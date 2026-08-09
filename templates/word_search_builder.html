@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Word Search Builder</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen">
+  <header class="border-b border-slate-200 bg-white">
+    <div class="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between gap-4">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Digital Product Factory</p>
+        <h1 class="text-xl font-bold text-slate-900">Word Search Builder</h1>
+      </div>
+      <a href="/" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">← Back to Dashboard</a>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-5 py-8">
+    <p class="text-sm text-slate-600 mb-6">
+      Create a printable word search PDF from a topic or your own word list. No Terminal, folders, or file renaming needed.
+    </p>
+
+    <form id="wsForm" class="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <fieldset class="space-y-3">
+        <legend class="text-sm font-bold text-slate-900">Creation Mode</legend>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="radio" name="creation_mode" value="topic" checked />
+          Create From Topic
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="radio" name="creation_mode" value="custom_word_list" />
+          Use My Own Word List
+        </label>
+      </fieldset>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label class="block sm:col-span-2">
+          <span class="text-sm font-medium">Product Title *</span>
+          <input name="product_title" type="text" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="My Word Search Book" />
+        </label>
+        <label class="block sm:col-span-2">
+          <span class="text-sm font-medium">Subtitle</span>
+          <input name="subtitle" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="Optional subtitle" />
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">Audience</span>
+          <input name="audience" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="General, Adults, Families..." />
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">Theme / Topic *</span>
+          <input name="theme" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="Holiday Fun, Brain Fitness..." />
+        </label>
+      </div>
+
+      <label id="customWordsWrap" class="hidden block">
+        <span class="text-sm font-medium">Custom Word List *</span>
+        <span class="block text-xs text-slate-500 mb-1">One word or phrase per line</span>
+        <textarea name="custom_words" rows="8" class="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm" placeholder="apple&#10;banana&#10;Gold Rush"></textarea>
+      </label>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label class="block">
+          <span class="text-sm font-medium">Difficulty</span>
+          <select name="difficulty" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">Grid Size</span>
+          <select name="grid_size" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+            <option value="12">12 × 12</option>
+            <option value="15" selected>15 × 15</option>
+            <option value="18">18 × 18</option>
+            <option value="20">20 × 20</option>
+          </select>
+        </label>
+      </div>
+
+      <fieldset class="space-y-3">
+        <legend class="text-sm font-bold text-slate-900">Output Type</legend>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="radio" name="output_type" value="single_worksheet" checked />
+          Single Worksheet
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="radio" name="output_type" value="book" />
+          Full Book
+        </label>
+      </fieldset>
+
+      <label id="puzzleCountWrap" class="hidden block">
+        <span class="text-sm font-medium">Number of Puzzles</span>
+        <input name="number_of_puzzles" type="number" min="1" max="50" value="5" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+      </label>
+
+      <fieldset class="space-y-3">
+        <legend class="text-sm font-bold text-slate-900">Include Answer Key</legend>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="radio" name="include_answer_key" value="yes" checked />
+          Yes
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="radio" name="include_answer_key" value="no" />
+          No
+        </label>
+      </fieldset>
+
+      <button type="submit" id="generateBtn" class="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700">
+        Generate Word Search PDF
+      </button>
+    </form>
+
+    <div id="statusBox" class="hidden mt-6 rounded-xl border p-4 text-sm"></div>
+    <div id="downloadBox" class="hidden mt-4">
+      <a id="downloadLink" href="#" class="inline-flex items-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700">
+        Download PDF
+      </a>
+    </div>
+  </main>
+
+  <script src="/static/js/word_search_builder.js"></script>
+</body>
+</html>

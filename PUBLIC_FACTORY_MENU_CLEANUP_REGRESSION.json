@@ -1,0 +1,172 @@
+{
+  "lock_id": "public_factory_menu_cleanup_v1",
+  "locked_at": "2026-07-28",
+  "fingerprint_refresh_history": [
+    {
+      "refreshed_at": "2026-07-30T20:50:00",
+      "reason": "Approved full-pipeline fix (2026-07-30 20:50 PT) modified flask_app/static/js/app.js. Four approved UX changes that complete the Market Research -> Plan -> Build Product -> Downloadable Product chain: (1) autoSaveEbookForWorkflow now auto-fires the PDF download (with ZIP fallback) right after auto-save completes, so the user always gets a downloadable file from one click on Build Product. (2) renderEbook now shows the Post-Save Next Steps panel directly for already-saved ebooks (skips the Save as Project bar), so reopening a saved ebook from Saved Projects lands the user on the download buttons immediately. (3) runNextAction (the Saved Projects 'Build Product' next-action) now auto-fires runEbook so a saved plan builds the ebook in one click (no second click on Generate Ebook). (4) projectRow now renders a direct 'Download PDF' and 'Download ZIP' button on every Saved Projects row, so the user can download any saved product without opening it first. No backend changes, no locked generator behavior change, no PDF/ZIP/cover renderer change.",
+      "files_refreshed": [
+        "flask_app/static/js/app.js"
+      ],
+      "files_unchanged": [
+        "flask_app/app.py"
+      ],
+      "locked_behavior_changed": false,
+      "note": "app.js md5 refreshed after approved full-pipeline fix. The Market Research -> Plan -> Build Product -> Downloadable Product chain is now genuinely one-click per stage: auto-trigger PDF download (with ZIP fallback), direct post-save panel for saved ebooks, auto-fire runEbook from Saved Projects 'Build Product', and direct Download PDF/ZIP buttons on every Saved Projects row. Locked generator behavior was not changed."
+    },
+    {
+      "refreshed_at": "2026-07-30T19:45:00",
+      "reason": "Approved Ebook Builder full-flow fix (2026-07-30 19:45 PT) modified flask_app/static/js/app.js. renderEbook now (1) normalizes the data shape (d.content = d.ebook, d.title = d.source, d.product_type = 'ebook', d.fields = {}) so loadEbookEnhancements and the post-save panel can use the same field names the Product Factory path produces, (2) wires a preview-card Download PDF button reusing /export-product, (3) auto-calls loadEbookEnhancements so the cover + visual plan render in the Ebook Builder view (previously only the Product Factory path did this; the Ebook Builder view showed only raw markdown with no cover), and (4) auto-saves the ebook in place and renders the Post-Save Next Steps panel (Download PDF / ZIP / Open / Selling) when the ebook came in through the sendToBuilder workflow (pendingEbookBrief._project_id). No backend changes, no locked generator behavior change, no PDF/ZIP/cover renderer change.",
+      "files_refreshed": [
+        "flask_app/static/js/app.js"
+      ],
+      "files_unchanged": [
+        "flask_app/app.py"
+      ],
+      "locked_behavior_changed": false,
+      "note": "app.js md5 refreshed after approved Ebook Builder full-flow fix. renderEbook normalizes the data shape, wires a preview-card Download PDF, auto-loads the cover via loadEbookEnhancements, and auto-saves + shows the Post-Save Next Steps panel in the workflow case. Locked generator behavior was not changed."
+    },
+    {
+      "refreshed_at": "2026-07-30T19:00:00",
+      "reason": "Approved Build Product auto-fire fix (2026-07-30 19:00 PT) modified flask_app/static/js/app.js. sendToBuilder()'s ebook branch now calls runEbook() after routing to the Ebook Builder view, so the user's one click on 'Build Product' / 'Send to Product Builder' produces the ebook without requiring a second click on 'Generate Ebook'. The misleading 'click Generate Ebook to use it' toast was replaced with 'Building your ebook from the research...'. No backend changes, no locked generator behavior change, no PDF/ZIP/cover renderer change.",
+      "files_refreshed": [
+        "flask_app/static/js/app.js"
+      ],
+      "files_unchanged": [
+        "flask_app/app.py"
+      ],
+      "locked_behavior_changed": false,
+      "note": "app.js md5 refreshed after approved Build Product auto-fire fix. sendToBuilder()'s ebook branch auto-fires runEbook() so one click on Build Product produces the ebook. Locked generator behavior was not changed."
+    },
+    {
+      "refreshed_at": "2026-07-30T12:18:28",
+      "reason": "Approved Product Planning -> Product Builder handoff fix (2026-07-30) modified flask_app/static/js/app.js.",
+      "files_refreshed": [
+        "flask_app/static/js/app.js"
+      ],
+      "files_unchanged": [
+        "flask_app/app.py"
+      ],
+      "locked_behavior_changed": false,
+      "note": "app.js md5 refreshed after approved Product Planning -> Product Builder handoff fix. Locked generator behavior was not changed."
+    },
+    {
+      "refreshed_at": "2026-07-30T18:25:00",
+      "reason": "Approved Market Research -> Factory -> Downloadable Product flow upgrade (2026-07-30) modified flask_app/static/js/app.js. Three approved UX changes: (1) auto-trigger PDF download on Generate success for the workflow case (wasWorkflow branch in runProduct), (2) scroll the post-save Next Steps panel into view after render via new scrollNextStepsPanelIntoView helper, (3) prominent 'Download PDF' button on the product preview card (top-right of title row) that reuses the same /export-product endpoint as the panel button.",
+      "files_refreshed": [
+        "flask_app/static/js/app.js"
+      ],
+      "files_unchanged": [
+        "flask_app/app.py"
+      ],
+      "locked_behavior_changed": false,
+      "note": "app.js md5 refreshed after approved Market Research -> Factory -> Downloadable Product flow upgrade. Locked generator behavior, hidden product filter, backend guard, and visible product types were not changed."
+    }
+  ],
+  "owner": "factory",
+  "purpose": "Regression fingerprint for the public Factory menu cleanup. Only two source files were intentionally modified for this change; all other fingerprints under EBOOK_GENERATOR_V1_REGRESSION.json remain authoritative for the Ebook Generator V1 lock.",
+  "files": {
+    "flask_app/app.py": {
+      "md5": "5ff36323d2ac16ae544713e2f4b1a91f",
+      "size_bytes": 33456,
+      "change": "Added backend guard that returns HTTP 400 'This product type is not ready yet.' for any of the 4 hidden product types if a caller hits /generate-product directly. Guard is _HIDDEN_PRODUCT_TYPES = {marketing_kit, cover_design, flip_book, planner} and runs before generate_product()."
+    },
+    "flask_app/static/js/app.js": {
+      "md5": "f59629484fb08e3a563a098ce8686da0",
+      "previous_md5": "1bc136c7fad323277989b61a7b773acf",
+      "size_bytes": 173629,
+      "previous_size_bytes": 169008,
+      "refresh_note": "app.js md5 refreshed after approved Build Product auto-fire fix. sendToBuilder()'s ebook branch now auto-fires runEbook() so the user does not have to click Generate Ebook a second time. Locked generator behavior, hidden product filter, backend guard, and visible product types were not changed.",
+      "change": "Added `hidden: true` flag to 4 PRODUCT_TYPES entries (marketing_kit, cover_design, flip_book, planner). buildFactoryTypes() filters via `!t.hidden` so the 4 hidden types are excluded from the public Product Factory picker. Visible types and all other JS paths unchanged."
+    }
+  },
+  "hidden_product_types": [
+    "marketing_kit",
+    "cover_design",
+    "flip_book",
+    "planner"
+  ],
+  "visible_product_types": [
+    "ebook",
+    "coloring_book",
+    "word_search",
+    "crossword",
+    "math_worksheet",
+    "spelling_worksheet"
+  ],
+  "expected_backend_behavior": {
+    "method": "POST",
+    "path": "/generate-product",
+    "content_type": "application/json",
+    "guarded_payload_examples": {
+      "marketing_kit": {
+        "product_type": "marketing_kit",
+        "fields": {}
+      },
+      "cover_design": {
+        "product_type": "cover_design",
+        "fields": {}
+      },
+      "flip_book": {
+        "product_type": "flip_book",
+        "fields": {}
+      },
+      "planner": {
+        "product_type": "planner",
+        "fields": {}
+      }
+    },
+    "expected_response": {
+      "status": 400,
+      "body": {
+        "error": "This product type is not ready yet."
+      }
+    },
+    "guard_location": "flask_app/app.py — _HIDDEN_PRODUCT_TYPES set, checked at top of generate_product_route before generate_product() is called."
+  },
+  "expected_ui_behavior": {
+    "factory_picker": "Only the 6 visible product types render as cards in the public Product Factory menu.",
+    "filter_location": "flask_app/static/js/app.js — buildFactoryTypes() filters PRODUCT_TYPES via `!t.hidden`.",
+    "no_console_errors": "No console errors when opening the factory view with the 4 hidden types filtered out.",
+    "no_failed_to_fetch": "No 'Failed to fetch' on the public picker, Saved Projects, or Ebook Builder views."
+  },
+  "preserved_features": {
+    "post_save_next_steps_panel": {
+      "still_present": true,
+      "function_name": "postEbookNextSteps",
+      "defined_at": "flask_app/static/js/app.js",
+      "renders_after": "Successful POST/PUT to /projects in the Ebook Builder view."
+    },
+    "saved_projects_view": {
+      "still_loads": true,
+      "loader_function": "loadProjects",
+      "filter_function": "isUserSavedProject",
+      "endpoint": "GET /projects returns 200."
+    },
+    "ebook_builder_view": {
+      "still_renders": true,
+      "view_key": "ebook"
+    }
+  },
+  "unaffected_locks": {
+    "ebook_generator_v1": "EBOOK_GENERATOR_V1_LOCK.md + EBOOK_GENERATOR_V1_REGRESSION.json remain authoritative for the Ebook Generator. The 2 fingerprints recorded in that file for app.py and app.js are EXPECTED to differ from this cleanup lock; that is the whole reason this separate file exists.",
+    "budget_planner_v1": "Not touched. BUDGET_PLANNER_V1_LOCK.md still authoritative.",
+    "faith_planner_v1": "Not touched. FAITH_PLANNER_V1_LOCK.md still authoritative.",
+    "bold_and_easy_kawaii_coloring": "Not touched. COLORING_BOOK_GENERATOR_LOCKED_STATE.md still authoritative."
+  },
+  "regression_test": {
+    "name": "public_factory_menu_cleanup_regression_test",
+    "manual_steps": [
+      "1. Compute md5 of flask_app/app.py and confirm == 5ff36323d2ac16ae544713e2f4b1a91f.",
+      "2. Compute md5 of flask_app/static/js/app.js and confirm == f59629484fb08e3a563a098ce8686da0.",
+      "3. GET http://127.0.0.1:5000/ and confirm 200.",
+      "4. GET http://127.0.0.1:5000/projects and confirm 200.",
+      "5. GET http://127.0.0.1:5000/static/js/app.js and confirm 200 and body contains `function postEbookNextSteps` and `async function loadProjects`.",
+      "6. POST http://127.0.0.1:5000/generate-product with body {\"product_type\":\"marketing_kit\",\"fields\":{}} and confirm 400 with body {\"error\":\"This product type is not ready yet.\"}.",
+      "7. Repeat step 6 for cover_design, flip_book, and planner; all must return the same 400.",
+      "8. Open the public Product Factory picker in a browser and confirm only the 6 visible types render (Ebook, Coloring Book, Word Search, Crossword, Math Worksheet, Spelling Worksheet).",
+      "9. Open Saved Projects and confirm the list still loads.",
+      "10. Open the Ebook Builder and confirm the post-save Next Steps panel still renders after a save."
+    ]
+  }
+}

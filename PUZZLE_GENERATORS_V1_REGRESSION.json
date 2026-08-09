@@ -1,0 +1,501 @@
+{
+  "lock_id": "puzzle_generators_v1",
+  "locked_at": "2026-07-29",
+  "fingerprint_refresh_history": [
+    {
+      "refreshed_at": "2026-07-30T20:50:00",
+      "reason": "Approved full-pipeline fix (2026-07-30 20:50 PT) modified flask_app/static/js/app.js. Four approved UX changes that complete the Market Research -> Plan -> Build Product -> Downloadable Product chain: (1) autoSaveEbookForWorkflow now auto-fires the PDF download (with ZIP fallback) right after auto-save completes, so the user always gets a downloadable file from one click on Build Product. (2) renderEbook now shows the Post-Save Next Steps panel directly for already-saved ebooks (skips the Save as Project bar), so reopening a saved ebook from Saved Projects lands the user on the download buttons immediately. (3) runNextAction (the Saved Projects 'Build Product' next-action) now auto-fires runEbook so a saved plan builds the ebook in one click (no second click on Generate Ebook). (4) projectRow now renders a direct 'Download PDF' and 'Download ZIP' button on every Saved Projects row, so the user can download any saved product without opening it first. No backend changes, no locked generator behavior change, no PDF/ZIP/cover renderer change.",
+      "files_refreshed": [
+        "flask_app/static/js/app.js"
+      ],
+      "files_unchanged": [
+        "flask_app/app.py",
+        "flask_app/services/word_search/*",
+        "flask_app/services/crossword/*",
+        "flask_app/services/math_worksheet/*",
+        "flask_app/services/spelling_worksheet/*",
+        "flask_app/services/packaging.py",
+        "flask_app/services/product.py"
+      ],
+      "locked_behavior_changed": false,
+      "note": "app.js md5 refreshed after approved full-pipeline fix. The Market Research -> Plan -> Build Product -> Downloadable Product chain is now genuinely one-click per stage: auto-trigger PDF download (with ZIP fallback), direct post-save panel for saved ebooks, auto-fire runEbook from Saved Projects 'Build Product', and direct Download PDF/ZIP buttons on every Saved Projects row. Locked puzzle/worksheet generator behavior was not changed."
+    },
+    {
+      "refreshed_at": "2026-07-30T19:45:00",
+      "reason": "Approved Ebook Builder full-flow fix (2026-07-30 19:45 PT) modified flask_app/static/js/app.js. renderEbook now (1) normalizes the data shape (d.content = d.ebook, d.title = d.source, d.product_type = 'ebook', d.fields = {}) so loadEbookEnhancements and the post-save panel can use the same field names the Product Factory path produces, (2) wires a preview-card Download PDF button reusing /export-product, (3) auto-calls loadEbookEnhancements so the cover + visual plan render in the Ebook Builder view (previously only the Product Factory path did this; the Ebook Builder view showed only raw markdown with no cover), and (4) auto-saves the ebook in place and renders the Post-Save Next Steps panel (Download PDF / ZIP / Open / Selling) when the ebook came in through the sendToBuilder workflow (pendingEbookBrief._project_id). No backend changes, no locked generator behavior change, no PDF/ZIP/cover renderer change.",
+      "files_refreshed": [
+        "flask_app/static/js/app.js"
+      ],
+      "files_unchanged": [
+        "flask_app/app.py",
+        "flask_app/services/word_search/*",
+        "flask_app/services/crossword/*",
+        "flask_app/services/math_worksheet/*",
+        "flask_app/services/spelling_worksheet/*",
+        "flask_app/services/packaging.py",
+        "flask_app/services/product.py"
+      ],
+      "locked_behavior_changed": false,
+      "note": "app.js md5 refreshed after approved Ebook Builder full-flow fix. renderEbook normalizes the data shape, wires a preview-card Download PDF, auto-loads the cover via loadEbookEnhancements, and auto-saves + shows the Post-Save Next Steps panel in the workflow case. Locked puzzle/worksheet generator behavior was not changed."
+    },
+    {
+      "refreshed_at": "2026-07-30T19:00:00",
+      "reason": "Approved Build Product auto-fire fix (2026-07-30 19:00 PT) modified flask_app/static/js/app.js. sendToBuilder()'s ebook branch now calls runEbook() after routing to the Ebook Builder view, so the user's one click on 'Build Product' / 'Send to Product Builder' produces the ebook without requiring a second click on 'Generate Ebook'. The misleading 'click Generate Ebook to use it' toast was replaced with 'Building your ebook from the research...'. No backend changes, no locked generator behavior change, no PDF/ZIP/cover renderer change.",
+      "files_refreshed": [
+        "flask_app/static/js/app.js"
+      ],
+      "files_unchanged": [
+        "flask_app/app.py",
+        "flask_app/services/word_search/*",
+        "flask_app/services/crossword/*",
+        "flask_app/services/math_worksheet/*",
+        "flask_app/services/spelling_worksheet/*",
+        "flask_app/services/packaging.py",
+        "flask_app/services/product.py"
+      ],
+      "locked_behavior_changed": false,
+      "note": "app.js md5 refreshed after approved Build Product auto-fire fix. sendToBuilder()'s ebook branch auto-fires runEbook() so one click on Build Product produces the ebook. Locked puzzle/worksheet generator behavior was not changed."
+    },
+    {
+      "refreshed_at": "2026-07-30T12:18:28",
+      "reason": "Approved Product Planning -> Product Builder handoff fix (2026-07-30) modified flask_app/static/js/app.js (added resolveFactoryTypeFromPlan + hiddenReasonFor + updated sendToBuilder + Saved Projects row handler).",
+      "files_refreshed": [
+        "flask_app/static/js/app.js"
+      ],
+      "files_unchanged": [
+        "flask_app/app.py",
+        "flask_app/services/word_search/*",
+        "flask_app/services/crossword/*",
+        "flask_app/services/math_worksheet/*",
+        "flask_app/services/spelling_worksheet/*",
+        "flask_app/services/packaging.py",
+        "flask_app/services/product.py"
+      ],
+      "locked_behavior_changed": false,
+      "note": "app.js md5 refreshed after approved Product Planning -> Product Builder handoff fix. Locked generator behavior was not changed."
+    },
+    {
+      "refreshed_at": "2026-07-30T18:25:00",
+      "reason": "Approved Market Research -> Factory -> Downloadable Product flow upgrade (2026-07-30) modified flask_app/static/js/app.js. Three approved UX changes: (1) auto-trigger PDF download on Generate success for the workflow case (wasWorkflow branch in runProduct), (2) scroll the post-save Next Steps panel into view after render via new scrollNextStepsPanelIntoView helper, (3) prominent 'Download PDF' button on the product preview card (top-right of title row) that reuses the same /export-product endpoint as the panel button.",
+      "files_refreshed": [
+        "flask_app/static/js/app.js"
+      ],
+      "files_unchanged": [
+        "flask_app/app.py",
+        "flask_app/services/word_search/*",
+        "flask_app/services/crossword/*",
+        "flask_app/services/math_worksheet/*",
+        "flask_app/services/spelling_worksheet/*",
+        "flask_app/services/packaging.py",
+        "flask_app/services/product.py"
+      ],
+      "locked_behavior_changed": false,
+      "note": "app.js md5 refreshed after approved Market Research -> Factory -> Downloadable Product flow upgrade. Locked puzzle/worksheet generator behavior was not changed."
+    }
+  ],
+  "owner": "factory",
+  "purpose": "Regression fingerprint for the Puzzle / Worksheet Generators V1 lock. Covers the 4 visible puzzle/worksheet product types: word_search, crossword, math_worksheet, spelling_worksheet.",
+  "source_files": {
+    "flask_app/services/word_search/word_lists.py": {
+      "md5": "3773E245ABC08EB81BC3DA3145EAB47C",
+      "size_bytes": 10248,
+      "role": "Local topic pack matcher. Whole-token + exact-phrase only. No substring cross-pack supplementation."
+    },
+    "flask_app/services/word_search/pdf_builder.py": {
+      "md5": "EBCFCE3C75041CD631130CF6C3E22284",
+      "size_bytes": 11539,
+      "role": "Word Search PDF orchestrator (single-worksheet + book modes)."
+    },
+    "flask_app/services/word_search/direct_pdf_renderer.py": {
+      "md5": "D0A8884623EF81FBD713796FCCAEFC7E",
+      "size_bytes": 40655,
+      "role": "Word Search PDF rendering."
+    },
+    "flask_app/services/word_search/builder.py": {
+      "md5": "6F9C23F3B17C9B60ACD01B4B1E3E41BC",
+      "size_bytes": 6537,
+      "role": "Word Search puzzle grid construction."
+    },
+    "flask_app/services/word_search/engine.py": {
+      "md5": "743FCB5E7AB53293927274AD038A7833",
+      "size_bytes": 8318,
+      "role": "Word Search grid placement engine."
+    },
+    "flask_app/services/word_search/qa_agent.py": {
+      "md5": "CFE51CD68B87151F58F3E8F8BED35C67",
+      "size_bytes": 19874,
+      "role": "Word Search QA agent."
+    },
+    "flask_app/services/word_search/answer_key_solver.py": {
+      "md5": "3546671602B93DC33E21BA111BD96518",
+      "size_bytes": 8902,
+      "role": "Word Search answer-key solver."
+    },
+    "flask_app/services/word_search/answer_key_validation.py": {
+      "md5": "293EF53B91A17984CCE5FC1F967B541A",
+      "size_bytes": 459,
+      "role": "Word Search answer-key validator."
+    },
+    "flask_app/services/word_search/book.py": {
+      "md5": "1451122175FEF93CF171739C5A5072BB",
+      "size_bytes": 7188,
+      "role": "Word Search book assembly."
+    },
+    "flask_app/services/word_search/capsule_verifier.py": {
+      "md5": "7166AFB505FB12F8C26B779F7F181E9B",
+      "size_bytes": 7476,
+      "role": "Word Search capsule verifier."
+    },
+    "flask_app/services/word_search/layout_attempt.py": {
+      "md5": "C95349878A259688C3222F716402F387",
+      "size_bytes": 9086,
+      "role": "Word Search layout-attempt helper."
+    },
+    "flask_app/services/word_search/pdf_cover.py": {
+      "md5": "2D6A1F86059C0DC605C6DC6112B99649",
+      "size_bytes": 1717,
+      "role": "Word Search cover merge."
+    },
+    "flask_app/services/word_search/renderer.py": {
+      "md5": "DA8185EFFD69AC866ECFA725B6BE1753",
+      "size_bytes": 20760,
+      "role": "Word Search renderer (legacy)."
+    },
+    "flask_app/services/word_search/solution_table.py": {
+      "md5": "7A7CA45C1C9FA3C1B931CD4F18D312A5",
+      "size_bytes": 19238,
+      "role": "Word Search solution table generator."
+    },
+    "flask_app/services/word_search/__init__.py": {
+      "md5": "99D5A1025B11895BAE7D408082B111B6",
+      "size_bytes": 846,
+      "role": "Word Search package marker."
+    },
+    "flask_app/services/crossword/word_entries.py": {
+      "md5": "A388C4D6F06CED8E89204D8E67979BF3",
+      "size_bytes": 7588,
+      "role": "Crossword local topic vocabulary (no API) + AI fallback (last resort)."
+    },
+    "flask_app/services/crossword/pdf_builder.py": {
+      "md5": "831A47A24AA88E01F129550C83F769AA",
+      "size_bytes": 7864,
+      "role": "Crossword PDF orchestrator."
+    },
+    "flask_app/services/crossword/builder.py": {
+      "md5": "6AD35CB2A5D13236BF96FDA551AB9FA7",
+      "size_bytes": 8676,
+      "role": "Crossword puzzle builder."
+    },
+    "flask_app/services/crossword/clues.py": {
+      "md5": "E9EAA6A75167EDEA18C55B967941BBD1",
+      "size_bytes": 7336,
+      "role": "Crossword clue generator."
+    },
+    "flask_app/services/crossword/direct_pdf_renderer.py": {
+      "md5": "3D85A2B28D91C8E1365BBA0633A15C55",
+      "size_bytes": 15222,
+      "role": "Crossword PDF rendering."
+    },
+    "flask_app/services/crossword/engine.py": {
+      "md5": "3A3C61887DD1AA9775E9588DAA564065",
+      "size_bytes": 8040,
+      "role": "Crossword grid engine."
+    },
+    "flask_app/services/crossword/pdf_cover.py": {
+      "md5": "E12167621E500F9D47D0179DDFE76A5B",
+      "size_bytes": 1738,
+      "role": "Crossword cover merge."
+    },
+    "flask_app/services/crossword/qa_agent.py": {
+      "md5": "8EF59B6B298BF96333256220A8059208",
+      "size_bytes": 25090,
+      "role": "Crossword QA agent."
+    },
+    "flask_app/services/crossword/book.py": {
+      "md5": "D565847EC0731895C7F4EEDD46EF62AF",
+      "size_bytes": 5446,
+      "role": "Crossword book assembly."
+    },
+    "flask_app/services/crossword/__init__.py": {
+      "md5": "09D1658FC76DB4ECD9D522C62EDF48F5",
+      "size_bytes": 1496,
+      "role": "Crossword package marker."
+    },
+    "flask_app/services/math_worksheet/builder.py": {
+      "md5": "9C892186100A9D8ECBC518D160FF51CA",
+      "size_bytes": 9410,
+      "role": "Math Worksheet problem generator. Fully local / procedural (chat_json removed). include_challenge default False."
+    },
+    "flask_app/services/math_worksheet/pdf_builder.py": {
+      "md5": "47BB2C7A14CF651B5D58EC8DFA58B38C",
+      "size_bytes": 4103,
+      "role": "Math Worksheet PDF orchestrator. Plumbs include_challenge through."
+    },
+    "flask_app/services/math_worksheet/renderer.py": {
+      "md5": "B87C4C6EB8A1E201C1609BFF87714875",
+      "size_bytes": 11148,
+      "role": "Math Worksheet PDF renderer. When challenge is on, draws separate 'Answer Key - Challenge Section' page."
+    },
+    "flask_app/services/math_worksheet/__init__.py": {
+      "md5": "DCA65C469F84B8B8F0DCEB73E7DD9615",
+      "size_bytes": 457,
+      "role": "Math Worksheet package marker."
+    },
+    "flask_app/services/spelling_worksheet/builder.py": {
+      "md5": "61EE87CA338F17ABD7C632D32D398563",
+      "size_bytes": 33520,
+      "role": "Spelling Worksheet builder. Header says: no OpenAI, no chat_json, no Tavily. Uses _TOPIC_BANKS and grade banks."
+    },
+    "flask_app/services/spelling_worksheet/pdf_builder.py": {
+      "md5": "15EF3B7D76E8A5021FDB9739279350B1",
+      "size_bytes": 3713,
+      "role": "Spelling Worksheet PDF orchestrator."
+    },
+    "flask_app/services/spelling_worksheet/renderer.py": {
+      "md5": "258AB87315455B66F2D14A767E735735",
+      "size_bytes": 19825,
+      "role": "Spelling Worksheet PDF renderer."
+    },
+    "flask_app/services/spelling_worksheet/__init__.py": {
+      "md5": "490349AC86CD977C33785A66FB2CCF48",
+      "size_bytes": 500,
+      "role": "Spelling Worksheet package marker."
+    },
+    "flask_app/services/packaging.py": {
+      "md5": "79F51290671EB9DCA0AA26940963E2A7",
+      "size_bytes": 46401,
+      "role": "Export packaging. Contains the dedicated word_search, crossword, math_worksheet, spelling_worksheet, and coloring_book branches. Each uses the stored pdf_bytes directly and enforces no-fallback, no-ebook-files, ZIP-PDF-matches-direct-PDF QA."
+    },
+    "flask_app/services/product.py": {
+      "md5": "06DA649DB3A46AD2C615722B385EAC6C",
+      "size_bytes": 33780,
+      "role": "Dispatch + per-product PDF payload builders. Math Worksheet branch plumbs include_challenge through to pdf_builder."
+    },
+    "flask_app/static/js/app.js": {
+      "md5": "f59629484fb08e3a563a098ce8686da0",
+      "previous_md5": "1bc136c7fad323277989b61a7b773acf",
+      "size_bytes": 173629,
+      "previous_size_bytes": 169008,
+      "refresh_note": "app.js md5 refreshed after approved Build Product auto-fire fix. sendToBuilder()'s ebook branch now auto-fires runEbook() so the user does not have to click Generate Ebook a second time. Locked puzzle/worksheet generator behavior was not changed.",
+      "role": "Factory UI. Math Worksheet card has include_challenge select (default No). Also handles Product Planning -> Product Builder handoff via resolveFactoryTypeFromPlan + hiddenReasonFor. Adds (1) wasWorkflow auto-download in runProduct, (2) scrollNextStepsPanelIntoView helper, (3) preview-card Download PDF button, (4) sendToBuilder ebook branch auto-fires runEbook. No generator behavior change."
+    },
+    "flask_app/app.py": {
+      "md5": "5FF36323D2AC16AE544713E2F4B1A91F",
+      "size_bytes": 33456,
+      "role": "Route layer. The hidden-product guard at /generate-product (marketing_kit, cover_design, flip_book, planner -> 400) was added in the public menu cleanup lock and is unaffected by this lock."
+    }
+  },
+  "test_topics": {
+    "word_search": {
+      "topic": "Computer Parts",
+      "word_source": "Custom word list (18 curated computer parts)",
+      "output_format": "Single Puzzle",
+      "include_answer_key": "Yes"
+    },
+    "crossword": {
+      "topic": "Office Supplies",
+      "word_source": "Custom word list (18 curated office supplies)",
+      "output_format": "Single Puzzle",
+      "include_answer_key": "Yes"
+    },
+    "math_worksheet": {
+      "topic": "Mixed Arithmetic",
+      "grade": "3",
+      "problems": "20",
+      "difficulty": "Medium",
+      "include_answer_key": "Yes",
+      "include_challenge_default": "No"
+    },
+    "spelling_worksheet": {
+      "topic": "Farm Animals",
+      "grade": "3",
+      "word_count": "10",
+      "activity_type": "Word List",
+      "include_answer_key": "Yes"
+    }
+  },
+  "regression_fixtures": {
+    "word_search": {
+      "generated_pdf": {
+        "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\word_search\\generated_computer_parts_word_search.pdf",
+        "size_bytes": 5037,
+        "page_count": 2
+      },
+      "downloaded_pdf": {
+        "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\word_search\\export_computer_parts_word_search.pdf",
+        "size_bytes": 5037,
+        "md5": "9c2f0927133ef279ff6a2826401a2d2e",
+        "page_count": 2
+      },
+      "zip": {
+        "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\word_search\\export_package.zip",
+        "size_bytes": 3928,
+        "md5": "e3524382c545f23d2332c560dcb63cd0",
+        "required_entries": [
+          "computer_parts_word_search.pdf"
+        ],
+        "additional_entries": [
+          "ebook.html",
+          "ebook.txt"
+        ]
+      }
+    },
+    "crossword": {
+      "generated_pdf": {
+        "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\crossword\\generated_office_supplies_crossword.pdf",
+        "size_bytes": 5490,
+        "page_count": 2
+      },
+      "downloaded_pdf": {
+        "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\crossword\\export_office_supplies_crossword.pdf",
+        "size_bytes": 5490,
+        "md5": "c91a1a9123fb0cc867d954bf1e861825",
+        "page_count": 2
+      },
+      "zip": {
+        "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\crossword\\export_package.zip",
+        "size_bytes": 4456,
+        "md5": "d95147c20b72d29f57a48cff4ee25a37",
+        "required_entries": [
+          "office_supplies_crossword.pdf"
+        ],
+        "additional_entries": [
+          "office_supplies_crossword.html",
+          "office_supplies_crossword.txt"
+        ]
+      }
+    },
+    "math_worksheet": {
+      "challenge_no_default": {
+        "generated_pdf": {
+          "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\math_worksheet\\generated_mixed_arithmetic_practice.pdf",
+          "size_bytes": 3806,
+          "page_count": 2
+        },
+        "downloaded_pdf": {
+          "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\math_worksheet\\export_mixed_arithmetic_practice.pdf",
+          "size_bytes": 3806,
+          "md5": "e387ce7117621e750d613c573321505d",
+          "page_count": 2
+        },
+        "zip": {
+          "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\math_worksheet\\export_package.zip",
+          "size_bytes": 3349,
+          "md5": "36366f3f5916e93e9c989a061bbc018b",
+          "required_entries": [
+            "mixed_arithmetic_practice.pdf",
+            "metadata.json",
+            "problems.txt",
+            "answer_key.txt"
+          ]
+        }
+      },
+      "challenge_yes": {
+        "generated_pdf": {
+          "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation_final\\math_challenge_yes\\generated_mixed_arithmetic_practice.pdf",
+          "size_bytes": 5610,
+          "page_count": 4
+        },
+        "downloaded_pdf": {
+          "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation_final\\math_challenge_yes\\export_mixed_arithmetic_practice.pdf",
+          "size_bytes": 5610,
+          "md5": "ab1501c47aa2c5f9d3e926e599cd37a9",
+          "page_count": 4
+        },
+        "zip": {
+          "required_entries": [
+            "mixed_arithmetic_practice.pdf",
+            "metadata.json",
+            "problems.txt",
+            "answer_key.txt"
+          ],
+          "expected_in_answer_key_txt": "--- Challenge Answers ---",
+          "expected_in_problems_txt": "--- Challenge Problems ---"
+        }
+      }
+    },
+    "spelling_worksheet": {
+      "generated_pdf": {
+        "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\spelling_worksheet\\generated_farm_animals.pdf",
+        "size_bytes": 4005,
+        "page_count": 3
+      },
+      "downloaded_pdf": {
+        "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\spelling_worksheet\\export_farm_animals.pdf",
+        "size_bytes": 4005,
+        "md5": "4db5895b8b90d483956e1f2430086948",
+        "page_count": 3
+      },
+      "zip": {
+        "path": "C:\\Users\\user\\.mavis\\sessions\\mvs_9a97078a3fc040fa9def5ae297f5e02a\\workspace\\puzzle_validation\\spelling_worksheet\\export_package.zip",
+        "size_bytes": 3163,
+        "md5": "684d3e96b85af5552dfb4873871f3a0d",
+        "required_entries": [
+          "farm_animals.pdf",
+          "metadata.json",
+          "spelling_words.txt",
+          "answer_key.txt"
+        ]
+      }
+    }
+  },
+  "forbidden_zip_contents": [
+    "ebook.html",
+    "ebook.txt",
+    "ebook.pdf"
+  ],
+  "forbidden_text_in_pdfs": [
+    "FALLBACK EXPORT",
+    "themed answer",
+    "placeholder",
+    "Failed to fetch"
+  ],
+  "allowed_zip_entries_per_product": {
+    "word_search": [
+      "computer_parts_word_search.pdf",
+      "ebook.html",
+      "ebook.txt"
+    ],
+    "crossword": [
+      "office_supplies_crossword.pdf",
+      "office_supplies_crossword.html",
+      "office_supplies_crossword.txt"
+    ],
+    "math_worksheet": [
+      "mixed_arithmetic_practice.pdf",
+      "metadata.json",
+      "problems.txt",
+      "answer_key.txt"
+    ],
+    "spelling_worksheet": [
+      "farm_animals.pdf",
+      "metadata.json",
+      "spelling_words.txt",
+      "answer_key.txt"
+    ]
+  },
+  "qa_rules": {
+    "byte_identical_artifacts": "Direct download PDF == ZIP-inside PDF (md5 match) for every product.",
+    "no_openai_in_normal_path": "Math worksheet: chat_json import removed from builder.py. Word search / crossword: custom_words path used. Spelling worksheet: local _TOPIC_BANKS path used.",
+    "no_fallback_export": "The literal string 'FALLBACK EXPORT' must not appear in any downloaded PDF. packaging.py raises ValueError if it does.",
+    "saved_projects_filter": "Test projects must be flagged system_test=true and temporary=true so the isUserSavedProject JS filter hides them. 0 test projects may leak into the user-visible list."
+  },
+  "regression_test": {
+    "name": "puzzle_generators_v1_regression_test",
+    "manual_steps": [
+      "1. Compute md5 of every file under flask_app/services/{word_search,crossword,math_worksheet,spelling_worksheet}/ and confirm each matches the source_files section above.",
+      "2. Compute md5 of flask_app/services/packaging.py and confirm == 79F51290671EB9DCA0AA26940963E2A7.",
+      "3. Compute md5 of flask_app/services/product.py and confirm == 06DA649DB3A46AD2C615722B385EAC6C.",
+      "4. Compute md5 of flask_app/static/js/app.js and confirm == f59629484fb08e3a563a098ce8686da0.",
+      "5. POST /generate-product with product_type=word_search, theme='Computer Parts', custom_words=<18 curated words>, output_format='Single Puzzle', include_answer_key='Yes'. Expect HTTP 200, ~5,037 B PDF, 2 pages.",
+      "6. POST /generate-product with product_type=crossword, theme='Office Supplies', custom_words=<18 curated words>, output_format='Single Puzzle', include_answer_key='Yes'. Expect HTTP 200, ~5,490 B PDF, 2 pages.",
+      "7. POST /generate-product with product_type=math_worksheet, grade='3', math_topic='Mixed Arithmetic', problems='20', include_answer_key='Yes', include_challenge='No'. Expect HTTP 200, ~3,806 B PDF, 2 pages, no challenge problem.",
+      "8. POST /generate-product with product_type=math_worksheet, include_challenge='Yes'. Expect HTTP 200, ~5,610 B PDF, 4 pages, challenge answers present in the answer key.",
+      "9. POST /generate-product with product_type=spelling_worksheet, theme='Farm Animals', grade='3', word_count='10', activity_type='Word List', include_answer_key='Yes'. Expect HTTP 200, ~4,005 B PDF, 3 pages.",
+      "10. For each test, save the project (system_test=true, temporary=true), POST /export-product, then download the PDF + ZIP. Verify direct PDF md5 == ZIP-inside PDF md5.",
+      "11. Verify the literal string 'FALLBACK EXPORT' does not appear in any of the 4 downloaded PDFs.",
+      "12. Verify none of the 4 ZIPs contain ebook.html, ebook.txt, or ebook.pdf (math_worksheet + spelling_worksheet branches enforce this; word_search + crossword branches historically included ebook.html / ebook.txt as legacy support files - those are allowed for those two products but not for math_worksheet or spelling_worksheet).",
+      "13. Verify 0 test projects leaked into /projects user-visible list."
+    ]
+  }
+}

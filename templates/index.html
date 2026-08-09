@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digital Product Factory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: "#eef2ff", 100: "#e0e7ff", 200: "#c7d2fe", 300: "#a5b4fc",
+              400: "#818cf8", 500: "#6366f1", 600: "#4f46e5", 700: "#4338ca",
+              800: "#3730a3", 900: "#312e81", 950: "#1e1b4b"
+            }
+          },
+          fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] }
+        }
+      }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    .prose-out h1 { font-size: 1.6rem; font-weight: 800; margin: 0.6rem 0; color: #1e1b4b; }
+    .prose-out h2 { font-size: 1.25rem; font-weight: 700; margin: 1.1rem 0 0.4rem; color: #312e81; }
+    .prose-out h3 { font-size: 1.05rem; font-weight: 600; margin: 0.8rem 0 0.3rem; color: #3730a3; }
+    .prose-out p { margin: 0.5rem 0; line-height: 1.7; color: #374151; }
+    .prose-out ul, .prose-out ol { margin: 0.5rem 0 0.5rem 1.4rem; line-height: 1.7; color: #374151; }
+    .prose-out ol { list-style: decimal; } .prose-out ul { list-style: disc; }
+    .prose-out li { margin: 0.35rem 0; }
+    .prose-out a { color: #4f46e5; text-decoration: underline; }
+    .prose-out table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+    .prose-out th { background: #eef2ff; color: #312e81; text-align: left; padding: 0.6rem 0.8rem; border: 1px solid #c7d2fe; font-weight: 600; }
+    .prose-out td { padding: 0.6rem 0.8rem; border: 1px solid #e0e7ff; vertical-align: top; color: #374151; }
+    .prose-out tr:nth-child(even) td { background: #f8fafc; }
+    .prose-out strong { color: #1e1b4b; }
+    .prose-out code { background: #eef2ff; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.85em; }
+  </style>
+</head>
+<body class="h-full bg-slate-50 text-slate-800 font-sans antialiased">
+  <div class="flex h-full min-h-screen">
+    <!-- Sidebar -->
+    <aside class="hidden md:flex w-64 shrink-0 flex-col bg-brand-950 text-brand-100">
+      <div class="flex items-center gap-3 px-6 py-6 border-b border-white/10">
+        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500 font-extrabold text-white">DP</div>
+        <div>
+          <div class="text-sm font-bold text-white leading-tight">Digital Product</div>
+          <div class="text-xs text-brand-300 tracking-wide">FACTORY</div>
+        </div>
+      </div>
+      <nav id="nav" class="flex-1 px-3 py-5 space-y-1"></nav>
+      <div class="px-6 py-4 text-xs text-brand-400 border-t border-white/10">
+        Digital Product Factory
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <header class="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-5 py-3 backdrop-blur shadow-sm">
+        <div class="flex items-center gap-3">
+          <select id="mobileNav" class="md:hidden rounded-lg border border-slate-300 px-2 py-1.5 text-sm"></select>
+          <h1 id="pageTitle" class="text-lg font-bold text-slate-900">Dashboard</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-brand-50 border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-700">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+            Plan: Starter
+          </span>
+          <button onclick="go('subscription')" class="rounded-xl border border-brand-300 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 text-xs font-semibold text-brand-700 transition">
+            Upgrade Plan
+          </button>
+          <button onclick="go('subscription')" class="rounded-xl bg-slate-100 hover:bg-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition">
+            Account
+          </button>
+        </div>
+      </header>
+
+      <main class="flex-1 overflow-y-auto p-5 sm:p-8">
+        <!-- Dashboard -->
+        <section data-view="dashboard" class="view space-y-8">
+
+          <!-- Quick Action Cards -->
+          <div id="quickActions" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <button onclick="go('factory')" class="group text-left rounded-2xl border border-slate-200 bg-white p-5 hover:border-brand-400 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+              <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-brand-600 group-hover:bg-brand-600 group-hover:text-white transition-colors">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+              </div>
+              <div class="text-sm font-bold text-slate-900 mb-1">Create New Product</div>
+              <div class="text-xs text-slate-500 leading-relaxed">Start in Product Factory — pick a type, fill details, download.</div>
+            </button>
+            <button onclick="go('market')" class="group text-left rounded-2xl border border-slate-200 bg-white p-5 hover:border-emerald-400 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+              <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              </div>
+              <div class="text-sm font-bold text-slate-900 mb-1">Research Ideas</div>
+              <div class="text-xs text-slate-500 leading-relaxed">Find profitable niches before you build.</div>
+            </button>
+            <button onclick="go('saved')" class="group text-left rounded-2xl border border-slate-200 bg-white p-5 hover:border-violet-400 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+              <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-600 group-hover:bg-violet-600 group-hover:text-white transition-colors">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 3h11l3 3v15a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1zM8 3v5h6V3"/></svg>
+              </div>
+              <div class="text-sm font-bold text-slate-900 mb-1">Saved Projects</div>
+              <div class="text-xs text-slate-500 leading-relaxed">Open, download, and promote your products.</div>
+            </button>
+            <button onclick="document.getElementById('launchDashBtn') && document.getElementById('launchDashBtn').click()" class="group text-left rounded-2xl border border-slate-200 bg-white p-5 hover:border-amber-400 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+              <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9.663 17h4.673M12 3v1m6.364 1.636-.707.707M21 12h-1M4 12H3m3.343-5.657-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+              </div>
+              <div class="text-sm font-bold text-slate-900 mb-1">Launch Package</div>
+              <div class="text-xs text-slate-500 leading-relaxed">Landing page, freebie, ads, and email sequence.</div>
+            </button>
+          </div>
+
+          <!-- Stats Row -->
+          <div id="statCards" class="grid grid-cols-2 lg:grid-cols-4 gap-4"></div>
+
+          <!-- Product Type Shortcuts -->
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <div class="flex items-center justify-between mb-5">
+              <div>
+                <h2 class="text-base font-bold text-slate-900">Popular Product Types</h2>
+                <p class="text-sm text-slate-500 mt-0.5">Pick a product type and start building in minutes.</p>
+              </div>
+              <button onclick="go('factory')" class="text-sm font-medium text-brand-600 hover:text-brand-800">View All</button>
+            </div>
+            <div id="productTypeShortcuts" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <button onclick="go('factory'); setTimeout(() => { const t = document.querySelector('[data-ft=ebook]'); if(t) t.click(); }, 100);" class="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-brand-50 hover:border-brand-300 p-4 text-center transition">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white border border-slate-200 text-brand-600 shadow-sm">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 012-2h9l5 5v11a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg>
+                </div>
+                <span class="text-xs font-semibold text-slate-700">Ebook</span>
+              </button>
+              <button onclick="go('factory'); setTimeout(() => { const t = document.querySelector('[data-ft=coloring_book]'); if(t) t.click(); }, 100);" class="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-brand-50 hover:border-brand-300 p-4 text-center transition">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white border border-slate-200 text-pink-600 shadow-sm">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
+                </div>
+                <span class="text-xs font-semibold text-slate-700">Coloring Book</span>
+              </button>
+              <button onclick="go('factory'); setTimeout(() => { const t = document.querySelector('[data-ft=word_search]'); if(t) t.click(); }, 100);" class="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-brand-50 hover:border-brand-300 p-4 text-center transition">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white border border-slate-200 text-teal-600 shadow-sm">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                </div>
+                <span class="text-xs font-semibold text-slate-700">Word Search</span>
+              </button>
+              <button onclick="go('factory'); setTimeout(() => { const t = document.querySelector('[data-ft=crossword]'); if(t) t.click(); }, 100);" class="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-brand-50 hover:border-brand-300 p-4 text-center transition">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white border border-slate-200 text-orange-600 shadow-sm">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+                </div>
+                <span class="text-xs font-semibold text-slate-700">Crossword</span>
+              </button>
+              <button onclick="go('factory'); setTimeout(() => { const t = document.querySelector('[data-ft=math_worksheet]'); if(t) t.click(); }, 100);" class="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-brand-50 hover:border-brand-300 p-4 text-center transition">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white border border-slate-200 text-blue-600 shadow-sm">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                </div>
+                <span class="text-xs font-semibold text-slate-700">Math Worksheet</span>
+              </button>
+              <button onclick="go('factory'); setTimeout(() => { const t = document.querySelector('[data-ft=spelling_worksheet]'); if(t) t.click(); }, 100);" class="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-brand-50 hover:border-brand-300 p-4 text-center transition">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white border border-slate-200 text-rose-600 shadow-sm">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </div>
+                <span class="text-xs font-semibold text-slate-700">Spelling Worksheet</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Recent Projects -->
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <div class="flex items-center justify-between mb-5">
+              <div>
+                <h2 class="text-base font-bold text-slate-900">Recent Projects</h2>
+                <p class="text-xs text-slate-400 mt-0.5">Your last 5 saved products</p>
+              </div>
+              <button onclick="go('saved')" class="text-sm font-medium text-brand-600 hover:text-brand-800">View All</button>
+            </div>
+            <div id="recentList" class="space-y-2"></div>
+          </div>
+
+        </section>
+
+        <!-- Saved Projects -->
+        <section data-view="saved" class="view hidden space-y-6">
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <div class="flex items-center justify-between mb-1">
+              <h2 class="text-base font-bold text-slate-900">Saved Projects</h2>
+              <button data-go="dashboard" class="text-sm font-medium text-brand-600 hover:text-brand-800">Back to Dashboard</button>
+            </div>
+            <p class="text-sm text-slate-500 mb-4">Your saved products are listed below. Download the files you want to keep. You can delete projects after downloading them.</p>
+
+            <!-- Admin controls — hidden by default, shown when admin mode is on -->
+            <div class="admin-controls hidden flex items-center justify-between gap-3 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <div class="flex items-center gap-3">
+                <span class="text-xs font-semibold text-amber-700 bg-amber-200 rounded-full px-2 py-0.5">ADMIN</span>
+                <label class="inline-flex items-center gap-2 text-sm text-amber-700 cursor-pointer">
+                  <input type="checkbox" id="showTestProjects" class="rounded border-amber-400 text-brand-600 focus:ring-brand-500" />
+                  <span>Show test / debug / auto-generated projects</span>
+                </label>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="exitAdminBtn" class="rounded-xl border border-slate-400 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition">
+                  Exit Admin Mode
+                </button>
+                <button id="deleteTestDebugBtn" class="rounded-xl border border-amber-400 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 transition">
+                  Delete Test/Debug Projects Only
+                </button>
+                <button id="deleteAllBtn" class="rounded-xl border border-rose-400 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                  Admin: Delete All Saved Projects
+                </button>
+              </div>
+            </div>
+
+            <div id="savedList" class="space-y-2"></div>
+          </div>
+          <!-- Admin mode hint — shown when NOT in admin mode (small, unobtrusive) -->
+          <div id="adminModeHint" class="hidden rounded-xl border border-slate-200 bg-white p-4 flex items-center justify-between">
+            <p class="text-sm text-slate-500">Looking for test/debug controls?</p>
+            <button id="enableAdminBtn" class="text-xs font-medium text-amber-600 hover:text-amber-800 underline">Enable Admin Mode</button>
+          </div>
+        </section>
+
+        <!-- Research -->
+        <section data-view="research" class="view hidden space-y-6">
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h2 class="text-base font-bold text-slate-900 mb-1">Niche Research</h2>
+            <p class="text-sm text-slate-500 mb-4">Find trending, profitable digital-product niches with live web research.</p>
+            <div class="flex flex-col sm:flex-row gap-3">
+              <input id="researchInput" type="text" placeholder="e.g. productivity for freelancers"
+                class="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              <button id="researchBtn" class="btn-primary">Research</button>
+            </div>
+          </div>
+          <div id="researchOutput"></div>
+        </section>
+
+        <!-- Market Research -->
+        <section data-view="market" class="view hidden space-y-6">
+          <!-- Step 1: how do you want to start? -->
+          <div id="marketChooser" class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h2 class="text-base font-bold text-slate-900 mb-1">How do you want to start?</h2>
+            <p class="text-sm text-slate-500 mb-5">Bring your own niche, or let the app research the market and recommend the best niche and product for you.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button data-start="own" class="text-left rounded-2xl border border-slate-200 hover:border-brand-400 hover:bg-brand-50/40 p-5 transition">
+                <div class="text-sm font-bold text-slate-900 mb-1">I already have a niche</div>
+                <div class="text-sm text-slate-500">Enter your niche and we'll research it and recommend the best product opportunities inside it.</div>
+              </button>
+              <button data-start="find" class="text-left rounded-2xl border border-slate-200 hover:border-brand-400 hover:bg-brand-50/40 p-5 transition">
+                <div class="text-sm font-bold text-slate-900 mb-1">Find the best niche for me</div>
+                <div class="text-sm text-slate-500">Share a broad interest (or leave it open) and get a ranked list of opportunities with a clear recommendation.</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 2a: I already have an idea -->
+          <div id="marketOwn" class="hidden rounded-2xl border border-slate-200 bg-white p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-base font-bold text-slate-900">Research your niche</h2>
+              <button data-market-back class="text-sm font-medium text-slate-500 hover:text-slate-700">Back</button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Niche <span class="text-rose-500">*</span></label>
+                <input id="ownNiche" type="text" placeholder="e.g. meal planning"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Topic / specific idea</label>
+                <input id="ownTopic" type="text" placeholder="e.g. weekly dinner planner for busy parents"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Target audience</label>
+                <input id="ownAudience" type="text" placeholder="e.g. working parents"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Preferred product type</label>
+                <select id="ownProductType"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none"></select>
+              </div>
+            </div>
+            <div class="mt-5 flex justify-end">
+              <button id="ownContinueBtn" class="btn-primary">Research This Niche</button>
+            </div>
+          </div>
+
+          <!-- Step 2b: find the best niche -->
+          <div id="marketFind" class="hidden rounded-2xl border border-slate-200 bg-white p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-base font-bold text-slate-900">Find the best niche for me</h2>
+              <button data-market-back class="text-sm font-medium text-slate-500 hover:text-slate-700">Back</button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-600 mb-1">Broad interest area <span class="text-slate-400">(optional)</span></label>
+                <input id="findInterest" type="text" placeholder="e.g. health, parenting, productivity — or leave open"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Target audience <span class="text-slate-400">(optional)</span></label>
+                <input id="findAudience" type="text" placeholder="e.g. students"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Preferred product type <span class="text-slate-400">(optional)</span></label>
+                <select id="findProductType"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none"></select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Difficulty level <span class="text-slate-400">(optional)</span></label>
+                <select id="findDifficulty"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                  <option value="">Any</option><option>Easy</option><option>Medium</option><option>Hard</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Goal <span class="text-slate-400">(optional)</span></label>
+                <input id="findGoal" type="text" placeholder="e.g. fast to make, passive income, build an audience"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+            </div>
+            <div class="mt-5 flex justify-end">
+              <button id="findBtn" class="btn-primary">Find Best Niche</button>
+            </div>
+          </div>
+
+          <div id="marketOutput"></div>
+        </section>
+
+        <!-- Product Planning -->
+        <section data-view="planning" class="view hidden space-y-6">
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h2 class="text-base font-bold text-slate-900 mb-1">Product Planning</h2>
+            <p class="text-sm text-slate-500 mb-4">Turn a research result or idea into a clear product blueprint before you build it.</p>
+            <div class="mb-5">
+              <label class="block text-xs font-medium text-slate-600 mb-1">Start from a saved Market Research result</label>
+              <div class="flex flex-col sm:flex-row gap-3">
+                <select id="planSource"
+                  class="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                  <option value="">Enter manually</option>
+                </select>
+                <button id="planClear" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Clear form</button>
+              </div>
+            </div>
+            <form id="planForm" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-600 mb-1">Product idea <span class="text-rose-500">*</span></label>
+                <input name="idea" type="text" placeholder="e.g. A weekly meal-planning workbook for busy parents"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Product type</label>
+                <select name="product_type" id="planProductType"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none"></select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Target audience</label>
+                <input name="audience" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-600 mb-1">Main problem the product solves</label>
+                <input name="problem" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-600 mb-1">Desired outcome for the customer</label>
+                <input name="outcome" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Tone / style</label>
+                <input name="tone" type="text" placeholder="e.g. friendly, practical" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Suggested length or size</label>
+                <input name="length" type="text" placeholder="e.g. 30 pages, 8 chapters" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Difficulty level</label>
+                <select name="difficulty"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                  <option>Easy</option><option>Medium</option><option>Hard</option>
+                </select>
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-600 mb-1">Notes or special instructions</label>
+                <textarea name="notes" rows="2" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none"></textarea>
+              </div>
+            </form>
+            <div class="mt-5 flex justify-end">
+              <button id="planBtn" class="btn-primary">Generate Product Plan</button>
+            </div>
+          </div>
+          <div id="planOutput"></div>
+        </section>
+
+        <!-- Product Factory -->
+        <section data-view="factory" class="view hidden space-y-6">
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h2 class="text-base font-bold text-slate-900 mb-1">Product Factory</h2>
+            <p class="text-sm text-slate-500 mb-2">Create sellable digital products in three simple steps:</p>
+            <ol class="mb-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
+              <li class="rounded-full bg-slate-100 px-3 py-1">1. Pick a product</li>
+              <li class="rounded-full bg-slate-100 px-3 py-1">2. Fill in a few details</li>
+              <li class="rounded-full bg-slate-100 px-3 py-1">3. Generate &amp; download</li>
+            </ol>
+            <p class="text-sm text-slate-500 mb-4">New here? Start with <span class="font-medium text-slate-700">Coloring Book</span>, <span class="font-medium text-slate-700">Word Search</span>, or <span class="font-medium text-slate-700">Crossword</span>.</p>
+            <div id="factoryTypes" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+          </div>
+          <div id="factoryFormWrap" class="hidden rounded-2xl border border-slate-200 bg-white p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h3 id="factoryFormTitle" class="text-base font-bold text-slate-900"></h3>
+              <button id="factoryReset" class="text-sm font-medium text-slate-500 hover:text-slate-800">Change product type</button>
+            </div>
+            <form id="factoryForm" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></form>
+            <div class="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p class="text-xs text-slate-500">AI artwork can take a few minutes. You’ll review previews before the full book finishes when needed.</p>
+              <button id="factoryBtn" class="btn-primary shrink-0">Generate Product</button>
+            </div>
+          </div>
+          <div id="factoryOutput"></div>
+        </section>
+
+        <!-- Ebook Builder -->
+        <section data-view="ebook" class="view hidden space-y-6">
+          <div id="ebookBriefPanel" class="hidden"></div>
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h2 class="text-base font-bold text-slate-900 mb-1">Ebook Builder</h2>
+            <p class="text-sm text-slate-500 mb-4">Paste a topic, an article URL, or a YouTube link. We fetch the content and draft a structured ebook.</p>
+            <textarea id="ebookInput" rows="3" placeholder="A topic, https://example.com/article, or https://youtube.com/watch?v=..."
+              class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none"></textarea>
+            <div class="mt-3 grid sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1" for="ebookAuthor">Author name</label>
+                <input id="ebookAuthor" type="text" placeholder="e.g. Jordan Lee"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1" for="ebookResearchNotes">Research notes (optional)</label>
+                <input id="ebookResearchNotes" type="text" placeholder="Paste findings — chapters paraphrase, never copy"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+            </div>
+            <div class="mt-3 flex justify-end">
+              <button id="ebookBtn" class="btn-primary">Generate Ebook</button>
+            </div>
+          </div>
+          <div id="ebookOutput"></div>
+        </section>
+
+        <!-- Visual Review -->
+        <section data-view="visual" class="view hidden space-y-6">
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h2 class="text-base font-bold text-slate-900 mb-1">Visual Review</h2>
+            <p class="text-sm text-slate-500">Review and edit the visuals automatically added to your ebook.</p>
+          </div>
+
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Optional Video Resources</h3>
+            <p class="text-sm text-slate-500 mb-4">Use a YouTube video as research or as a recommended resource. Transcripts are used for summaries and original content only, never copied word-for-word.</p>
+
+            <div class="inline-flex rounded-xl bg-slate-100 p-1 mb-5">
+              <button data-yt-mode="link" class="yt-tab rounded-lg px-4 py-1.5 text-sm font-medium">Use a YouTube link</button>
+              <button data-yt-mode="search" class="yt-tab rounded-lg px-4 py-1.5 text-sm font-medium">Search for videos</button>
+            </div>
+
+            <!-- Link panel -->
+            <div id="ytLinkPanel" class="space-y-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">YouTube link <span class="text-rose-500">*</span></label>
+                <input id="ytUrl" type="text" placeholder="https://www.youtube.com/watch?v=..."
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Ebook or chapter topic it supports <span class="text-slate-400">(optional)</span></label>
+                <input id="ytLinkTopic" type="text" placeholder="e.g. Chapter 3: Meal prep basics"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div class="flex justify-end">
+                <button id="ytAnalyzeBtn" class="btn-primary">Analyze Video</button>
+              </div>
+            </div>
+
+            <!-- Search panel -->
+            <div id="ytSearchPanel" class="hidden space-y-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Chapter or ebook topic to search for <span class="text-rose-500">*</span></label>
+                <input id="ytTopic" type="text" placeholder="e.g. beginner meal prep for busy parents"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div class="flex justify-end">
+                <button id="ytSearchBtn" class="btn-primary">Search Videos</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="ytOutput"></div>
+        </section>
+
+        <!-- Publishing Studio -->
+        <section data-view="publishing" class="view hidden space-y-6">
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h2 class="text-base font-bold text-slate-900 mb-1">Publishing Studio</h2>
+            <p class="text-sm text-slate-500 mb-4">Turn a saved product into a polished, formatted ebook preview. Pick a project, choose a template, add video resources, and edit your publishing details.</p>
+            <div id="pubEditing" class="hidden mb-4 rounded-xl border border-brand-200 bg-brand-50/50 px-4 py-3"></div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Product Project to publish <span class="text-rose-500">*</span></label>
+                <select id="pubSource"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                  <option value="">Select a saved project</option>
+                </select>
+                <p class="text-xs text-slate-400 mt-1">Ebooks, Factory products, and Product Plans can be published.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Choose a template</h3>
+            <p class="text-sm text-slate-500 mb-4">Each template controls the cover, fonts, colors, spacing, tip and action boxes, footers, and more.</p>
+            <div id="pubTemplates" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+          </div>
+
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Include visual aids</h3>
+            <p class="text-sm text-slate-500 mb-4">Add saved video resources from the Visual Review page. Each appears as a resource box with a QR code placeholder.</p>
+            <div id="pubAids" class="space-y-2">
+              <p class="text-sm text-slate-400">No saved video resources yet.</p>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Publishing details</h3>
+            <p class="text-sm text-slate-500 mb-4">These appear on the cover, copyright page, footers, and call-to-action.</p>
+            <form id="pubForm" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Product title</label>
+                <input name="product_title" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Subtitle</label>
+                <input name="subtitle" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Author or brand name</label>
+                <input name="author_brand" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Website or contact link</label>
+                <input name="website_contact" type="text" placeholder="https://yourbrand.com" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-600 mb-1">Call-to-action</label>
+                <input name="call_to_action" type="text" placeholder="e.g. Get the full course at..." class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-600 mb-1">Copyright text</label>
+                <input name="copyright_text" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-600 mb-1">Disclaimer</label>
+                <textarea name="disclaimer" rows="3" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none"></textarea>
+              </div>
+            </form>
+            <div class="mt-5 flex flex-wrap justify-end gap-3">
+              <button id="pubGenerateBtn" class="btn-primary">Generate Publishing Preview</button>
+              <button id="pubSaveBtn" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Save Publishing Layout</button>
+            </div>
+          </div>
+
+          <div id="pubOutput"></div>
+        </section>
+
+        <!-- Platform Packages -->
+        <section data-view="packages" class="view hidden space-y-6">
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <h2 class="text-base font-bold text-slate-900 mb-1">Platform Package Builder</h2>
+            <p class="text-sm text-slate-500 mb-4">Prepare a finished product for selling on Amazon KDP, Etsy, Gumroad, or Lemon Squeezy. Pick a saved product that has reached Publishing Preview or Export Ready.</p>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Select a saved product</label>
+            <select id="packageSource" class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none"></select>
+          </div>
+          <div id="packageOutput" class="space-y-6"></div>
+        </section>
+
+        <!-- Ad Generator / Product Promotion Package -->
+        <section data-view="ad" class="view hidden space-y-6">
+
+          <!-- Product Promotion Package form -->
+          <div class="rounded-2xl border border-slate-200 bg-white p-6">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h2 class="text-base font-bold text-slate-900">Product Promotion Package</h2>
+                <p class="text-sm text-slate-500 mt-0.5">Generate a complete marketing and free-traffic package for your product.</p>
+              </div>
+              <span id="adContextBadge" class="hidden text-xs font-medium text-brand-600 bg-brand-50 border border-brand-200 rounded-full px-3 py-1"></span>
+            </div>
+
+            <!-- Promotion goal -->
+            <div class="mb-5 p-4 bg-brand-50 border border-brand-100 rounded-xl">
+              <label class="block text-xs font-semibold text-brand-700 mb-2">Promotion Goal *</label>
+              <div class="flex flex-wrap gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="adPromoGoal" value="freebie_signups" checked class="accent-brand-600">
+                  <span class="text-sm text-slate-700">Drive freebie signups</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="adPromoGoal" value="sell_paid_product" class="accent-brand-600">
+                  <span class="text-sm text-slate-700">Sell paid product</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Product Title *</label>
+                <input id="adProductTitle" type="text" placeholder="The Flexible Focus Weekly Kit"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Target Audience</label>
+                <input id="adAudience" type="text" placeholder="Adults with ADHD, late-diagnosed professionals..."
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Customer Problem</label>
+                <input id="adProblem" type="text" placeholder="Traditional planners are too rigid and make people feel behind..."
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Product Promise / Outcome</label>
+                <input id="adPromise" type="text" placeholder="A flexible planning kit that helps users restart quickly..."
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Product Description</label>
+                <input id="adProductDesc" type="text" placeholder="What the product includes, format, key features..."
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Price</label>
+                <input id="adPrice" type="text" placeholder="$19 or Free"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Free Giveaway / Lead Magnet</label>
+                <input id="adFreebie" type="text" placeholder="The 5-Page Flexible Focus Starter Pack"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Landing Page URL</label>
+                <input id="adLandingUrl" type="url" placeholder="https://example.com/flexible-focus"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Paid Product URL</label>
+                <input id="adPaidUrl" type="url" placeholder="https://example.com/flexible-focus-kit"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Tone</label>
+                <select id="adTone"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                  <option value="empathetic and understanding" selected>Empathetic and understanding</option>
+                  <option value="helpful and relatable">Helpful and relatable</option>
+                  <option value="warm and encouraging">Warm and encouraging</option>
+                  <option value="bold and direct">Bold and direct</option>
+                  <option value="professional and trustworthy">Professional and trustworthy</option>
+                  <option value="playful and fun">Playful and fun</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Paid ads option -->
+            <div class="mb-5">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="adIncludePaid" class="accent-brand-600 w-4 h-4">
+                <span class="text-sm text-slate-700">Include paid ad copy (Facebook, short video, Google/YouTube)</span>
+              </label>
+            </div>
+
+            <div class="flex justify-end gap-3">
+              <button id="adBtn" class="btn-primary">Generate Promotion Package</button>
+            </div>
+          </div>
+
+          <div id="adOutput"></div>
+        </section>
+
+        <!-- Subscription Plans -->
+        <section data-view="subscription" class="view hidden space-y-8">
+          <div class="text-center max-w-2xl mx-auto">
+            <h2 class="text-2xl font-extrabold text-slate-900">Simple, Transparent Pricing</h2>
+            <p class="mt-2 text-slate-500">Start free. Upgrade when you're ready to scale.</p>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            <!-- Free -->
+            <div class="rounded-2xl border border-slate-200 bg-white p-7 flex flex-col">
+              <div class="mb-5">
+                <div class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-1">Free</div>
+                <div class="text-4xl font-extrabold text-slate-900">$0</div>
+                <div class="text-sm text-slate-400 mt-1">forever</div>
+              </div>
+              <ul class="space-y-2.5 flex-1 mb-7">
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Create up to 3 products</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Basic ebook builder</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Market research tools</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> PDF downloads</li>
+              </ul>
+              <div class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-center text-sm font-semibold text-slate-400">Current Plan</div>
+            </div>
+            <!-- Starter -->
+            <div class="rounded-2xl border-2 border-brand-500 bg-white p-7 flex flex-col relative shadow-lg shadow-brand-100/50">
+              <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+                <span class="rounded-full bg-brand-600 text-white text-xs font-bold px-3 py-1">Most Popular</span>
+              </div>
+              <div class="mb-5">
+                <div class="text-sm font-bold text-brand-600 uppercase tracking-wide mb-1">Starter</div>
+                <div class="text-4xl font-extrabold text-slate-900">$9</div>
+                <div class="text-sm text-slate-400 mt-1">per month</div>
+              </div>
+              <ul class="space-y-2.5 flex-1 mb-7">
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Unlimited products</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> All product types</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Launch Package builder</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Ad &amp; promotion packages</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Publishing Studio</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Priority support</li>
+              </ul>
+              <button onclick="toast('Checkout coming soon!')" class="rounded-xl bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 text-sm font-semibold text-center transition">Upgrade to Starter</button>
+            </div>
+            <!-- Pro -->
+            <div class="rounded-2xl border border-slate-200 bg-white p-7 flex flex-col">
+              <div class="mb-5">
+                <div class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-1">Pro</div>
+                <div class="text-4xl font-extrabold text-slate-900">$19</div>
+                <div class="text-sm text-slate-400 mt-1">per month</div>
+              </div>
+              <ul class="space-y-2.5 flex-1 mb-7">
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Everything in Starter</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Advanced AI writing</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Custom branding</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Priority queue</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> White-label exports</li>
+                <li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> Dedicated support</li>
+              </ul>
+              <button onclick="toast('Checkout coming soon!')" class="rounded-xl border border-brand-300 text-brand-700 hover:bg-brand-50 px-4 py-2.5 text-sm font-semibold text-center transition">Upgrade to Pro</button>
+            </div>
+          </div>
+          <p class="text-center text-xs text-slate-400 max-w-md mx-auto">Payments are processed securely. Cancel anytime. All plans include a 14-day free trial.</p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 hidden rounded-xl px-4 py-3 text-sm text-white shadow-lg"></div>
+
+  <style>
+    .btn-primary { background:#4f46e5; color:#fff; font-weight:600; font-size:0.875rem; padding:0.625rem 1.25rem; border-radius:0.75rem; transition:.15s; white-space:nowrap; }
+    .btn-primary:hover { background:#4338ca; }
+    .btn-primary:disabled { opacity:.6; cursor:not-allowed; }
+    .nav-link { display:flex; align-items:center; gap:.7rem; padding:.6rem .85rem; border-radius:.6rem; font-size:.875rem; font-weight:500; color:#c7d2fe; transition:.15s; cursor:pointer; }
+    .nav-link:hover { background:rgba(255,255,255,.08); color:#fff; }
+    .nav-link.active { background:#4f46e5; color:#fff; }
+    .yt-tab { color:#64748b; }
+    .yt-tab.active { background:#fff; color:#4338ca; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  </style>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

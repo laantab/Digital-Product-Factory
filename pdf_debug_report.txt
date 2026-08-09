@@ -1,0 +1,12 @@
+PDF size: 4973 bytes
+=== DECODING ASCII85 STREAMS ===
+
+=== SEARCHING ENTIRE PDF FOR KEY TERMS ===
+
+=== QA REPORT ===
+passed: True
+answer_key_included: True
+answer_key_requested: True
+errors: []
+warnings: []
+fixes_applied: []

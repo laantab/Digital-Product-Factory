@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cover Editor — {{ project_id }}</title>
+  <script src="/static/js/app.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --brand: #2563eb;
+      --brand-dark: #1d4ed8;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --danger: #dc2626;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────────── */
+    .editor-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1.5rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .editor-header h1 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .editor-header .badge {
+      font-size: 0.7rem;
+      background: #dbeafe;
+      color: var(--brand);
+      border-radius: 9999px;
+      padding: 0.15rem 0.6rem;
+      font-weight: 500;
+    }
+    .editor-header .spacer { flex: 1; }
+
+    /* ── Layout ────────────────────────────────────────────────────────── */
+    .editor-layout {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Preview pane ───────────────────────────────────────────────────── */
+    .preview-pane {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #e2e8f0;
+      overflow: auto;
+      padding: 2rem;
+    }
+
+    .cover-frame {
+      position: relative;
+      width: 256px; /* scaled preview width */
+      /* COVER_IMAGE_SIZE = 1024x1536, so height = 1536/1024 * 256 ≈ 384 */
+      aspect-ratio: 1024 / 1536;
+      overflow: hidden;
+      border-radius: 4px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.2);
+      background: #1e3a5f;
+    }
+
+    .cover-frame img.cover-art {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: filter 0.2s;
+    }
+
+    .cover-frame .text-overlay {
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      top: auto;
+      bottom: 14%;
+      text-align: center;
+      pointer-events: none;
+      transition: top 0.2s, bottom 0.2s;
+    }
+
+    .cover-frame .title-text {
+      font-size: clamp(0.6rem, 2vw, 1rem);
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.25em;
+      word-break: break-word;
+    }
+
+    .cover-frame .subtitle-text {
+      font-size: clamp(0.45rem, 1.5vw, 0.75rem);
+      font-weight: 400;
+      line-height: 1.3;
+      opacity: 0.9;
+      word-break: break-word;
+    }
+
+    .cover-frame .author-text {
+      font-size: clamp(0.35rem, 1vw, 0.55rem);
+      font-weight: 300;
+      margin-top: 0.3em;
+      opacity: 0.8;
+    }
+
+    /* ── Controls pane ─────────────────────────────────────────────────── */
+    .controls-pane {
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .ctrl-section {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .ctrl-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0.75rem;
+      background: #f1f5f9;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    .ctrl-section-header:hover { background: #e2e8f0; }
+    .ctrl-section-header .chevron {
+      transition: transform 0.15s;
+      font-size: 0.65rem;
+    }
+    .ctrl-section.collapsed .chevron { transform: rotate(-90deg); }
+    .ctrl-section.collapsed .ctrl-body { display: none; }
+
+    .ctrl-body { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
+
+    .ctrl-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .ctrl-row label {
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .ctrl-row input[type="text"],
+    .ctrl-row input[type="number"],
+    .ctrl-row select,
+    .ctrl-row textarea {
+      width: 100%;
+      padding: 0.35rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.82rem;
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+    }
+    .ctrl-row input:focus,
+    .ctrl-row select:focus,
+    .ctrl-row textarea:focus {
+      outline: none;
+      border-color: var(--brand);
+      box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+    }
+
+    /* Sliders */
+    .ctrl-row input[type="range"] {
+      width: 100%;
+      accent-color: var(--brand);
+    }
+    .range-val {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    /* Alignment buttons */
+    .align-btns { display: flex; gap: 0.25rem; }
+    .align-btns button {
+      flex: 1;
+      padding: 0.3rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+    .align-btns button.active {
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
+
+    /* Palette grid */
+    .palette-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.35rem;
+    }
+    .palette-swatch {
+      border: 2px solid transparent;
+      border-radius: 6px;
+      padding: 0.35rem;
+      cursor: pointer;
+      text-align: center;
+      font-size: 0.65rem;
+      font-weight: 500;
+    }
+    .palette-swatch:hover { opacity: 0.85; }
+    .palette-swatch.active { border-color: var(--brand); }
+
+    /* Color swatches preview */
+    .palette-swatch .swatch-bar {
+      height: 20px;
+      border-radius: 3px;
+      margin-bottom: 2px;
+    }
+
+    /* Toggle */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .toggle-row label { font-size: 0.8rem; }
+    .toggle { position: relative; width: 36px; height: 20px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider {
+      position: absolute;
+      inset: 0;
+      background: #cbd5e1;
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle .slider::before {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      left: 3px; top: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle input:checked + .slider { background: var(--brand); }
+    .toggle input:checked + .slider::before { transform: translateX(16px); }
+
+    /* Action buttons */
+    .action-btn {
+      width: 100%;
+      padding: 0.55rem 1rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--brand);
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--brand-dark); }
+    .btn-secondary {
+      background: #f1f5f9;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover:not(:disabled) { background: #e2e8f0; }
+    .btn-danger {
+      background: #fef2f2;
+      color: var(--danger);
+      border: 1px solid #fecaca;
+    }
+    .btn-danger:hover:not(:disabled) { background: #fee2e2; }
+    .btn-success {
+      background: #16a34a;
+      color: #fff;
+    }
+    .btn-success:hover:not(:disabled) { background: #15803d; }
+
+    .cost-notice {
+      font-size: 0.68rem;
+      color: var(--muted);
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 0.5rem;
+      line-height: 1.4;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0.25rem 0;
+    }
+
+    /* File upload */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.78rem;
+      color: var(--muted);
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .upload-zone:hover { border-color: var(--brand); background: #eff6ff; }
+    .upload-zone input[type="file"] { display: none; }
+
+    /* Loading overlay */
+    .busy-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .busy-overlay .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #e2e8f0;
+      border-top-color: var(--brand);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,.12);
+      z-index: 200;
+      animation: slideUp 0.2s ease-out;
+    }
+    .toast.success { background: #16a34a; color: #fff; }
+    .toast.error   { background: var(--danger); color: #fff; }
+    @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay (shown during API calls) -->
+<div id="busyOverlay" class="busy-overlay" style="display:none;">
+  <div class="spinner"></div>
+  <span style="font-size:0.85rem;color:#64748b;">Working…</span>
+</div>
+
+<!-- Header -->
+<div class="editor-header">
+  <button type="button" id="btnBackFactory" class="btn-secondary" style="padding:0.4rem 0.75rem;font-size:0.78rem;border-radius:6px;">← Back to Factory</button>
+  <h1>Cover Editor</h1>
+  <span class="badge">{{ product_type|upper }}</span>
+  <div class="spacer"></div>
+  <span id="saveStatus" style="font-size:0.75rem;color:#64748b;"></span>
+</div>
+
+<!-- Main layout -->
+<div class="editor-layout">
+
+  <!-- Preview pane -->
+  <div class="preview-pane">
+    <div class="cover-frame" id="coverFrame">
+      <img
+        id="coverArtImg"
+        class="cover-art"
+        src="/download/{{ package_id }}/img_cover.png"
+        alt="Cover artwork"
+        onerror="this.style.display='none'"
+      />
+      <div class="text-overlay" id="textOverlay">
+        <div class="title-text" id="titleText"></div>
+        <div class="subtitle-text" id="subtitleText"></div>
+        <div class="author-text" id="authorText"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls pane -->
+  <div class="controls-pane">
+
+    <!-- ── Section: Text ─────────────────────────────────────────────── -->
+    <div class="ctrl-section" id="sec-text">
+      <div class="ctrl-section-header" onclick="toggleSection('sec-text')">
+        <span>Text</span><span class="chevron">▼</span>
+      </div>
+      <div class="ctrl-body">
+        <div class="ctrl-row">
+          <label>Title</label>
+          <input type="text" id="inTitle" placeholder="Book title" />
+        </div>
+        <div class="ctrl-row">
+          <label>Subtitle</label>
+          <input type="text" id="inSubtitle" placeholder="Subtitle" />
+        </div>
+        <div class="ctrl-row" id="authorRow">
+          <label>Author / Brand</label>
+          <input type="text" id="inAuthor" placeholder="Author name" />
+          <p id="authorHint" class="hint" style="display:none;margin-top:0.35rem;font-size:0.72rem;color:#64748b;">
+            Coloring book covers do not show an author name by default.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Section: Typography ────────────────────────────────────────── -->
+    <div class="ctrl-section" id="sec-typography">
+      <div class="ctrl-section-header" onclick="toggleSection('sec-typography')">
+        <span>Typography</span><span class="chevron">▼</span>
+      </div>
+      <div class="ctrl-body">
+        <div class="ctrl-row">
+          <label>Font Family</label>
+          <select id="inFontFamily">
+            <option value="Georgia, serif">Georgia Serif</option>
+            <option value="Arial, sans-serif">Arial Sans</option>
+            <option value="'Times New Roman', serif">Times New Roman</option>
+            <option value="Impact, sans-serif">Impact</option>
+            <option value="'Courier New', monospace">Courier</option>
+          </select>
+        </div>
+        <div class="ctrl-row">
+          <label>Font Size</label>
+          <input type="range" id="inFontSize" min="8" max="48" value="18" />
+          <div class="range-val" id="valFontSize">18px</div>
+        </div>
+        <div class="ctrl-row">
+          <label>Font Weight</label>
+          <select id="inFontWeight">
+            <option value="300">Light</option>
+            <option value="400">Regular</option>
+            <option value="600">Semi-Bold</option>
+            <option value="700" selected>Bold</option>
+            <option value="900">Black</option>
+          </select>
+        </div>
+        <div class="ctrl-row">
+          <label>Text Color</label>
+          <input type="color" id="inTextColor" value="#ffffff" style="height:32px;border-radius:6px;cursor:pointer;" />
+        </div>
+        <div class="ctrl-row">
+          <label>Text Alignment</label>
+          <div class="align-btns">
+            <button id="alignLeft" onclick="setAlign('left')">Left</button>
+            <button id="alignCenter" class="active" onclick="setAlign('center')">Center</button>
+            <button id="alignRight" onclick="setAlign('right')">Right</button>
+          </div>
+        </div>
+        <div class="ctrl-row">
+          <label>Title Position (vertical)</label>
+          <input type="range" id="inTextY" min="10" max="90" value="75" />
+          <div class="range-val" id="valTextY">75% from top</div>
+        </div>
+        <div class="ctrl-row">
+          <label>Line Spacing</label>
+          <input type="range" id="inLineHeight" min="1.0" max="2.5" step="0.1" value="1.3" />
+          <div class="range-val" id="valLineHeight">1.3</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Section: Color Palette ─────────────────────────────────────── -->
+    <div class="ctrl-section" id="sec-palette">
+      <div class="ctrl-section-header" onclick="toggleSection('sec-palette')">
+        <span>Color Palette</span><span class="chevron">▼</span>
+      </div>
+      <div class="ctrl-body">
+        <div class="palette-grid" id="paletteGrid"></div>
+      </div>
+    </div>
+
+    <!-- ── Section: Background ────────────────────────────────────────── -->
+    <div class="ctrl-section" id="sec-background">
+      <div class="ctrl-section-header" onclick="toggleSection('sec-background')">
+        <span>Background & Artwork</span><span class="chevron">▼</span>
+      </div>
+      <div class="ctrl-body">
+        <div class="ctrl-row">
+          <label>Image Brightness</label>
+          <input type="range" id="inBrightness" min="20" max="150" value="100" />
+          <div class="range-val" id="valBrightness">100%</div>
+        </div>
+        <div class="ctrl-row">
+          <label>Image Darkness / Overlay</label>
+          <input type="range" id="inDarkness" min="0" max="80" value="30" />
+          <div class="range-val" id="valDarkness">30%</div>
+        </div>
+        <div class="ctrl-row">
+          <label>Image Scale / Zoom</label>
+          <input type="range" id="inImageScale" min="80" max="130" value="100" />
+          <div class="range-val" id="valImageScale">100%</div>
+        </div>
+        <div class="ctrl-row">
+          <label>Image Horizontal Position</label>
+          <input type="range" id="inImageX" min="0" max="100" value="50" />
+          <div class="range-val" id="valImageX">50%</div>
+        </div>
+        <div class="ctrl-row">
+          <label>Image Vertical Position</label>
+          <input type="range" id="inImageY" min="0" max="100" value="50" />
+          <div class="range-val" id="valImageY">50%</div>
+        </div>
+        <div class="ctrl-row">
+          <label>Swap Background (use current artwork)</label>
+          <div class="toggle-row">
+            <label style="font-size:0.78rem;color:#64748b;">Keep current artwork</label>
+            <label class="toggle">
+              <input type="checkbox" id="inSwapBg" />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Section: Upload ────────────────────────────────────────────── -->
+    <div class="ctrl-section" id="sec-upload">
+      <div class="ctrl-section-header" onclick="toggleSection('sec-upload')">
+        <span>Upload Image</span><span class="chevron">▼</span>
+      </div>
+      <div class="ctrl-body">
+        <label class="upload-zone" id="uploadZone">
+          <input type="file" id="inFileUpload" accept="image/*" />
+          <div style="font-size:1.2rem;margin-bottom:0.25rem;">🖼️</div>
+          <div>Click or drag image to upload</div>
+          <div style="font-size:0.68rem;margin-top:0.25rem;color:#94a3b8;">PNG, JPG, WEBP · Replaces artwork</div>
+        </label>
+        <button class="action-btn btn-secondary" id="btnUpload" style="display:none;">Use Uploaded Image</button>
+      </div>
+    </div>
+
+    <!-- ── Section: Decorative ────────────────────────────────────────── -->
+    <div class="ctrl-section" id="sec-deco">
+      <div class="ctrl-section-header" onclick="toggleSection('sec-deco')">
+        <span>Decorative Elements</span><span class="chevron">▼</span>
+      </div>
+      <div class="ctrl-body">
+        <div class="toggle-row">
+          <label>Show subtle shadow on text</label>
+          <label class="toggle">
+            <input type="checkbox" id="inTextShadow" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Gradient fade at bottom</label>
+          <label class="toggle">
+            <input type="checkbox" id="inGradient" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Decorative line above title</label>
+          <label class="toggle">
+            <input type="checkbox" id="inDecoLine" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Actions ───────────────────────────────────────────────────── -->
+    <div class="ctrl-section">
+      <div class="ctrl-body" style="gap:0.6rem;">
+
+        <div class="cost-notice">
+          ⚠️ <strong>Regenerate Artwork</strong> uses OpenAI and may create an API charge.
+          Editing, saving, and downloading do not call OpenAI.
+        </div>
+        <button class="action-btn btn-primary" id="btnRegenerate">Regenerate Artwork ✨</button>
+
+        <button class="action-btn btn-secondary" id="btnPreview">Preview Cover</button>
+        <button class="action-btn btn-secondary" id="btnSave">Save Cover</button>
+        <button class="action-btn btn-danger" id="btnReset">Reset Changes</button>
+
+        <div class="divider"></div>
+
+        <button class="action-btn btn-success" id="btnApplyToPdf">Use This Cover in PDF</button>
+        <button class="action-btn btn-secondary" id="btnDownload">Download Cover PNG</button>
+      </div>
+    </div>
+
+  </div><!-- /controls-pane -->
+</div><!-- /editor-layout -->
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+const PROJECT_ID = {{ project_id }};
+const PRODUCT_TYPE = "{{ product_type }}";
+const PACKAGE_ID = "{{ package_id }}";
+
+// Start from the server-provided cover_design (or empty shell)
+const initialCover = {{ cover_json | tojson }};
+
+// Local editor state — mirrors cover fields + editor-specific settings
+function _initialTextY(cover) {
+  // Prefer explicit text_y; else map text_position.y (cover engine, ~81 = lower third).
+  if (cover.text_y != null && cover.text_y !== "") return Number(cover.text_y);
+  const pos = cover.text_position;
+  if (pos && pos.y != null) return Number(pos.y);
+  return 78;
+}
+
+const _rawAuthor = initialCover.author || "";
+const _isColoring = PRODUCT_TYPE === "coloring_book";
+const state = {
+  title:       initialCover.title       || "",
+  subtitle:    initialCover.subtitle    || "",
+  // Coloring books: no author/brand on the cover by default.
+  author:      _isColoring
+    ? (_rawAuthor === "Lonnie Brown" || _rawAuthor === "Digital Product Factory" ? "" : _rawAuthor)
+    : _rawAuthor,
+  fontFamily:  initialCover.font_family  || (_isColoring ? "Arial, sans-serif" : "Georgia, serif"),
+  fontSize:    initialCover.font_size    || 18,
+  fontWeight:  initialCover.font_weight  || "700",
+  textColor:   initialCover.text_color   || "#ffffff",
+  textAlign:   initialCover.text_align   || "center",
+  textY:       _initialTextY(initialCover),
+  lineHeight:  initialCover.line_height  || 1.3,
+  paletteId:   initialCover.palette_id   || "professional_blue",
+  brightness:  initialCover.brightness  || 100,
+  darkness:    initialCover.darkness     || 30,
+  imageScale:  initialCover.image_scale  || 100,
+  imageX:      initialCover.image_x       || 50,
+  imageY:      initialCover.image_y       || 50,
+  textShadow:  initialCover.text_shadow  !== undefined ? initialCover.text_shadow : true,
+  gradient:    initialCover.gradient      !== undefined ? initialCover.gradient : true,
+  decoLine:    initialCover.deco_line    || false,
+};
+
+// Keep coloring-book title in the lower third (never a top banner).
+if (_isColoring && state.textY < 55) state.textY = 78;
+
+// Snapshot for reset
+const savedState = JSON.parse(JSON.stringify(state));
+
+// ── Palette definitions ─────────────────────────────────────────────────────────
+const PALETTES = [
+  { id: "professional_blue", name: "Professional Blue",
+    swatch: "linear-gradient(135deg, #1e3a5f 50%, #2563eb 50%)" },
+  { id: "warm_orange",        name: "Warm Orange",
+    swatch: "linear-gradient(135deg, #7c2d12 50%, #ea580c 50%)" },
+  { id: "black_gold",         name: "Black & Gold",
+    swatch: "linear-gradient(135deg, #0a0a0a 50%, #d4af37 50%)" },
+  { id: "clean_white",        name: "Clean White",
+    swatch: "linear-gradient(135deg, #ffffff 50%, #f1f5f9 50%)" },
+  { id: "purple_modern",      name: "Purple Modern",
+    swatch: "linear-gradient(135deg, #312e81 50%, #7c3aed 50%)" },
+  { id: "earth_tones",        name: "Earth Tones",
+    swatch: "linear-gradient(135deg, #44403c 50%, #78716c 50%)" },
+];
+
+// ── DOM refs ───────────────────────────────────────────────────────────────────
+const coverFrame    = document.getElementById("coverFrame");
+const coverArtImg   = document.getElementById("coverArtImg");
+const textOverlay   = document.getElementById("textOverlay");
+const titleText     = document.getElementById("titleText");
+const subtitleText  = document.getElementById("subtitleText");
+const authorText    = document.getElementById("authorText");
+const saveStatus    = document.getElementById("saveStatus");
+
+// ── Render palette grid ────────────────────────────────────────────────────────
+function buildPaletteGrid() {
+  const grid = document.getElementById("paletteGrid");
+  PALETTES.forEach(p => {
+    const el = document.createElement("div");
+    el.className = "palette-swatch" + (state.paletteId === p.id ? " active" : "");
+    el.title = p.name;
+    el.innerHTML = `<div class="swatch-bar" style="background:${p.swatch}"></div>${p.name}`;
+    el.onclick = () => selectPalette(p.id);
+    grid.appendChild(el);
+  });
+}
+
+function selectPalette(id) {
+  state.paletteId = id;
+  document.querySelectorAll(".palette-swatch").forEach(el => el.classList.remove("active"));
+  const idx = PALETTES.findIndex(p => p.id === id);
+  if (idx >= 0) document.querySelectorAll(".palette-swatch")[idx]?.classList.add("active");
+  applyPreview();
+}
+
+// ── Render preview ─────────────────────────────────────────────────────────────
+function applyPreview() {
+  const palette = PALETTES.find(p => p.id === state.paletteId) || PALETTES[0];
+
+  // Background
+  coverFrame.style.background = palette.swatch.split(",")[0].replace("linear-gradient(135deg, ", "").trim();
+
+  // Artwork filter (brightness + darkness overlay via CSS)
+  const darkOverlay = state.darkness / 100;
+  const brightAdjust = state.brightness / 100;
+  coverArtImg.style.filter =
+    `brightness(${brightAdjust})` +
+    (darkOverlay > 0 ? ` drop-shadow(0 0 100px rgba(0,0,0,${darkOverlay}))` : "");
+
+  // Artwork position / scale
+  coverArtImg.style.transformOrigin = `${state.imageX}% ${state.imageY}%`;
+  coverArtImg.style.transform = `scale(${state.imageScale / 100})`;
+
+  // Text
+  titleText.textContent   = state.title;
+  subtitleText.textContent = state.subtitle;
+  authorText.textContent   = state.author;
+
+  // Typography
+  const family = state.fontFamily;
+  const weight = state.fontWeight;
+  const color  = state.textColor;
+  const lh     = state.lineHeight;
+  const fsPx   = Math.round(state.fontSize * (256 / 16)); // scale to preview px
+  titleText.style.cssText = `
+    font-family: ${family};
+    font-weight: ${weight};
+    color: ${color};
+    line-height: ${lh};
+    font-size: ${fsPx}px;
+    ${state.textShadow ? "text-shadow: 0 1px 4px rgba(0,0,0,.5);" : ""}
+  `;
+  subtitleText.style.cssText = `
+    font-family: ${family};
+    font-weight: 400;
+    color: ${color};
+    line-height: ${lh};
+    font-size: ${Math.round(fsPx * 0.7)}px;
+    ${state.textShadow ? "text-shadow: 0 1px 3px rgba(0,0,0,.45);" : ""}
+  `;
+  authorText.style.cssText = `
+    font-family: ${family};
+    font-weight: 300;
+    color: ${color};
+    font-size: ${Math.round(fsPx * 0.5)}px;
+    opacity: 0.85;
+    ${state.textShadow ? "text-shadow: 0 1px 2px rgba(0,0,0,.4);" : ""}
+  `;
+
+  // Alignment + vertical position.
+  // textY = % from top where the title block sits. Use top only — setting both
+  // top and bottom stretches/collapses the overlay and can shove title to the top.
+  textOverlay.style.textAlign = state.textAlign;
+  textOverlay.style.top = state.textY + "%";
+  textOverlay.style.bottom = "auto";
+  textOverlay.style.transform = "translateY(-20%)";
+
+  // Gradient fade
+  if (state.gradient) {
+    coverFrame.style.boxShadow = `inset 0 -60px 80px -20px rgba(0,0,0,${darkOverlay + 0.2})`;
+  } else {
+    coverFrame.style.boxShadow = "";
+  }
+
+  // Decorative line
+  let decoLine = document.getElementById("decoLineEl");
+  if (state.decoLine) {
+    if (!decoLine) {
+      decoLine = document.createElement("div");
+      decoLine.id = "decoLineEl";
+      decoLine.style.cssText = `
+        width: 40px; height: 2px; background: ${color}; margin: 0 auto 0.3em;
+        opacity: 0.7;
+      `;
+      textOverlay.insertBefore(decoLine, titleText);
+    }
+  } else {
+    decoLine?.remove();
+  }
+}
+
+// ── Wire up inputs ─────────────────────────────────────────────────────────────
+function wire(id, key, transform) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener("input", () => {
+    state[key] = transform ? transform(el.value) : el.value;
+    applyPreview();
+  });
+}
+
+wire("inTitle",    "title");
+wire("inSubtitle", "subtitle");
+wire("inAuthor",   "author");
+wire("inFontFamily", "fontFamily");
+wire("inFontWeight", "fontWeight");
+wire("inTextColor",  "textColor");
+
+document.getElementById("inFontSize").addEventListener("input", e => {
+  state.fontSize = parseInt(e.target.value, 10);
+  document.getElementById("valFontSize").textContent = state.fontSize + "px";
+  applyPreview();
+});
+
+document.getElementById("inTextY").addEventListener("input", e => {
+  state.textY = parseInt(e.target.value, 10);
+  document.getElementById("valTextY").textContent = state.textY + "% from top";
+  applyPreview();
+});
+
+document.getElementById("inLineHeight").addEventListener("input", e => {
+  state.lineHeight = parseFloat(e.target.value);
+  document.getElementById("valLineHeight").textContent = state.lineHeight;
+  applyPreview();
+});
+
+document.getElementById("inBrightness").addEventListener("input", e => {
+  state.brightness = parseInt(e.target.value, 10);
+  document.getElementById("valBrightness").textContent = state.brightness + "%";
+  applyPreview();
+});
+
+document.getElementById("inDarkness").addEventListener("input", e => {
+  state.darkness = parseInt(e.target.value, 10);
+  document.getElementById("valDarkness").textContent = state.darkness + "%";
+  applyPreview();
+});
+
+document.getElementById("inImageScale").addEventListener("input", e => {
+  state.imageScale = parseInt(e.target.value, 10);
+  document.getElementById("valImageScale").textContent = state.imageScale + "%";
+  applyPreview();
+});
+
+document.getElementById("inImageX").addEventListener("input", e => {
+  state.imageX = parseInt(e.target.value, 10);
+  document.getElementById("valImageX").textContent = state.imageX + "%";
+  applyPreview();
+});
+
+document.getElementById("inImageY").addEventListener("input", e => {
+  state.imageY = parseInt(e.target.value, 10);
+  document.getElementById("valImageY").textContent = state.imageY + "%";
+  applyPreview();
+});
+
+document.getElementById("inTextShadow").addEventListener("change", e => {
+  state.textShadow = e.target.checked;
+  applyPreview();
+});
+
+document.getElementById("inGradient").addEventListener("change", e => {
+  state.gradient = e.target.checked;
+  applyPreview();
+});
+
+document.getElementById("inDecoLine").addEventListener("change", e => {
+  state.decoLine = e.target.checked;
+  applyPreview();
+});
+
+function setAlign(val) {
+  state.textAlign = val;
+  document.querySelectorAll(".align-btns button").forEach(b => b.classList.remove("active"));
+  document.getElementById("align" + val.charAt(0).toUpperCase() + val.slice(1))?.classList.add("active");
+  applyPreview();
+}
+
+// ── Toggle section ─────────────────────────────────────────────────────────────
+function toggleSection(id) {
+  document.getElementById(id)?.classList.toggle("collapsed");
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function showToast(msg, type) {
+  const existing = document.querySelector(".toast");
+  existing?.remove();
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ── Busy overlay ───────────────────────────────────────────────────────────────
+function setBusy(on) {
+  document.getElementById("busyOverlay").style.display = on ? "flex" : "none";
+}
+
+// ── API helper ─────────────────────────────────────────────────────────────────
+async function apiPost(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || "Request failed");
+  }
+  return res.json();
+}
+
+// ── Button actions ─────────────────────────────────────────────────────────────
+
+// Preview: apply local state to server cover, return updated cover JSON
+document.getElementById("btnPreview").onclick = async () => {
+  setBusy(true);
+  try {
+    const overrides = {
+      title: state.title,
+      subtitle: state.subtitle,
+      author: _isColoring ? "" : state.author,
+      font_family: state.fontFamily,
+      font_size: state.fontSize,
+      font_weight: state.fontWeight,
+      text_color: state.textColor,
+      text_align: state.textAlign,
+      text_y: state.textY,
+      text_position: { x: 50.0, y: Number(state.textY) || 78, align: state.textAlign || "center" },
+      line_height: state.lineHeight,
+      palette_id: state.paletteId,
+      brightness: state.brightness,
+      darkness: state.darkness,
+      image_scale: state.imageScale,
+      image_x: state.imageX,
+      image_y: state.imageY,
+      text_shadow: state.textShadow,
+      gradient: state.gradient,
+      deco_line: state.decoLine,
+      text_overlay: true,
+    };
+    const result = await apiPost("/cover/preview", {
+      project_id: PROJECT_ID,
+      overrides,
+    });
+    Object.assign(state, {
+      title:      result.title      || state.title,
+      subtitle:   result.subtitle   || state.subtitle,
+      author:     _isColoring ? "" : (result.author || state.author),
+      fontFamily: result.font_family || state.fontFamily,
+    });
+    document.getElementById("inTitle").value    = state.title;
+    document.getElementById("inSubtitle").value = state.subtitle;
+    document.getElementById("inAuthor").value   = state.author;
+    applyPreview();
+    showToast("Preview updated.", "success");
+  } catch (e) {
+    showToast("Preview failed: " + e.message, "error");
+  } finally {
+    setBusy(false);
+  }
+};
+
+// Save: persist current cover to DB
+document.getElementById("btnSave").onclick = async () => {
+  setBusy(true);
+  try {
+    if (_isColoring) {
+      state.author = "";
+      document.getElementById("inAuthor").value = "";
+      if (state.textY < 55) state.textY = 78;
+    }
+    const overrides = {
+      title: state.title,
+      subtitle: state.subtitle,
+      author: _isColoring ? "" : state.author,
+      font_family: state.fontFamily,
+      font_size: state.fontSize,
+      font_weight: state.fontWeight,
+      text_color: state.textColor,
+      text_align: state.textAlign,
+      text_y: state.textY,
+      text_position: { x: 50.0, y: Number(state.textY) || 78, align: state.textAlign || "center" },
+      line_height: state.lineHeight,
+      palette_id: state.paletteId,
+      brightness: state.brightness,
+      darkness: state.darkness,
+      image_scale: state.imageScale,
+      image_x: state.imageX,
+      image_y: state.imageY,
+      text_shadow: state.textShadow,
+      gradient: state.gradient,
+      deco_line: state.decoLine,
+      text_overlay: true,
+    };
+    await apiPost("/cover/save", {
+      project_id: PROJECT_ID,
+      cover: coverPayloadForApi(),
+      overrides,
+    });
+    saveStatus.textContent = "✓ Saved";
+    setTimeout(() => { saveStatus.textContent = ""; }, 2500);
+    showToast("Cover saved.", "success");
+  } catch (e) {
+    showToast("Save failed: " + e.message, "error");
+  } finally {
+    setBusy(false);
+  }
+};
+
+function coverPayloadForApi() {
+  // Map editor state → cover_design keys the backend expects.
+  const author = (_isColoring ? "" : state.author);
+  return {
+    ...initialCover,
+    title: state.title,
+    subtitle: state.subtitle,
+    author,
+    font_family: state.fontFamily,
+    font_size: state.fontSize,
+    font_weight: state.fontWeight,
+    text_color: state.textColor,
+    text_align: state.textAlign,
+    text_y: state.textY,
+    text_position: { x: 50.0, y: Number(state.textY) || 78, align: state.textAlign || "center" },
+    line_height: state.lineHeight,
+    palette_id: state.paletteId,
+    brightness: state.brightness,
+    darkness: state.darkness,
+    image_scale: state.imageScale,
+    image_x: state.imageX,
+    image_y: state.imageY,
+    text_shadow: state.textShadow,
+    gradient: state.gradient,
+    deco_line: state.decoLine,
+    text_overlay: true,
+    product_type: PRODUCT_TYPE,
+    package_id: PACKAGE_ID || initialCover.package_id || "",
+  };
+}
+
+// Back → Product Factory (window.close does nothing when this page was opened via navigation)
+document.getElementById("btnBackFactory").onclick = () => {
+  window.location.href = `/?view=factory&project_id=${PROJECT_ID}`;
+};
+
+// Regenerate Artwork
+document.getElementById("btnRegenerate").onclick = async () => {
+  if (!confirm("Regenerate artwork uses OpenAI and may create an API charge. Continue?")) return;
+  setBusy(true);
+  try {
+    // Persist text settings first (without inventing an author on coloring books)
+    const overrides = {
+      title: state.title,
+      subtitle: state.subtitle,
+      author: _isColoring ? "" : state.author,
+      font_family: state.fontFamily,
+      font_size: state.fontSize,
+      font_weight: state.fontWeight,
+      text_color: state.textColor,
+      text_align: state.textAlign,
+      text_y: Math.max(state.textY, _isColoring ? 55 : 10),
+      text_position: { x: 50.0, y: Math.max(state.textY, _isColoring ? 55 : 10), align: state.textAlign || "center" },
+      line_height: state.lineHeight,
+      palette_id: state.paletteId,
+      brightness: state.brightness,
+      darkness: state.darkness,
+      image_scale: state.imageScale,
+      image_x: state.imageX,
+      image_y: state.imageY,
+      text_shadow: state.textShadow,
+      gradient: state.gradient,
+      deco_line: state.decoLine,
+      text_overlay: true,
+    };
+    if (_isColoring) {
+      state.author = "";
+      document.getElementById("inAuthor").value = "";
+      if (state.textY < 55) state.textY = 78;
+      overrides.text_y = state.textY;
+      overrides.text_position.y = state.textY;
+    }
+    await apiPost("/cover/save", {
+      project_id: PROJECT_ID,
+      cover: coverPayloadForApi(),
+      overrides,
+    });
+    const result = await apiPost("/cover/regenerate", {
+      project_id: PROJECT_ID,
+      cover: coverPayloadForApi(),
+    });
+    const url = result.asset_url || (result.cover && result.cover.cover_asset_url) || "";
+    if (url) {
+      coverArtImg.src = url + (url.includes("?") ? "&" : "?") + "t=" + Date.now();
+      coverArtImg.style.display = "block";
+    }
+    // Keep author cleared / title in lower third after regen
+    if (_isColoring) {
+      state.author = "";
+      document.getElementById("inAuthor").value = "";
+      if (state.textY < 55) state.textY = 78;
+      document.getElementById("inTextY").value = state.textY;
+      applyPreview();
+    }
+    showToast("Artwork regenerated.", "success");
+  } catch (e) {
+    showToast("Regenerate failed: " + e.message, "error");
+  } finally {
+    setBusy(false);
+  }
+};
+
+// Reset
+document.getElementById("btnReset").onclick = () => {
+  Object.assign(state, JSON.parse(JSON.stringify(savedState)));
+  document.getElementById("inTitle").value    = state.title;
+  document.getElementById("inSubtitle").value = state.subtitle;
+  document.getElementById("inAuthor").value   = state.author;
+  setAlign(state.textAlign);
+  applyPreview();
+  showToast("Changes reset.", "success");
+};
+
+// Apply to PDF
+document.getElementById("btnApplyToPdf").onclick = async () => {
+  if (!confirm("This will update the product PDF with the current cover. Continue?")) return;
+  setBusy(true);
+  try {
+    await document.getElementById("btnSave").onclick();
+    const result = await apiPost("/cover/apply-to-pdf", {
+      project_id: PROJECT_ID,
+      cover: coverPayloadForApi(),
+    });
+    showToast("Cover applied to PDF. " + (result.exports?.files?.pdf?.name || ""), "success");
+  } catch (e) {
+    showToast("Apply-to-PDF failed: " + e.message, "error");
+  } finally {
+    setBusy(false);
+  }
+};
+
+// Download Cover PNG
+document.getElementById("btnDownload").onclick = async () => {
+  setBusy(true);
+  try {
+    // Ensure saved
+    await document.getElementById("btnSave").onclick();
+    const url = `/download/${PACKAGE_ID}/img_cover.png`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "cover.png";
+    a.click();
+    showToast("Download started.", "success");
+  } catch (e) {
+    showToast("Download failed: " + e.message, "error");
+  } finally {
+    setBusy(false);
+  }
+};
+
+// ── Image upload ───────────────────────────────────────────────────────────────
+const uploadZone   = document.getElementById("uploadZone");
+const fileInput    = document.getElementById("inFileUpload");
+const btnUpload    = document.getElementById("btnUpload");
+let uploadedB64    = null;
+
+uploadZone.onclick = () => fileInput.click();
+uploadZone.ondragover = e => { e.preventDefault(); uploadZone.style.borderColor = "var(--brand)"; };
+uploadZone.ondragleave = () => { uploadZone.style.borderColor = ""; };
+uploadZone.ondrop = e => {
+  e.preventDefault();
+  uploadZone.style.borderColor = "";
+  const file = e.dataTransfer.files[0];
+  if (file) processFile(file);
+};
+
+fileInput.onchange = () => {
+  const file = fileInput.files[0];
+  if (file) processFile(file);
+};
+
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    uploadedB64 = e.target.result.split(",")[1];
+    btnUpload.style.display = "block";
+    btnUpload.textContent = "Use: " + file.name;
+    // Preview the uploaded image locally
+    coverArtImg.src = e.target.result;
+    coverArtImg.style.display = "block";
+  };
+  reader.readAsDataURL(file);
+}
+
+btnUpload.onclick = async () => {
+  if (!uploadedB64) return;
+  setBusy(true);
+  try {
+    const result = await apiPost("/cover/upload-image", {
+      project_id: PROJECT_ID,
+      image_data: uploadedB64,
+    });
+    coverArtImg.src = result.url + "?t=" + Date.now();
+    showToast("Image uploaded and saved.", "success");
+    uploadedB64 = null;
+    btnUpload.style.display = "none";
+    fileInput.value = "";
+  } catch (e) {
+    showToast("Upload failed: " + e.message, "error");
+  } finally {
+    setBusy(false);
+  }
+};
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+buildPaletteGrid();
+document.getElementById("inTitle").value    = state.title;
+document.getElementById("inSubtitle").value = state.subtitle;
+document.getElementById("inAuthor").value   = state.author;
+document.getElementById("inFontFamily").value  = state.fontFamily;
+document.getElementById("inFontSize").value     = state.fontSize;
+document.getElementById("valFontSize").textContent = state.fontSize + "px";
+document.getElementById("inFontWeight").value   = state.fontWeight;
+document.getElementById("inTextColor").value   = state.textColor;
+document.getElementById("inTextY").value        = state.textY;
+document.getElementById("valTextY").textContent = state.textY + "% from top";
+document.getElementById("inLineHeight").value    = state.lineHeight;
+document.getElementById("valLineHeight").textContent = state.lineHeight;
+document.getElementById("inBrightness").value   = state.brightness;
+document.getElementById("valBrightness").textContent = state.brightness + "%";
+document.getElementById("inDarkness").value    = state.darkness;
+document.getElementById("valDarkness").textContent = state.darkness + "%";
+document.getElementById("inImageScale").value   = state.imageScale;
+document.getElementById("valImageScale").textContent = state.imageScale + "%";
+document.getElementById("inImageX").value   = state.imageX;
+document.getElementById("valImageX").textContent = state.imageX + "%";
+document.getElementById("inImageY").value   = state.imageY;
+document.getElementById("valImageY").textContent = state.imageY + "%";
+document.getElementById("inTextShadow").checked = state.textShadow;
+document.getElementById("inGradient").checked   = state.gradient;
+document.getElementById("inDecoLine").checked   = state.decoLine;
+if (_isColoring) {
+  const authorInput = document.getElementById("inAuthor");
+  const authorHint = document.getElementById("authorHint");
+  if (authorInput) {
+    authorInput.value = "";
+    authorInput.placeholder = "Not used on coloring book covers";
+  }
+  if (authorHint) authorHint.style.display = "block";
+  state.author = "";
+}
+applyPreview();
+</script>
+</body>
+</html>

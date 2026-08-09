@@ -1,0 +1,26 @@
+---
+description: Protect the Digital Product Factory from cross-product regressions
+alwaysApply: true
+---
+
+# Factory stability rules
+
+1. Work on one product family at a time. Do not modify another generator unless
+   a failing acceptance test proves that shared code requires it.
+2. Before editing, run `python preflight_check.py` and record any existing
+   failures. After editing, run it again. Never call work complete when it fails.
+3. Tests must make zero paid API calls. Do not weaken the network guard, delete a
+   failing test, change an expected result to match a defect, or accept skips.
+4. Preview, Save, PDF download, and ZIP download must use the same accepted
+   artifact bytes. Export must not silently regenerate a different product.
+5. A QA-blocked full product must not be saved or returned as downloadable PDF.
+6. Do not use unrelated vocabulary, generic placeholder text, ebook fallback,
+   or test artwork to make a product appear successful.
+7. Preserve Ebook, Coloring Book, Word Search, Crossword, saved projects,
+   subscriptions, and exports unless they are explicitly in scope.
+8. Inspect the actual downloaded PDF/ZIP for customer-path work; API success
+   alone is not acceptance.
+9. Keep secrets in `.env`, generated files outside Git, and make a Git checkpoint
+   before approved production changes.
+10. Report exact files changed, commands run, tests passed/failed, skipped test
+    count, paid-call count, and any remaining blocker.

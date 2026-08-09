@@ -1,0 +1,15 @@
+# Production runtime — update deliberately and run preflight_check.py afterward.
+Flask==3.1.1
+Markdown==3.8.2
+Pillow==12.2.0
+PyMuPDF==1.26.6
+beautifulsoup4==4.13.4
+openai==1.97.1
+python-dotenv==1.1.1
+pypdf==6.10.0
+reportlab==4.4.9
+requests==2.32.4
+svglib==1.5.1
+tavily-python==0.7.10
+xhtml2pdf==0.2.17
+youtube-transcript-api==0.6.2
