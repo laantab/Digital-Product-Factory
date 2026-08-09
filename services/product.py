@@ -909,6 +909,11 @@ def _build_crossword_cover(fields: dict, plan: dict, package_id: str) -> dict | 
     cover["topic"] = plan.get("sub_topic") or plan["title"]
     cover["difficulty"] = difficulty_label
     cover["audience"] = str(cover_fields.get("audience") or "").strip()
+    cover["package_id"] = package_id
+    # Customer Cover Editor "Download Cover" needs exports/<pkg>/img_cover.png.
+    from services.crossword.pdf_cover import ensure_crossword_cover_png
+
+    ensure_crossword_cover_png(cover, package_id, force=True)
     return cover
 
 
@@ -1091,10 +1096,18 @@ def _crossword_pdf_payload(
 
 
 def apply_crossword_cover_to_saved_data(data: dict, cover_design: dict) -> dict:
-    """Update a saved Crossword project cover without regenerating puzzle content."""
+    """Update a saved Crossword project cover without regenerating puzzle content.
+
+    Topic-mode books store the resolved word pool in custom_words for packaging
+    continuity. That must NOT trigger a full puzzle rebuild — merge the cover
+    into the QA-approved PDF bytes instead.
+    """
     import base64
 
-    from services.crossword.pdf_cover import merge_cover_into_crossword_pdf
+    from services.crossword.pdf_cover import (
+        ensure_crossword_cover_png,
+        merge_cover_into_crossword_pdf,
+    )
 
     data = normalize_crossword_project_data(data)
     meta = data.get("crossword_meta") if isinstance(data.get("crossword_meta"), dict) else {}
@@ -1105,9 +1118,13 @@ def apply_crossword_cover_to_saved_data(data: dict, cover_design: dict) -> dict:
     package_id = str(cover_design.get("package_id") or data.get("package_id") or "")
     cover_design["package_id"] = package_id
     had_cover_page = bool(data.get("pdf_has_cover_page"))
-    stored_words = str(data.get("custom_words") or "").strip()
 
-    if stored_words:
+    existing_pdf = data.get("pdf_bytes")
+    if not existing_pdf:
+        # No approved PDF to merge into — only then rebuild from fields/words.
+        stored_words = str(data.get("custom_words") or "").strip()
+        if not stored_words:
+            raise ValueError("Regenerate the crossword product before saving a cover.")
         payload = _crossword_pdf_payload(
             data.get("fields") or {},
             stored_words=stored_words,
@@ -1121,14 +1138,17 @@ def apply_crossword_cover_to_saved_data(data: dict, cover_design: dict) -> dict:
                 "cover_design": payload.get("cover_design") or cover_design,
                 "package_id": payload.get("package_id") or package_id,
                 "custom_words": stored_words,
-                "pdf_has_cover_page": bool(cover_design),
+                "pdf_has_cover_page": True,
             }
         )
         return data
 
-    existing_pdf = data.get("pdf_bytes")
-    if not existing_pdf:
-        raise ValueError("Regenerate the crossword product before saving a cover.")
+    if package_id and not cover_design.get("local_image_path"):
+        candidate = os.path.join(EXPORTS_DIR, package_id, "img_cover.png")
+        if os.path.isfile(candidate):
+            cover_design["local_image_path"] = candidate
+
+    ensure_crossword_cover_png(cover_design, package_id, force=True)
 
     merged = merge_cover_into_crossword_pdf(
         base64.b64decode(existing_pdf),

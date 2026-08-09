@@ -469,5 +469,96 @@ class TestExportPathAndCoverEntry(unittest.TestCase):
         self.assertIn("12 Crossword Puzzles", str(reader.metadata.subject or ""))
 
 
+class TestCrosswordCoverCustomerPath(unittest.TestCase):
+    """Cover apply must not rebuild puzzles; Download Cover needs img_cover.png."""
+
+    def _gold_rush_fields(self):
+        return {
+            "book_title": "California Gold Rush Days",
+            "theme": "California Gold Rush Days",
+            "audience": "Adults and history enthusiasts",
+            "difficulty": "Easy",
+            "puzzles": "12",
+            "output_format": "Full Book",
+            "creation_mode": "Topic (AI generates words)",
+            "include_cover": "Yes",
+            "include_answer_key": "Yes",
+        }
+
+    def test_topic_generate_writes_img_cover_png(self):
+        from services.ebook_package import EXPORTS_DIR
+        from services.product import _crossword_pdf_payload
+
+        payload = _crossword_pdf_payload(self._gold_rush_fields())
+        package_id = payload["package_id"]
+        png_path = os.path.join(EXPORTS_DIR, package_id, "img_cover.png")
+        self.assertTrue(os.path.isfile(png_path), "img_cover.png missing after generate")
+        self.assertGreater(os.path.getsize(png_path), 1000)
+        cover = payload.get("cover_design") or {}
+        self.assertTrue(cover.get("has_cover_image") or cover.get("cover_asset") == "img_cover.png")
+
+    def test_apply_cover_merges_without_regenerating_puzzles(self):
+        import base64
+        from pypdf import PdfReader
+        from services.product import (
+            _crossword_pdf_payload,
+            apply_crossword_cover_to_saved_data,
+        )
+
+        payload = _crossword_pdf_payload(self._gold_rush_fields())
+        before_b64 = payload["pdf_bytes"]
+        before = base64.b64decode(before_b64)
+        before_reader = PdfReader(io.BytesIO(before))
+        self.assertEqual(len(before_reader.pages), 25)
+        interior_before = b"".join(
+            (before_reader.pages[i].extract_text() or "").encode("utf-8")
+            for i in range(1, len(before_reader.pages))
+        )
+
+        data = {
+            "product_type": "crossword",
+            "is_book": True,
+            "is_pdf": True,
+            "pdf_bytes": before_b64,
+            "pdf_has_cover_page": True,
+            "package_id": payload["package_id"],
+            "custom_words": payload.get("custom_words") or "",
+            "fields": self._gold_rush_fields(),
+            "cover_design": dict(payload.get("cover_design") or {}),
+            "crossword_meta": {"output_type": "book"},
+        }
+        new_cover = dict(payload.get("cover_design") or {})
+        new_cover["title"] = "California Gold Rush Days"
+        new_cover["subtitle"] = "12 Crossword Puzzles - Easy Level"
+        new_cover["author"] = "Test Author"
+        out = apply_crossword_cover_to_saved_data(data, new_cover)
+        after = base64.b64decode(out["pdf_bytes"])
+        after_reader = PdfReader(io.BytesIO(after))
+        self.assertEqual(len(after_reader.pages), 25)
+        interior_after = b"".join(
+            (after_reader.pages[i].extract_text() or "").encode("utf-8")
+            for i in range(1, len(after_reader.pages))
+        )
+        self.assertEqual(
+            hashlib.sha256(interior_before).hexdigest(),
+            hashlib.sha256(interior_after).hexdigest(),
+            "Use This Cover must not regenerate puzzle/answer-key pages",
+        )
+        self.assertNotEqual(
+            hashlib.sha256(before).hexdigest(),
+            hashlib.sha256(after).hexdigest(),
+            "Cover page must change when Use This Cover is applied",
+        )
+        from services.ebook_package import EXPORTS_DIR
+        from services.product import crossword_full_book_pdf_is_valid
+
+        self.assertTrue(
+            crossword_full_book_pdf_is_valid(after, expected_puzzles=12),
+            "Cover merge must keep Full Book metadata so Export does not rebuild puzzles",
+        )
+        png_path = os.path.join(EXPORTS_DIR, out["package_id"], "img_cover.png")
+        self.assertTrue(os.path.isfile(png_path), "Download Cover PNG missing after apply")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
