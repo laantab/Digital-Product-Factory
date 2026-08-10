@@ -1,0 +1,32 @@
+{
+  "product": "Thunder Volt Coloring Book",
+  "product_family": "coloring_book",
+  "package_id": "a092b8e351174900a9082fbb46350364",
+  "lock_status": "LOCKED",
+  "locked_at": "2026-08-10T22:20:53Z",
+  "book_locked": true,
+  "paid_calls": 0,
+  "user_visual_approval": true,
+  "interior_qa": "25/25 PASS",
+  "page_count": 26,
+  "cover_pages": 1,
+  "interior_pages": 25,
+  "approved_outputs": {
+    "pdf_path": "exports/a092b8e351174900a9082fbb46350364/thunder_volt.pdf",
+    "zip_path": "exports/a092b8e351174900a9082fbb46350364/package.zip",
+    "pdf_bytes": 59425947,
+    "zip_bytes": 47854015,
+    "pdf_sha256": "59c3d7cd0e22963cad995d762b4126f593ea97df2458577f80c431672aca4bac",
+    "zip_sha256": "958c208e733d2ee8cf766bf2dd985ec6fdfcdd2ed5abe0122208463c8594273f",
+    "zip_contents": [
+      "ebook.html",
+      "ebook.txt",
+      "thunder_volt.pdf"
+    ],
+    "zip_pdf_matches_disk_pdf": true
+  },
+  "on_disk_manifest": "exports/a092b8e351174900a9082fbb46350364/package_acceptance_manifest.json",
+  "on_disk_build_report": "exports/a092b8e351174900a9082fbb46350364/final_package_build_report.json",
+  "exports_gitignored": true,
+  "note": "PDF/ZIP remain on disk as gitignored artifacts; hashes recorded here for authoritative lock."
+}
