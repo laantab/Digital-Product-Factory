@@ -20,6 +20,7 @@
     "tests/test_ebook_quality_repair.py",
     "tests/test_ebook_designrr_quality.py",
     "tests/test_research_to_build_handoff.py",
+    "tests/test_saved_projects_reopen_build.py",
     "test_crossword_quality.py"
   ]
 }
