@@ -12,9 +12,14 @@
     "tests/test_coloring_book_download_availability.py",
     "tests/test_coloring_book_thunder_volt_repair.py",
     "tests/test_coloring_book_thunder_volt_consistency.py",
+    "tests/test_coloring_book_thunder_volt_quality_gate.py",
+    "tests/test_paid_image_authorization_guard.py",
+    "tests/test_paid_image_budget_controls.py",
+    "tests/test_coloring_open_skin_and_text_rules.py",
     "tests/test_theme_isolation_farm.py",
     "tests/test_ebook_quality_repair.py",
     "tests/test_ebook_designrr_quality.py",
+    "tests/test_research_to_build_handoff.py",
     "test_crossword_quality.py"
   ]
 }

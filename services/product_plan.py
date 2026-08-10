@@ -103,8 +103,14 @@ def generate_product_plan(form: dict) -> dict:
     )
 
     plan = _coerce_plan(raw)
+    # When research/planning already selected an explicit product type, keep it.
+    # The model must not silently rewrite Coloring Book / Word Search / etc. to
+    # Ebook — sendToBuilder routes from plan.product_type.
+    if product_type and product_type != "Not Sure Yet":
+        plan["product_type"] = product_type
+    resolved_type = plan.get("product_type") or product_type
     return {
         "form": form,
-        "product_type": plan.get("product_type") or product_type,
+        "product_type": resolved_type,
         "plan": plan,
     }
