@@ -290,7 +290,7 @@ def save_ad_set_route():
             if proj:
                 pdata = dict(proj.get("data") or {})
                 pdata["ad_set"] = {"name": name, "platforms": data["platforms"], "traffic_goal": data["traffic_goal"]}
-                database.update_project(int(product_project_id), None, pdata, None)
+                _persist_product_data(proj, pdata)
         except Exception:  # noqa: BLE001
             pass  # Non-fatal: save the ad set independently
         new_proj = database.create_project(name, "ad_set", data)
@@ -353,14 +353,11 @@ def generate_launch_package_route():
             funnel_context=funnel_context,
             promotion_goal=body.get("promotion_goal", "sell_paid_product"),
         )
-        # Store the result in the project data so it can be re-downloaded
+        # Store the result in the project data so it can be re-downloaded.
+        # Use the shared persistence boundary so approved artifacts stay immutable.
+        data = dict(data)
         data["_launch_package"] = result
-        database.update_project(
-            project_id=int(project_id),
-            name=project["name"],
-            data=data,
-            type_=project["type"],
-        )
+        _persist_product_data(project, data)
         return jsonify({"ok": True, "package": result})
     except ValueError as exc:
         return _error(str(exc), 400)
@@ -953,8 +950,24 @@ def _load_product_project(body):
 
 
 def _persist_product_data(project, data):
-    """Write the updated data blob back to the same project record."""
-    database.update_project(project["id"], None, data, None)
+    """Write the updated data blob back to the same project record.
+
+    Shared Next Steps / seller / launch / export persistence boundary.
+    Approved-artifact fields are enforced here so route callers cannot bypass
+    the PUT-route immutability contract.
+    """
+    project_id = int(project["id"])
+    existing = database.get_project(project_id) or project
+    existing_data = existing.get("data") if isinstance(existing.get("data"), dict) else {}
+    if isinstance(data, dict):
+        from services.quality.artifact_identity import enforce_artifact_immutability
+
+        enforce_artifact_immutability(existing_data or {}, data)
+    updated = database.update_project(project_id, None, data, None)
+    if updated is not None:
+        project["data"] = updated.get("data")
+    else:
+        project["data"] = data
 
 
 # Disclaimer fingerprint markers — any of these in the manuscript means the
