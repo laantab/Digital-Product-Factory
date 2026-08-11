@@ -24,6 +24,7 @@
     "tests/test_choose_idea_build_handoff.py",
     "tests/test_preview_save_export_identity.py",
     "tests/test_publish_save_reopen_immutability.py",
+    "tests/test_seller_launch_metadata_immutability.py",
     "test_crossword_quality.py"
   ]
 }
