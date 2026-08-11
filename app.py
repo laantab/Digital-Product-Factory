@@ -1237,6 +1237,18 @@ def update_project_route(project_id: int):
         system_test = bool(system_test_arg) if system_test_arg is not None else None
         temporary = bool(temporary_arg) if temporary_arg is not None else None
 
+    # Publish/Next Steps → Save must not rewrite an approved artifact.
+    incoming_data = body.get("data")
+    if isinstance(incoming_data, dict):
+        existing = database.get_project(project_id)
+        if existing and isinstance(existing.get("data"), dict):
+            try:
+                from services.quality.artifact_identity import enforce_artifact_immutability
+
+                enforce_artifact_immutability(existing.get("data") or {}, incoming_data)
+            except ValueError as exc:
+                return _error(str(exc), 400)
+
     project = database.update_project(
         project_id,
         name=name,

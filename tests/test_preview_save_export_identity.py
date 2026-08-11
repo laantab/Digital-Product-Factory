@@ -274,12 +274,14 @@ class PreviewSaveExportIdentityTests(unittest.TestCase):
 
             # Prior export package becomes stale after a new authoritative export
             # (simulate by clearing export_package_id link while leaving folder).
+            # Use DB write: Save/PUT must not rewrite artifact_revision.
+            import database as db
+
             prior_pkg = export_pkg
             bumped = dict(adata)
             bumped["artifact_revision"] = int(adata["artifact_revision"]) + 1
             # Keep same content digests/pdf — only revision bump + new export later.
-            put = self.client.put(f"/projects/{project_id}", json={"data": bumped})
-            self.assertEqual(put.status_code, 200)
+            self.assertIsNotNone(db.update_project(project_id, None, bumped, None))
             export2 = self.client.post("/export-product", json={"project_id": project_id})
             self.assertEqual(export2.status_code, 200, export2.data)
             new_pkg = export2.get_json()["package_id"]
@@ -290,11 +292,11 @@ class PreviewSaveExportIdentityTests(unittest.TestCase):
             )
             self.assertEqual(stale_prior.status_code, 403, stale_prior.data[:400])
 
-            # 14: identity mismatch fails clearly (no silent regen)
+            # 14: identity mismatch fails clearly (no silent regen).
+            # Inject corrupt digest via DB — Save/PUT rejects artifact rewrites.
             bad = dict(self.client.get(f"/projects/{project_id}").get_json()["data"])
             bad["content_digest"] = "0" * 64
-            put_bad = self.client.put(f"/projects/{project_id}", json={"data": bad})
-            self.assertEqual(put_bad.status_code, 200)
+            self.assertIsNotNone(db.update_project(project_id, None, bad, None))
             gen_before_mismatch = dict(gen_calls)
             mismatch = self.client.post("/export-product", json={"project_id": project_id})
             self.assertEqual(mismatch.status_code, 400, mismatch.data)

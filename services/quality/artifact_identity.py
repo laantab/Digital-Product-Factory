@@ -156,6 +156,104 @@ def verify_artifact_identity(data: dict) -> None:
             )
 
 
+_IMMUTABLE_SCALAR_KEYS = (
+    "content_digest",
+    "asset_manifest_digest",
+    "artifact_id",
+    "artifact_revision",
+    "product_type",
+    "title",
+    "package_id",
+    "qa_status",
+)
+
+_IMMUTABLE_ORDERED_KEYS = (
+    "problems",
+    "challenge_problems",
+    "words",
+    "pages",
+)
+
+
+def enforce_artifact_immutability(existing: dict, incoming: dict) -> None:
+    """Block Save/PUT that rewrites an already-stamped authoritative artifact.
+
+    Publication / Next Steps metadata may change. Digests, revision, ordered
+    content, approved assets, and PDF identity must not.
+    """
+    if not isinstance(existing, dict) or not isinstance(incoming, dict):
+        return
+    product_type = str(existing.get("product_type") or incoming.get("product_type") or "")
+    if product_type not in _PDF_PRODUCT_TYPES and not (
+        existing.get("is_pdf") or incoming.get("is_pdf")
+    ):
+        return
+
+    existing_content = str(existing.get("content_digest") or "").strip()
+    existing_assets = str(existing.get("asset_manifest_digest") or "").strip()
+    if not existing_content and not existing_assets:
+        return  # legacy unstamped projects
+
+    for key in _IMMUTABLE_SCALAR_KEYS:
+        prior = existing.get(key)
+        if prior is None or prior == "":
+            continue
+        if key not in incoming:
+            continue
+        if incoming.get(key) != prior:
+            raise ValueError(
+                f"Artifact identity mismatch: cannot rewrite {key} during Save. "
+                "Publish/Next Steps metadata may be stored separately, but the "
+                "approved artifact is immutable."
+            )
+
+    for key in _IMMUTABLE_ORDERED_KEYS:
+        prior = existing.get(key)
+        if prior is None:
+            continue
+        if incoming.get(key) != prior:
+            raise ValueError(
+                f"Artifact identity mismatch: cannot rewrite {key} during Save. "
+                "Publish/Next Steps metadata may be stored separately, but the "
+                "approved artifact is immutable."
+            )
+
+    # Cover reference (when present on the approved artifact).
+    prior_cover = asset_manifest_payload(existing).get("cover_ref") or ""
+    if prior_cover:
+        new_cover = asset_manifest_payload(incoming).get("cover_ref") or ""
+        if new_cover != prior_cover:
+            raise ValueError(
+                "Artifact identity mismatch: cannot rewrite cover reference during "
+                "Save. The approved artifact is immutable."
+            )
+
+    incoming_pdf = decode_pdf_bytes(incoming)
+    if incoming_pdf and existing_content:
+        actual = content_digest_from_pdf_bytes(incoming_pdf)
+        if actual != existing_content:
+            raise ValueError(
+                "Artifact identity mismatch: PDF bytes do not match the saved "
+                "content_digest. Save blocked — will not replace the approved artifact."
+            )
+    elif incoming_pdf:
+        existing_pdf = decode_pdf_bytes(existing)
+        if existing_pdf and incoming_pdf != existing_pdf:
+            raise ValueError(
+                "Artifact identity mismatch: PDF bytes changed during Save. "
+                "The approved artifact is immutable."
+            )
+
+    if existing_assets:
+        actual_assets = asset_manifest_digest(incoming)
+        if actual_assets != existing_assets:
+            raise ValueError(
+                "Artifact identity mismatch: ordered content/assets do not match "
+                "the saved asset_manifest_digest. Save blocked — will not replace "
+                "the approved artifact."
+            )
+
+
 def package_belongs_to_project(data: dict, package_id: str) -> bool:
     """True when package_id is the generation or current export package."""
     pkg = str(package_id or "").strip()
