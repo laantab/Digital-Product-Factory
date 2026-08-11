@@ -548,6 +548,19 @@ def generate_product_route():
     _requested = (body.get("product_type", "") or "").strip()
     if _requested in _HIDDEN_PRODUCT_TYPES:
         return _error("This product type is not ready yet.", 400)
+    from services.quality.artifact_state import ArtifactStateError
+
+    # Existing project: enforce write policy before any generation work.
+    if project_id:
+        project = database.get_project(int(project_id))
+        if project:
+            try:
+                _require_content_mutation_allowed(
+                    project.get("data") or {},
+                    action="regenerate product content",
+                )
+            except ArtifactStateError as exc:
+                return _error(str(exc), 409)
     try:
         result = generate_product(_requested, fields)
         # Stamp canonical digests + revision so Preview/Save/Export share one artifact.
@@ -565,6 +578,7 @@ def generate_product_route():
             project = database.get_project(int(project_id))
             if project:
                 data = dict(project.get("data") or {})
+                prior_revision = data.get("artifact_revision")
                 data["pdf_bytes"] = result["pdf_bytes"]
                 data["package_id"] = result.get("package_id", "")
                 data["filename"] = result.get("filename", "")
@@ -586,7 +600,6 @@ def generate_product_route():
                 for _k in (
                     "content_digest",
                     "asset_manifest_digest",
-                    "artifact_revision",
                     "artifact_id",
                     "problems",
                     "challenge_problems",
@@ -595,8 +608,15 @@ def generate_product_route():
                 ):
                     if _k in result:
                         data[_k] = result[_k]
-                database.update_project(project_id, None, data, None)
+                # Keep current draft revision; never auto-bump from Generate.
+                if prior_revision is not None:
+                    data["artifact_revision"] = prior_revision
+                elif "artifact_revision" in result:
+                    data["artifact_revision"] = result["artifact_revision"]
+                _persist_draft_content_mutation(project_id, data)
         return jsonify(result)
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
     except ValueError as exc:
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
@@ -613,6 +633,18 @@ def enhance_ebook_route():
     project_id = body.get("project_id")
     if not content.strip():
         return _error("Ebook content is required.", 400)
+    from services.quality.artifact_state import ArtifactStateError
+
+    if project_id:
+        project = database.get_project(int(project_id))
+        if project:
+            try:
+                _require_content_mutation_allowed(
+                    project.get("data") or {},
+                    action="enhance ebook content",
+                )
+            except ArtifactStateError as exc:
+                return _error(str(exc), 409)
     try:
         result = build_ebook_package(title, content, fields)
         # Step-by-step quality / originality pipeline (no paid APIs)
@@ -656,8 +688,10 @@ def enhance_ebook_route():
                 data["pipeline"] = pipeline.to_dict()
                 if fields.get("author_brand"):
                     data["author_brand"] = fields.get("author_brand")
-                database.update_project(int(project_id), None, data, None)
+                _persist_draft_content_mutation(int(project_id), data)
         return jsonify(result)
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("ebook enhancement failed")
         return _error(str(exc), 500)
@@ -971,6 +1005,31 @@ def _enforce_save_persistence_boundary(
     )
     if not allow_revision_transition:
         enforce_artifact_immutability(existing_data or {}, incoming_data)
+
+
+def _require_content_mutation_allowed(project_data, *, action: str):
+    """Pass 1 write-policy gateway for Generate / Enhance / Cover mutation routes.
+
+    Reuses ``assert_content_mutation_allowed`` (resolve_artifact_state). Does not
+    call ``transition_artifact_revision`` or create a revision automatically.
+    """
+    from services.quality.artifact_state import assert_content_mutation_allowed
+
+    return assert_content_mutation_allowed(project_data or {}, action=action)
+
+
+def _persist_draft_content_mutation(project_id, data):
+    """Persist a legitimate DRAFT content/cover change and invalidate export refs.
+
+    Bypasses the Save immutability boundary (digests may change on draft edit)
+    but never opens a revision transition. Prior approved lineage is preserved.
+    """
+    from services.quality.artifact_state import invalidate_draft_export_references
+
+    if not isinstance(data, dict):
+        raise ValueError("Draft content mutation requires a data mapping.")
+    invalidate_draft_export_references(data)
+    return database.update_project(int(project_id), None, data, None)
 
 
 def _persist_product_data(project, data, *, allow_revision_transition=False):
@@ -1650,9 +1709,16 @@ def cover_save_route():
     overrides = body.get("overrides") or {}
     if not project_id:
         return jsonify({"error": "project_id is required"}), 400
+    from services.quality.artifact_state import ArtifactStateError
+
     try:
         package_id = str(existing.get("package_id") or "")
         project = database.get_project(int(project_id))
+        if project:
+            _require_content_mutation_allowed(
+                project.get("data") or {},
+                action="save cover changes",
+            )
         product_type = str(((project or {}).get("data") or {}).get("product_type") or "")
         if product_type == "coloring_book":
             overrides = dict(overrides or {})
@@ -1669,8 +1735,10 @@ def cover_save_route():
             data["cover_design"] = saved
             if saved.get("image_prompt"):
                 data["cover_prompt"] = saved["image_prompt"]
-            database.update_project(project_id, None, data, None)
+            _persist_draft_content_mutation(project_id, data)
         return jsonify(saved)
+    except ArtifactStateError as exc:
+        return jsonify({"error": str(exc)}), 409
     except Exception as exc:
         app.logger.exception("cover save failed")
         return jsonify({"error": str(exc)}), 500
@@ -1684,11 +1752,14 @@ def cover_regenerate_route():
     cover = body.get("cover") or {}
     if not project_id:
         return jsonify({"error": "project_id is required"}), 400
+    from services.quality.artifact_state import ArtifactStateError
+
     try:
         project = database.get_project(int(project_id))
         if not project:
             return jsonify({"error": "Project not found"}), 404
         data = dict(project.get("data") or {})
+        _require_content_mutation_allowed(data, action="regenerate cover artwork")
         package_id = str(cover.get("package_id") or data.get("package_id") or "")
         fields = data.get("fields") or {}
         topic = str(fields.get("theme") or cover.get("topic") or "")
@@ -1752,8 +1823,10 @@ def cover_regenerate_route():
         data["cover_design"] = saved
         if saved.get("image_prompt"):
             data["cover_prompt"] = saved["image_prompt"]
-        database.update_project(project_id, None, data, None)
+        _persist_draft_content_mutation(project_id, data)
         return jsonify({"cover": saved, "asset_url": asset_url})
+    except ArtifactStateError as exc:
+        return jsonify({"error": str(exc)}), 409
     except Exception as exc:
         app.logger.exception("cover regeneration failed")
         return jsonify({"error": str(exc)}), 500
@@ -1771,11 +1844,14 @@ def cover_apply_to_pdf_route():
     cover = body.get("cover") or {}
     if not project_id:
         return jsonify({"error": "project_id is required"}), 400
+    from services.quality.artifact_state import ArtifactStateError
+
     try:
         project = database.get_project(int(project_id))
         if not project:
             return jsonify({"error": "Project not found"}), 404
         data = dict(project.get("data") or {})
+        _require_content_mutation_allowed(data, action="apply cover to PDF")
         fields = data.get("fields") or {}
         product_type = str(data.get("product_type") or "")
 
@@ -1807,13 +1883,15 @@ def cover_apply_to_pdf_route():
             from services.product import apply_ebook_cover_to_saved_data
             data = apply_ebook_cover_to_saved_data(data, cover)
 
-        # Re-save with the new covered PDF
-        database.update_project(project_id, None, data, None)
+        # Re-save with the new covered PDF (invalidates stale draft export refs)
+        _persist_draft_content_mutation(project_id, data)
         project = database.get_project(int(project_id)) or {**project, "data": data}
 
         # Re-export (build_product_export expects the project dict, not an id)
         result = build_product_export(project)
         return jsonify({"ok": True, "exports": result})
+    except ArtifactStateError as exc:
+        return jsonify({"error": str(exc)}), 409
     except Exception as exc:
         app.logger.exception("cover apply-to-pdf failed")
         return jsonify({"error": str(exc)}), 500
@@ -1829,11 +1907,14 @@ def cover_upload_image_route():
     image_data = body.get("image_data")  # base64 string
     if not project_id or not image_data:
         return jsonify({"error": "project_id and image_data required"}), 400
+    from services.quality.artifact_state import ArtifactStateError
+
     try:
         project = database.get_project(int(project_id))
         if not project:
             return jsonify({"error": "Project not found"}), 404
         data = dict(project.get("data") or {})
+        _require_content_mutation_allowed(data, action="upload cover image")
         package_id = str(data.get("package_id") or "")
         if not package_id:
             return jsonify({"error": "No package_id for this project"}), 400
@@ -1844,7 +1925,11 @@ def cover_upload_image_route():
         img = Image.open(io.BytesIO(img_bytes))
         img = img.convert("RGB")
         img.save(out_path, "PNG")
+        # Cover asset change invalidates current-draft export refs only.
+        _persist_draft_content_mutation(project_id, data)
         return jsonify({"ok": True, "url": f"/download/{package_id}/img_cover.png"})
+    except ArtifactStateError as exc:
+        return jsonify({"error": str(exc)}), 409
     except Exception as exc:
         app.logger.exception("cover image upload failed")
         return jsonify({"error": str(exc)}), 500

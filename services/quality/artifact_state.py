@@ -1,6 +1,8 @@
 """Authoritative artifact state (DRAFT / APPROVED / LOCKED) and revision transitions.
 
-Gate 10 primitives only — not wired into Generate / enhance / cover / packaging routes.
+Gate 10 primitives plus Pass 1 content-mutation write policy
+(``assert_content_mutation_allowed`` / ``invalidate_draft_export_references``)
+for Generate / Enhance / Cover routes that bypass Save.
 
 State resolution (no migration of saved projects)
 -------------------------------------------------
@@ -294,6 +296,71 @@ def assert_content_mutable(
             "APPROVED artifact cannot mutate content or assets in place. "
             "Call transition_artifact_revision() to open a new DRAFT revision."
         )
+
+
+def assert_content_mutation_allowed(
+    record: Mapping[str, Any] | None,
+    *,
+    action: str = "edit content",
+    repo_root: Path | None = None,
+    committed_lock_ids: frozenset[str] | None = None,
+) -> ArtifactState:
+    """Shared write-policy gateway for Generate / Enhance / Cover mutation paths.
+
+    - New / empty records and DRAFT: allowed under the current draft revision.
+    - APPROVED: blocked — user must explicitly Create Draft Revision first.
+    - LOCKED: blocked — cannot change.
+    - Conflicting or unverifiable evidence fails safely via resolve_artifact_state.
+
+    Does not call ``transition_artifact_revision``, generation, or export.
+    Does not bump ``artifact_revision`` or rewrite prior approved lineage.
+    """
+    state = resolve_artifact_state(
+        record, repo_root=repo_root, committed_lock_ids=committed_lock_ids
+    )
+    action_label = str(action or "edit content").strip() or "edit content"
+    if state is ArtifactState.LOCKED:
+        raise ArtifactStateError(
+            f"LOCKED artifact cannot {action_label}. "
+            "Locked products cannot be changed."
+        )
+    if state is ArtifactState.APPROVED:
+        raise ArtifactStateError(
+            f"APPROVED artifact cannot {action_label} in place. "
+            "Use Create Draft Revision before editing."
+        )
+    return state
+
+
+def invalidate_draft_export_references(
+    record: dict[str, Any],
+    *,
+    repo_root: Path | None = None,
+    committed_lock_ids: frozenset[str] | None = None,
+) -> dict[str, Any]:
+    """Clear current-draft export package/download refs after content/cover mutation.
+
+    Preserves ``prior_approved_revision``, ``artifact_lineage``, identity fields,
+    and generation ``package_id``. Does not transition state or bump revision.
+    Mutates ``record`` in place and returns it.
+    """
+    if not isinstance(record, dict):
+        raise ArtifactStateError(
+            "invalidate_draft_export_references requires a mutable mapping"
+        )
+    state = resolve_artifact_state(
+        record, repo_root=repo_root, committed_lock_ids=committed_lock_ids
+    )
+    if state is not ArtifactState.DRAFT:
+        raise ArtifactStateError(
+            "Export-reference invalidation applies only to DRAFT revisions "
+            f"(current state: {state.value})."
+        )
+    for key in _EXPORT_REF_KEYS:
+        record.pop(key, None)
+    for key in ("pdf_download_url", "zip_download_url", "download_urls"):
+        record.pop(key, None)
+    return record
 
 
 # Identity / content / asset keys that Save must not rewrite for APPROVED/LOCKED.
