@@ -3248,7 +3248,9 @@ function finalOutputCard(projectId, ex, existingPackages, productType) {
      <div class="mb-6">
        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Basic Downloads</p>
         <div class="flex flex-wrap gap-3">
-          ${(productType === "word_search" || productType === "crossword") ? `<button class="${NS_BTN}" data-pdf>Download PDF</button>` : ""}
+          ${(productType === "word_search" || productType === "crossword")
+            ? `<button class="${NS_BTN}" data-pdf>Download PDF</button>`
+            : dl(f.pdf, "Download PDF")}
           ${dl(f.html, "Download HTML")}
          ${dl(f.txt, "Download TXT")}
          ${dl(f.zip, "Download ZIP Package")}
