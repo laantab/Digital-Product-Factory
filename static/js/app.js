@@ -3032,8 +3032,11 @@ function nextStepsPanel(d) {
            <button data-ns="launch" class="${NS_BTN} border-amber-300 text-amber-700 hover:bg-amber-50">Create Launch Package</button>
          </div>
        </details>
+       <div data-kdp-preflight-slot class="mt-4"></div>
        <p data-ns-msg class="hidden mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"></p>`
     );
+    const kdpSlot = head.querySelector("[data-kdp-preflight-slot]");
+    if (kdpSlot) kdpSlot.appendChild(kdpPreflightPanel(d, projectId));
     const msg = head.querySelector("[data-ns-msg]");
     const editCoverBtn = head.querySelector('[data-ns="edit-cover"]');
     if (editCoverBtn) {
@@ -3220,6 +3223,228 @@ async function nsPublish(d, btn) {
   } finally {
     setBusyEl(btn, false);
   }
+}
+
+/** Narrow KDP Preflight + Prepare Package UI for Publish/Next Steps only. */
+function kdpPreflightPanel(d, projectId) {
+  const wrap = document.createElement("div");
+  const defaultFmt = (d.product_type === "ebook") ? "ebook" : "paperback";
+  wrap.innerHTML = card(
+    `<h4 class="text-sm font-bold text-slate-900 mb-1">Amazon KDP Preflight</h4>
+     <p class="text-xs text-slate-500 mb-3">Choose format and settings, complete metadata and AI disclosure, then run preflight. Ordinary PDF/ZIP downloads are unchanged.</p>
+     <div class="grid gap-2 sm:grid-cols-2 text-sm">
+       <label class="block">Publication format
+         <select data-kdp="format" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5">
+           <option value="paperback">Paperback</option>
+           <option value="ebook">Ebook</option>
+           <option value="hardcover">Hardcover (unsupported)</option>
+         </select>
+       </label>
+       <label class="block">Ink
+         <select data-kdp="ink" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5">
+           <option value="black">Black</option>
+           <option value="standard_color">Standard color</option>
+           <option value="premium_color">Premium color</option>
+         </select>
+       </label>
+       <label class="block">Paper
+         <select data-kdp="paper" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5">
+           <option value="white">White</option>
+           <option value="cream">Cream</option>
+           <option value="groundwood">Groundwood</option>
+         </select>
+       </label>
+       <label class="block">Trim
+         <select data-kdp="trim" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5">
+           <option value="6x9">6 x 9</option>
+           <option value="8.5x11">8.5 x 11</option>
+           <option value="8.5x8.5">8.5 x 8.5</option>
+           <option value="5x8">5 x 8</option>
+         </select>
+       </label>
+       <label class="block">Bleed
+         <select data-kdp="bleed" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5">
+           <option value="with_bleed">With bleed</option>
+           <option value="no_bleed">No bleed</option>
+         </select>
+       </label>
+       <label class="block">Page count (optional override)
+         <input data-kdp="page_count" type="number" min="1" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5" placeholder="Auto from PDF">
+       </label>
+       <label class="block sm:col-span-2">Title
+         <input data-kdp="title" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5" value="${escapeHtml(d.title || d.listing_title || "")}">
+       </label>
+       <label class="block">Author
+         <input data-kdp="author" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5" value="${escapeHtml(d.author_name || d.author || "")}">
+       </label>
+       <label class="block">ISBN option
+         <select data-kdp="isbn_option" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5">
+           <option value="none">None / not set</option>
+           <option value="own">Own ISBN</option>
+           <option value="kdp_free">Free KDP ISBN (eligibility)</option>
+           <option value="publish_without">Publish without (low-content)</option>
+         </select>
+       </label>
+       <label class="block sm:col-span-2">ISBN (caller-supplied only)
+         <input data-kdp="isbn" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5" placeholder="978…">
+       </label>
+       <label class="block">AI text
+         <select data-kdp="ai_text" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5">
+           <option value="unknown">Unknown</option>
+           <option value="none">None</option>
+           <option value="ai_assisted">AI-assisted</option>
+           <option value="ai_generated">AI-generated</option>
+         </select>
+       </label>
+       <label class="block">AI images
+         <select data-kdp="ai_images" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5">
+           <option value="unknown">Unknown</option>
+           <option value="none">None</option>
+           <option value="ai_assisted">AI-assisted</option>
+           <option value="ai_generated">AI-generated</option>
+         </select>
+       </label>
+       <label class="block sm:col-span-2">AI translations
+         <select data-kdp="ai_translations" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5">
+           <option value="unknown">Unknown</option>
+           <option value="none">None</option>
+           <option value="ai_assisted">AI-assisted</option>
+           <option value="ai_generated">AI-generated</option>
+         </select>
+       </label>
+     </div>
+     <div class="flex flex-wrap gap-3 mt-4">
+       <button data-kdp-act="run" class="btn-primary">Run KDP Preflight</button>
+       <button data-kdp-act="prepare" class="${NS_BTN}" disabled>Prepare KDP Package</button>
+     </div>
+     <label class="hidden mt-3 flex items-start gap-2 text-xs text-amber-900" data-kdp-ack-wrap>
+       <input type="checkbox" data-kdp-ack class="mt-0.5">
+       <span>I reviewed all WARNING findings and accept human responsibility before Prepare KDP Package.</span>
+     </label>
+     <div data-kdp-result class="mt-3 text-sm"></div>`
+  );
+  const fmtEl = wrap.querySelector('[data-kdp="format"]');
+  if (fmtEl) fmtEl.value = defaultFmt;
+  const resultEl = wrap.querySelector("[data-kdp-result]");
+  const prepareBtn = wrap.querySelector('[data-kdp-act="prepare"]');
+  const ackWrap = wrap.querySelector("[data-kdp-ack-wrap]");
+  const ackEl = wrap.querySelector("[data-kdp-ack]");
+  let lastPreflight = null;
+
+  function collectPayload() {
+    const trim = (wrap.querySelector('[data-kdp="trim"]').value || "6x9").split("x");
+    const pageRaw = wrap.querySelector('[data-kdp="page_count"]').value;
+    const print_settings = {
+      binding: "paperback",
+      ink: wrap.querySelector('[data-kdp="ink"]').value,
+      paper: wrap.querySelector('[data-kdp="paper"]').value,
+      trim_width_in: trim[0],
+      trim_height_in: trim[1],
+      bleed: wrap.querySelector('[data-kdp="bleed"]').value,
+    };
+    if (pageRaw) print_settings.page_count = Number(pageRaw);
+    return {
+      publication_format: wrap.querySelector('[data-kdp="format"]').value,
+      print_settings,
+      metadata: {
+        title: wrap.querySelector('[data-kdp="title"]').value,
+        author: wrap.querySelector('[data-kdp="author"]').value,
+        isbn: wrap.querySelector('[data-kdp="isbn"]').value,
+        isbn_option: wrap.querySelector('[data-kdp="isbn_option"]').value,
+        product_type: d.product_type || "",
+      },
+      ai_disclosure: {
+        text: wrap.querySelector('[data-kdp="ai_text"]').value,
+        images: wrap.querySelector('[data-kdp="ai_images"]').value,
+        translations: wrap.querySelector('[data-kdp="ai_translations"]').value,
+      },
+    };
+  }
+
+  function renderFindings(r) {
+    lastPreflight = r;
+    const overall = r.overall || "";
+    let tone = "bg-slate-50 border-slate-200 text-slate-800";
+    if (overall.indexOf("PASS") === 0) tone = "bg-emerald-50 border-emerald-200 text-emerald-900";
+    else if (overall.indexOf("WARNING") === 0) tone = "bg-amber-50 border-amber-200 text-amber-900";
+    else if (overall.indexOf("FAIL") === 0) tone = "bg-rose-50 border-rose-200 text-rose-900";
+    const findings = Array.isArray(r.findings) ? r.findings : [];
+    const rows = findings.map((f) =>
+      `<li class="mb-2"><span class="font-semibold">${escapeHtml(f.severity)}</span> · ${escapeHtml(f.rule_id)} · <span class="text-slate-600">${escapeHtml(f.affected || "")}</span><br>${escapeHtml(f.explanation || "")}<br><span class="text-xs">Fix: ${escapeHtml(f.required_correction || "")}</span></li>`
+    ).join("");
+    resultEl.innerHTML =
+      `<div class="rounded-lg border px-3 py-2 ${tone}"><p class="font-bold">${escapeHtml(overall)}</p>
+       <p class="text-xs mt-1">Never “Guaranteed Amazon Approved.”</p></div>
+       <ul class="mt-3 max-h-64 overflow-auto text-xs">${rows}</ul>`;
+    prepareBtn.disabled = true;
+    ackWrap.classList.add("hidden");
+    if (overall.indexOf("PASS") === 0) {
+      prepareBtn.disabled = false;
+    } else if (overall.indexOf("WARNING") === 0) {
+      ackWrap.classList.remove("hidden");
+      prepareBtn.disabled = !(ackEl && ackEl.checked);
+    }
+  }
+
+  if (ackEl) {
+    ackEl.onchange = () => {
+      if (lastPreflight && String(lastPreflight.overall || "").indexOf("WARNING") === 0) {
+        prepareBtn.disabled = !ackEl.checked;
+      }
+    };
+  }
+
+  wrap.querySelector('[data-kdp-act="run"]').onclick = async (e) => {
+    const btn = e.currentTarget;
+    setBusyEl(btn, true);
+    resultEl.innerHTML = spinner("Running KDP preflight…");
+    try {
+      const payload = collectPayload();
+      const r = await api(`/projects/${projectId}/kdp/preflight`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      d.kdp_preflight = r;
+      renderFindings(r);
+    } catch (err) {
+      lastPreflight = null;
+      prepareBtn.disabled = true;
+      resultEl.innerHTML = `<p class="text-rose-600">${escapeHtml(err.message || String(err))}</p>`;
+    } finally {
+      setBusyEl(btn, false);
+    }
+  };
+
+  prepareBtn.onclick = async () => {
+    if (!lastPreflight || !lastPreflight.preflight_token) {
+      toast("Run KDP Preflight first.", "error");
+      return;
+    }
+    setBusyEl(prepareBtn, true);
+    try {
+      const payload = collectPayload();
+      payload.preflight_token = lastPreflight.preflight_token;
+      payload.warning_acknowledged = !!(ackEl && ackEl.checked);
+      const r = await api(`/projects/${projectId}/kdp/prepare-package`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      d.kdp_package_manifest = r.manifest;
+      resultEl.innerHTML +=
+        `<div class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-900">
+          <p class="font-bold">${escapeHtml(r.label || "Ready for Amazon Previewer")}</p>
+          <p class="text-xs mt-1">${escapeHtml(r.note || "")}</p>
+         </div>`;
+      toast("KDP package gate accepted (manifest written).");
+    } catch (err) {
+      toast(err.message || "Prepare KDP Package blocked", "error");
+      resultEl.innerHTML += `<p class="mt-2 text-rose-600 text-xs">${escapeHtml(err.message || String(err))}</p>`;
+    } finally {
+      setBusyEl(prepareBtn, false);
+    }
+  };
+
+  return wrap;
 }
 
 // Unified "Final Output Options" shown after a product is completed (Export
@@ -3932,9 +4157,12 @@ async function postEbookNextSteps(d, projectId, name) {
          <button id="createLaunchPkgBtn" class="${NS_BTN} border-amber-300 text-amber-700 hover:bg-amber-50">Create Launch Package</button>
        </div>
      </div>
+     <div data-kdp-preflight-slot class="mt-4 pt-3 border-t border-slate-200"></div>
      <div data-sell-result class="mt-4"></div>`
   );
   wrap.appendChild(selling);
+  const ebookKdpSlot = selling.querySelector("[data-kdp-preflight-slot]");
+  if (ebookKdpSlot) ebookKdpSlot.appendChild(kdpPreflightPanel(d, projectId));
 
   // Wire Create Traffic Content button — prefill from the ebook's plan data
   const tcBtn = selling.querySelector("#createTrafficContentBtn");

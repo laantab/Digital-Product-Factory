@@ -83,6 +83,20 @@ _METADATA_ALLOWED_KEYS = frozenset(
         "seller_metadata",
         "publish_metadata",
         "next_steps_metadata",
+        # KDP Pass 2 settings / preflight sidecars (metadata-only; never content)
+        "kdp_settings",
+        "kdp_print_settings",
+        "kdp_metadata",
+        "kdp_ai_disclosure",
+        "kdp_preflight",
+        "kdp_package_manifest",
+        "publication_format",
+        "isbn",
+        "isbn_option",
+        "imprint",
+        "language",
+        "content_class",
+        "kdp_content_class",
     }
 )
 _EXPORT_REF_KEYS = (

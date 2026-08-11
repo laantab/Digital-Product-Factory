@@ -36,6 +36,7 @@
     "tests/test_math_worksheet_final_output_pdf_link.py",
     "tests/test_math_worksheet_pdf_visual_qa.py",
     "tests/test_kdp_foundations_pass1.py",
+    "tests/test_kdp_preflight_pass2.py",
     "test_crossword_quality.py"
   ]
 }

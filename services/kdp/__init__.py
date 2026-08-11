@@ -1,7 +1,8 @@
-"""KDP foundations (Pass 1): print profile, geometry, metadata, classification, AI disclosure.
+"""KDP foundations (Pass 1) + preflight gate (Pass 2).
 
-Pure computation/validation only. No route wiring, no export-blocking preflight UI,
-no mutation of legacy/locked artifacts.
+Pass 1: print profile, geometry, metadata, classification, AI disclosure.
+Pass 2: combined preflight validator and KDP-specific package gate helpers.
+Ordinary Factory PDF/ZIP downloads are not blocked by this package.
 """
 from __future__ import annotations
 
@@ -56,10 +57,30 @@ from services.kdp.print_profile import (
     page_count_range,
     validate_page_count,
 )
+from services.kdp.preflight import (
+    RESULT_FAIL,
+    RESULT_PASS,
+    RESULT_WARNING,
+    KdpPreflightError,
+    KdpPreflightResult,
+    PreflightFinding,
+    assert_prepare_kdp_package_allowed,
+    build_kdp_package_manifest,
+    run_kdp_preflight,
+)
 from services.kdp.sources import SOURCE_INDEX
 
 __all__ = [
     "SOURCE_INDEX",
+    "RESULT_FAIL",
+    "RESULT_PASS",
+    "RESULT_WARNING",
+    "KdpPreflightError",
+    "KdpPreflightResult",
+    "PreflightFinding",
+    "assert_prepare_kdp_package_allowed",
+    "build_kdp_package_manifest",
+    "run_kdp_preflight",
     "AiContentKind",
     "AiDisclosureError",
     "AiDisclosureRecord",

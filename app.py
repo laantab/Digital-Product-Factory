@@ -1611,6 +1611,135 @@ def create_project_revision_route(project_id: int):
     ), 201
 
 
+@app.post("/projects/<int:project_id>/kdp/preflight")
+def kdp_preflight_route(project_id: int):
+    """KDP Pass 2: run combined preflight; does not block ordinary PDF/ZIP."""
+    from services.kdp.preflight import run_kdp_preflight
+    from services.quality.artifact_state import ArtifactStateError
+
+    body = request.get_json(silent=True) or {}
+    project = database.get_project(project_id)
+    if not project:
+        return _error("Project not found.", 404)
+    data = project.get("data") if isinstance(project.get("data"), dict) else {}
+    try:
+        result = run_kdp_preflight(
+            data,
+            print_settings=body.get("print_settings") or body.get("print"),
+            metadata=body.get("metadata"),
+            ai_disclosure=body.get("ai_disclosure"),
+            publication_format=body.get("publication_format"),
+        )
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
+    except ValueError as exc:
+        return _error(str(exc), 400)
+
+    # Persist preflight sidecar + optional settings (metadata-only; no content regen).
+    data = dict(data)
+    data["kdp_settings"] = {
+        "publication_format": result.publication_format,
+        "print": body.get("print_settings") or body.get("print") or data.get("kdp_print_settings") or {},
+        "metadata": body.get("metadata") or data.get("kdp_metadata") or {},
+        "ai_disclosure": body.get("ai_disclosure") or data.get("kdp_ai_disclosure") or {},
+    }
+    if body.get("print_settings") or body.get("print"):
+        data["kdp_print_settings"] = body.get("print_settings") or body.get("print")
+    if body.get("metadata"):
+        data["kdp_metadata"] = body.get("metadata")
+    if body.get("ai_disclosure"):
+        data["kdp_ai_disclosure"] = body.get("ai_disclosure")
+    if body.get("publication_format"):
+        data["publication_format"] = body.get("publication_format")
+    data["kdp_preflight"] = result.as_dict()
+    try:
+        _persist_product_data(project, data)
+    except (ArtifactStateError, ValueError) as exc:
+        # Still return preflight even if persist of sidecar is refused
+        payload = result.as_dict()
+        payload["persist_warning"] = str(exc)
+        return jsonify(payload)
+    return jsonify(result.as_dict())
+
+
+@app.post("/projects/<int:project_id>/kdp/prepare-package")
+def kdp_prepare_package_route(project_id: int):
+    """KDP-specific export gate + manifest. Does not alter ordinary PDF/ZIP paths."""
+    from services.kdp.preflight import (
+        KdpPreflightError,
+        assert_prepare_kdp_package_allowed,
+        build_kdp_package_manifest,
+    )
+    from services.quality.artifact_state import ArtifactStateError
+
+    body = request.get_json(silent=True) or {}
+    project = database.get_project(project_id)
+    if not project:
+        return _error("Project not found.", 404)
+    data = project.get("data") if isinstance(project.get("data"), dict) else {}
+    token = str(body.get("preflight_token") or "").strip()
+    try:
+        preflight = assert_prepare_kdp_package_allowed(
+            data,
+            preflight_token=token,
+            warning_acknowledged=bool(body.get("warning_acknowledged")),
+            print_settings=body.get("print_settings") or body.get("print"),
+            metadata=body.get("metadata"),
+            ai_disclosure=body.get("ai_disclosure"),
+            publication_format=body.get("publication_format"),
+        )
+    except KdpPreflightError as exc:
+        return _error(str(exc), 403)
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
+    except ValueError as exc:
+        return _error(str(exc), 400)
+
+    settings = {
+        "publication_format": preflight.publication_format,
+        "print": body.get("print_settings")
+        or body.get("print")
+        or (data.get("kdp_settings") or {}).get("print")
+        or data.get("kdp_print_settings")
+        or {},
+        "metadata": body.get("metadata")
+        or (data.get("kdp_settings") or {}).get("metadata")
+        or data.get("kdp_metadata")
+        or {},
+        "ai_disclosure": body.get("ai_disclosure")
+        or (data.get("kdp_settings") or {}).get("ai_disclosure")
+        or data.get("kdp_ai_disclosure")
+        or {},
+    }
+    manifest = build_kdp_package_manifest(data, preflight, settings=settings)
+
+    # Gate + manifest only — do not invent a new Amazon upload package format
+    # and do not regenerate PDF/ZIP content to cure failures.
+    data = dict(data)
+    data["kdp_package_manifest"] = manifest
+    data["kdp_preflight"] = preflight.as_dict()
+    try:
+        _persist_product_data(project, data)
+    except (ArtifactStateError, ValueError) as exc:
+        return _error(str(exc), 409)
+
+    return jsonify(
+        {
+            "ok": True,
+            "label": "Ready for Amazon Previewer",
+            "amazon_approval_claim": None,
+            "manifest": manifest,
+            "preflight": preflight.as_dict(),
+            "package_construction": "manifest_only",
+            "note": (
+                "KDP package gate approved the authoritative artifact and wrote a "
+                "manifest. No new Amazon upload format was invented; ordinary "
+                "PDF/ZIP downloads remain unchanged."
+            ),
+        }
+    )
+
+
 @app.delete("/projects/<int:project_id>")
 def delete_project_route(project_id: int):
     if not database.delete_project(project_id):
