@@ -296,6 +296,166 @@ def assert_content_mutable(
         )
 
 
+# Identity / content / asset keys that Save must not rewrite for APPROVED/LOCKED.
+# Export package refs (product_exports / export_package_id / exports) are not
+# listed here — packaging may attach them via the shared persist boundary
+# without regenerating content; digest/PDF checks remain in artifact_identity.
+_SAVE_PROTECTED_KEYS = frozenset(
+    {
+        "content_digest",
+        "asset_manifest_digest",
+        "artifact_id",
+        "artifact_revision",
+        "artifact_state",
+        "product_type",
+        "title",
+        "package_id",
+        "qa_status",
+        "problems",
+        "challenge_problems",
+        "words",
+        "pages",
+        "pdf_bytes",
+        "cover_design",
+        "cover_image",
+        "image_jobs",
+        "ebook",
+        "book_locked",
+        "lock_status",
+        "locked_at",
+        "artifact_lineage",
+        "prior_approved_revision",
+    }
+)
+
+
+def _values_differ(prior: Any, new: Any) -> bool:
+    return prior != new
+
+
+def _incoming_clears_approval(
+    existing: Mapping[str, Any], incoming: Mapping[str, Any]
+) -> bool:
+    if not has_verified_approval_evidence(existing):
+        return False
+    for key in ("content_digest", "asset_manifest_digest"):
+        if key not in incoming:
+            continue
+        if _nonempty_digest(existing.get(key)) and not _nonempty_digest(incoming.get(key)):
+            return True
+    return False
+
+
+def _incoming_clears_lock(
+    existing: Mapping[str, Any],
+    incoming: Mapping[str, Any],
+    *,
+    repo_root: Path | None = None,
+    committed_lock_ids: frozenset[str] | None = None,
+) -> bool:
+    if not has_verified_lock_evidence(
+        existing, repo_root=repo_root, committed_lock_ids=committed_lock_ids
+    ):
+        return False
+    # Attempt to weaken local lock markers while leaving package ids alone.
+    if "book_locked" in incoming and _truthy_lock_flag(
+        existing.get("book_locked")
+    ) and not _truthy_lock_flag(incoming.get("book_locked")):
+        return True
+    if "lock_status" in incoming and _lock_status_locked(
+        existing.get("lock_status")
+    ) and not _lock_status_locked(incoming.get("lock_status")):
+        return True
+    if "locked_at" in incoming and existing.get("locked_at") and not incoming.get(
+        "locked_at"
+    ):
+        return True
+    if "artifact_state" in incoming:
+        incoming_state = _norm_state(incoming.get("artifact_state"))
+        if incoming_state is not None and incoming_state is not ArtifactState.LOCKED:
+            return True
+    return False
+
+
+def _has_protected_content_mutation(
+    existing: Mapping[str, Any], incoming: Mapping[str, Any]
+) -> bool:
+    for key in _SAVE_PROTECTED_KEYS:
+        if key not in existing:
+            continue
+        prior = existing.get(key)
+        if prior is None or prior == "":
+            continue
+        if key not in incoming:
+            continue
+        if _values_differ(prior, incoming.get(key)):
+            return True
+    return False
+
+
+def enforce_save_artifact_state(
+    existing: Mapping[str, Any] | None,
+    incoming: Mapping[str, Any] | None,
+    *,
+    repo_root: Path | None = None,
+    committed_lock_ids: frozenset[str] | None = None,
+) -> ArtifactState:
+    """Gate 11 Save policy using resolve_artifact_state (no migration).
+
+    - DRAFT: allow legitimate draft persistence.
+    - APPROVED / LOCKED: allow metadata-only updates; block content/asset mutation.
+    - Never transitions revision, never clears approval/lock, never regenerates.
+    - Conflicting evidence fails safely via resolve_artifact_state.
+
+    Does not call ``transition_artifact_revision`` or any generation/export path.
+    """
+    if not isinstance(existing, Mapping) or not isinstance(incoming, Mapping):
+        return ArtifactState.DRAFT
+
+    state = resolve_artifact_state(
+        existing, repo_root=repo_root, committed_lock_ids=committed_lock_ids
+    )
+
+    # Save must never bump revision (even accidental / smuggled).
+    if "artifact_revision" in incoming:
+        if current_revision(incoming) != current_revision(existing):
+            raise ArtifactStateError(
+                "Artifact identity mismatch: cannot rewrite artifact_revision "
+                "during Save. Revision transitions are not performed on the "
+                "Save path."
+            )
+
+    if _incoming_clears_approval(existing, incoming):
+        raise ArtifactStateError(
+            "Artifact identity mismatch: Save cannot clear approval evidence "
+            "(content_digest / asset_manifest_digest)."
+        )
+
+    if _incoming_clears_lock(
+        existing,
+        incoming,
+        repo_root=repo_root,
+        committed_lock_ids=committed_lock_ids,
+    ):
+        raise ArtifactStateError(
+            "Artifact identity mismatch: Save cannot clear lock status on a "
+            "LOCKED artifact."
+        )
+
+    if state is ArtifactState.DRAFT:
+        return state
+
+    # APPROVED and LOCKED: metadata-only; block protected content/asset mutation.
+    if _has_protected_content_mutation(existing, incoming):
+        raise ArtifactStateError(
+            f"Artifact identity mismatch: {state.value} artifact cannot mutate "
+            "content, assets, digests, cover, or PDF during Save. "
+            "Metadata-only updates are permitted; use an explicit revision "
+            "transition outside Save to reopen DRAFT content editing."
+        )
+    return state
+
+
 def apply_metadata_fields(
     record: Mapping[str, Any],
     metadata: Mapping[str, Any],

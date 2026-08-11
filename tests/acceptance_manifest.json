@@ -27,6 +27,7 @@
     "tests/test_seller_launch_metadata_immutability.py",
     "tests/test_non_put_persistence_immutability.py",
     "tests/test_artifact_state_revision_primitives.py",
+    "tests/test_save_state_enforcement.py",
     "test_crossword_quality.py"
   ]
 }

@@ -949,6 +949,20 @@ def _load_product_project(body):
     return project
 
 
+def _enforce_save_persistence_boundary(existing_data, incoming_data):
+    """Shared Save / persist policy: artifact state + identity immutability.
+
+    Used by ``_persist_product_data`` and PUT ``update_project_route`` so
+    seller/launch/Next Steps and project Save cannot bypass Gate 11 state rules.
+    Does not call ``transition_artifact_revision`` or regenerate content.
+    """
+    from services.quality.artifact_identity import enforce_artifact_immutability
+    from services.quality.artifact_state import enforce_save_artifact_state
+
+    enforce_save_artifact_state(existing_data or {}, incoming_data)
+    enforce_artifact_immutability(existing_data or {}, incoming_data)
+
+
 def _persist_product_data(project, data):
     """Write the updated data blob back to the same project record.
 
@@ -960,9 +974,7 @@ def _persist_product_data(project, data):
     existing = database.get_project(project_id) or project
     existing_data = existing.get("data") if isinstance(existing.get("data"), dict) else {}
     if isinstance(data, dict):
-        from services.quality.artifact_identity import enforce_artifact_immutability
-
-        enforce_artifact_immutability(existing_data or {}, data)
+        _enforce_save_persistence_boundary(existing_data or {}, data)
     updated = database.update_project(project_id, None, data, None)
     if updated is not None:
         project["data"] = updated.get("data")
@@ -1250,15 +1262,15 @@ def update_project_route(project_id: int):
         system_test = bool(system_test_arg) if system_test_arg is not None else None
         temporary = bool(temporary_arg) if temporary_arg is not None else None
 
-    # Publish/Next Steps → Save must not rewrite an approved artifact.
+    # Publish/Next Steps → Save must not rewrite an approved/locked artifact.
     incoming_data = body.get("data")
     if isinstance(incoming_data, dict):
         existing = database.get_project(project_id)
         if existing and isinstance(existing.get("data"), dict):
             try:
-                from services.quality.artifact_identity import enforce_artifact_immutability
-
-                enforce_artifact_immutability(existing.get("data") or {}, incoming_data)
+                _enforce_save_persistence_boundary(
+                    existing.get("data") or {}, incoming_data
+                )
             except ValueError as exc:
                 return _error(str(exc), 400)
 
