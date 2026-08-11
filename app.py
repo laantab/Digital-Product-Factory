@@ -553,6 +553,16 @@ def generate_product_route():
         return _error("This product type is not ready yet.", 400)
     try:
         result = generate_product(_requested, fields)
+        # Stamp canonical digests + revision so Preview/Save/Export share one artifact.
+        if isinstance(result, dict) and (
+            result.get("is_pdf")
+            or result.get("pdf_bytes")
+            or result.get("product_type")
+            in {"math_worksheet", "spelling_worksheet", "word_search", "crossword", "coloring_book"}
+        ):
+            from services.quality.artifact_identity import stamp_artifact_identity
+
+            stamp_artifact_identity(result)
         # If a project_id was provided, persist pdf_bytes and package_id so export/download works
         if project_id and result.get("pdf_bytes"):
             project = database.get_project(int(project_id))
@@ -576,6 +586,18 @@ def generate_product_route():
                     data["is_book"] = result["is_book"]
                 if result.get("is_pdf"):
                     data["is_pdf"] = True
+                for _k in (
+                    "content_digest",
+                    "asset_manifest_digest",
+                    "artifact_revision",
+                    "artifact_id",
+                    "problems",
+                    "challenge_problems",
+                    "words",
+                    "pages",
+                ):
+                    if _k in result:
+                        data[_k] = result[_k]
                 database.update_project(project_id, None, data, None)
         return jsonify(result)
     except ValueError as exc:
@@ -1061,10 +1083,23 @@ def export_product_route():
         # the required disclaimer; insert it before PDF/ZIP rendering so the
         # customer never gets a non-compliant export. Idempotent.
         enforce_disclaimer_on_project_data(project)
+        from services.quality.artifact_identity import (
+            stamp_artifact_identity,
+            verify_artifact_identity,
+        )
+
+        data = project.get("data") or {}
+        # Hard-fail identity mismatches; never silently regenerate a different artifact.
+        verify_artifact_identity(data)
+        if data.get("is_pdf") or data.get("pdf_bytes"):
+            stamp_artifact_identity(data)
+            project["data"] = data
         result = build_product_export(project)
         data = project.get("data") or {}
         data["export_package_id"] = result["package_id"]
         data["product_exports"] = result["exports"]
+        if data.get("is_pdf") or data.get("pdf_bytes"):
+            stamp_artifact_identity(data)
         _persist_product_data(project, data)
         return jsonify(result)
     except ValueError as exc:

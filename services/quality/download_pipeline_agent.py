@@ -664,14 +664,27 @@ def validate_download(context: DownloadContext) -> DownloadResult:
             if any(kw in all_lower for kw in cover_keywords):
                 violations.append("zip_contains_illegal_cover")
 
-        # Orphan detection for ZIP (no project context).
-        # Bypass for crosswords — they are a separate product type, never orphans.
-        if context.project_id is None and context.product_type != "crossword":
-            page_num_re = re.compile(r"page\s+\d+\s+of\s+\d+", re.IGNORECASE)
-            for txt in all_text:
-                if page_num_re.search(txt):
-                    violations.append(f"zip_orphan_suspected_coloring_book: page_count={page_count}")
-                    break
+        # Orphan / stale-revision ZIP: must belong to a current project package.
+        if context.project_id is None and context.product_type is None:
+            return DownloadResult(
+                status="blocked",
+                violations=["stale_or_orphan_export_package"],
+                page_count=0,
+                zip_pdf_page_count=zip_page_count,
+                message=(
+                    "Download blocked: this export package is not linked to the current "
+                    "saved artifact revision. Open the project and export again."
+                ),
+                error_response={
+                    "error": "download_blocked",
+                    "message": (
+                        "Download blocked: this export package is not linked to the current "
+                        "saved artifact revision. Open the project and export again."
+                    ),
+                    "violations": ["stale_or_orphan_export_package"],
+                },
+                status_code=403,
+            )
 
         if violations:
             return DownloadResult(
@@ -725,28 +738,28 @@ def validate_download(context: DownloadContext) -> DownloadResult:
     violations: list[str] = []
     _refine_coloring_book_cover_eligibility(context, page_count)
 
-    # ── Orphan detection (no project context) ───────────────────────────────
+    # ── Orphan / stale-revision detection (no project context) ─────────────
+    # PDF product exports must belong to a current project package_id or
+    # export_package_id. Orphan folders from earlier revisions are not served.
     if context.project_id is None and context.product_type is None:
-        orphan_passed, orphan_violations = _validate_orphan_suspected(file_bytes)
-        if not orphan_passed:
-            return DownloadResult(
-                status="blocked",
-                violations=orphan_violations,
-                page_count=page_count,
-                message=(
-                    "Download blocked: this file appears to be a stale coloring book export "
-                    "from a deleted project. Please regenerate the export from the current project."
+        return DownloadResult(
+            status="blocked",
+            violations=["stale_or_orphan_export_package"],
+            page_count=page_count,
+            message=(
+                "Download blocked: this export package is not linked to the current "
+                "saved artifact revision. Open the project and export again."
+            ),
+            error_response={
+                "error": "download_blocked",
+                "message": (
+                    "Download blocked: this export package is not linked to the current "
+                    "saved artifact revision. Open the project and export again."
                 ),
-                error_response={
-                    "error": "download_blocked",
-                    "message": (
-                        "Download blocked: this file appears to be a stale coloring book export "
-                        "from a deleted project. Please regenerate the export from the current project."
-                    ),
-                    "violations": orphan_violations,
-                },
-                status_code=403,
-            )
+                "violations": ["stale_or_orphan_export_package"],
+            },
+            status_code=403,
+        )
 
     # ── Coloring Book Single Sheet ─────────────────────────────────────────
     if context.product_type == "coloring_book" and context.is_single_sheet:
