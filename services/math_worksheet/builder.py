@@ -14,6 +14,43 @@ from dataclasses import dataclass, field
 # Local procedural math problem generator — no OpenAI, no network
 # ---------------------------------------------------------------------------
 
+def _normalize_grade_label(grade: str) -> str:
+    """Return 'Grade N' once — UI already sends 'Grade 6', not bare '6'."""
+    raw = str(grade or "3").strip()
+    if not raw:
+        raw = "3"
+    stripped = re.sub(r"(?i)^grades?\s*", "", raw).strip()
+    if not stripped:
+        stripped = "3"
+    return f"Grade {stripped}"
+
+
+def _resolve_topic_and_ops(topic: str) -> tuple[str, list[str]]:
+    """Map UI topic to display label + operation list.
+
+    Single-operation topics keep their label and force that op exclusively.
+    Intentionally mixed topics (or unknown) display as 'Mixed Operations'.
+    """
+    topic_l = str(topic or "").strip().lower()
+    if any(t in topic_l for t in ["add", "plus", "sum"]):
+        return "Addition", ["+"]
+    if any(t in topic_l for t in ["subtract", "minus", "difference"]):
+        return "Subtraction", ["-"]
+    if any(t in topic_l for t in ["multiplic", "multiply", "times", "product"]):
+        return "Multiplication", ["*"]
+    if any(t in topic_l for t in ["divid", "division", "quotient"]):
+        return "Division", ["/"]
+    if any(t in topic_l for t in ["fraction", "fractions"]):
+        # Fractions practice uses a restricted mixed set; keep topic name.
+        return (str(topic or "Fractions").strip() or "Fractions"), ["+", "-", "*"]
+    # Default / Decimals / Algebra / Geometry / Word Problems → mixed ops
+    if topic_l in ("", "mixed", "mixed arithmetic", "mixed operations"):
+        return "Mixed Operations", ["+", "-", "*", "/"]
+    # Keep specific non-op topic names but generate mixed practice.
+    label = str(topic or "Mixed Operations").strip() or "Mixed Operations"
+    return label, ["+", "-", "*", "/"]
+
+
 def _generate_local_problems(
     count: int,
     grade: str,
@@ -49,21 +86,7 @@ def _generate_local_problems(
     else:
         a_max, b_max = 1000, 200
 
-    topic_l = str(topic or "mixed").lower()
-
-    # Select operation mix based on topic
-    if any(t in topic_l for t in ["add", "plus", "sum"]):
-        ops = ["+"]
-    elif any(t in topic_l for t in ["subtract", "minus", "difference"]):
-        ops = ["-"]
-    elif any(t in topic_l for t in ["multiply", "times", "product"]):
-        ops = ["*"]
-    elif any(t in topic_l for t in ["divide", "division", "quotient"]):
-        ops = ["/"]
-    elif any(t in topic_l for t in ["fraction", "fractions"]):
-        ops = ["+", "-", "*"]
-    else:
-        ops = ["+", "-", "*", "/"]
+    _label, ops = _resolve_topic_and_ops(topic)
 
     for i in range(count):
         op = ops[i % len(ops)]
@@ -88,18 +111,20 @@ def _generate_local_problems(
                 a = random.randint(2, 10)
                 b = random.randint(2, 12)
             ans = a * b
-            expr = f"{a} × {b} = ?"
+            # ASCII operators keep PDF typography stable (no Type1 fallback).
+            expr = f"{a} x {b} = ?"
         else:  # division
             b = random.randint(2, 12)
             ans = random.randint(2, 12)
             a = b * ans
-            expr = f"{a} ÷ {b} = ?"
+            expr = f"{a} / {b} = ?"
 
         problems.append({
             "number": i + 1,
             "expression": expr,
             "answer": str(ans),
             "hint": "",
+            "operation": op,
         })
 
     challenges = []
@@ -109,23 +134,36 @@ def _generate_local_problems(
             challenge_count = min(3, max(1, count // 4 + 1))
         else:
             challenge_count = 1
+        # Challenge section follows the selected topic when it is a single op.
+        challenge_ops = ops if len(ops) == 1 else ["*", "/"]
         for i in range(challenge_count):
-            op = random.choice(["*", "/"])
-            if op == "*":
+            op = challenge_ops[i % len(challenge_ops)]
+            if op == "+":
+                a = random.randint(50, 200)
+                b = random.randint(50, 200)
+                ans = a + b
+                expr = f"{a} + {b} = ?"
+            elif op == "-":
+                a = random.randint(100, 300)
+                b = random.randint(20, 99)
+                ans = a - b
+                expr = f"{a} - {b} = ?"
+            elif op == "*":
                 a = random.randint(8, 15)
                 b = random.randint(8, 15)
                 ans = a * b
-                expr = f"{a} × {b} = ?"
+                expr = f"{a} x {b} = ?"
             else:
                 b = random.randint(8, 15)
                 ans = random.randint(8, 15)
                 a = b * ans
-                expr = f"{a} ÷ {b} = ?"
+                expr = f"{a} / {b} = ?"
             challenges.append({
                 "number": i + 1,
                 "expression": expr,
                 "answer": str(ans),
                 "hint": "",
+                "operation": op,
             })
 
     return problems, challenges
@@ -219,13 +257,14 @@ def build_math_worksheet(
             False. When False, no challenge problems are generated.
     """
     title = str(worksheet_title or "Math Worksheet").strip()
-    topic = str(math_topic or "Mixed Arithmetic").strip()
-    grade_val = str(grade or "3").strip()
+    topic_raw = str(math_topic or "").strip()
+    grade_val = _normalize_grade_label(grade)
     difficulty_val = str(difficulty or "Medium").strip()
+    topic, _ops = _resolve_topic_and_ops(topic_raw)
 
     # Local procedural generation only — no AI dependency.
     problems_raw, challenges_raw = _generate_local_problems(
-        problem_count, grade_val, topic, difficulty_val,
+        problem_count, grade_val, topic_raw or topic, difficulty_val,
         include_challenge=bool(include_challenge),
     )
 

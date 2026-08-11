@@ -3,20 +3,23 @@ from __future__ import annotations
 
 import io
 import os
+import re
 from dataclasses import dataclass
 
-from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 from services.math_worksheet.builder import MathProblem, MathWorksheetResult
+from services.math_worksheet.pdf_fonts import ascii_pdf_text, ensure_math_fonts
 
 _MARGIN = 0.5 * 72.0  # 0.5 inch
 _HEADER_H = 60  # space for title block
-_ANSWER_LINE_H = 24
 _PROBLEM_H = 36  # space per problem row
 _COLS = 2  # two-column problem layout
+_INSTRUCTION = (
+    "Solve each problem. Show your work. Write your final answer in the answer blank."
+)
 
 
 @dataclass
@@ -25,6 +28,50 @@ class MathWorksheetLayoutInfo:
     worksheet_pages: int = 0
     answer_key_pages: int = 0
     cover_page_count: int = 0
+
+
+def _fonts() -> tuple[str, str, str]:
+    return ensure_math_fonts()
+
+
+def _format_grade_display(grade: str) -> str:
+    """Ensure header shows 'Grade 6', never 'Grade Grade 6'."""
+    raw = str(grade or "").strip()
+    if not raw:
+        return ""
+    stripped = re.sub(r"(?i)^grades?\s*", "", raw).strip()
+    return f"Grade {stripped}" if stripped else ""
+
+
+def _draw_text(
+    pdf: canvas.Canvas,
+    x: float,
+    y: float,
+    text: str,
+    *,
+    font_name: str,
+    font_size: float,
+    align: str = "left",
+    fill=None,
+) -> float:
+    """Whole-string draw with character/word spacing cleared."""
+    safe = ascii_pdf_text(text)
+    pdf.saveState()
+    try:
+        pdf.setFillColor(fill if fill is not None else colors.black)
+        pdf.setFont(font_name, font_size)
+        pdf._code.append("0 Tc")
+        pdf._code.append("0 Tw")
+        width = pdf.stringWidth(safe, font_name, font_size)
+        if align == "center":
+            pdf.drawCentredString(x, y, safe)
+        elif align == "right":
+            pdf.drawRightString(x, y, safe)
+        else:
+            pdf.drawString(x, y, safe)
+        return width
+    finally:
+        pdf.restoreState()
 
 
 def _draw_header(
@@ -37,44 +84,50 @@ def _draw_header(
     page_num: int,
     total_pages: int,
 ) -> float:
-    """Draw worksheet header and return the y position below the header."""
+    """Draw worksheet header once and return the y position below it."""
     page_w, page_h = letter
+    font, font_bold, font_italic = _fonts()
 
-    # Title
-    pdf.setFont("Helvetica-Bold", 16)
-    pdf.setFillColor(colors.black)
-    pdf.drawCentredString(page_w / 2.0, page_h - _MARGIN - 18, title[:80])
+    _draw_text(
+        pdf, page_w / 2.0, page_h - _MARGIN - 18, title[:80],
+        font_name=font_bold, font_size=16, align="center",
+    )
 
-    # Metadata line
     meta_parts = []
-    if grade:
-        meta_parts.append(f"Grade {grade}")
+    grade_label = _format_grade_display(grade)
+    if grade_label:
+        meta_parts.append(grade_label)
     if topic:
-        meta_parts.append(topic)
+        meta_parts.append(str(topic))
     if difficulty:
-        meta_parts.append(difficulty)
+        meta_parts.append(str(difficulty))
     meta = "  |  ".join(meta_parts)
-    pdf.setFont("Helvetica", 9)
-    pdf.setFillColor(colors.HexColor("#4B5563"))
-    pdf.drawCentredString(page_w / 2.0, page_h - _MARGIN - 32, meta)
+    _draw_text(
+        pdf, page_w / 2.0, page_h - _MARGIN - 32, meta,
+        font_name=font, font_size=9, align="center",
+        fill=colors.HexColor("#4B5563"),
+    )
 
-    # Divider line
     pdf.setStrokeColor(colors.HexColor("#D1D5DB"))
     pdf.setLineWidth(0.5)
     y_line = page_h - _MARGIN - 42
     pdf.line(_MARGIN, y_line, page_w - _MARGIN, y_line)
 
-    # Page number
-    pdf.setFont("Helvetica", 8)
-    pdf.setFillColor(colors.HexColor("#9CA3AF"))
-    pdf.drawRightString(page_w - _MARGIN, page_h - _MARGIN - 8, f"Page {page_num} of {total_pages}")
+    _draw_text(
+        pdf, page_w - _MARGIN, page_h - _MARGIN - 8,
+        f"Page {page_num} of {total_pages}",
+        font_name=font, font_size=8, align="right",
+        fill=colors.HexColor("#9CA3AF"),
+    )
 
-    # Instructions
-    pdf.setFont("Helvetica-Oblique", 9)
-    pdf.setFillColor(colors.HexColor("#374151"))
-    pdf.drawString(_MARGIN, y_line - 14, f"Solve each problem. Show your work. Write your final answer in the answer blank.")
+    # Single instruction line — never redrawn elsewhere on this page.
+    _draw_text(
+        pdf, _MARGIN, y_line - 14, _INSTRUCTION,
+        font_name=font_italic, font_size=9,
+        fill=colors.HexColor("#374151"),
+    )
 
-    return y_line - 30  # return top_y for problem area
+    return y_line - 30
 
 
 def _draw_problem_grid(
@@ -87,6 +140,7 @@ def _draw_problem_grid(
     bottom_y: float,
 ) -> float:
     """Draw problems in two columns. Returns the y after the last problem."""
+    font, font_bold, _font_italic = _fonts()
     col_width = (right_x - left_x) / _COLS
     row_h = _PROBLEM_H
 
@@ -98,33 +152,25 @@ def _draw_problem_grid(
         y = top_y - row * row_h
 
         if y - row_h < bottom_y:
-            break  # ran out of space
+            break
 
-        # Row background (alternating)
         if row % 2 == 0:
             pdf.setFillColor(colors.HexColor("#F9FAFB"))
             pdf.rect(x, y - row_h + 2, col_width - 4, row_h - 4, fill=1, stroke=0)
 
-        # Problem number
-        pdf.setFont("Helvetica-Bold", 9)
-        pdf.setFillColor(colors.HexColor("#374151"))
-        num_text = f"{problem.number}."
-        pdf.drawString(x + 2, y - 12, num_text)
+        _draw_text(
+            pdf, x + 2, y - 12, f"{problem.number}.",
+            font_name=font_bold, font_size=9,
+            fill=colors.HexColor("#374151"),
+        )
+        _draw_text(
+            pdf, x + 22, y - 12, problem.expression[:30],
+            font_name=font, font_size=11,
+        )
 
-        # Expression
-        pdf.setFont("Helvetica", 11)
-        pdf.setFillColor(colors.black)
-        # Fit expression to column width
-        expr = problem.expression[:30]
-        pdf.drawString(x + 22, y - 12, expr)
-
-        # Answer blank line
         pdf.setStrokeColor(colors.HexColor("#9CA3AF"))
         pdf.setLineWidth(0.5)
         pdf.line(x + 22, y - 16, x + col_width - 8, y - 16)
-
-        # Answer (only in key pages)
-        # (Answers shown in answer key section)
 
     return y - row_h
 
@@ -138,56 +184,86 @@ def _draw_answer_key_page(
     total_pages: int = 1,
     section_label: str = "Main",
 ) -> None:
-    """Draw one answer key page."""
+    """Draw one answer key page with two clearly separated columns."""
     page_w, page_h = letter
+    font, font_bold, _font_italic = _fonts()
 
     _paint_white(pdf)
 
-    # Header
-    section_suffix = f" — {section_label} Section" if section_label and section_label != "Main" else ""
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.setFillColor(colors.black)
-    pdf.drawCentredString(page_w / 2.0, page_h - _MARGIN - 16, f"Answer Key{section_suffix} — {title[:60]}")
+    section_suffix = f" - {section_label} Section" if section_label and section_label != "Main" else ""
+    heading = f"Answer Key{section_suffix} - {title[:60]}"
+    _draw_text(
+        pdf, page_w / 2.0, page_h - _MARGIN - 16, heading,
+        font_name=font_bold, font_size=14, align="center",
+    )
 
     pdf.setStrokeColor(colors.HexColor("#D1D5DB"))
     pdf.setLineWidth(0.5)
     pdf.line(_MARGIN, page_h - _MARGIN - 26, page_w - _MARGIN, page_h - _MARGIN - 26)
 
-    pdf.setFont("Helvetica", 8)
-    pdf.setFillColor(colors.HexColor("#9CA3AF"))
-    pdf.drawRightString(page_w - _MARGIN, page_h - _MARGIN - 8, f"Page {page_num} of {total_pages}")
+    _draw_text(
+        pdf, page_w - _MARGIN, page_h - _MARGIN - 8,
+        f"Page {page_num} of {total_pages}",
+        font_name=font, font_size=8, align="right",
+        fill=colors.HexColor("#9CA3AF"),
+    )
 
-    # Answer table header
-    top_y = page_h - _MARGIN - 36
-    pdf.setFont("Helvetica-Bold", 9)
-    pdf.setFillColor(colors.HexColor("#374151"))
-    pdf.drawString(_MARGIN, top_y, "#")
-    pdf.drawString(_MARGIN + 30, top_y, "Problem")
-    pdf.drawString(_MARGIN + 260, top_y, "Answer")
+    # Two independent columns with equal gutters and per-column headers.
+    col_gap = 18.0
+    usable_w = page_w - (2 * _MARGIN) - col_gap
+    col_w = usable_w / 2.0
+    top_y = page_h - _MARGIN - 40
+    row_h = 16.0
+    num_w = 22.0
+    ans_w = 48.0
+    expr_x_off = num_w + 4.0
+    ans_x_off = col_w - ans_w
+
+    for col_idx in range(2):
+        x0 = _MARGIN + col_idx * (col_w + col_gap)
+        _draw_text(
+            pdf, x0, top_y, "#",
+            font_name=font_bold, font_size=9,
+            fill=colors.HexColor("#374151"),
+        )
+        _draw_text(
+            pdf, x0 + expr_x_off, top_y, "Problem",
+            font_name=font_bold, font_size=9,
+            fill=colors.HexColor("#374151"),
+        )
+        _draw_text(
+            pdf, x0 + ans_x_off, top_y, "Answer",
+            font_name=font_bold, font_size=9,
+            fill=colors.HexColor("#374151"),
+        )
 
     pdf.setStrokeColor(colors.HexColor("#D1D5DB"))
-    pdf.line(_MARGIN, top_y - 2, page_w - _MARGIN, top_y - 2)
+    pdf.line(_MARGIN, top_y - 4, page_w - _MARGIN, top_y - 4)
 
-    # Answers in 2-column table
-    col_w = (page_w - 2 * _MARGIN) / 2.0
-    y = top_y - 16
-    row_h = 14
+    y_base = top_y - 18
     for i, problem in enumerate(problems):
         col = i % 2
         row = i // 2
-        x = _MARGIN + col * col_w
-        y = top_y - 16 - row * row_h
+        x0 = _MARGIN + col * (col_w + col_gap)
+        y = y_base - row * row_h
 
-        if y - row_h < _MARGIN + 10:
+        if y < _MARGIN + 12:
             break
 
-        pdf.setFont("Helvetica", 8)
-        pdf.setFillColor(colors.black)
-        pdf.drawString(x, y, f"{problem.number}.")
-        pdf.drawString(x + 20, y, problem.expression[:28])
-        pdf.setFont("Helvetica-Bold", 8)
-        pdf.setFillColor(colors.HexColor("#059669"))
-        pdf.drawString(x + 230, y, str(problem.answer)[:12])
+        _draw_text(
+            pdf, x0, y, f"{problem.number}.",
+            font_name=font, font_size=8,
+        )
+        expr_max = max(8, int((ans_x_off - expr_x_off - 6) / 4.2))
+        _draw_text(
+            pdf, x0 + expr_x_off, y, problem.expression[:expr_max],
+            font_name=font, font_size=8,
+        )
+        _draw_text(
+            pdf, x0 + ans_x_off, y, str(problem.answer)[:12],
+            font_name=font_bold, font_size=8,
+            fill=colors.HexColor("#059669"),
+        )
 
 
 def _paint_white(pdf: canvas.Canvas) -> None:
@@ -203,10 +279,12 @@ def build_math_worksheet_pdf_bytes(
     cover_image_path: str = "",
 ) -> tuple[bytes, MathWorksheetLayoutInfo]:
     """Render a math worksheet PDF from MathWorksheetResult."""
+    ensure_math_fonts()
     buffer = io.BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
     layout = MathWorksheetLayoutInfo()
     page_w, page_h = letter
+    font, font_bold, _font_italic = _fonts()
 
     # Cover page
     if cover_image_path and os.path.isfile(cover_image_path):
@@ -214,33 +292,29 @@ def build_math_worksheet_pdf_bytes(
             pdf.drawImage(cover_image_path, 0, 0, width=page_w, height=page_h, preserveAspectRatio=False)
         except Exception:  # noqa: BLE001
             _paint_white(pdf)
-            pdf.setFont("Helvetica-Bold", 20)
-            pdf.drawCentredString(page_w / 2.0, page_h / 2.0 + 20, result.title[:80])
+            _draw_text(
+                pdf, page_w / 2.0, page_h / 2.0 + 20, result.title[:80],
+                font_name=font_bold, font_size=20, align="center",
+            )
         layout.cover_page_count = 1
         pdf.showPage()
 
-    # Determine total worksheet pages needed (2 cols × ~20 rows per page)
     PROBLEMS_PER_PAGE = 20
-    ws_pages_needed = max(1, (len(result.problems) + _COLS - 1) // _COLS)
-    # But also cap per page
-    problems_per_page = min(PROBLEMS_PER_PAGE, len(result.problems))
+    problems_per_page = min(PROBLEMS_PER_PAGE, max(1, len(result.problems)))
     ws_page_count = max(1, (len(result.problems) + problems_per_page - 1) // problems_per_page)
 
-    # Challenge page (if any)
     has_challenge = bool(result.challenge_problems)
     challenge_page_count = 1 if has_challenge else 0
 
-    # Answer key pages
     answers_per_page = 40
     ak_page_count = 0
     if include_answer_key and result.problems:
         ak_page_count = max(1, (len(result.problems) + answers_per_page - 1) // answers_per_page)
 
+    challenge_ak_count = 1 if (include_answer_key and has_challenge) else 0
     total_ws_pages = ws_page_count + challenge_page_count
-    total_ak_pages = ak_page_count
-    total_non_cover = total_ws_pages + total_ak_pages
+    total_pages = total_ws_pages + ak_page_count + challenge_ak_count
 
-    # Worksheet pages
     problems = result.problems
     problems_left = len(problems)
 
@@ -255,16 +329,16 @@ def build_math_worksheet_pdf_bytes(
             result.math_topic,
             result.difficulty,
             page_num,
-            total_ws_pages,
+            total_pages,
         )
 
         left_x = _MARGIN
         right_x = page_w - _MARGIN
         bottom_y = _MARGIN + 30
 
-        # How many problems on this page?
         on_this_page = min(problems_per_page, problems_left)
         page_problems = problems[page_idx * problems_per_page: page_idx * problems_per_page + on_this_page]
+        problems_left -= on_this_page
 
         _draw_problem_grid(
             pdf, page_problems,
@@ -275,17 +349,15 @@ def build_math_worksheet_pdf_bytes(
         layout.worksheet_pages += 1
         pdf.showPage()
 
-    # Challenge page
     if has_challenge:
         _paint_white(pdf)
-        _draw_header(
+        top_y = _draw_header(
             pdf,
-            f"{result.title} — Challenge",
+            f"{result.title} - Challenge",
             "Bonus problems for advanced learners",
             result.grade, result.math_topic, result.difficulty,
-            ws_page_count + 1, total_ws_pages,
+            ws_page_count + 1, total_pages,
         )
-        top_y = page_h - _MARGIN - _HEADER_H - 10
         _draw_problem_grid(
             pdf, result.challenge_problems,
             left_x=_MARGIN, right_x=page_w - _MARGIN,
@@ -294,37 +366,31 @@ def build_math_worksheet_pdf_bytes(
         layout.worksheet_pages += 1
         pdf.showPage()
 
-    # Answer key pages
     if include_answer_key and result.problems:
-        # Compute the list of (label, problem) pairs so we can include both
-        # main problems and challenge problems (with their own section header)
-        # in the answer key.
         main_answers = list(result.problems)
         challenge_answers = list(result.challenge_problems) if result.challenge_problems else []
 
-        # Render main answer-key pages first
         for ak_page_idx in range(ak_page_count):
+            page_num = total_ws_pages + ak_page_idx + 1
             _draw_answer_key_page(
                 pdf,
                 main_answers[ak_page_idx * answers_per_page: (ak_page_idx + 1) * answers_per_page],
                 result.title,
-                page_num=ak_page_idx + 1,
-                total_pages=ak_page_count,
+                page_num=page_num,
+                total_pages=total_pages,
                 section_label="Main",
             )
             layout.answer_key_pages += 1
             pdf.showPage()
 
-        # Render a separate answer-key page for the challenge section if there
-        # are challenge problems. This guarantees the customer sees the
-        # challenge answer alongside the bonus problems on the worksheet.
         if challenge_answers:
+            page_num = total_ws_pages + ak_page_count + 1
             _draw_answer_key_page(
                 pdf,
                 challenge_answers,
                 result.title,
-                page_num=1,
-                total_pages=1,
+                page_num=page_num,
+                total_pages=total_pages,
                 section_label="Challenge",
             )
             layout.answer_key_pages += 1
@@ -341,7 +407,7 @@ def save_math_worksheet_pdf(
 ) -> tuple[bytes, MathWorksheetLayoutInfo]:
     pdf_bytes, layout = build_math_worksheet_pdf_bytes(result)
     path = os.path.join(output_dir, filename)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    os.makedirs(os.path.dirname(path) or output_dir, exist_ok=True)
     with open(path, "wb") as fh:
         fh.write(pdf_bytes)
     return pdf_bytes, layout

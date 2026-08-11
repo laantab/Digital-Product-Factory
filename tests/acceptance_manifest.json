@@ -34,6 +34,7 @@
     "tests/test_reopen_packaging_identity_pass2.py",
     "tests/test_final_automated_customer_flow_pass3.py",
     "tests/test_math_worksheet_final_output_pdf_link.py",
+    "tests/test_math_worksheet_pdf_visual_qa.py",
     "test_crossword_quality.py"
   ]
 }
