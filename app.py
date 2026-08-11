@@ -1207,12 +1207,41 @@ def generate_product_ad_route():
 # ----- Product Projects (SQLite) -----
 
 
+def _record_artifact_id(data) -> str:
+    if not isinstance(data, dict):
+        return ""
+    return str(data.get("artifact_id") or data.get("package_id") or "").strip()
+
+
+def _enrich_project_artifact_fields(project: dict) -> dict:
+    """Attach resolved artifact_state / id / revision for UI (no DB migration)."""
+    if not isinstance(project, dict):
+        return project
+    data = project.get("data") if isinstance(project.get("data"), dict) else None
+    if not data:
+        return project
+    try:
+        from services.quality.artifact_state import (
+            current_revision,
+            resolve_artifact_state,
+        )
+
+        project["artifact_state"] = resolve_artifact_state(data).value
+        project["artifact_id"] = _record_artifact_id(data)
+        project["artifact_revision"] = current_revision(data)
+    except Exception:
+        # Conflicting / unreadable evidence: omit fields so UI hides the control.
+        pass
+    return project
+
+
 @app.get("/projects")
 def list_projects_route():
     """List projects. By default hides system/test/temporary projects.
     Pass ?include_system=1 to see everything."""
     include_system = request.args.get("include_system", "0") == "1"
-    return jsonify(database.list_projects(include_system=include_system))
+    projects = database.list_projects(include_system=include_system)
+    return jsonify([_enrich_project_artifact_fields(p) for p in projects])
 
 
 @app.get("/projects/<int:project_id>")
@@ -1220,7 +1249,7 @@ def get_project_route(project_id: int):
     project = database.get_project(project_id)
     if not project:
         return _error("Project not found.", 404)
-    return jsonify(project)
+    return jsonify(_enrich_project_artifact_fields(project))
 
 
 @app.post("/projects")
@@ -1314,20 +1343,13 @@ _REVISION_REQUEST_ALLOWED_KEYS = frozenset(
 )
 
 
-def _record_artifact_id(data) -> str:
-    if not isinstance(data, dict):
-        return ""
-    return str(data.get("artifact_id") or data.get("package_id") or "").strip()
-
-
 @app.post("/projects/<int:project_id>/revisions")
 def create_project_revision_route(project_id: int):
     """Gate 12: explicit APPROVED → new DRAFT revision (no generation).
 
-    Controlled production entrypoint only. Does not wire Generate Product,
-    enhancement, cover, packaging, or dashboard buttons. Persists the
-    transitioned DRAFT through ``_persist_product_data`` without Save bumping
-    revision again.
+    Controlled production entrypoint only. Does not call Generate Product,
+    enhancement, cover, or packaging. Persists the transitioned DRAFT through
+    ``_persist_product_data`` without Save bumping revision again.
     """
     from services.quality.artifact_state import (
         ArtifactState,

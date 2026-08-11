@@ -116,9 +116,9 @@ const PRODUCT_TYPES = [
         default: "AI Image Coloring Page",
         hint: "Use Sellable AI artwork for a real product. Quick test skips AI images.",
       },
-      { name: "age_group", label: "Who is this for?", type: "select", options: ["Kids", "Teens", "12-adult", "Adults", "All ages"], default: "Kids" },
-      { name: "pages", label: "Number of pages", type: "number", value: "12", hint: "Full books usually work best at 8–12 pages." },
-      { name: "art_style", label: "Art style", type: "select", options: ["Bold & Easy Kawaii", "Cartoon comic-book", "Cute cartoon", "Bold KDP style", "Realistic", "Kids coloring"], default: "Bold & Easy Kawaii" },
+      { name: "age_group", label: "Who is this for?", type: "select", options: ["Kids", "Children ages 8–12", "Teens", "12-adult", "Adults", "All ages"], default: "Children ages 8–12" },
+      { name: "pages", label: "Number of pages", type: "number", value: "25", hint: "Thunder Volt full story books use 25 interiors (+ cover = 26 PDF pages)." },
+      { name: "art_style", label: "Art style", type: "select", options: ["Cartoon comic-book", "Bold & Easy Kawaii", "Cute cartoon", "Bold KDP style", "Realistic", "Kids coloring"], default: "Cartoon comic-book" },
       { name: "include_captions", label: "Add short captions under pages?", type: "select", options: YN, default: "No" },
       { name: "page_size", label: "Page size", type: "select", options: ["US Letter", "A4", "6x9", "8.5x11"], default: "US Letter" },
     ],
@@ -832,6 +832,84 @@ function nextActionLabel(stage, p) {
   }
 }
 
+// Gate 13: Create Draft Revision (APPROVED only) — Saved Projects actions.
+function projectArtifactMeta(p) {
+  const d = p && p.data && typeof p.data === "object" ? p.data : {};
+  const state = String((p && p.artifact_state) || d.artifact_state || "")
+    .trim()
+    .toUpperCase();
+  const artifactId = String(
+    (p && p.artifact_id) || d.artifact_id || d.package_id || ""
+  ).trim();
+  let revision = 1;
+  const rawRev =
+    p && p.artifact_revision != null ? p.artifact_revision : d.artifact_revision;
+  if (rawRev != null && rawRev !== "") {
+    const n = Number(rawRev);
+    if (Number.isFinite(n)) revision = Math.max(1, Math.trunc(n));
+  }
+  return { state, artifactId, revision };
+}
+
+function shouldShowCreateDraftRevision(p) {
+  return projectArtifactMeta(p).state === "APPROVED";
+}
+
+function buildCreateDraftRevisionPayload(p) {
+  const meta = projectArtifactMeta(p);
+  // Only the four Gate 12 revision keys — no content/assets/cover/exports.
+  return {
+    create_draft_revision: true,
+    reason: "Create draft revision from approved artifact",
+    expected_artifact_id: meta.artifactId,
+    expected_revision: meta.revision,
+  };
+}
+
+async function createDraftRevision(p, btn) {
+  if (!shouldShowCreateDraftRevision(p)) return;
+  if (btn && btn.disabled) return;
+  const confirmMsg =
+    "Create a draft revision?\n\n" +
+    "Your approved version will be preserved. Editing continues in a new draft " +
+    "revision — the approved artifact is not replaced.";
+  if (!confirm(confirmMsg)) return;
+  if (btn && btn.disabled) return;
+  setBusyEl(btn, true);
+  try {
+    const body = buildCreateDraftRevisionPayload(p);
+    const res = await fetch(`/projects/${p.id}/revisions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) {
+      toast(
+        data.error ||
+          "This project changed on the server. Reopen it from Saved Projects, then try Create Draft Revision again.",
+        "error"
+      );
+      return;
+    }
+    if (!res.ok) {
+      toast(data.error || `Request failed (${res.status})`, "error");
+      return;
+    }
+    toast("Draft revision created. Your approved version is preserved.");
+    const project = await api(`/projects/${p.id}`);
+    openProject(project);
+    loadProjects();
+  } catch (err) {
+    toast(
+      (err && err.message) || "Could not create draft revision.",
+      "error"
+    );
+  } finally {
+    setBusyEl(btn, false);
+  }
+}
+
 function projectRow(p, opts) {
   const isDash = opts && opts.dashboard;
   const showMeta = opts && opts.showMeta;
@@ -856,6 +934,15 @@ function projectRow(p, opts) {
   const row = document.createElement("div");
   row.className = "flex items-center justify-between gap-3 rounded-xl border border-slate-100 hover:border-brand-200 hover:bg-brand-50/40 px-4 py-3 transition" + (isDash ? " dashboard-row" : "");
 
+  // Saved Projects only (not dashboard): explicit Create Draft Revision for APPROVED.
+  const showDraftRevision = !isDash && shouldShowCreateDraftRevision(p);
+  const draftRevisionBtn = showDraftRevision
+    ? `<button type="button" class="rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-1.5 disabled:opacity-50" data-create-draft-revision title="Approved version preserved; editing continues in a new draft">Create Draft Revision</button>`
+    : "";
+  const draftRevisionNote = showDraftRevision
+    ? `<span class="hidden xl:inline text-xs text-slate-500 max-w-[14rem] leading-snug" data-draft-revision-note>Approved version preserved; editing continues in a new draft.</span>`
+    : "";
+
   if (isDash) {
     // Clean dashboard view: title + type + date + single Open button
     row.innerHTML = `
@@ -877,12 +964,14 @@ function projectRow(p, opts) {
         ${metaBadge}
         <span class="truncate font-medium text-slate-800">${escapeHtml(p.name)}</span>
         <span class="hidden sm:inline text-xs text-slate-400">${date}</span>
+        ${draftRevisionNote}
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <button class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5" data-dl-pdf>Download PDF</button>
         <button class="rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-1.5" data-dl-zip>Download ZIP</button>
         <button class="rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5" data-launch>Launch Package</button>
         ${nextLabel ? `<button class="rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-1.5" data-next>${escapeHtml(nextLabel)}</button>` : ""}
+        ${draftRevisionBtn}
         <button class="text-sm font-medium text-brand-600 hover:text-brand-800" data-open>Open</button>
         <button class="text-sm font-medium text-rose-500 hover:text-rose-700" data-del>Delete</button>
       </div>`;
@@ -928,6 +1017,10 @@ function projectRow(p, opts) {
   if (nextBtn) nextBtn.onclick = () => runNextAction(p);
   const openBtn = row.querySelector("[data-open]");
   if (openBtn) openBtn.onclick = () => openProject(p);
+  const draftRevBtn = row.querySelector("[data-create-draft-revision]");
+  if (draftRevBtn) {
+    draftRevBtn.onclick = () => createDraftRevision(p, draftRevBtn);
+  }
   // Dashboard rows omit Delete — must null-check or loadProjects crashes
   // and Saved Projects stays empty even when the project is in the DB.
   const delBtn = row.querySelector("[data-del]");

@@ -29,6 +29,7 @@
     "tests/test_artifact_state_revision_primitives.py",
     "tests/test_save_state_enforcement.py",
     "tests/test_controlled_revision_transition.py",
+    "tests/test_create_draft_revision_ui.py",
     "test_crossword_quality.py"
   ]
 }
