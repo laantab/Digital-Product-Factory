@@ -151,8 +151,12 @@ def _resolve_factory_type_from_plan(plan: dict) -> dict:
     if "crossword" in pt:
         return {"status": "active", "factoryId": "crossword"}
     if "spelling" in pt:
-        return {"status": "active", "factoryId": "spelling_worksheet"}
-    if "math" in pt or "worksheet" in pt:
+        return {
+            "status": "hidden",
+            "factoryId": "spelling_worksheet",
+            "hiddenReason": "Spelling Worksheet is not ready in the public builder yet.",
+        }
+    if "math" in pt or ("worksheet" in pt and "spelling" not in pt):
         return {"status": "active", "factoryId": "math_worksheet"}
     if "book" in pt or "guide" in pt or "workbook" in pt or "checklist" in pt:
         return {"status": "active", "factoryId": "ebook"}

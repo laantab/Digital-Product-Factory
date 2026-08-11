@@ -79,7 +79,7 @@ def _resolve_factory_type_from_plan(plan: dict) -> tuple[str, str | None]:
     if "crossword" in pt:
         return "active", "crossword"
     if "spelling" in pt:
-        return "active", "spelling_worksheet"
+        return "hidden", "spelling_worksheet"
     if "math" in pt or "worksheet" in pt:
         return "active", "math_worksheet"
     if "book" in pt or "guide" in pt or "workbook" in pt or "checklist" in pt:

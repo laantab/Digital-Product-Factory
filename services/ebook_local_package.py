@@ -183,7 +183,12 @@ def _escape(s: str) -> str:
 
 
 def ensure_ebook_visual_package(project: dict) -> dict:
-    """If an ebook project lacks visual_plan/preview, build a local package in place."""
+    """If an ebook project lacks visual_plan/preview, build a local package in place.
+
+    Content mutation is gated by ``assert_content_mutation_allowed``:
+    DRAFT may assemble missing visuals; APPROVED requires Create Draft Revision;
+    LOCKED is blocked. Successful DRAFT mutation clears stale export refs.
+    """
     data = dict(project.get("data") or {})
     product_type = (data.get("product_type") or project.get("type") or "").lower()
     if product_type not in {"ebook", ""} and project.get("type") != "ebook":
@@ -196,6 +201,14 @@ def ensure_ebook_visual_package(project: dict) -> dict:
         return project
     if data.get("visual_plan") and data.get("preview_html") and data.get("cover_design"):
         return project
+
+    from services.quality.artifact_state import (
+        assert_content_mutation_allowed,
+        invalidate_draft_export_references,
+    )
+
+    # Shared write policy — no APPROVED/LOCKED content/cover/asset mutation.
+    assert_content_mutation_allowed(data, action="build ebook visual package")
 
     title = (data.get("title") or project.get("name") or "Untitled Product").strip()
     fields = dict(data.get("fields") or {})
@@ -223,6 +236,7 @@ def ensure_ebook_visual_package(project: dict) -> dict:
             "local_visual_package": True,
         }
     )
+    invalidate_draft_export_references(data)
     project = dict(project)
     project["data"] = data
     return project

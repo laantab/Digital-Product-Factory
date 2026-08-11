@@ -45,6 +45,7 @@ Scope:
 from __future__ import annotations
 
 import datetime
+import hashlib
 import fitz
 import io
 import json
@@ -331,6 +332,11 @@ def resolve_download_request(
                 or (data or {}).get("package_id")
                 or ""
             ).strip(),
+            "artifact_revision": (data or {}).get("artifact_revision"),
+            "export_package_id": str((data or {}).get("export_package_id") or "").strip(),
+            "product_exports": (data or {}).get("product_exports")
+            if isinstance((data or {}).get("product_exports"), dict)
+            else None,
         },
     )
 
@@ -587,6 +593,147 @@ def _attempt_single_sheet_repair(
 
 
 # --------------------------------------------------------------------------- //
+# Authoritative export byte / digest verification (Pass 3)
+# --------------------------------------------------------------------------- //
+def _expected_export_sha256(context: DownloadContext) -> str:
+    """Return verified sha256 from product_exports when recorded for this file."""
+    exports = context.metadata.get("product_exports")
+    if not isinstance(exports, dict):
+        return ""
+    files = exports.get("files") if isinstance(exports.get("files"), dict) else {}
+    filename = str(context.filename or "").strip().lower()
+    package_id = str(context.package_id or "").strip()
+
+    candidates: list[dict] = []
+    for key, entry in files.items():
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or "").strip().lower()
+        url = str(entry.get("url") or "")
+        disk_from_url = url.rstrip("/").rsplit("/", 1)[-1].lower() if url else ""
+        key_l = str(key).strip().lower()
+        if filename and (
+            filename == name
+            or filename == disk_from_url
+            or (filename.endswith(".zip") and key_l == "zip")
+            or (filename.endswith(".pdf") and key_l == "pdf")
+        ):
+            candidates.append(entry)
+        elif package_id and f"/download/{package_id}/" in url and (
+            disk_from_url == filename or key_l in {"pdf", "zip"} and filename.endswith(key_l)
+        ):
+            candidates.append(entry)
+
+    for entry in candidates:
+        digest = str(entry.get("sha256") or "").strip().lower()
+        if len(digest) == 64 and all(c in "0123456789abcdef" for c in digest):
+            return digest
+    return ""
+
+
+def _verify_authoritative_export_bytes(
+    context: DownloadContext,
+    file_bytes: bytes,
+    *,
+    is_pdf: bool,
+    is_zip: bool,
+) -> DownloadResult | None:
+    """Block changed/stale/substituted export bytes; never auto-regenerate.
+
+    Prefer verifying when a verified SHA-256 exists on the export record.
+    Legacy exports without a file hash may still pass when package identity
+    already resolved; mismatched verified hashes always fail closed.
+    """
+    if not (is_pdf or is_zip):
+        return None
+
+    meta = context.metadata or {}
+    exports = meta.get("product_exports")
+
+    # Revision / artifact binding when export meta carries identity.
+    if isinstance(exports, dict) and context.project_id is not None:
+        export_meta = exports.get("meta") if isinstance(exports.get("meta"), dict) else {}
+        recorded_rev = export_meta.get("artifact_revision")
+        current_rev = meta.get("artifact_revision")
+        if recorded_rev is not None and current_rev is not None:
+            try:
+                if int(recorded_rev) != int(current_rev):
+                    return DownloadResult(
+                        status="blocked",
+                        violations=["stale_export_revision"],
+                        message=(
+                            "Download blocked: export package belongs to a different "
+                            "artifact revision than the saved product."
+                        ),
+                        error_response={
+                            "error": "download_blocked",
+                            "message": (
+                                "Download blocked: export package belongs to a different "
+                                "artifact revision than the saved product."
+                            ),
+                            "violations": ["stale_export_revision"],
+                        },
+                        status_code=403,
+                    )
+            except (TypeError, ValueError):
+                pass
+        recorded_art = str(export_meta.get("artifact_id") or "").strip()
+        current_art = str(meta.get("artifact_id") or "").strip()
+        if recorded_art and current_art and recorded_art != current_art:
+            return DownloadResult(
+                status="blocked",
+                violations=["export_artifact_mismatch"],
+                message=(
+                    "Download blocked: export package is not bound to the "
+                    "authoritative artifact identity."
+                ),
+                error_response={
+                    "error": "download_blocked",
+                    "message": (
+                        "Download blocked: export package is not bound to the "
+                        "authoritative artifact identity."
+                    ),
+                    "violations": ["export_artifact_mismatch"],
+                },
+                status_code=403,
+            )
+
+    expected_sha = _expected_export_sha256(context)
+    if expected_sha:
+        actual_sha = hashlib.sha256(file_bytes or b"").hexdigest()
+        if actual_sha != expected_sha:
+            return DownloadResult(
+                status="blocked",
+                violations=["export_sha256_mismatch"],
+                message=(
+                    "Download blocked: file bytes do not match the authoritative "
+                    "export digest. Re-export from the saved product; mismatched "
+                    "files are not regenerated automatically."
+                ),
+                error_response={
+                    "error": "download_blocked",
+                    "message": (
+                        "Download blocked: file bytes do not match the authoritative "
+                        "export digest. Re-export from the saved product; mismatched "
+                        "files are not regenerated automatically."
+                    ),
+                    "violations": ["export_sha256_mismatch"],
+                },
+                status_code=403,
+            )
+        # Hash verified — do not attempt coloring-book auto-repair that would
+        # substitute different bytes for a digest-bound export.
+        context.metadata["export_sha256_verified"] = True
+        return None
+
+    # Legacy path without per-file hash: rely on package↔project identity
+    # (package_belongs_to_project / orphan detection). Do not invent a digest
+    # failure for products whose export PDF may legitimately differ from
+    # generation-package bytes (e.g. historical coloring exports).
+    return None
+
+
+# --------------------------------------------------------------------------- //
 # Core validation
 # --------------------------------------------------------------------------- //
 def validate_download(context: DownloadContext) -> DownloadResult:
@@ -623,6 +770,13 @@ def validate_download(context: DownloadContext) -> DownloadResult:
     filename_lower = context.filename.lower()
     is_pdf = filename_lower.endswith(".pdf")
     is_zip = filename_lower.endswith(".zip")
+
+    # Pass 3: authoritative export identity + byte digest checks (hash when present).
+    digest_block = _verify_authoritative_export_bytes(
+        context, file_bytes, is_pdf=is_pdf, is_zip=is_zip
+    )
+    if digest_block is not None:
+        return digest_block
 
     # ── ZIP handling ─────────────────────────────────────────────────────────
     if is_zip:
@@ -794,6 +948,27 @@ def validate_download(context: DownloadContext) -> DownloadResult:
                 served_path=file_path,
                 page_count=page_count,
                 message="Coloring Book Single Sheet passed validation.",
+            )
+
+        # Digest-bound exports must not be silently substituted via repair.
+        if context.metadata.get("export_sha256_verified"):
+            return DownloadResult(
+                status="blocked",
+                violations=violations or ["digest_bound_export_failed_qa"],
+                page_count=page_count,
+                message=(
+                    "Download blocked: digest-bound coloring export failed QA and "
+                    "will not be auto-regenerated."
+                ),
+                error_response={
+                    "error": "download_blocked",
+                    "message": (
+                        "Download blocked: digest-bound coloring export failed QA and "
+                        "will not be auto-regenerated."
+                    ),
+                    "violations": violations or ["digest_bound_export_failed_qa"],
+                },
+                status_code=403,
             )
 
         # Attempt ONE auto-correction

@@ -223,6 +223,73 @@ def _reuse_existing_export_package(data: dict) -> dict | None:
     return {"package_id": package_id, "exports": exports}
 
 
+def _finalize_export_result(
+    package_id: str,
+    exports: dict,
+    *,
+    data: dict | None = None,
+) -> dict:
+    """Attach artifact identity meta + per-file SHA-256 digests to export payload.
+
+    Digests are recorded when files exist on disk so download can verify bytes
+    against the authoritative export record. Does not regenerate content.
+    """
+    import hashlib
+
+    from services.quality.artifact_state import current_revision
+
+    exports_out = dict(exports or {})
+    meta = (
+        dict(exports_out["meta"])
+        if isinstance(exports_out.get("meta"), dict)
+        else {}
+    )
+    meta["package_id"] = str(package_id)
+    if isinstance(data, dict):
+        art_id = str(data.get("artifact_id") or data.get("package_id") or "").strip()
+        if art_id:
+            meta["artifact_id"] = art_id
+        try:
+            meta["artifact_revision"] = current_revision(data)
+        except Exception:
+            pass
+        content_digest = str(data.get("content_digest") or "").strip()
+        if content_digest:
+            meta["content_digest"] = content_digest
+    exports_out["meta"] = meta
+
+    files = exports_out.get("files")
+    if isinstance(files, dict):
+        pkg_dir = os.path.join(EXPORTS_DIR, package_id)
+        stamped: dict = {}
+        for key, entry in files.items():
+            if not isinstance(entry, dict):
+                stamped[key] = entry
+                continue
+            entry_out = dict(entry)
+            disk_name = ""
+            url = str(entry_out.get("url") or "")
+            if "/download/" in url:
+                disk_name = url.rstrip("/").rsplit("/", 1)[-1]
+            if str(key) == "zip" or str(entry_out.get("name") or "").lower().endswith(
+                ".zip"
+            ):
+                disk_name = "package.zip"
+            if not disk_name:
+                disk_name = str(entry_out.get("name") or "")
+            path = os.path.join(pkg_dir, disk_name) if disk_name else ""
+            if path and os.path.isfile(path):
+                digest = hashlib.sha256()
+                with open(path, "rb") as fh:
+                    for chunk in iter(lambda: fh.read(65536), b""):
+                        digest.update(chunk)
+                entry_out["sha256"] = digest.hexdigest()
+            stamped[key] = entry_out
+        exports_out["files"] = stamped
+
+    return {"package_id": package_id, "exports": exports_out}
+
+
 def build_product_export(project: dict, publishing_layout: dict | None = None) -> dict:
     """Render a self-contained HTML + TXT + PDF + ZIP export for any product."""
     data = project.get("data") or {}
@@ -241,11 +308,17 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
     if packaging_state is ArtifactState.LOCKED:
         existing = _reuse_existing_export_package(data if isinstance(data, dict) else {})
         if existing is not None:
-            return existing
+            return _finalize_export_result(
+                existing["package_id"],
+                existing["exports"] if isinstance(existing.get("exports"), dict) else {},
+                data=data if isinstance(data, dict) else None,
+            )
 
     # Ebook repair: never export a bare markdown dump when we can assemble a
     # local visual package (cover + TOC aids + rewritten headings) with zero
     # paid API calls. Skips crossword/coloring/word_search paths below.
+    # Missing visuals mutate content/cover — gated by assert_content_mutation_allowed
+    # inside ensure_ebook_visual_package (DRAFT only; APPROVED/LOCKED blocked).
     is_ebook = (
         project.get("type") == "ebook"
         or data.get("product_type") == "ebook"
@@ -257,7 +330,10 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
         from services.ebook_local_package import ensure_ebook_visual_package
         from services.ebook_pipeline_agents import run_ebook_quality_pipeline
 
-        updated = ensure_ebook_visual_package(project)
+        try:
+            updated = ensure_ebook_visual_package(project)
+        except ArtifactStateError:
+            raise
         # Mutate caller's project so /export-product can persist visual_plan/cover.
         project["data"] = updated.get("data") or project.get("data") or {}
         data = project.get("data") or {}
@@ -366,10 +442,11 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
             "pdf": {"name": pdf_name, "url": _download_url(package_id, pdf_name)},
             "zip": {"name": f"{slug}.zip", "url": _download_url(package_id, "package.zip")},
         }
-        return {
-            "package_id": package_id,
-            "exports": {"pdf_available": True, "files": exports_files},
-        }
+        return _finalize_export_result(
+            package_id,
+            {"pdf_available": True, "files": exports_files},
+            data=data if isinstance(data, dict) else None,
+        )
 
     # Special handling for crossword — use the dedicated crossword PDF builder
     if data.get("product_type") == "crossword" and data.get("is_pdf"):
@@ -506,10 +583,11 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
             "pdf": {"name": pdf_name, "url": _download_url(package_id, pdf_name)},
             "zip": {"name": f"{slug}.zip", "url": _download_url(package_id, "package.zip")},
         }
-        return {
-            "package_id": package_id,
-            "exports": {"pdf_available": True, "files": exports_files},
-        }
+        return _finalize_export_result(
+            package_id,
+            {"pdf_available": True, "files": exports_files},
+            data=data if isinstance(data, dict) else None,
+        )
 
     # Special handling for spelling_worksheet — use the stored PDF, never fall through to ebook.
     # Spelling worksheet ZIP contains ONLY product-specific files. No ebook.html / ebook.txt.
@@ -583,10 +661,11 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
             "pdf": {"name": pdf_name, "url": _download_url(package_id, pdf_name)},
             "zip": {"name": f"{slug}.zip", "url": _download_url(package_id, "package.zip")},
         }
-        return {
-            "package_id": package_id,
-            "exports": {"pdf_available": True, "files": exports_files},
-        }
+        return _finalize_export_result(
+            package_id,
+            {"pdf_available": True, "files": exports_files},
+            data=data if isinstance(data, dict) else None,
+        )
 
     # Special handling for math_worksheet — use the stored PDF, never fall through to ebook.
     # Math worksheet ZIP contains ONLY product-specific files. No ebook.html / ebook.txt / ebook.pdf.
@@ -737,14 +816,15 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
         # and looks for a *dict value* with a `package_id` field. Without this
         # the orphan-detection heuristic mis-classifies a math worksheet as a
         # "stale coloring book export" because the worksheet has page numbering.
-        return {
-            "package_id": package_id,
-            "exports": {
+        return _finalize_export_result(
+            package_id,
+            {
                 "meta": {"package_id": package_id},
                 "pdf_available": True,
                 "files": exports_files,
             },
-        }
+            data=data if isinstance(data, dict) else None,
+        )
 
     # Special handling for coloring_book — use the dedicated coloring book PDF
     # Note: is_pdf may be absent from old projects; check product_type + pdf_bytes
@@ -905,10 +985,11 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
             "pdf": {"name": pdf_name, "url": _download_url(package_id, pdf_name)},
             "zip": {"name": f"{slug}.zip", "url": _download_url(package_id, "package.zip")},
         }
-        return {
-            "package_id": package_id,
-            "exports": {"pdf_available": True, "files": exports_files},
-        }
+        return _finalize_export_result(
+            package_id,
+            {"pdf_available": True, "files": exports_files},
+            data=data if isinstance(data, dict) else None,
+        )
 
     # ── HARD BLOCK: crossword must never reach the ebook fallback ─────────────────
     # If crossword has is_pdf=True but pdf_bytes is somehow missing, the rebuild
@@ -1031,13 +1112,14 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
     }
     if pdf_available:
         exports_files["pdf"] = {"name": "product.pdf", "url": _download_url(package_id, "ebook.pdf")}
-    return {
-        "package_id": package_id,
-        "exports": {
+    return _finalize_export_result(
+        package_id,
+        {
             "pdf_available": pdf_available,
             "files": exports_files,
         },
-    }
+        data=data if isinstance(data, dict) else None,
+    )
 
 
 def project_export_file_path(

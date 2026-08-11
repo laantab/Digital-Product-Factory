@@ -553,7 +553,12 @@ def regenerate_cover_image_for_cover(cover: dict, package_id: str) -> tuple[dict
 
 
 def finalize_word_search_production_cover(project: dict) -> dict[str, Any]:
-    """Single production pass: lock typography, QC existing PNG, regen only if QC fails."""
+    """Single production pass: lock typography, QC existing PNG, regen only if QC fails.
+
+    Gated by shared content-mutation policy: DRAFT only; APPROVED requires
+    Create Draft Revision; LOCKED blocked. Successful DRAFT edits invalidate
+    stale export package references for the current revision.
+    """
     from services.cover_agent import (
         WORD_SEARCH_COVER_FINAL_DIRECTION,
         _has_cover_image,
@@ -563,8 +568,13 @@ def finalize_word_search_production_cover(project: dict) -> dict[str, Any]:
     )
     from services.cover_quality_agent import ensure_professional_cover, evaluate_cover_image_vision_qc
     from services.product import apply_word_search_cover_to_saved_data, normalize_word_search_project_data
+    from services.quality.artifact_state import (
+        assert_content_mutation_allowed,
+        invalidate_draft_export_references,
+    )
 
     data = dict(project.get("data") or {})
+    assert_content_mutation_allowed(data, action="finalize word search cover")
     existing = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
     package_id = str(data.get("package_id") or existing.get("package_id") or "")
     fields = data.get("fields") if isinstance(data.get("fields"), dict) else {}
@@ -629,6 +639,8 @@ def finalize_word_search_production_cover(project: dict) -> dict[str, Any]:
                 data = apply_word_search_cover_to_saved_data(data, cover)
             except RuntimeError:
                 pass
+
+    invalidate_draft_export_references(data)
 
     return {
         "cover_design": cover,

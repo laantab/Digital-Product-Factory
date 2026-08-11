@@ -544,7 +544,15 @@ def generate_product_route():
     # Product types that are hidden from the public picker (UI-side `hidden: true`
     # in static/js/app.js). If a caller hits them directly, return a clear "not
     # ready" error so we never silently produce a placeholder product.
-    _HIDDEN_PRODUCT_TYPES = {"marketing_kit", "cover_design", "flip_book", "planner"}
+    # spelling_worksheet: no end-to-end acceptance contract in acceptance_manifest
+    # (code retained; public builder + /generate-product guard hide it).
+    _HIDDEN_PRODUCT_TYPES = {
+        "marketing_kit",
+        "cover_design",
+        "flip_book",
+        "planner",
+        "spelling_worksheet",
+    }
     _requested = (body.get("product_type", "") or "").strip()
     if _requested in _HIDDEN_PRODUCT_TYPES:
         return _error("This product type is not ready yet.", 400)

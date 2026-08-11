@@ -224,6 +224,9 @@ const PRODUCT_TYPES = [
     label: "Spelling Worksheet",
     icon: "M3 5h18M3 9h18M3 13h18M3 17h18",
     desc: "Themed spelling practice sheets",
+    // No passing end-to-end acceptance contract in acceptance_manifest.json
+    // (lifecycle/handoff mapping only). Keep code; hide from public picker.
+    hidden: true,
     fields: [
       { name: "worksheet_title", label: "Worksheet title", type: "text", required: true },
       { name: "creation_mode", label: "Word source", type: "select", options: ["Themed (AI generates words)", "My custom word list"] },
@@ -1909,10 +1912,18 @@ function resolveFactoryTypeFromPlan(plan) {
   if (pt.includes("color")) return { status: "active", factoryId: "coloring_book" };
   if (pt.includes("word search")) return { status: "active", factoryId: "word_search" };
   if (pt.includes("crossword")) return { status: "active", factoryId: "crossword" };
-  if (pt.includes("spelling")) return { status: "active", factoryId: "spelling_worksheet" };
-  if (pt.includes("math") || pt.includes("worksheet")) return { status: "active", factoryId: "math_worksheet" };
+  if (pt.includes("math") || (pt.includes("worksheet") && !pt.includes("spelling"))) {
+    return { status: "active", factoryId: "math_worksheet" };
+  }
 
   // 4. Heuristic detection for hidden builders.
+  if (pt.includes("spelling")) {
+    return {
+      status: "hidden",
+      factoryId: "spelling_worksheet",
+      hiddenReason: hiddenReasonFor("spelling_worksheet"),
+    };
+  }
   if (pt.includes("flip")) return { status: "hidden", factoryId: "flip_book", hiddenReason: hiddenReasonFor("flip_book") };
   if (pt.includes("cover")) return { status: "hidden", factoryId: "cover_design", hiddenReason: hiddenReasonFor("cover_design") };
   if (pt.includes("marketing") || pt.includes("sales copy") || pt.includes("ad script")) {
@@ -1945,6 +1956,7 @@ function hiddenReasonFor(factoryId) {
     factoryId === "cover_design" ? "Cover Design" :
     factoryId === "flip_book" ? "Flip Book" :
     factoryId === "marketing_kit" ? "Marketing Kit" :
+    factoryId === "spelling_worksheet" ? "Spelling Worksheet" :
     "This product type";
   const verb = subject.endsWith("products") ? "are" : "is";
   return (

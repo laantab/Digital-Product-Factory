@@ -12,6 +12,11 @@ if ROOT not in sys.path:
 
 import database
 from services.product_cover_agent import finalize_word_search_production_cover
+from services.quality.artifact_state import (
+    ArtifactStateError,
+    assert_content_mutation_allowed,
+    resolve_artifact_state,
+)
 
 
 def main() -> int:
@@ -21,11 +26,32 @@ def main() -> int:
         print(f"Project {project_id} not found.")
         return 1
 
+    data = project.get("data") if isinstance(project.get("data"), dict) else {}
+    state_value = None
+    try:
+        state_value = resolve_artifact_state(data).value
+        # Offline scripts must resolve state before writing.
+        assert_content_mutation_allowed(data, action="finalize word search cover")
+    except ArtifactStateError as exc:
+        print(
+            json.dumps(
+                {
+                    "project_id": project_id,
+                    "error": str(exc),
+                    "artifact_state": state_value,
+                },
+                indent=2,
+            )
+        )
+        return 1
+
     result = finalize_word_search_production_cover(project)
     data = result["data"]
     cover = result["cover_design"]
     qa = result["quality"]
 
+    # DRAFT-only write; finalize_word_search_production_cover already invalidated
+    # stale export refs for this draft revision.
     database.update_project(project_id, None, data, None)
 
     print(json.dumps({
@@ -40,6 +66,7 @@ def main() -> int:
         "regenerated_image": result.get("regenerated_image"),
         "asset_url": result.get("asset_url"),
         "package_id": data.get("package_id"),
+        "artifact_state": resolve_artifact_state(data).value,
         "preview_html_length": len(result.get("preview_html") or ""),
         "has_pdf_bytes": bool(result.get("pdf_bytes")),
     }, indent=2))
