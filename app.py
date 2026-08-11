@@ -564,6 +564,7 @@ def generate_product_route():
     try:
         result = generate_product(_requested, fields)
         # Stamp canonical digests + revision so Preview/Save/Export share one artifact.
+        # New generation is always DRAFT — digests alone must not classify as APPROVED.
         if isinstance(result, dict) and (
             result.get("is_pdf")
             or result.get("pdf_bytes")
@@ -571,14 +572,18 @@ def generate_product_route():
             in {"math_worksheet", "spelling_worksheet", "word_search", "crossword", "coloring_book"}
         ):
             from services.quality.artifact_identity import stamp_artifact_identity
+            from services.quality.artifact_state import ArtifactState
 
             stamp_artifact_identity(result)
+            if not result.get("artifact_state"):
+                result["artifact_state"] = ArtifactState.DRAFT.value
         # If a project_id was provided, persist pdf_bytes and package_id so export/download works
         if project_id and result.get("pdf_bytes"):
             project = database.get_project(int(project_id))
             if project:
                 data = dict(project.get("data") or {})
                 prior_revision = data.get("artifact_revision")
+                prior_state = data.get("artifact_state")
                 data["pdf_bytes"] = result["pdf_bytes"]
                 data["package_id"] = result.get("package_id", "")
                 data["filename"] = result.get("filename", "")
@@ -613,6 +618,15 @@ def generate_product_route():
                     data["artifact_revision"] = prior_revision
                 elif "artifact_revision" in result:
                     data["artifact_revision"] = result["artifact_revision"]
+                # Preserve explicit DRAFT on the working revision (never auto-approve).
+                from services.quality.artifact_state import ArtifactState
+
+                if prior_state:
+                    data["artifact_state"] = prior_state
+                elif result.get("artifact_state"):
+                    data["artifact_state"] = result["artifact_state"]
+                else:
+                    data["artifact_state"] = ArtifactState.DRAFT.value
                 _persist_draft_content_mutation(project_id, data)
         return jsonify(result)
     except ArtifactStateError as exc:
@@ -1185,21 +1199,81 @@ def export_product_route():
             stamp_artifact_identity,
             verify_artifact_identity,
         )
+        from services.quality.artifact_state import (
+            ArtifactState,
+            ArtifactStateError,
+            assert_packaging_allowed,
+            current_revision,
+            resolve_artifact_state,
+        )
 
         data = project.get("data") or {}
-        # Hard-fail identity mismatches; never silently regenerate a different artifact.
+        # Pass 2 packaging policy + identity: no silent content regeneration.
+        packaging_state = assert_packaging_allowed(data)
         verify_artifact_identity(data)
+        identity_before = {
+            "content_digest": data.get("content_digest"),
+            "asset_manifest_digest": data.get("asset_manifest_digest"),
+            "artifact_id": data.get("artifact_id") or data.get("package_id"),
+            "artifact_revision": current_revision(data),
+            "artifact_state": resolve_artifact_state(data).value,
+            "pdf_bytes": data.get("pdf_bytes"),
+            "export_package_id": data.get("export_package_id"),
+            "product_exports": data.get("product_exports"),
+        }
         if data.get("is_pdf") or data.get("pdf_bytes"):
             stamp_artifact_identity(data)
             project["data"] = data
         result = build_product_export(project)
         data = project.get("data") or {}
+        # Packaging must not rewrite content/assets/cover/state/revision.
+        if packaging_state in (ArtifactState.APPROVED, ArtifactState.LOCKED) or (
+            identity_before.get("content_digest")
+            and identity_before.get("asset_manifest_digest")
+        ):
+            if data.get("pdf_bytes") != identity_before.get("pdf_bytes"):
+                raise ArtifactStateError(
+                    "Packaging must not modify stored PDF content."
+                )
+            if (
+                identity_before.get("content_digest")
+                and data.get("content_digest") != identity_before.get("content_digest")
+            ):
+                raise ArtifactStateError(
+                    "Packaging must not modify content_digest."
+                )
+            if (
+                identity_before.get("asset_manifest_digest")
+                and data.get("asset_manifest_digest")
+                != identity_before.get("asset_manifest_digest")
+            ):
+                raise ArtifactStateError(
+                    "Packaging must not modify asset_manifest_digest."
+                )
+            if current_revision(data) != identity_before["artifact_revision"]:
+                raise ArtifactStateError(
+                    "Packaging must not modify artifact_revision."
+                )
+            if resolve_artifact_state(data).value != identity_before["artifact_state"]:
+                raise ArtifactStateError(
+                    "Packaging must not modify artifact_state."
+                )
+        # LOCKED with an existing export package: do not replace export refs.
+        if (
+            packaging_state is ArtifactState.LOCKED
+            and identity_before.get("export_package_id")
+            and result.get("package_id") == identity_before.get("export_package_id")
+            and identity_before.get("product_exports")
+        ):
+            return jsonify(result)
         data["export_package_id"] = result["package_id"]
         data["product_exports"] = result["exports"]
         if data.get("is_pdf") or data.get("pdf_bytes"):
             stamp_artifact_identity(data)
         _persist_product_data(project, data)
         return jsonify(result)
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
     except ValueError as exc:
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
@@ -1272,7 +1346,9 @@ def _record_artifact_id(data) -> str:
     return str(data.get("artifact_id") or data.get("package_id") or "").strip()
 
 
-def _enrich_project_artifact_fields(project: dict) -> dict:
+def _enrich_project_artifact_fields(
+    project: dict, *, raise_on_conflict: bool = False
+) -> dict:
     """Attach resolved artifact_state / id / revision for UI (no DB migration)."""
     if not isinstance(project, dict):
         return project
@@ -1281,6 +1357,7 @@ def _enrich_project_artifact_fields(project: dict) -> dict:
         return project
     try:
         from services.quality.artifact_state import (
+            ArtifactStateError,
             current_revision,
             resolve_artifact_state,
         )
@@ -1288,8 +1365,13 @@ def _enrich_project_artifact_fields(project: dict) -> dict:
         project["artifact_state"] = resolve_artifact_state(data).value
         project["artifact_id"] = _record_artifact_id(data)
         project["artifact_revision"] = current_revision(data)
+    except ArtifactStateError:
+        if raise_on_conflict:
+            raise
+        # List view: omit fields so UI hides the control.
+        pass
     except Exception:
-        # Conflicting / unreadable evidence: omit fields so UI hides the control.
+        # Unreadable evidence: omit fields so UI hides the control.
         pass
     return project
 
@@ -1305,10 +1387,17 @@ def list_projects_route():
 
 @app.get("/projects/<int:project_id>")
 def get_project_route(project_id: int):
+    from services.quality.artifact_state import ArtifactStateError
+
     project = database.get_project(project_id)
     if not project:
         return _error("Project not found.", 404)
-    return jsonify(_enrich_project_artifact_fields(project))
+    try:
+        return jsonify(
+            _enrich_project_artifact_fields(project, raise_on_conflict=True)
+        )
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
 
 
 @app.post("/projects")
@@ -1329,6 +1418,9 @@ def create_project_route():
         temporary=body.get("temporary"),
     )
 
+    # Identity/state for new PDF products is stamped on Generate
+    # (artifact_state=DRAFT). POST /projects persists the client payload as-is
+    # so legacy digests-without-state fixtures are not migrated.
     project = database.create_project(
         name=name,
         type_=type_,

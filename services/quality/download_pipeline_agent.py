@@ -236,6 +236,21 @@ def resolve_download_request(
             fields_resolved = {**fields_resolved, **(data.get("fields") or {})}
             pdf_has_cover_page = bool(data.get("pdf_has_cover_page"))
 
+    # Pass 2: package must belong to the resolved project identity.
+    if package_id and data:
+        try:
+            from services.quality.artifact_identity import package_belongs_to_project
+
+            if not package_belongs_to_project(data, package_id):
+                project_id = None
+                project_name = None
+                product_type = None
+                data = {}
+                fields_resolved = dict(fields) if fields else {}
+                pdf_has_cover_page = False
+        except Exception:
+            pass
+
     # Determine expected page count (must come before is_single_sheet)
     # Crossword books: each puzzle occupies ~2 pages (front + back).
     # Also read output_format from fields_resolved (not just top-level data).
@@ -308,7 +323,15 @@ def resolve_download_request(
         is_single_sheet=is_single_sheet,
         expected_page_count=expected_page_count,
         cover_eligible=cover_eligible,
-        metadata={"pdf_has_cover_page": pdf_has_cover_page},
+        metadata={
+            "pdf_has_cover_page": pdf_has_cover_page,
+            "content_digest": str((data or {}).get("content_digest") or "").strip(),
+            "artifact_id": str(
+                (data or {}).get("artifact_id")
+                or (data or {}).get("package_id")
+                or ""
+            ).strip(),
+        },
     )
 
 
@@ -741,6 +764,7 @@ def validate_download(context: DownloadContext) -> DownloadResult:
     # ── Orphan / stale-revision detection (no project context) ─────────────
     # PDF product exports must belong to a current project package_id or
     # export_package_id. Orphan folders from earlier revisions are not served.
+    # package_belongs_to_project is enforced in resolve_download_request.
     if context.project_id is None and context.product_type is None:
         return DownloadResult(
             status="blocked",

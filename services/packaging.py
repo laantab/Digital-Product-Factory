@@ -211,9 +211,38 @@ table{border-collapse:collapse;width:100%;margin:0 0 16px}th,td{border:1px solid
 """
 
 
+def _reuse_existing_export_package(data: dict) -> dict | None:
+    """Return prior export payload when package files still exist on disk."""
+    package_id = str((data or {}).get("export_package_id") or "").strip()
+    exports = (data or {}).get("product_exports")
+    if not package_id or not isinstance(exports, dict):
+        return None
+    pkg_dir = os.path.join(EXPORTS_DIR, package_id)
+    if not os.path.isdir(pkg_dir):
+        return None
+    return {"package_id": package_id, "exports": exports}
+
+
 def build_product_export(project: dict, publishing_layout: dict | None = None) -> dict:
     """Render a self-contained HTML + TXT + PDF + ZIP export for any product."""
     data = project.get("data") or {}
+    from services.quality.artifact_state import (
+        ArtifactState,
+        ArtifactStateError,
+        assert_packaging_allowed,
+        packaging_may_rebuild_content,
+    )
+
+    try:
+        packaging_state = assert_packaging_allowed(data if isinstance(data, dict) else {})
+    except ArtifactStateError:
+        raise
+    # LOCKED: serve existing approved exports when present; never replace them.
+    if packaging_state is ArtifactState.LOCKED:
+        existing = _reuse_existing_export_package(data if isinstance(data, dict) else {})
+        if existing is not None:
+            return existing
+
     # Ebook repair: never export a bare markdown dump when we can assemble a
     # local visual package (cover + TOC aids + rewritten headings) with zero
     # paid API calls. Skips crossword/coloring/word_search paths below.
@@ -269,14 +298,19 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
             # HARD GUARD: ALWAYS prefer the stored pdf_bytes — the original generation
             # passed QA and produced a valid PDF. Rebuilding can introduce new bugs
             # (e.g. different word placement that fails the answer-key path validator).
-            # Only rebuild if no stored bytes exist.
+            # Only unstamped DRAFT may rebuild for export bytes; never persist content.
             if data.get("pdf_bytes"):
                 pdf_bytes = base64.b64decode(data["pdf_bytes"])
-            elif data.get("fields") or data.get("custom_words"):
+            elif packaging_may_rebuild_content(data) and (
+                data.get("fields") or data.get("custom_words")
+            ):
                 rebuilt = rebuild_word_search_pdf_from_data(data)
                 pdf_bytes = base64.b64decode(rebuilt.get("pdf_bytes") or "")
             else:
-                raise FileNotFoundError("Word Search PDF is not available on this project.")
+                raise FileNotFoundError(
+                    "Word Search PDF is not available on this project. "
+                    "Packaging will not silently regenerate missing content."
+                )
         except Exception as exc:
             raise FileNotFoundError(f"Word Search PDF export failed: {exc}") from exc
 
@@ -365,6 +399,17 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
                 needs_rebuild = True
 
         if needs_rebuild:
+            # Pass 2: packaging must not mutate project content/assets/state/revision
+            # or bypass the write-policy gateway via database.update_project.
+            # Unstamped DRAFT may rebuild export bytes only; digested / APPROVED /
+            # LOCKED artifacts must block instead of silently regenerating.
+            if not packaging_may_rebuild_content(data):
+                raise ValueError(
+                    "Crossword PDF export blocked: stored PDF is missing or invalid "
+                    "for this artifact identity/state. Packaging will not silently "
+                    "regenerate content for APPROVED, LOCKED, or digested DRAFT "
+                    "artifacts. Generate and save a valid crossword first."
+                )
             try:
                 rebuilt = _crossword_pdf_payload(
                     cw_fields,
@@ -372,20 +417,10 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
                     cover_design=data.get("cover_design") if isinstance(data.get("cover_design"), dict) else None,
                     package_id=str(data.get("package_id") or ""),
                 )
+                # Export-package bytes only — do not write back into project data.
                 pdf_bytes = base64.b64decode(rebuilt["pdf_bytes"])
-                data["pdf_bytes"] = rebuilt["pdf_bytes"]
-                data["filename"] = rebuilt.get("filename", data.get("filename", "crossword.pdf"))
-                data["puzzle_count"] = rebuilt.get("puzzle_count", data.get("puzzle_count"))
-                if rebuilt.get("cover_design"):
-                    data["cover_design"] = rebuilt["cover_design"]
-                if rebuilt.get("crossword_meta"):
-                    data["crossword_meta"] = rebuilt["crossword_meta"]
-                project = {**project, "data": data}
-                # Persist repaired PDF so later downloads stay correct.
-                try:
-                    import database as _db
-                    _db.update_project(int(project.get("id")), None, data, None)
-                except Exception:
+                if rebuilt.get("filename") and not data.get("filename"):
+                    # Filename for package naming only; leave stored project untouched.
                     pass
             except Exception as rebuild_err:
                 raise ValueError(
@@ -791,22 +826,45 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
                     f"Coloring Book QA blocked export: {exc}"
                 ) from exc
         else:
-            # No PDF bytes — try regeneration as last resort
-            try:
-                from services.coloring_book.sheet_validator import (
-                    regenerate_coloring_book_pdf_for_export,
-                )
-                pdf_bytes = regenerate_coloring_book_pdf_for_export(
-                    stored_fields,
-                    package_id=data.get("package_id", ""),
-                )
-            except Exception as exc:
-                raise ValueError(
-                    f"Coloring Book PDF export failed: {exc}"
-                ) from exc
+            # Fail closed: never silently regenerate paid AI pages on Save/Export.
+            raise ValueError(
+                "Coloring Book PDF is missing from this project. "
+                "Generate and approve the book again before exporting. "
+                "Export will not call image generation."
+            )
+
+        # Honor in-project quality hard-blocks (QA-failed books are not downloadable).
+        qr = data.get("quality_result") or data.get("qa_result") or {}
+        if isinstance(qr, dict) and qr.get("blocked_export"):
+            raise ValueError(
+                "Coloring Book QA blocked export: quality issues remain on one or more pages. "
+                "Fix or regenerate approved pages before downloading PDF/ZIP."
+            )
+        if data.get("qa_blocked") or data.get("blocked_export"):
+            raise ValueError(
+                "Coloring Book QA blocked export: this project is marked non-downloadable."
+            )
 
         if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
             raise ValueError("Coloring Book PDF export is invalid.")
+
+        # Full Thunder Volt-sized books: enforce cover + interior page count.
+        # Do not apply this to short/legacy projects with mismatched metadata.
+        pages_meta = data.get("pages") if isinstance(data.get("pages"), list) else []
+        if pages_meta and data.get("is_book") and len(pages_meta) >= 25:
+            try:
+                from pypdf import PdfReader
+                from io import BytesIO as _BytesIO
+
+                actual = len(PdfReader(_BytesIO(pdf_bytes)).pages)
+            except Exception:
+                actual = 0
+            expected = len(pages_meta) + (1 if data.get("pdf_has_cover_page") else 0)
+            if actual and expected and actual != expected:
+                raise ValueError(
+                    f"Coloring Book QA blocked export: PDF has {actual} pages but "
+                    f"project metadata expects {expected} (cover + interiors)."
+                )
         # ── END QA AGENT ─────────────────────────────────────────────────────────
 
         slug = re.sub(r"[^A-Za-z0-9]+", "_", data.get("title") or project.get("name") or "coloring_book").strip("_").lower() or "coloring_book"

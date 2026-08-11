@@ -31,6 +31,7 @@
     "tests/test_controlled_revision_transition.py",
     "tests/test_create_draft_revision_ui.py",
     "tests/test_artifact_lifecycle_mutation_paths.py",
+    "tests/test_reopen_packaging_identity_pass2.py",
     "test_crossword_quality.py"
   ]
 }

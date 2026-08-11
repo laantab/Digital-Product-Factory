@@ -2,7 +2,8 @@
 
 Gate 10 primitives plus Pass 1 content-mutation write policy
 (``assert_content_mutation_allowed`` / ``invalidate_draft_export_references``)
-for Generate / Enhance / Cover routes that bypass Save.
+and Pass 2 packaging policy (``assert_packaging_allowed`` /
+``packaging_may_rebuild_content``).
 
 State resolution (no migration of saved projects)
 -------------------------------------------------
@@ -26,8 +27,8 @@ Verified approval evidence (when not LOCKED):
 Conflicting evidence (e.g. explicit DRAFT with verified lock) raises
 ``ArtifactStateError`` rather than inventing a silent winner.
 
-Transition contracts (documented; routes unchanged this gate)
--------------------------------------------------------------
+Transition / packaging contracts
+--------------------------------
 - DRAFT content is editable under the current draft revision.
 - DRAFT → APPROVED via ``approve_artifact_revision`` when digests (or equivalent
   approval evidence) are present — pure function, not route-wired.
@@ -38,10 +39,11 @@ Transition contracts (documented; routes unchanged this gate)
 - LOCKED rejects new revisions (and content mutation helpers).
 - Metadata-only updates must not change state or revision
   (``apply_metadata_fields``); existing ``enforce_artifact_immutability`` already
-  covers PUT — route behavior is not changed here.
-- Export rebuild / identity mismatch: when canonical digests match, rebuild
-  must not create a new revision; mismatch must block. Export routes are not
-  rewired in this gate — identity checks remain in ``artifact_identity``.
+  covers PUT.
+- Packaging: DRAFT may package the current authoritative draft; APPROVED may
+  reproduce only the identical approved artifact; LOCKED may serve/verify
+  existing exports but must not replace content. Same-identity rebuild requires
+  matching digests; mismatch and silent content regeneration are blocked.
 """
 from __future__ import annotations
 
@@ -361,6 +363,48 @@ def invalidate_draft_export_references(
     for key in ("pdf_download_url", "zip_download_url", "download_urls"):
         record.pop(key, None)
     return record
+
+
+def assert_packaging_allowed(
+    record: Mapping[str, Any] | None,
+    *,
+    repo_root: Path | None = None,
+    committed_lock_ids: frozenset[str] | None = None,
+) -> ArtifactState:
+    """Shared packaging/rebuild gateway (Pass 2).
+
+    - DRAFT / APPROVED / LOCKED may package when state evidence is consistent.
+    - Conflicting evidence fails safely via ``resolve_artifact_state``.
+    - Does not mutate the record, bump revision, or call generation.
+
+    Callers must still honor ``packaging_may_rebuild_content`` and
+    ``verify_artifact_identity`` for content/asset stability.
+    """
+    return resolve_artifact_state(
+        record, repo_root=repo_root, committed_lock_ids=committed_lock_ids
+    )
+
+
+def packaging_may_rebuild_content(
+    record: Mapping[str, Any] | None,
+    *,
+    repo_root: Path | None = None,
+    committed_lock_ids: frozenset[str] | None = None,
+) -> bool:
+    """True only for unstamped DRAFT packaging that may repair export bytes.
+
+    APPROVED / LOCKED never rebuild. Digested DRAFT artifacts must package the
+    authoritative stored bytes (identity mismatch blocks instead of regen).
+    Export-only rebuild must not persist content back into the project record.
+    """
+    state = resolve_artifact_state(
+        record, repo_root=repo_root, committed_lock_ids=committed_lock_ids
+    )
+    if state is not ArtifactState.DRAFT:
+        return False
+    if has_verified_approval_evidence(record):
+        return False
+    return True
 
 
 # Identity / content / asset keys that Save must not rewrite for APPROVED/LOCKED.
