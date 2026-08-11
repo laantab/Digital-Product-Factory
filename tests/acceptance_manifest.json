@@ -28,6 +28,7 @@
     "tests/test_non_put_persistence_immutability.py",
     "tests/test_artifact_state_revision_primitives.py",
     "tests/test_save_state_enforcement.py",
+    "tests/test_controlled_revision_transition.py",
     "test_crossword_quality.py"
   ]
 }

@@ -399,6 +399,7 @@ def enforce_save_artifact_state(
     *,
     repo_root: Path | None = None,
     committed_lock_ids: frozenset[str] | None = None,
+    allow_revision_transition: bool = False,
 ) -> ArtifactState:
     """Gate 11 Save policy using resolve_artifact_state (no migration).
 
@@ -406,6 +407,9 @@ def enforce_save_artifact_state(
     - APPROVED / LOCKED: allow metadata-only updates; block content/asset mutation.
     - Never transitions revision, never clears approval/lock, never regenerates.
     - Conflicting evidence fails safely via resolve_artifact_state.
+    - ``allow_revision_transition``: Gate 12 only — persist a DRAFT already
+      produced by ``transition_artifact_revision`` (next revision). Does not
+      call transition itself or bump revision again.
 
     Does not call ``transition_artifact_revision`` or any generation/export path.
     """
@@ -415,6 +419,35 @@ def enforce_save_artifact_state(
     state = resolve_artifact_state(
         existing, repo_root=repo_root, committed_lock_ids=committed_lock_ids
     )
+
+    if allow_revision_transition:
+        # Authorized Gate 12 persist of a pre-transitioned DRAFT. Validate shape
+        # only — do not transition, regenerate, or bump beyond next revision.
+        if state is not ArtifactState.APPROVED:
+            raise ArtifactStateError(
+                "Revision-transition persist requires an APPROVED saved artifact."
+            )
+        try:
+            incoming_state = resolve_artifact_state(
+                incoming, repo_root=repo_root, committed_lock_ids=committed_lock_ids
+            )
+        except ArtifactStateError as exc:
+            raise ArtifactStateError(
+                f"Revision-transition persist rejected conflicting incoming "
+                f"artifact evidence: {exc}"
+            ) from exc
+        if incoming_state is not ArtifactState.DRAFT:
+            raise ArtifactStateError(
+                "Revision-transition persist requires incoming DRAFT revision "
+                f"(got {incoming_state.value})."
+            )
+        expected_next = current_revision(existing) + 1
+        if current_revision(incoming) != expected_next:
+            raise ArtifactStateError(
+                "Revision-transition persist requires deterministic next "
+                f"revision {expected_next} (got {current_revision(incoming)})."
+            )
+        return incoming_state
 
     # Save must never bump revision (even accidental / smuggled).
     if "artifact_revision" in incoming:

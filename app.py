@@ -949,21 +949,31 @@ def _load_product_project(body):
     return project
 
 
-def _enforce_save_persistence_boundary(existing_data, incoming_data):
+def _enforce_save_persistence_boundary(
+    existing_data, incoming_data, *, allow_revision_transition=False
+):
     """Shared Save / persist policy: artifact state + identity immutability.
 
     Used by ``_persist_product_data`` and PUT ``update_project_route`` so
     seller/launch/Next Steps and project Save cannot bypass Gate 11 state rules.
     Does not call ``transition_artifact_revision`` or regenerate content.
+
+    ``allow_revision_transition`` is Gate 12 only: persist a DRAFT already
+    produced by ``transition_artifact_revision``. Ordinary Save never sets it.
     """
     from services.quality.artifact_identity import enforce_artifact_immutability
     from services.quality.artifact_state import enforce_save_artifact_state
 
-    enforce_save_artifact_state(existing_data or {}, incoming_data)
-    enforce_artifact_immutability(existing_data or {}, incoming_data)
+    enforce_save_artifact_state(
+        existing_data or {},
+        incoming_data,
+        allow_revision_transition=allow_revision_transition,
+    )
+    if not allow_revision_transition:
+        enforce_artifact_immutability(existing_data or {}, incoming_data)
 
 
-def _persist_product_data(project, data):
+def _persist_product_data(project, data, *, allow_revision_transition=False):
     """Write the updated data blob back to the same project record.
 
     Shared Next Steps / seller / launch / export persistence boundary.
@@ -974,7 +984,11 @@ def _persist_product_data(project, data):
     existing = database.get_project(project_id) or project
     existing_data = existing.get("data") if isinstance(existing.get("data"), dict) else {}
     if isinstance(data, dict):
-        _enforce_save_persistence_boundary(existing_data or {}, data)
+        _enforce_save_persistence_boundary(
+            existing_data or {},
+            data,
+            allow_revision_transition=allow_revision_transition,
+        )
     updated = database.update_project(project_id, None, data, None)
     if updated is not None:
         project["data"] = updated.get("data")
@@ -1286,6 +1300,134 @@ def update_project_route(project_id: int):
     if not project:
         return _error("Project not found.", 404)
     return jsonify(project)
+
+
+# Request body keys allowed on the Gate 12 controlled revision entrypoint.
+# Anything else (content/assets/cover/digests/exports/data blob) is rejected.
+_REVISION_REQUEST_ALLOWED_KEYS = frozenset(
+    {
+        "create_draft_revision",
+        "reason",
+        "expected_artifact_id",
+        "expected_revision",
+    }
+)
+
+
+def _record_artifact_id(data) -> str:
+    if not isinstance(data, dict):
+        return ""
+    return str(data.get("artifact_id") or data.get("package_id") or "").strip()
+
+
+@app.post("/projects/<int:project_id>/revisions")
+def create_project_revision_route(project_id: int):
+    """Gate 12: explicit APPROVED → new DRAFT revision (no generation).
+
+    Controlled production entrypoint only. Does not wire Generate Product,
+    enhancement, cover, packaging, or dashboard buttons. Persists the
+    transitioned DRAFT through ``_persist_product_data`` without Save bumping
+    revision again.
+    """
+    from services.quality.artifact_state import (
+        ArtifactState,
+        ArtifactStateError,
+        current_revision,
+        resolve_artifact_state,
+        transition_artifact_revision,
+    )
+
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return _error("JSON body with create_draft_revision is required.", 400)
+
+    unknown = sorted(set(body.keys()) - _REVISION_REQUEST_ALLOWED_KEYS)
+    if unknown:
+        return _error(
+            "Revision request cannot include replacement content, assets, "
+            "cover, digests, or export references. "
+            f"Unsupported fields: {', '.join(unknown)}.",
+            400,
+        )
+
+    if body.get("create_draft_revision") is not True:
+        return _error(
+            "Explicit create_draft_revision=true is required to open a new "
+            "DRAFT revision.",
+            400,
+        )
+
+    reason = str(body.get("reason") or "").strip()
+    if not reason:
+        return _error("A non-empty revision reason is required.", 400)
+
+    expected_artifact_id = str(body.get("expected_artifact_id") or "").strip()
+    if not expected_artifact_id:
+        return _error("expected_artifact_id is required.", 400)
+    if "expected_revision" not in body:
+        return _error("expected_revision is required.", 400)
+    try:
+        expected_revision = int(body.get("expected_revision"))
+    except (TypeError, ValueError):
+        return _error("expected_revision must be an integer.", 400)
+
+    project = database.get_project(project_id)
+    if not project:
+        return _error("Project not found.", 404)
+    existing_data = project.get("data") if isinstance(project.get("data"), dict) else None
+    if not existing_data:
+        return _error("Project has no saved artifact data.", 404)
+
+    try:
+        state = resolve_artifact_state(existing_data)
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
+
+    saved_artifact_id = _record_artifact_id(existing_data)
+    saved_revision = current_revision(existing_data)
+    if (
+        saved_artifact_id != expected_artifact_id
+        or saved_revision != expected_revision
+    ):
+        return _error(
+            "Artifact revision conflict: expected_artifact_id / "
+            "expected_revision do not match the authoritative saved record. "
+            "No storage change was made.",
+            409,
+        )
+
+    if state is not ArtifactState.APPROVED:
+        return _error(
+            f"Revision transition accepts APPROVED only (current state: "
+            f"{state.value}).",
+            409,
+        )
+
+    try:
+        draft = transition_artifact_revision(existing_data, reason=reason)
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
+
+    try:
+        _persist_product_data(
+            project, draft, allow_revision_transition=True
+        )
+    except (ArtifactStateError, ValueError) as exc:
+        return _error(str(exc), 400)
+
+    stored = database.get_project(project_id) or project
+    stored_data = stored.get("data") if isinstance(stored.get("data"), dict) else draft
+    return jsonify(
+        {
+            "ok": True,
+            "project_id": project_id,
+            "artifact_id": _record_artifact_id(stored_data),
+            "artifact_revision": current_revision(stored_data),
+            "artifact_state": resolve_artifact_state(stored_data).value,
+            "prior_approved_revision": stored_data.get("prior_approved_revision"),
+            "reason": reason,
+        }
+    ), 201
 
 
 @app.delete("/projects/<int:project_id>")
