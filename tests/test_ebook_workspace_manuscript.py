@@ -40,37 +40,37 @@ Keep pricing and printer claims as planning scenarios. Equipment and media price
 
 Plan a lean or event-focused kit budget as a planning range, not a guarantee. Register the business and arrange liability and equipment insurance before the first paid event.
 
-## Core Camera Kit and Backup Gear
+## Core Camera Kit, Printing Equipment, and Backup Gear
 
-Carry a body, lenses for wide/medium/telephoto roles, flash, computer, editing software, and backup batteries and cards. Add a second body as soon as practical.
+Carry a body, lenses for wide/medium/telephoto roles, flash, computer, editing software, backup batteries and cards, and the dye-sub printer plan. Add a second body as soon as practical.
 
-## Packages Clients Can Understand
+## Finding Clients and Turning Inquiries into Signed Bookings
 
-Define hours, deliverables, planning meetings, and turnaround. Offer print add-ons without muddying the core coverage package.
+Collect venue constraints, shot lists, deposits, and print expectations before event day. Turn inquiries into signed bookings with clear contracts.
 
-## Pricing Scenarios That Protect Your Margin
+## Packages and Pricing Scenarios That Protect Your Margin
 
-Hypothetical planning scenario only: cover shooting, planning, editing, travel, taxes, gear recovery, and profit. Published averages are signals, not your local price list.
+Define hours, deliverables, planning meetings, and turnaround. Hypothetical planning scenario only: cover shooting, planning, editing, travel, taxes, gear recovery, and profit.
 
-## From Inquiry to Signed Booking
+## Planning the Event: Contracts, Timelines, Space, Power, and Staffing
 
-Collect venue constraints, shot lists, deposits, and print expectations before event day.
+Lock contracts, timelines, booth space, power, and staffing before the event so print and coverage plans hold under pressure.
 
-## Event-Day Operations Without Chaos
+## Event-Day Operations: From Photograph to Guest Delivery
 
-Use a before/during/after workflow. Coordinate guest flow to the print station without inventing unverified POS procedures.
+Use a before/during/after workflow from capture to guest delivery. Coordinate guest flow to the print station without inventing unverified POS procedures.
 
-## Dye-Sublimation On-Site Printing
+## Dye-Sublimation Printing: Setup, Queue, Ordering, Payment, and Pickup
 
-Use DS-RX1HS, DS620A, and QW410 specifications only where manufacturer sources support them. Hot Folder Print can automate folder-based printing on supported models. Media prices vary — verify with current suppliers.
+Use DS-RX1HS, DS620A, and QW410 specifications only where manufacturer sources support them. Plan setup, queue, ordering, payment, and pickup. Media prices vary — verify with current suppliers.
 
-## Keepsakes Beyond Photo Prints
+## Keepsakes Beyond Photo Prints: Separate Equipment and Workflow
 
 Mugs, buttons, shirts, and plates require separate equipment, materials, production time, staffing, and safety planning. They were not verified by the printer-manufacturer sources used for dye-sub photo printers here. Do not invent production specs.
 
-## Common Mistakes and Your First Paid Event Checklist
+## Common Mistakes and Your 30-Day First Paid Event Plan
 
-Avoid underpricing, missing backup gear, vague packages, and weak print planning. Use a first-paid-event checklist spanning kit, insurance, packages, booking, and print readiness.
+Avoid underpricing, missing backup gear, vague packages, and weak print planning. Use a 30-day first-paid-event plan spanning kit, insurance, packages, booking, and print readiness.
 """
 
 BAD_MS = GOOD_MS + "\n\n## Chapter Extra\n\nsub-goal #1 invent a Lonnie story here\n"
@@ -78,7 +78,6 @@ BAD_MS = GOOD_MS + "\n\n## Chapter Extra\n\nsub-goal #1 invent a Lonnie story he
 
 def _mock_generate_ok(source, contract=None, author="", research_notes=""):
     assert "Lonnie Brown" in (author or research_notes)
-    assert "From First Booking" in (source or research_notes) or "From First Booking" in research_notes
     assert "APPROVED OUTLINE" in research_notes or "What This Business" in research_notes
     assert "LOCKED EDITORIAL" in research_notes or "DS-RX1HS" in research_notes
     assert "sub-goal" not in research_notes.lower() or "FORBIDDEN" in research_notes
@@ -93,11 +92,11 @@ class ManuscriptExecutionTests(unittest.TestCase):
     def setUp(self):
         self.client = app.test_client()
         app.config["TESTING"] = True
-        self.project = upsert_acceptance_project(database)
+        self.project = upsert_acceptance_project(database, preserve_live_manuscript=False)
         self.pid = self.project["id"]
 
     def _fresh(self):
-        self.project = upsert_acceptance_project(database)
+        self.project = upsert_acceptance_project(database, preserve_live_manuscript=False)
         self.pid = self.project["id"]
         # Reset manuscript state if prior test left content
         data = dict(database.get_project(self.pid)["data"])
@@ -469,7 +468,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
         self.assertEqual(
             {s["id"]: s["status"] for s in ws["rail"]}["manuscript"], "awaiting_approval"
         )
-        self.assertIn("Dye-Sublimation On-Site Printing", ws["manuscript"]["content"])
+        self.assertIn("Dye-Sublimation Printing", ws["manuscript"]["content"])
         proj = self.client.get(f"/projects/{self.pid}").get_json()
         self.assertIn("Dye-Sublimation", proj["data"].get("content") or "")
 

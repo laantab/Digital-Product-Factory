@@ -837,6 +837,7 @@ function nextActionLabel(stage, p) {
     if (next === "generate_manuscript") return "Generate Manuscript";
     if (next === "approve_manuscript") return "Approve Manuscript";
     if (next === "request_correction") return "Request Correction";
+    if (next === "correct_manuscript") return "Request Correction";
     return "Open Ebook Project";
   }
   switch (stage) {
@@ -4727,6 +4728,8 @@ function renderEbookWorkspace(ws) {
         ${
           ws.next_action === "generate_manuscript" && ws.gates && ws.gates.manuscript_enabled
             ? `<button type="button" class="btn-primary text-sm" data-ws-estimate-manuscript>Generate Manuscript…</button>`
+            : ws.next_action === "request_correction" && ws.gates && ws.gates.correction_enabled
+            ? `<button type="button" class="btn-primary text-sm" data-ws-request-correction-top>Request Correction…</button>`
             : `<button type="button" class="btn-secondary text-sm opacity-60 cursor-not-allowed" disabled title="Blocked until prior stages are approved">Generate Manuscript</button>`
         }
       </div>
@@ -4741,6 +4744,10 @@ function renderEbookWorkspace(ws) {
   const estBtn = root.querySelector("[data-ws-estimate-manuscript]");
   if (estBtn) {
     estBtn.onclick = () => estimateManuscriptInWorkspace(ws.project_id);
+  }
+  const corrTop = root.querySelector("[data-ws-request-correction-top]");
+  if (corrTop) {
+    corrTop.onclick = () => estimateCorrectionInWorkspace(ws.project_id);
   }
   showEbookWorkspaceStage(ws.current_stage || "research");
 }
@@ -4790,12 +4797,15 @@ function showEbookWorkspaceStage(stageId) {
     `;
   } else if (stageId === "manuscript") {
     const m = ws.manuscript || {};
-    const findings = (m.qa_findings || []).map((f) => `<li>${escapeHtml(String(f))}</li>`).join("");
+    const findings = (m.structure_findings || m.qa_findings || []).map((f) => `<li>${escapeHtml(String(f))}</li>`).join("");
     const chapters = (m.chapters || []).map((c) =>
       `<li class="rounded-lg border border-slate-200 bg-white p-2 text-sm"><b>Ch ${escapeHtml(String(c.order || ""))}:</b> ${escapeHtml(c.title || "")}</li>`
     ).join("");
-    const canApprove = m.status === "awaiting_approval";
+    const canApprove = m.can_approve === true && m.status === "awaiting_approval";
+    const needsCorrection = m.status === "needs_correction";
     const contentPreview = (m.content || "").slice(0, 4000);
+    const rem = Number((m.remaining_usd != null ? m.remaining_usd : (ws.budget || {}).remaining_usd) || 0);
+    const corrEst = Number(m.correction_estimate_usd || 0.75);
     body = `
       <h3 class="text-sm font-bold text-slate-900 mb-2">Manuscript · ${escapeHtml(stage.status_label || m.status_label || "")}</h3>
       ${
@@ -4803,14 +4813,27 @@ function showEbookWorkspaceStage(stageId) {
           ? `<p class="text-sm text-slate-600">Not started. Click <b>Generate Manuscript…</b> for a cost estimate. Nothing is spent until you click <b>Confirm and Generate Manuscript</b>.</p>`
           : ""
       }
-      ${chapters ? `<ol class="space-y-1 mb-3">${chapters}</ol>` : ""}
-      ${findings ? `<h4 class="text-xs font-semibold uppercase text-rose-700 mb-1">Content QA findings</h4><ul class="list-disc pl-5 text-sm text-rose-700 mb-3">${findings}</ul>` : ""}
-      ${contentPreview ? `<pre class="text-xs bg-white border border-slate-200 rounded-lg p-3 whitespace-pre-wrap max-h-64 overflow-auto font-mono">${escapeHtml(contentPreview)}</pre>` : ""}
+      ${
+        needsCorrection
+          ? `<p class="text-sm text-orange-800 mb-2">Needs correction. The generated draft is preserved for inspection. Approve is blocked while structural FAIL findings remain.</p>`
+          : ""
+      }
+      ${chapters ? `<h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Generated chapter list</h4><ol class="space-y-1 mb-3">${chapters}</ol>` : ""}
+      ${findings ? `<h4 class="text-xs font-semibold uppercase text-rose-700 mb-1">Structural / QA findings</h4><ul class="list-disc pl-5 text-sm text-rose-700 mb-3">${findings}</ul>` : ""}
+      ${contentPreview ? `<h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Preserved draft (preview)</h4><pre class="text-xs bg-white border border-slate-200 rounded-lg p-3 whitespace-pre-wrap max-h-64 overflow-auto font-mono">${escapeHtml(contentPreview)}</pre>` : ""}
       ${
         canApprove
           ? `<div class="mt-3 flex flex-wrap gap-2">
               <button type="button" class="btn-primary text-sm" data-ws-approve-manuscript>Approve Manuscript</button>
-              <button type="button" class="btn-secondary text-sm" data-ws-request-correction>Request Correction</button>
+            </div>`
+          : ""
+      }
+      ${
+        needsCorrection
+          ? `<div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+              <p class="text-sm text-amber-900">Estimated maximum correction cost: <b>$${corrEst.toFixed(3)}</b></p>
+              <p class="text-xs text-amber-800">Remaining project budget: <b>$${rem.toFixed(3)}</b>. Correction uses the existing manuscript and the exact approved outline — it does not restart research.</p>
+              <button type="button" class="btn-primary text-sm" data-ws-request-correction>Request Correction…</button>
             </div>`
           : ""
       }
@@ -4839,9 +4862,82 @@ function showEbookWorkspaceStage(stageId) {
   }
   const corrBtn = panel.querySelector("[data-ws-request-correction]");
   if (corrBtn) {
-    corrBtn.onclick = () => {
-      toast("Request Correction: edit chapters or regenerate after fixing QA findings.", "error");
+    corrBtn.onclick = () => estimateCorrectionInWorkspace(ws.project_id);
+  }
+}
+
+async function estimateCorrectionInWorkspace(projectId) {
+  const confirmEl = document.querySelector("[data-ws-confirm]");
+  if (!confirmEl) return;
+  confirmEl.classList.remove("hidden");
+  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing correction cost estimate…</p>`;
+  try {
+    const res = await api(`/ebook-workspace/${projectId}/estimate-cost`, {
+      method: "POST",
+      body: JSON.stringify({ action: "correct_manuscript" }),
+    });
+    if (res.workspace) _ebookWorkspaceState = res.workspace;
+    const est = res.estimate || {};
+    const ws = _ebookWorkspaceState || {};
+    const idempotencyKey =
+      "corr-" + String(projectId) + "-" + String(est.confirmation_token || "").slice(0, 12) + "-" + Date.now();
+    confirmEl.innerHTML = `
+      <h4 class="text-sm font-bold text-amber-900">Confirm paid correction</h4>
+      <p class="text-sm text-amber-900">${escapeHtml(est.label || "Request Correction")}</p>
+      <p class="text-sm">Estimated maximum: <b>$${Number(est.estimated_max_usd || 0).toFixed(3)}</b></p>
+      <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
+      <p class="text-xs text-slate-600">Uses the preserved manuscript and the exact approved outline. Confirmation required before any paid call.</p>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
+        <button type="button" class="btn-primary text-sm" data-ws-confirm-correct>Confirm and Correct Manuscript</button>
+      </div>
+    `;
+    confirmEl.querySelector("[data-ws-cancel-confirm]").onclick = async () => {
+      try {
+        await api(`/ebook-workspace/${projectId}/cancel-estimate`, { method: "POST", body: "{}" });
+      } catch (e) { /* non-fatal */ }
+      confirmEl.classList.add("hidden");
+      confirmEl.innerHTML = "";
+      toast("Cancelled — nothing spent.");
     };
+    confirmEl.querySelector("[data-ws-confirm-correct]").onclick = async () => {
+      const btn = confirmEl.querySelector("[data-ws-confirm-correct]");
+      setBusyEl(btn, true);
+      confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = true;
+      try {
+        const body = {
+          confirmation_token: est.confirmation_token,
+          expected_artifact_id: est.artifact_id || ws.artifact_id || "",
+          expected_revision: est.artifact_revision != null ? est.artifact_revision : (ws.artifact_revision || 1),
+          outline_digest: est.outline_digest || ws.outline_digest || "",
+          max_authorized_usd: est.max_authorized_usd != null ? est.max_authorized_usd : est.estimated_max_usd,
+          idempotency_key: idempotencyKey,
+        };
+        const gen = await api(`/ebook-workspace/${projectId}/correct-manuscript`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        if (gen.workspace) {
+          renderEbookWorkspace(gen.workspace);
+        }
+        confirmEl.classList.add("hidden");
+        confirmEl.innerHTML = "";
+        const st = (gen.result && gen.result.manuscript_status) || "";
+        if (gen.duplicate) {
+          toast("Already corrected for this confirmation — no extra charge.");
+        } else if (st === "needs_correction") {
+          toast("Correction still needs structural fixes.", "error");
+        } else {
+          toast("Correction complete — awaiting approval.");
+        }
+      } catch (e) {
+        toast(e.message || String(e), "error");
+        setBusyEl(btn, false);
+        confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = false;
+      }
+    };
+  } catch (e) {
+    confirmEl.innerHTML = `<p class="text-sm text-rose-700">${escapeHtml(e.message || String(e))}</p>`;
   }
 }
 

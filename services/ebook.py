@@ -91,14 +91,47 @@ def generate_ebook(
     if contract:
         contract_guidance = "\n\n" + contract_to_prompt_guidance(contract)
 
+    outline_bound = "APPROVED OUTLINE" in research_notes
+    chapter_count = int(getattr(contract, "chapter_count", 0) or 0) if contract else 0
+
+    if outline_bound or chapter_count >= 3:
+        n = chapter_count if chapter_count >= 3 else "the approved"
+        structure_block = (
+            f"Produce clean Markdown with: a compelling title (H1), a short introduction, "
+            f"then EXACTLY {n} chapters as ## H2 headings. "
+            "Use the approved outline titles verbatim, in order. "
+            "Each chapter needs 2-3 ### subsections (H3) with substantive content. "
+            "Do NOT add Conclusion, Disclaimer, Sources, References, or Appendix as ## H2 "
+            "chapters unless those exact titles appear in the approved outline. "
+            "If a disclaimer or sources list is needed, place it AFTER the approved chapters "
+            "as plain paragraphs labeled **Disclaimer** and **Sources** (not H2 chapters). "
+            "Do not use emojis."
+        )
+        sources_instruction = (
+            "When you use a research-backed point, keep it general or attribute the "
+            "source name if it appears in the notes. If you include sources, put them in a "
+            "**Sources** back-matter block after the approved chapters — never as an H2 chapter "
+            "unless Sources is an approved outline title."
+        )
+    else:
+        structure_block = (
+            "Produce clean Markdown with: a compelling title (H1), a one-paragraph "
+            "introduction, then 5-8 chapters (H2) each with 2-3 subsections (H3) "
+            "and substantive, specific content per subsection, and a short conclusion. "
+            "Do not use emojis."
+        )
+        sources_instruction = (
+            "When you use a research-backed point, keep it general or attribute the "
+            "source name if it appears in the notes. Add a short Sources section at the end "
+            "listing only sources that actually appeared in the notes."
+        )
+
     research_block = ""
     if research_notes or (contract and contract.research_requested):
         research_block = (
             "\n\nRESEARCH NOTES (use these; paraphrase fully — never copy sentences):\n"
             f"{research_notes or '(Use only the brief angles in the contract. Do not invent studies.)'}\n"
-            "When you use a research-backed point, keep it general or attribute the "
-            "source name if it appears in the notes. Add a short Sources section at the end "
-            "listing only sources that actually appeared in the notes."
+            f"{sources_instruction}"
         )
 
     author_line = f"\nAuthor / brand byline: {author.strip()}" if author.strip() else ""
@@ -114,14 +147,12 @@ def generate_ebook(
             "studies. You do not use hype language. You do not make health, "
             "financial, or legal claims without appropriate disclaimers. "
             "Every chapter must be substantive, specific, and actionable. "
-            "Vary chapter structures — do not repeat identical H3 labels."
+            "Vary chapter structures — do not repeat identical H3 labels. "
+            "When an approved outline is provided, you must follow it exactly."
         ),
         user=(
             f"Create a structured ebook based on the following {label}. "
-            f"Produce clean Markdown with: a compelling title (H1), a one-paragraph "
-            f"introduction, then 5-8 chapters (H2) each with 2-3 subsections (H3) "
-            f"and substantive, specific content per subsection, and a short conclusion. "
-            f"Do not use emojis.{author_line}{contract_guidance}{research_block}\n\n"
+            f"{structure_block}{author_line}{contract_guidance}{research_block}\n\n"
             f"SOURCE MATERIAL:\n{content}"
         ),
     )
@@ -142,3 +173,51 @@ def generate_ebook(
         "source_content": content,
         "originality": originality.to_dict(),
     }
+
+
+def correct_ebook_manuscript(
+    *,
+    existing_manuscript: str,
+    approved_outline: list,
+    author: str = "",
+    research_notes: str = "",
+    title: str = "",
+    subtitle: str = "",
+) -> dict:
+    """Rewrite an existing manuscript to match the approved outline exactly.
+
+    Does not gather new research URLs. Paid chat call only when invoked.
+    """
+    existing_manuscript = (existing_manuscript or "").strip()
+    if not existing_manuscript:
+        raise ValueError("Existing manuscript is required for correction.")
+    research_notes = (research_notes or "").strip()[:12000]
+    outline_lines = []
+    for i, item in enumerate(approved_outline or [], 1):
+        if isinstance(item, dict):
+            outline_lines.append(
+                f"{int(item.get('order') or i)}. {item.get('title')}\n"
+                f"{str(item.get('purpose') or '')[:500]}"
+            )
+        else:
+            outline_lines.append(f"{i}. {item}")
+    outline_block = "\n\n".join(outline_lines)
+    author_line = f"\nAuthor / brand byline: {author.strip()}" if author.strip() else ""
+    ebook = chat(
+        system=(
+            "You correct ebook manuscripts to match an approved outline exactly. "
+            "Reuse useful facts from the existing draft. Do not invent research. "
+            "Do not add Conclusion/Disclaimer/Sources as H2 chapters unless listed."
+        ),
+        user=(
+            f"Revise the manuscript so it has EXACTLY these approved chapters as ## H2 "
+            f"headings in this order and wording:\n\n{outline_block}\n\n"
+            f"Title (H1): {title or 'keep existing'}\nSubtitle context: {subtitle}\n"
+            f"{author_line}\n"
+            "Put any disclaimer/sources after chapters as **Disclaimer** / **Sources** "
+            "paragraphs, not H2 chapters.\n\n"
+            f"RESEARCH NOTES (paraphrase only):\n{research_notes or '(none)'}\n\n"
+            f"EXISTING MANUSCRIPT DRAFT:\n{existing_manuscript[:20000]}"
+        ),
+    )
+    return {"ebook": ebook, "content": ebook, "source_type": "correction"}

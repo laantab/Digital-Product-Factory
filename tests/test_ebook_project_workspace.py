@@ -128,7 +128,7 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
         self.assertEqual(len(reopened["data"]["outline"]), 3)
 
     def test_05_acceptance_project_resumes_at_manuscript(self):
-        project = upsert_acceptance_project(database)
+        project = upsert_acceptance_project(database, preserve_live_manuscript=False)
         self.assertEqual(project["name"], ACCEPTANCE_PROJECT_NAME)
         ws = self.client.get(f"/ebook-workspace/{project['id']}").get_json()["workspace"]
         rail = {s["id"]: s["status"] for s in ws["rail"]}
@@ -177,7 +177,7 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
             assert_can_run_stage(ws, "cover")
 
     def test_08_edit_research_invalidates_title_and_later(self):
-        project = upsert_acceptance_project(database)
+        project = upsert_acceptance_project(database, preserve_live_manuscript=False)
         pid = project["id"]
         data = dict(database.get_project(pid)["data"])
         data = save_research(
@@ -192,7 +192,7 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
         self.assertEqual(stage_status(ws, "manuscript"), "not_started")
 
     def test_09_edit_title_invalidates_outline_and_later(self):
-        project = upsert_acceptance_project(database)
+        project = upsert_acceptance_project(database, preserve_live_manuscript=False)
         pid = project["id"]
         data = dict(database.get_project(pid)["data"])
         data = edit_title(data, title="New Title", subtitle="New Sub")
@@ -203,7 +203,7 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
         self.assertEqual(stage_status(ws, "manuscript"), "not_started")
 
     def test_10_edit_outline_invalidates_manuscript_and_later(self):
-        project = upsert_acceptance_project(database)
+        project = upsert_acceptance_project(database, preserve_live_manuscript=False)
         pid = project["id"]
         data = dict(database.get_project(pid)["data"])
         data = edit_outline(
@@ -220,7 +220,7 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
         self.assertEqual(stage_status(ws, "manuscript"), "not_started")
 
     def test_11_paid_actions_require_explicit_confirmation(self):
-        project = upsert_acceptance_project(database)
+        project = upsert_acceptance_project(database, preserve_live_manuscript=False)
         pid = project["id"]
         # Estimate only — no paid call
         r = self.client.post(
@@ -253,7 +253,7 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
         self.assertEqual(r3.status_code, 400)
 
     def test_12_cost_ledger_persists_and_enforces_cap(self):
-        project = upsert_acceptance_project(database)
+        project = upsert_acceptance_project(database, preserve_live_manuscript=False)
         data = dict(database.get_project(project["id"])["data"])
         ws = get_workspace(data)
         ledger = ws["paid_call_ledger"]
@@ -266,7 +266,7 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
             estimate_paid_action(data, "generate_manuscript")
 
     def test_13_no_paid_call_on_render_reopen(self):
-        project = upsert_acceptance_project(database)
+        project = upsert_acceptance_project(database, preserve_live_manuscript=False)
         pid = project["id"]
         with patch("services.ebook.generate_ebook") as mocked:
             self.client.get(f"/ebook-workspace/{pid}")
@@ -275,7 +275,7 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
             mocked.assert_not_called()
 
     def test_14_server_state_not_javascript_determines_approval(self):
-        project = upsert_acceptance_project(database)
+        project = upsert_acceptance_project(database, preserve_live_manuscript=False)
         pid = project["id"]
         # Client cannot POST a fake PASS / approved rail via generic PUT without server helpers —
         # approve endpoint is authoritative. Attempting to approve manuscript via approve route fails.
@@ -295,7 +295,7 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
         self.assertIn('data-view="ebook-workspace"', html)
         self.assertIn("ebookWorkspaceRoot", html)
         # Acceptance project open path uses workspace
-        project = upsert_acceptance_project(database)
+        project = upsert_acceptance_project(database, preserve_live_manuscript=False)
         self.assertTrue(project["data"].get("ebook_project_workspace"))
         self.assertEqual((project["data"].get("ebook_workspace") or {}).get("marker"), ACCEPTANCE_MARKER)
 
