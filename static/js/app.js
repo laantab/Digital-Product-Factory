@@ -19,7 +19,7 @@ const NAV = [
   { _section: "Account" },
   { id: "subscription", label: "Subscription", icon: "M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" },
 ];
-const TITLES = { dashboard: "Dashboard", saved: "Saved Projects", market: "Market Research", planning: "Product Planning", factory: "Product Factory", research: "Niche Research", ebook: "Ebook Builder", visual: "Visual Review", publishing: "Publishing Studio", packages: "Platform Packages", ad: "Ad Generator", subscription: "Subscription Plans" };
+const TITLES = { dashboard: "Dashboard", saved: "Saved Projects", market: "Market Research", planning: "Product Planning", factory: "Product Factory", research: "Niche Research", ebook: "Ebook Builder", "ebook-workspace": "Ebook Project", visual: "Visual Review", publishing: "Publishing Studio", packages: "Platform Packages", ad: "Ad Generator", subscription: "Subscription Plans" };
 
 const MARKET_PRODUCT_TYPES = [
   "Ebook", "Workbook", "Checklist", "Coloring Book", "Word Search Book",
@@ -831,6 +831,12 @@ function _isEbookProject(p) {
 }
 
 function nextActionLabel(stage, p) {
+  const d = (p && p.data) || {};
+  if (_isEbookProject(p) && (d.ebook_project_workspace || d.ebook_workspace)) {
+    const next = (d.ebook_workspace && d.ebook_workspace.next_action) || "";
+    if (next === "generate_manuscript") return "Generate Manuscript";
+    return "Open Ebook Project";
+  }
   switch (stage) {
     case "research_saved": return "Create Product Plan";
     case "product_plan_saved": return "Build Product";
@@ -957,8 +963,13 @@ function projectRow(p, opts) {
   // Download / Launch only apply to finished products. Showing them on
   // product_plan / research rows called /export-product, wrote orphan packages,
   // then /download returned 403 — the classic "Download doesn't work" UX.
+  // Ebook Project workspace: PDF/ZIP stay hidden until server preflight PASS.
+  const workspaceEbook =
+    p.type === "ebook" &&
+    (d.ebook_project_workspace || d.ebook_workspace) &&
+    !(d.export_ready === true && String(d.release_status || "").toUpperCase() === "PASS");
   const canDownloadProduct =
-    p.type === "product" || p.type === "ebook";
+    (p.type === "product" || p.type === "ebook") && !workspaceEbook;
   const dlPdfBtn = canDownloadProduct
     ? `<button class="rounded-lg ${isDash ? "bg-slate-100 hover:bg-slate-200 text-slate-600" : "bg-emerald-600 hover:bg-emerald-700 text-white"} text-xs font-semibold px-3 py-1.5" data-dl-pdf>${isDash ? "PDF" : "Download PDF"}</button>`
     : "";
@@ -1065,6 +1076,10 @@ function openProject(p) {
     document.getElementById("researchInput").value = d.keyword || "";
     renderResearch(d);
   } else if (p.type === "ebook") {
+    if (d.ebook_project_workspace || d.ebook_workspace) {
+      openEbookWorkspace(p.id);
+      return;
+    }
     go("ebook");
     document.getElementById("ebookInput").value = d.source || "";
     renderEbook(d);
@@ -1115,6 +1130,11 @@ function openProject(p) {
 // Route a project to the correct next step based on its workflow stage, advancing
 // the SAME record in place rather than creating a new one.
 async function runNextAction(p) {
+  const d0 = (p && p.data) || {};
+  if (_isEbookProject(p) && (d0.ebook_project_workspace || d0.ebook_workspace)) {
+    await openEbookWorkspace(p.id);
+    return;
+  }
   const stage = projectStage(p);
   if (stage === "research_saved") {
     go("planning");
@@ -4614,6 +4634,209 @@ function packageResultHtml(payload) {
   return `<div class="grid sm:grid-cols-2 gap-4">${rows}</div>`;
 }
 
+// ---------- Ebook Project workspace (stage rail) ----------
+let _ebookWorkspaceState = null;
+
+function _ebookRailStatusClass(status) {
+  switch (String(status || "")) {
+    case "approved": return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    case "awaiting_approval": return "bg-amber-100 text-amber-800 border-amber-200";
+    case "in_progress": return "bg-sky-100 text-sky-800 border-sky-200";
+    case "needs_correction": return "bg-orange-100 text-orange-800 border-orange-200";
+    case "blocked": return "bg-rose-100 text-rose-800 border-rose-200";
+    default: return "bg-slate-100 text-slate-600 border-slate-200";
+  }
+}
+
+async function startEbookWorkspaceFromBuilder() {
+  const topic = (document.getElementById("ebookInput").value || "").trim();
+  const author = (document.getElementById("ebookAuthor").value || "").trim();
+  if (!topic) return toast("Enter a topic to start the Ebook Project workspace.", "error");
+  if (!author) return toast("Enter an author name.", "error");
+  try {
+    const created = await api("/ebook-workspace", {
+      method: "POST",
+      body: JSON.stringify({
+        topic,
+        author,
+        audience: "",
+        outcome: "",
+        name: topic.slice(0, 120),
+      }),
+    });
+    toast("Ebook Project workspace created at Research.");
+    loadProjects();
+    await openEbookWorkspace(created.project.id);
+  } catch (e) {
+    toast(e.message || String(e), "error");
+  }
+}
+
+async function openEbookWorkspace(projectId) {
+  go("ebook-workspace");
+  const root = document.getElementById("ebookWorkspaceRoot");
+  if (!root) return;
+  root.innerHTML = spinner("Opening Ebook Project workspace...");
+  try {
+    const res = await api(`/ebook-workspace/${projectId}`);
+    _ebookWorkspaceState = res.workspace;
+    renderEbookWorkspace(res.workspace);
+  } catch (e) {
+    root.innerHTML = card(`<p class="text-rose-600 text-sm">${escapeHtml(e.message || String(e))}</p>`);
+  }
+}
+
+function renderEbookWorkspace(ws) {
+  _ebookWorkspaceState = ws;
+  const root = document.getElementById("ebookWorkspaceRoot");
+  if (!root) return;
+  const budget = ws.budget || {};
+  const railHtml = (ws.rail || []).map((s) => {
+    const active = s.id === ws.current_stage;
+    return `<button type="button" data-ws-stage="${escapeHtml(s.id)}"
+      class="ebook-rail-item flex flex-col items-start gap-1 rounded-xl border px-3 py-2 text-left min-w-[7.5rem] ${
+        active ? "ring-2 ring-brand-400 border-brand-300 bg-white" : "bg-white/80"
+      } ${_ebookRailStatusClass(s.status)}">
+      <span class="text-[11px] font-bold uppercase tracking-wide opacity-80">${escapeHtml(s.label)}</span>
+      <span class="text-xs font-semibold">${escapeHtml(s.status_label || s.status)}</span>
+    </button>`;
+  }).join("");
+
+  root.innerHTML = `
+    <div class="rounded-2xl border border-slate-200 bg-white p-6 space-y-4" data-ebook-workspace>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-xs font-semibold uppercase tracking-wide text-brand-600">Ebook Project</p>
+          <h2 class="text-xl font-bold text-slate-900 truncate">${escapeHtml(ws.name || ws.title || "Ebook")}</h2>
+          <p class="text-sm text-slate-500 mt-1">Author: <b>${escapeHtml(ws.author || "—")}</b>
+            · Artifact: <b>${escapeHtml(ws.artifact_state || "DRAFT")}</b>
+            · Rev ${escapeHtml(String(ws.artifact_revision || 1))}</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+          <div>Spend: <b>$${Number(budget.spent_usd || 0).toFixed(3)}</b></div>
+          <div>Remaining: <b>$${Number(budget.remaining_usd || 0).toFixed(3)}</b></div>
+          <div class="text-xs text-slate-500">Cap $${Number(budget.cap_usd || 0).toFixed(2)} · ${Number(budget.paid_calls || 0)} paid calls</div>
+        </div>
+      </div>
+      <div class="flex gap-2 overflow-x-auto pb-1" data-ebook-rail>${railHtml}</div>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-sm text-slate-600">Next production action:</span>
+        <b class="text-sm text-slate-900" data-ws-next-label>${escapeHtml(ws.next_action_label || ws.next_action || "—")}</b>
+        ${
+          ws.next_action === "generate_manuscript" && ws.gates && ws.gates.manuscript_enabled
+            ? `<button type="button" class="btn-primary text-sm" data-ws-estimate-manuscript>Generate Manuscript…</button>`
+            : `<button type="button" class="btn-secondary text-sm opacity-60 cursor-not-allowed" disabled title="Blocked until prior stages are approved">Generate Manuscript</button>`
+        }
+      </div>
+      <div data-ws-stage-panel class="rounded-xl border border-slate-200 bg-slate-50 p-4"></div>
+      <div data-ws-confirm class="hidden rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-3"></div>
+    </div>
+  `;
+
+  root.querySelectorAll("[data-ws-stage]").forEach((btn) => {
+    btn.onclick = () => showEbookWorkspaceStage(btn.getAttribute("data-ws-stage"));
+  });
+  const estBtn = root.querySelector("[data-ws-estimate-manuscript]");
+  if (estBtn) {
+    estBtn.onclick = () => estimateManuscriptInWorkspace(ws.project_id);
+  }
+  showEbookWorkspaceStage(ws.current_stage || "research");
+}
+
+function showEbookWorkspaceStage(stageId) {
+  const ws = _ebookWorkspaceState;
+  if (!ws) return;
+  const panel = document.querySelector("[data-ws-stage-panel]");
+  if (!panel) return;
+  const stage = (ws.rail || []).find((s) => s.id === stageId) || { id: stageId, label: stageId, status_label: "" };
+  let body = "";
+  if (stageId === "research") {
+    const r = ws.research || {};
+    const findings = (r.key_findings || []).map((f) => `<li>${escapeHtml(f)}</li>`).join("") || "<li class=\"text-slate-400\">None yet</li>";
+    const sources = (r.source_urls || []).slice(0, 12).map((u) => `<li class="truncate"><a class="text-brand-700 underline" href="${escapeHtml(u)}" target="_blank" rel="noopener">${escapeHtml(u)}</a></li>`).join("") || "<li class=\"text-slate-400\">—</li>";
+    const rules = (ws.editorial_rules_locked || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li class=\"text-slate-400\">—</li>";
+    body = `
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Research · ${escapeHtml(stage.status_label || "")}</h3>
+      <p class="text-sm text-slate-700 whitespace-pre-wrap mb-3">${escapeHtml(r.summary || "")}</p>
+      <h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Key findings</h4>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1 mb-3">${findings}</ul>
+      <h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Printing notes</h4>
+      <p class="text-sm text-slate-700 mb-2">${escapeHtml((r.printing_research && r.printing_research.keepsake_notes) || "")}</p>
+      <p class="text-xs text-slate-500 mb-3">Evidence: ${escapeHtml((r.printing_research && r.printing_research.evidence_quality) || "—")}</p>
+      <h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Locked editorial rules</h4>
+      <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1 mb-3">${rules}</ul>
+      <h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Sources</h4>
+      <ul class="text-sm space-y-1">${sources}</ul>
+    `;
+  } else if (stageId === "title") {
+    body = `
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Title · ${escapeHtml(stage.status_label || "")}</h3>
+      <p class="text-lg font-semibold text-slate-900">${escapeHtml(ws.title || "—")}</p>
+      <p class="text-sm text-slate-600 mt-1">${escapeHtml(ws.subtitle || "")}</p>
+      <p class="text-xs text-slate-500 mt-3">Approved option: ${escapeHtml(ws.approved_title_id || "—")}</p>
+    `;
+  } else if (stageId === "outline") {
+    const chapters = (ws.outline || []).map((c) => `
+      <li class="rounded-lg border border-slate-200 bg-white p-3">
+        <div class="font-semibold text-slate-900">Chapter ${escapeHtml(String(c.order || ""))}: ${escapeHtml(c.title || "")}</div>
+        <pre class="mt-1 text-xs text-slate-600 whitespace-pre-wrap font-sans">${escapeHtml(c.purpose || "")}</pre>
+      </li>`).join("") || `<li class="text-slate-400 text-sm">No outline yet</li>`;
+    body = `
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Outline · ${escapeHtml(stage.status_label || "")}</h3>
+      <p class="text-xs text-slate-500 mb-3">Approved option: ${escapeHtml(ws.approved_outline_id || "—")}</p>
+      <ol class="space-y-2">${chapters}</ol>
+    `;
+  } else if (stageId === "manuscript") {
+    body = `
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Manuscript · ${escapeHtml(stage.status_label || "")}</h3>
+      <p class="text-sm text-slate-600">Not started. Use <b>Generate Manuscript…</b> when ready. A cost estimate and explicit confirmation are required. No paid call runs when this page opens.</p>
+    `;
+  } else {
+    body = `
+      <h3 class="text-sm font-bold text-slate-900 mb-2">${escapeHtml(stage.label || stageId)} · ${escapeHtml(stage.status_label || "Not started")}</h3>
+      <p class="text-sm text-slate-600">This stage unlocks after earlier approvals. Server state controls availability — the UI cannot invent PASS or approvals.</p>
+    `;
+  }
+  panel.innerHTML = body;
+}
+
+async function estimateManuscriptInWorkspace(projectId) {
+  const confirmEl = document.querySelector("[data-ws-confirm]");
+  if (!confirmEl) return;
+  confirmEl.classList.remove("hidden");
+  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing cost estimate…</p>`;
+  try {
+    const res = await api(`/ebook-workspace/${projectId}/estimate-cost`, {
+      method: "POST",
+      body: JSON.stringify({ action: "generate_manuscript" }),
+    });
+    if (res.workspace) _ebookWorkspaceState = res.workspace;
+    const est = res.estimate || {};
+    confirmEl.innerHTML = `
+      <h4 class="text-sm font-bold text-amber-900">Confirm paid action</h4>
+      <p class="text-sm text-amber-900">${escapeHtml(est.label || "Generate Manuscript")}</p>
+      <p class="text-sm">Estimated maximum: <b>$${Number(est.estimated_max_usd || 0).toFixed(3)}</b></p>
+      <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
+      <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "Confirmation required before any paid call.")}</p>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
+        <button type="button" class="btn-primary text-sm" data-ws-hold-confirm>I understand — do not run yet</button>
+      </div>
+      <p class="text-xs text-slate-500">Manuscript execution is intentionally not started from this integration step. Confirmation token was issued for later use inside the Factory.</p>
+    `;
+    confirmEl.querySelector("[data-ws-cancel-confirm]").onclick = () => {
+      confirmEl.classList.add("hidden");
+      confirmEl.innerHTML = "";
+    };
+    confirmEl.querySelector("[data-ws-hold-confirm]").onclick = () => {
+      toast("Cost confirmation recorded. Manuscript was not generated.");
+      confirmEl.classList.add("hidden");
+    };
+  } catch (e) {
+    confirmEl.innerHTML = `<p class="text-sm text-rose-700">${escapeHtml(e.message || String(e))}</p>`;
+  }
+}
+
 async function runEbook() {
   const source = document.getElementById("ebookInput").value.trim();
   if (!source) return toast("Enter a topic or URL", "error");
@@ -4630,7 +4853,13 @@ async function runEbook() {
     if (researchNotes) body.research_notes = researchNotes;
     if (pendingEbookBrief) {
       body.contract = pendingEbookBrief;
-      if (pendingEbookBrief._project_id != null) body.project_id = pendingEbookBrief._project_id;
+      // Only attach project_id for legacy non-workspace plan builds.
+      if (
+        pendingEbookBrief._project_id != null &&
+        !(pendingEbookBrief.ebook_project_workspace || pendingEbookBrief.ebook_workspace)
+      ) {
+        body.project_id = pendingEbookBrief._project_id;
+      }
     }
     const data = await api("/generate-ebook", { method: "POST", body: JSON.stringify(body) });
     data.author_brand = author;
@@ -6221,6 +6450,8 @@ document.addEventListener("click", (e) => {
 });
 document.getElementById("researchBtn").onclick = runResearch;
 document.getElementById("ebookBtn").onclick = runEbook;
+const ebookWsStart = document.getElementById("ebookWorkspaceStartBtn");
+if (ebookWsStart) ebookWsStart.onclick = startEbookWorkspaceFromBuilder;
 document.getElementById("adBtn").onclick = runTrafficContent;
 document.getElementById("factoryBtn").onclick = runProduct;
 document.getElementById("factoryReset").onclick = resetFactory;

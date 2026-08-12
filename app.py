@@ -100,6 +100,29 @@ def research_route():
 def generate_ebook_route():
     body = request.get_json(silent=True) or {}
     try:
+        # Workspace-gated manuscripts require outline approval + paid confirmation.
+        project_id = body.get("project_id")
+        if project_id is not None:
+            from services.ebook_project_workspace import (
+                assert_can_run_stage,
+                consume_confirmation,
+                get_workspace,
+            )
+
+            project = database.get_project(int(project_id))
+            if not project:
+                return _error("Project not found.", 404)
+            data = dict(project.get("data") or {})
+            ws = get_workspace(data)
+            if ws is not None:
+                assert_can_run_stage(ws, "manuscript")
+                token = str(body.get("confirmation_token") or "").strip()
+                if not token:
+                    return _error(
+                        "Generate Manuscript requires an explicit cost confirmation token.",
+                        400,
+                    )
+                consume_confirmation(data, "generate_manuscript", token)
         brief = body.get("contract")
         contract = _brief_to_contract(brief)
         author = (body.get("author") or body.get("author_brand") or "").strip()
@@ -124,6 +147,249 @@ def generate_ebook_route():
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("ebook generation failed")
+        return _error(str(exc), 500)
+
+
+def _ebook_workspace_project_or_404(project_id: int):
+    project = database.get_project(project_id)
+    if not project:
+        return None, (_error("Project not found.", 404), 404)
+    if project.get("type") != "ebook" and str((project.get("data") or {}).get("product_type") or "").lower() != "ebook":
+        return None, (_error("Not an ebook project.", 400), 400)
+    return project, None
+
+
+@app.post("/ebook-workspace")
+def create_ebook_workspace_route():
+    """Start a new Ebook Project workspace at Research (no paid call)."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_project_workspace import (
+            new_workspace,
+            sync_document_from_workspace,
+            workspace_public_view,
+        )
+
+        topic = str(body.get("topic") or "").strip()
+        audience = str(body.get("audience") or "").strip()
+        outcome = str(body.get("outcome") or "").strip()
+        author = str(body.get("author") or "").strip()
+        if not topic:
+            return _error("Topic is required.", 400)
+        name = str(body.get("name") or topic)[:200]
+        data = {
+            "product_type": "ebook",
+            "ebook_project_workspace": True,
+            "artifact_state": "DRAFT",
+            "artifact_revision": 1,
+            "title": topic,
+            "subtitle": "",
+            "author_brand": author,
+            "source": topic,
+            "content": "",
+            "ebook": "",
+            "export_ready": False,
+            "ebook_workspace": new_workspace(
+                topic=topic,
+                audience=audience,
+                outcome=outcome,
+                author=author,
+                budget_cap_usd=float(body.get("budget_cap_usd") or 3.5),
+            ),
+        }
+        data = sync_document_from_workspace(data)
+        project = database.create_project(
+            name,
+            "ebook",
+            data,
+            user_saved=True,
+            system_test=False,
+            temporary=False,
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "project": _enrich_project_artifact_fields(project),
+                "workspace": workspace_public_view(project),
+            }
+        )
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("create ebook workspace failed")
+        return _error(str(exc), 500)
+
+
+@app.get("/ebook-workspace/<int:project_id>")
+def get_ebook_workspace_route(project_id: int):
+    """Read-only workspace view — never triggers paid calls."""
+    try:
+        from services.ebook_project_workspace import (
+            assert_no_paid_side_effects_on_read,
+            ensure_workspace,
+            get_workspace,
+            sync_document_from_workspace,
+            workspace_public_view,
+        )
+
+        assert_no_paid_side_effects_on_read()
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = dict(project.get("data") or {})
+        if get_workspace(data) is None and data.get("ebook_project_workspace"):
+            data = ensure_workspace(data)
+            data = sync_document_from_workspace(data)
+            project = database.update_project(project_id, None, data) or project
+        elif get_workspace(data) is None:
+            return _error("This ebook is not an Ebook Project workspace.", 400)
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("get ebook workspace failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/research")
+def save_ebook_workspace_research_route(project_id: int):
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_project_workspace import save_research, workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = save_research(dict(project.get("data") or {}), body.get("research") or body)
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("save ebook research failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/approve")
+def approve_ebook_workspace_stage_route(project_id: int):
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_project_workspace import approve_stage, workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        stage = str(body.get("stage") or "").strip()
+        data = approve_stage(
+            dict(project.get("data") or {}),
+            stage,
+            choice_id=body.get("choice_id"),
+        )
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("approve ebook stage failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/title")
+def edit_ebook_workspace_title_route(project_id: int):
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_project_workspace import edit_title, workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = edit_title(
+            dict(project.get("data") or {}),
+            title=str(body.get("title") or ""),
+            subtitle=str(body.get("subtitle") or ""),
+            options=body.get("title_options"),
+        )
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("edit ebook title failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/outline")
+def edit_ebook_workspace_outline_route(project_id: int):
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_project_workspace import edit_outline, workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        chapters = body.get("chapters") or body.get("outline") or []
+        data = edit_outline(
+            dict(project.get("data") or {}),
+            chapters=list(chapters),
+            option_id=body.get("option_id") or body.get("choice_id"),
+        )
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("edit ebook outline failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/estimate-cost")
+def estimate_ebook_workspace_cost_route(project_id: int):
+    """Return a cost estimate + confirmation token. Does not spend."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_project_workspace import estimate_paid_action, workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        action = str(body.get("action") or "").strip()
+        data = dict(project.get("data") or {})
+        data["_project_id"] = project_id
+        result = estimate_paid_action(data, action)
+        # Persist pending estimate only (still zero paid spend).
+        project = database.update_project(project_id, None, data) or project
+        result["workspace"] = workspace_public_view(project)
+        return jsonify(result)
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook cost estimate failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/seed-acceptance")
+def seed_ebook_acceptance_workspace_route():
+    """Upsert the LIVE ACCEPTANCE DRAFT from preserved export materials (local only)."""
+    try:
+        from services.ebook_project_workspace import (
+            upsert_acceptance_project,
+            workspace_public_view,
+        )
+
+        project = upsert_acceptance_project(database)
+        return jsonify(
+            {
+                "ok": True,
+                "project": _enrich_project_artifact_fields(project),
+                "workspace": workspace_public_view(project),
+            }
+        )
+    except FileNotFoundError as exc:
+        return _error(str(exc), 404)
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("seed ebook acceptance failed")
         return _error(str(exc), 500)
 
 
