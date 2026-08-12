@@ -4728,7 +4728,7 @@ function renderEbookWorkspace(ws) {
         ${
           ws.next_action === "generate_manuscript" && ws.gates && ws.gates.manuscript_enabled
             ? `<button type="button" class="btn-primary text-sm" data-ws-estimate-manuscript>Generate Manuscript…</button>`
-            : ws.next_action === "request_correction" && ws.gates && ws.gates.correction_enabled
+            : (ws.next_action === "request_correction" || ws.next_action === "correct_manuscript") && ws.gates && ws.gates.correction_enabled
             ? `<button type="button" class="btn-primary text-sm" data-ws-request-correction-top>Request Correction…</button>`
             : `<button type="button" class="btn-secondary text-sm opacity-60 cursor-not-allowed" disabled title="Blocked until prior stages are approved">Generate Manuscript</button>`
         }

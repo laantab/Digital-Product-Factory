@@ -440,6 +440,7 @@ def correct_ebook_workspace_manuscript_route(project_id: int):
         if err:
             return err[0], err[1]
         data = dict(project.get("data") or {})
+        data["_project_id"] = project_id
         out = execute_correct_manuscript(
             data,
             confirmation_token=str(body.get("confirmation_token") or ""),

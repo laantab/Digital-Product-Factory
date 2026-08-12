@@ -364,6 +364,32 @@ def outline_digest(data: dict | None) -> str:
     return _sha(payload)
 
 
+def manuscript_digest(data: dict | None) -> str:
+    """Digest of the preserved manuscript bytes (content/ebook)."""
+    data = data or {}
+    text = str(data.get("content") or data.get("ebook") or "")
+    return _sha({"manuscript": text})
+
+
+def structural_findings_digest(data: dict | None) -> str:
+    """Digest of manuscript structural/QA findings used to bind correction tokens."""
+    data = data or {}
+    ws = get_workspace(data) or {}
+    findings = list(ws.get("manuscript_structure_findings") or ws.get("manuscript_qa") or [])
+    return _sha({"findings": [str(f) for f in findings]})
+
+
+def normalize_paid_action(action: str) -> str:
+    """Map UI synonyms to the canonical paid-action registry key."""
+    raw = str(action or "").strip()
+    aliases = {
+        "request_correction": "correct_manuscript",
+        "correct": "correct_manuscript",
+        "correction": "correct_manuscript",
+    }
+    return aliases.get(raw, raw)
+
+
 TOKEN_TTL_SECONDS = 30 * 60
 MANUSCRIPT_AUTH_MAX_USD = 1.50
 CORRECTION_AUTH_MAX_USD = 0.75
@@ -941,9 +967,11 @@ def edit_outline(data: dict, *, chapters: list[dict], option_id: str | None = No
 def estimate_paid_action(data: dict, action: str) -> dict:
     data = ensure_workspace(data)
     ws = data["ebook_workspace"]
+    action = normalize_paid_action(action)
     spec = PAID_ACTIONS.get(action)
     if not spec:
-        raise ValueError(f"Unknown paid action: {action}")
+        known = ", ".join(sorted(PAID_ACTIONS))
+        raise ValueError(f"Unknown paid action: {action}. Known actions: {known}")
     for req in spec["requires_approved"]:
         if not is_approved(ws, req):
             raise ValueError(f"Action '{action}' requires approved stage '{req}'.")
@@ -977,7 +1005,12 @@ def estimate_paid_action(data: dict, action: str) -> dict:
     remaining = round(float(ledger.get("remaining_usd") or 0), 4)
     cap = round(float(ledger.get("budget_cap_usd") or DEFAULT_BUDGET_CAP_USD), 4)
     spent = round(float(ledger.get("spent_usd") or 0), 4)
-    if estimate > remaining + 1e-9:
+    if action == "correct_manuscript":
+        # Correction estimates must fit remaining budget (never overshoot).
+        estimate = min(estimate, remaining)
+        if estimate <= 0:
+            raise ValueError("No remaining budget for manuscript correction.")
+    elif estimate > remaining + 1e-9:
         raise ValueError(
             f"Estimated cost ${estimate:.3f} exceeds remaining budget ${remaining:.3f}."
         )
@@ -991,6 +1024,7 @@ def estimate_paid_action(data: dict, action: str) -> dict:
         (_iso_to_ts(created) or datetime.now(timezone.utc).timestamp()) + TOKEN_TTL_SECONDS,
         tz=timezone.utc,
     ).isoformat()
+    project_id = data.get("_project_id")
     pending = {
         "action": action,
         "label": spec["label"],
@@ -1002,16 +1036,19 @@ def estimate_paid_action(data: dict, action: str) -> dict:
         "confirmation_token": token,
         "created_at": created,
         "expires_at": expires_at,
+        "project_id": int(project_id) if project_id is not None else None,
         "artifact_id": str(data.get("artifact_id") or data.get("package_id") or ""),
         "artifact_revision": int(data.get("artifact_revision") or 1),
         "outline_digest": outline_digest(data),
+        "manuscript_digest": manuscript_digest(data),
+        "structural_findings_digest": structural_findings_digest(data),
         "used": False,
+        "confirmation_required": True,
         "expires_note": "Confirmation required before any paid call. Opening this page does not spend.",
     }
     ledger["pending_estimate"] = pending
     _append_history(ws, "estimate", action=action, estimated_max_usd=estimate)
     data["ebook_workspace"] = ws
-    # Customer-facing estimate omits nothing critical; token is required for confirm.
     public_estimate = dict(pending)
     return {
         "ok": True,
@@ -1394,6 +1431,25 @@ def execute_correct_manuscript(
         raise ValueError("Outline changed since the estimate — request a new cost estimate.")
     if str(pending.get("outline_digest") or "") != current_od:
         raise ValueError("Confirmation token outline digest mismatch.")
+    if str(pending.get("artifact_id") or "") != artifact_id:
+        raise ValueError("Confirmation token was issued for a different artifact.")
+    if int(pending.get("artifact_revision") or 0) != revision:
+        raise ValueError("Confirmation token was issued for a different revision.")
+    current_ms = manuscript_digest(data)
+    if str(pending.get("manuscript_digest") or "") != current_ms:
+        raise ValueError(
+            "Preserved manuscript changed since the estimate — request a new correction estimate."
+        )
+    current_findings = structural_findings_digest(data)
+    if str(pending.get("structural_findings_digest") or "") != current_findings:
+        raise ValueError(
+            "Structural findings changed since the estimate — request a new correction estimate."
+        )
+    token_project = pending.get("project_id")
+    live_project = data.get("_project_id")
+    if token_project is not None and live_project is not None:
+        if int(token_project) != int(live_project):
+            raise ValueError("Confirmation token was issued for a different project.")
 
     approved_outline = authoritative_approved_outline(data)
     auth_max = round(float(max_authorized_usd), 4)
