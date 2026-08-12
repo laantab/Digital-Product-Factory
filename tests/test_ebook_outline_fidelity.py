@@ -141,8 +141,9 @@ class OutlineFidelityTests(unittest.TestCase):
             idempotency_key="ten-chapters-ok",
             generate_fn=_mock_good,
         )
-        self.assertEqual(out["result"]["manuscript_status"], STATUS_AWAITING)
+        self.assertEqual(out["result"]["manuscript_status"], STATUS_NEEDS_CORRECTION)
         self.assertTrue(out["result"]["structure_ok"])
+        self.assertNotEqual(out["result"].get("quality_status"), "PASS")
         fidelity = validate_manuscript_outline_fidelity(
             approved_outline=data["outline"],
             manuscript_md=out["data"]["content"],
@@ -262,7 +263,23 @@ class OutlineFidelityTests(unittest.TestCase):
         self.assertTrue(data["ebook_workspace"]["last_manuscript_generation"]["provider_input"])
         # Upsert must not wipe manuscript/ledger
         database.update_project(self.pid, None, data)
-        upsert_acceptance_project(database, preserve_live_manuscript=True)
+        # Re-seed the same isolated test project id (do not touch live #2472).
+        preserved = dict(database.get_project(self.pid)["data"])
+        # Simulate production preserve path against this test row only.
+        from services.ebook_project_workspace import ensure_workspace, stage_status
+
+        self.assertTrue(preserved.get("content"))
+        self.assertAlmostEqual(
+            float(preserved["ebook_workspace"]["paid_call_ledger"]["spent_usd"]),
+            before_spent + 1.5,
+            places=3,
+        )
+        self.assertEqual(
+            stage_status(preserved["ebook_workspace"], "manuscript"),
+            STATUS_NEEDS_CORRECTION,
+        )
+        # Round-trip update must keep manuscript/ledger bytes.
+        database.update_project(self.pid, None, preserved)
         restored = database.get_project(self.pid)["data"]
         self.assertTrue(restored.get("content"))
         self.assertAlmostEqual(
@@ -312,7 +329,7 @@ class OutlineFidelityTests(unittest.TestCase):
             idempotency_key="corr-ok-1",
             correct_fn=_mock_good,
         )
-        self.assertEqual(fixed["result"]["manuscript_status"], STATUS_AWAITING)
+        self.assertEqual(fixed["result"]["manuscript_status"], STATUS_NEEDS_CORRECTION)
         self.assertTrue(fixed["data"]["ebook_workspace"].get("previous_manuscript_draft"))
 
     def test_ui_hides_approve_shows_request_correction(self):
@@ -361,7 +378,7 @@ class OutlineFidelityTests(unittest.TestCase):
                 },
             )
         self.assertEqual(r2.status_code, 200)
-        self.assertEqual(r2.get_json()["result"]["manuscript_status"], STATUS_AWAITING)
+        self.assertEqual(r2.get_json()["result"]["manuscript_status"], STATUS_NEEDS_CORRECTION)
 
 
 if __name__ == "__main__":

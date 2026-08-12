@@ -478,6 +478,20 @@ def build_research_notes_for_manuscript(data: dict) -> str:
         for o in outline:
             purpose = str(o.get("purpose") or "")[:800]
             parts.append(f"Chapter {o.get('order')}: {o.get('title')}\n{purpose}")
+        try:
+            from services.ebook_manuscript_engine import build_book_contract
+
+            book = build_book_contract(data)
+            parts.append("CHAPTER CONTRACTS (authoritative):")
+            for ch in book.chapters:
+                parts.append(
+                    f"Ch {ch.order} {ch.title}: min {ch.min_useful_words} words; "
+                    f"table={ch.required_table or '-'}; workflow={ch.required_workflow or '-'}; "
+                    f"checklist={ch.required_checklist or '-'}; "
+                    f"facts={', '.join(ch.required_facts[:8])}"
+                )
+        except Exception:
+            pass
         parts.append(
             "BACK MATTER RULE: If a disclaimer or sources list is required, place it "
             "AFTER the approved chapters using plain paragraphs or **Disclaimer** / "
@@ -560,6 +574,15 @@ def build_manuscript_contract(data: dict):
         worksheet_required=False,
     )
     contract.required_chapter_angles = angles
+    try:
+        from services.ebook_manuscript_engine import build_book_contract
+
+        book = build_book_contract(data)
+        contract.chapter_count = len(book.chapters) or contract.chapter_count
+        setattr(contract, "book_contract_digest", book.digest())
+        setattr(contract, "chapter_contracts", book.chapters)
+    except Exception:
+        pass
     return contract
 
 
@@ -643,6 +666,23 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
             }
         )
     pending = ledger.get("pending_estimate")
+    from services.ebook_manuscript_engine import QUALITY_PASS, validate_manuscript_quality
+
+    md_now = str(data.get("content") or data.get("ebook") or "")
+    quality_status = ""
+    quality_findings: list[str] = []
+    chapter_quality: list[dict] = []
+    quality_view = None
+    if md_now and is_approved(ws, "outline"):
+        quality = validate_manuscript_quality(data, manuscript_md=md_now)
+        quality_view = quality.as_dict()
+        quality_status = quality.status
+        quality_findings = quality.finding_messages
+        chapter_quality = quality.chapter_results
+    can_approve = (
+        stage_status(ws, "manuscript") == STATUS_AWAITING
+        and quality_status == QUALITY_PASS
+    )
     return {
         "project_id": project.get("id"),
         "name": project.get("name"),
@@ -694,9 +734,7 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
             "correction_enabled": is_approved(ws, "outline")
             and stage_status(ws, "manuscript") == STATUS_NEEDS_CORRECTION
             and bool(data.get("content") or data.get("ebook")),
-            "approve_manuscript_enabled": stage_status(ws, "manuscript") == STATUS_AWAITING
-            and not list(ws.get("manuscript_qa") or [])
-            and not list(ws.get("manuscript_structure_findings") or []),
+            "approve_manuscript_enabled": can_approve,
             "visuals_enabled": is_approved(ws, "manuscript"),
             "export_enabled": str(data.get("release_status") or "").upper() == "PASS"
             and data.get("export_ready") is True,
@@ -705,13 +743,14 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
             "status": stage_status(ws, "manuscript"),
             "status_label": STATUS_LABELS.get(stage_status(ws, "manuscript"), ""),
             "content": str(data.get("content") or data.get("ebook") or "")[:200000],
-            "chapters": _manuscript_chapter_view(data, ws),
-            "qa_findings": list(ws.get("manuscript_qa") or []),
+            "chapters": _manuscript_chapter_view(data, ws, chapter_quality=chapter_quality),
+            "qa_findings": quality_findings or list(ws.get("manuscript_qa") or []),
             "structure_findings": list(ws.get("manuscript_structure_findings") or []),
+            "quality_status": quality_status,
+            "quality": quality_view,
+            "chapter_findings": chapter_quality,
             "last_generation": ws.get("last_manuscript_generation"),
-            "can_approve": stage_status(ws, "manuscript") == STATUS_AWAITING
-            and not list(ws.get("manuscript_qa") or [])
-            and not list(ws.get("manuscript_structure_findings") or []),
+            "can_approve": can_approve,
             "correction_estimate_usd": CORRECTION_AUTH_MAX_USD,
             "remaining_usd": ledger.get("remaining_usd"),
         },
@@ -719,17 +758,32 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
     }
 
 
-def _manuscript_chapter_view(data: dict, ws: dict) -> list[dict]:
+def _manuscript_chapter_view(data: dict, ws: dict, chapter_quality: list | None = None) -> list[dict]:
     """Prefer generated manuscript H2 chapters; fall back to approved outline."""
+    quality_by_order = {
+        int(r.get("order") or 0): r for r in (chapter_quality or []) if isinstance(r, dict)
+    }
+
+    def _attach(row: dict) -> dict:
+        q = quality_by_order.get(int(row.get("order") or 0)) or {}
+        row = dict(row)
+        if q:
+            row["quality_status"] = q.get("status")
+            row["word_count"] = q.get("words")
+            row["findings"] = q.get("findings") or []
+        return row
+
     ed = data.get("ebook_document") if isinstance(data.get("ebook_document"), dict) else {}
     chapters = list(ed.get("chapters") or [])
     if chapters:
         return [
-            {
-                "order": c.get("order"),
-                "title": c.get("title"),
-                "approved": bool(c.get("approved")),
-            }
+            _attach(
+                {
+                    "order": c.get("order"),
+                    "title": c.get("title"),
+                    "approved": bool(c.get("approved")),
+                }
+            )
             for c in chapters
             if isinstance(c, dict)
         ]
@@ -742,7 +796,7 @@ def _manuscript_chapter_view(data: dict, ws: dict) -> list[dict]:
         from services.ebook_outline_fidelity import extract_manuscript_h2_titles
 
         return [
-            {"order": i, "title": t, "approved": False}
+            _attach({"order": i, "title": t, "approved": False})
             for i, t in enumerate(extract_manuscript_h2_titles(md), 1)
         ]
     if stage_status(ws, "manuscript") in {
@@ -751,7 +805,7 @@ def _manuscript_chapter_view(data: dict, ws: dict) -> list[dict]:
         STATUS_APPROVED,
     }:
         return [
-            {"order": o.get("order"), "title": o.get("title"), "approved": False}
+            _attach({"order": o.get("order"), "title": o.get("title"), "approved": False})
             for o in (data.get("outline") or [])
             if isinstance(o, dict)
         ]
@@ -856,7 +910,10 @@ def approve_stage(data: dict, stage: str, *, choice_id: str | None = None) -> di
         chapters = (chosen or {}).get("chapters") or data.get("outline") or []
         if len(chapters) < 3:
             raise ValueError("Outline must include at least 3 chapters.")
-        data["outline"] = [
+        previous_outline = list(data.get("outline") or [])
+        from services.ebook_manuscript_engine import remap_outline_purposes
+
+        drafted = [
             {
                 "order": int(c.get("n") or c.get("order") or i + 1),
                 "title": str(c.get("title") or ""),
@@ -866,6 +923,7 @@ def approve_stage(data: dict, stage: str, *, choice_id: str | None = None) -> di
             for i, c in enumerate(chapters)
             if isinstance(c, dict)
         ]
+        data["outline"] = remap_outline_purposes(drafted, previous_outline=previous_outline)
         if chosen:
             ws["approved_outline_id"] = chosen.get("id")
         set_stage_status(ws, "outline", STATUS_APPROVED)
@@ -906,6 +964,22 @@ def approve_stage(data: dict, stage: str, *, choice_id: str | None = None) -> di
             raise ValueError(
                 "Manuscript fails approved-outline fidelity and cannot be approved."
             )
+        from services.ebook_manuscript_engine import QUALITY_PASS, validate_manuscript_quality
+
+        quality = validate_manuscript_quality(data, manuscript_md=md)
+        if quality.status != QUALITY_PASS:
+            ws["manuscript_quality"] = quality.as_dict()
+            ws["manuscript_qa"] = quality.finding_messages
+            set_stage_status(
+                ws,
+                "manuscript",
+                STATUS_NEEDS_CORRECTION,
+                note="Manuscript quality gate blocked approval",
+            )
+            _recompute_next_action(ws)
+            raise ValueError(
+                "Manuscript quality must be PASS before Approve Manuscript."
+            )
         set_stage_status(ws, "manuscript", STATUS_APPROVED)
         _append_history(ws, "approve", stage="manuscript")
 
@@ -942,7 +1016,10 @@ def edit_outline(data: dict, *, chapters: list[dict], option_id: str | None = No
         raise ValueError("Approve title before editing outline.")
     if len(chapters) < 3:
         raise ValueError("Outline requires at least 3 chapters.")
-    data["outline"] = [
+    previous_outline = list(data.get("outline") or [])
+    from services.ebook_manuscript_engine import remap_outline_purposes
+
+    drafted = [
         {
             "order": int(c.get("order") or c.get("n") or i + 1),
             "title": str(c.get("title") or ""),
@@ -952,6 +1029,7 @@ def edit_outline(data: dict, *, chapters: list[dict], option_id: str | None = No
         for i, c in enumerate(chapters)
         if isinstance(c, dict)
     ]
+    data["outline"] = remap_outline_purposes(drafted, previous_outline=previous_outline)
     if option_id:
         ws["approved_outline_id"] = option_id
     if is_approved(ws, "outline") or stage_status(ws, "outline") != STATUS_NOT_STARTED:
@@ -1025,6 +1103,9 @@ def estimate_paid_action(data: dict, action: str) -> dict:
         tz=timezone.utc,
     ).isoformat()
     project_id = data.get("_project_id")
+    from services.ebook_manuscript_engine import build_book_contract
+
+    book_contract = build_book_contract(data)
     pending = {
         "action": action,
         "label": spec["label"],
@@ -1040,6 +1121,8 @@ def estimate_paid_action(data: dict, action: str) -> dict:
         "artifact_id": str(data.get("artifact_id") or data.get("package_id") or ""),
         "artifact_revision": int(data.get("artifact_revision") or 1),
         "outline_digest": outline_digest(data),
+        "book_contract_digest": book_contract.digest(),
+        "chapter_contract_digests": [c.digest() for c in book_contract.chapters],
         "manuscript_digest": manuscript_digest(data),
         "structural_findings_digest": structural_findings_digest(data),
         "used": False,
@@ -1107,6 +1190,7 @@ def execute_generate_manuscript(
     max_authorized_usd: float,
     idempotency_key: str,
     generate_fn=None,
+    generate_chapter_fn=None,
 ) -> dict:
     """Server-authoritative manuscript generation after explicit cost confirmation.
 
@@ -1118,6 +1202,14 @@ def execute_generate_manuscript(
         manuscript_to_chapters,
         strip_visual_instructions,
     )
+    from services.ebook_manuscript_engine import (
+        QUALITY_FAIL,
+        QUALITY_PASS,
+        apply_quality_to_workspace,
+        build_book_contract,
+        run_chapter_pipeline,
+        validate_manuscript_quality,
+    )
     from services.ebook_outline_fidelity import (
         normalize_chapter_title,
         validate_manuscript_outline_fidelity,
@@ -1125,20 +1217,6 @@ def execute_generate_manuscript(
 
     data = ensure_workspace(data)
     ws = data["ebook_workspace"]
-    assert_can_run_stage(ws, "manuscript")
-    if not (
-        is_approved(ws, "research")
-        and is_approved(ws, "title")
-        and is_approved(ws, "outline")
-    ):
-        raise ValueError("Research, title, and outline must all be approved.")
-    if stage_status(ws, "manuscript") == STATUS_NEEDS_CORRECTION and (
-        data.get("content") or data.get("ebook")
-    ):
-        raise ValueError(
-            "Manuscript already exists and needs correction — use correct_manuscript."
-        )
-
     ledger = ws.setdefault("paid_call_ledger", empty_ledger())
     idem_store = ledger.setdefault("idempotency_keys", {})
     key = str(idempotency_key or "").strip()
@@ -1153,6 +1231,19 @@ def execute_generate_manuscript(
             "result": prior.get("result") or {},
             "workspace_note": "Idempotent replay — no additional paid call.",
         }
+    assert_can_run_stage(ws, "manuscript")
+    if not (
+        is_approved(ws, "research")
+        and is_approved(ws, "title")
+        and is_approved(ws, "outline")
+    ):
+        raise ValueError("Research, title, and outline must all be approved.")
+    if stage_status(ws, "manuscript") == STATUS_NEEDS_CORRECTION and (
+        data.get("content") or data.get("ebook")
+    ):
+        raise ValueError(
+            "Manuscript already exists and needs correction — use correct_manuscript."
+        )
 
     pending = consume_confirmation(data, "generate_manuscript", confirmation_token)
 
@@ -1172,6 +1263,10 @@ def execute_generate_manuscript(
         raise ValueError("Outline changed since the estimate — request a new cost estimate.")
     if str(pending.get("outline_digest") or "") != current_od:
         raise ValueError("Confirmation token outline digest mismatch.")
+    book_contract = build_book_contract(data)
+    pending_book_digest = str(pending.get("book_contract_digest") or "")
+    if pending_book_digest and pending_book_digest != book_contract.digest():
+        raise ValueError("Book/chapter contract changed since the estimate — request a new cost estimate.")
 
     approved_outline = authoritative_approved_outline(data)
     if len(approved_outline) < 3:
@@ -1206,7 +1301,7 @@ def execute_generate_manuscript(
         }
     )
 
-    if generate_fn is None:
+    if generate_chapter_fn is None and generate_fn is None:
         from services.ebook import generate_ebook as generate_fn
 
     research_notes = build_research_notes_for_manuscript(data)
@@ -1233,17 +1328,34 @@ def execute_generate_manuscript(
         "prompt_titles": prompt_titles,
         "chapter_count": len(approved_outline),
         "research_notes_prefix": research_notes[:2000],
+        "book_contract_digest": book_contract.digest(),
+        "chapter_titles": [c.title for c in book_contract.chapters],
     }
 
-    raw = generate_fn(
-        source,
-        contract=contract,
-        author=author,
-        research_notes=research_notes,
-    )
-    if not isinstance(raw, dict):
-        raise ValueError("Manuscript generator returned an invalid payload.")
-    manuscript_md = str(raw.get("ebook") or raw.get("content") or "").strip()
+    if generate_chapter_fn is not None:
+        pipeline = run_chapter_pipeline(
+            book_contract,
+            generate_chapter_fn=generate_chapter_fn,
+        )
+        manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
+        ws["accepted_chapters"] = [
+            {"order": c.order, "title": c.title, "body": c.body}
+            for c in pipeline.get("accepted_chapters") or []
+        ]
+        ws["chapter_pipeline"] = {
+            "chapter_calls": pipeline.get("chapter_calls"),
+            "failed_orders": pipeline.get("failed_orders"),
+        }
+    else:
+        raw = generate_fn(
+            source,
+            contract=contract,
+            author=author,
+            research_notes=research_notes,
+        )
+        if not isinstance(raw, dict):
+            raise ValueError("Manuscript generator returned an invalid payload.")
+        manuscript_md = str(raw.get("ebook") or raw.get("content") or "").strip()
     if not manuscript_md:
         raise ValueError("Manuscript generator returned empty content.")
 
@@ -1256,8 +1368,10 @@ def execute_generate_manuscript(
         token_outline_digest=str(pending.get("outline_digest") or ""),
         current_outline_digest=current_od,
     )
+    quality = validate_manuscript_quality(data, manuscript_md=cleaned, book_contract=book_contract)
+    apply_quality_to_workspace(data, quality)
     structure_findings = list(fidelity.get("findings") or [])
-    defects = list(structure_findings) + list(content_defects)
+    defects = list(structure_findings) + list(content_defects) + list(quality.finding_messages)
     chapters = manuscript_to_chapters(cleaned)
 
     # Record spend for the provider call that already ran. Structurally invalid
@@ -1305,19 +1419,21 @@ def execute_generate_manuscript(
         "provider_input": provider_input,
         "provider_response_chapter_titles": list(fidelity.get("raw_h2_titles") or []),
         "structure_ok": bool(fidelity.get("ok")),
+        "quality_status": quality.status,
         "confirmation_token": str(pending.get("confirmation_token") or ""),
     }
-    if defects or not fidelity.get("ok"):
-        data["release_status"] = "FAIL"
+    quality_blocked = quality.status != QUALITY_PASS
+    if content_defects or not fidelity.get("ok") or quality_blocked:
+        data["release_status"] = "FAIL" if (not fidelity.get("ok") or quality.status == QUALITY_FAIL) else ""
         data["release_messages"] = list(defects)
-        set_stage_status(
-            ws,
-            "manuscript",
-            STATUS_NEEDS_CORRECTION,
-            note="Approved-outline fidelity FAIL — draft preserved"
-            if structure_findings
-            else "Content QA found defects",
-        )
+        note = "Approved-outline fidelity FAIL — draft preserved"
+        if not structure_findings:
+            note = (
+                "Manuscript quality FAIL — draft preserved"
+                if quality.status == QUALITY_FAIL
+                else "Manuscript quality needs correction"
+            )
+        set_stage_status(ws, "manuscript", STATUS_NEEDS_CORRECTION, note=note)
     else:
         data["release_status"] = ""
         data["release_messages"] = []
@@ -1348,6 +1464,7 @@ def execute_generate_manuscript(
         "qa_findings": defects,
         "structure_findings": structure_findings,
         "structure_ok": bool(fidelity.get("ok")),
+        "quality_status": quality.status,
         "charge_usd": charge,
         "paid_calls": ledger.get("paid_calls"),
         "spent_usd": ledger.get("spent_usd"),
@@ -1379,16 +1496,28 @@ def execute_correct_manuscript(
     max_authorized_usd: float,
     idempotency_key: str,
     correct_fn=None,
+    correct_chapter_fn=None,
 ) -> dict:
     """Correct an existing manuscript against the token-bound approved outline.
 
     Does not repeat research. Requires Needs correction + preserved draft.
-    ``correct_fn`` is injectable for tests (zero paid calls).
+    ``correct_fn`` is injectable for tests (zero paid calls). Accepted chapters
+    are preserved; only failed chapters are replaced.
     """
     from services.ebook_document import (
         find_customer_content_defects,
         manuscript_to_chapters,
         strip_visual_instructions,
+    )
+    from services.ebook_manuscript_engine import (
+        QUALITY_PASS,
+        ParsedChapter,
+        apply_quality_to_workspace,
+        assemble_manuscript,
+        build_book_contract,
+        run_chapter_pipeline,
+        split_front_chapters_back,
+        validate_manuscript_quality,
     )
     from services.ebook_outline_fidelity import (
         normalize_chapter_title,
@@ -1452,6 +1581,10 @@ def execute_correct_manuscript(
             raise ValueError("Confirmation token was issued for a different project.")
 
     approved_outline = authoritative_approved_outline(data)
+    book_contract = build_book_contract(data)
+    pending_book_digest = str(pending.get("book_contract_digest") or "")
+    if pending_book_digest and pending_book_digest != book_contract.digest():
+        raise ValueError("Book/chapter contract changed since the estimate — request a new correction estimate.")
     auth_max = round(float(max_authorized_usd), 4)
     pending_max = round(float(pending.get("max_authorized_usd") or pending.get("estimated_max_usd") or 0), 4)
     if auth_max <= 0 or abs(auth_max - pending_max) > 1e-9:
@@ -1487,22 +1620,81 @@ def execute_correct_manuscript(
             "Correction prompt outline does not match the token-bound approved outline."
         )
 
-    if correct_fn is None:
+    if correct_fn is None and correct_chapter_fn is None:
         from services.ebook import correct_ebook_manuscript as correct_fn
 
     set_stage_status(ws, "manuscript", STATUS_IN_PROGRESS, note="Correcting manuscript")
     author = str(ws.get("author") or data.get("author_brand") or "").strip()
-    raw = correct_fn(
-        existing_manuscript=existing,
-        approved_outline=approved_outline,
-        author=author,
-        research_notes=research_notes,
-        title=str(data.get("title") or ""),
-        subtitle=str(data.get("subtitle") or ""),
+    prior_quality = validate_manuscript_quality(
+        data, manuscript_md=existing, book_contract=book_contract
     )
-    if not isinstance(raw, dict):
-        raise ValueError("Correction generator returned an invalid payload.")
-    manuscript_md = str(raw.get("ebook") or raw.get("content") or "").strip()
+    failed_orders = [
+        int(r["order"])
+        for r in prior_quality.chapter_results
+        if r.get("status") != QUALITY_PASS
+    ]
+    if not prior_quality.outline_ok:
+        failed_orders = [c.order for c in book_contract.chapters]
+    _front, prior_chapters, prior_back = split_front_chapters_back(existing)
+    accepted_keep = [
+        ch for ch in prior_chapters if ch.order not in set(failed_orders)
+    ]
+
+    if correct_chapter_fn is not None:
+        pipeline = run_chapter_pipeline(
+            book_contract,
+            generate_chapter_fn=correct_chapter_fn,
+            accepted_chapters=accepted_keep,
+            repair_orders=failed_orders,
+            back_matter=prior_back,
+        )
+        manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
+        if prior_back and "**disclaimer**" not in manuscript_md.lower():
+            manuscript_md = manuscript_md.rstrip() + "\n\n" + prior_back + "\n"
+        ws["chapter_pipeline"] = {
+            "chapter_calls": pipeline.get("chapter_calls"),
+            "failed_orders": pipeline.get("failed_orders"),
+            "preserved_orders": [c.order for c in accepted_keep],
+        }
+    else:
+        raw = correct_fn(
+            existing_manuscript=existing,
+            approved_outline=approved_outline,
+            author=author,
+            research_notes=research_notes,
+            title=str(data.get("title") or ""),
+            subtitle=str(data.get("subtitle") or ""),
+        )
+        if not isinstance(raw, dict):
+            raise ValueError("Correction generator returned an invalid payload.")
+        manuscript_md = str(raw.get("ebook") or raw.get("content") or "").strip()
+        # Preserve accepted chapters when the full-book corrector returns a new book.
+        if accepted_keep and prior_quality.outline_ok:
+            _nf, new_chs, new_back = split_front_chapters_back(manuscript_md)
+            keep_by_order = {c.order: c for c in accepted_keep}
+            merged: list[ParsedChapter] = []
+            new_by_title = {normalize_chapter_title(c.title): c for c in new_chs}
+            for contract in book_contract.chapters:
+                if contract.order in keep_by_order:
+                    merged.append(keep_by_order[contract.order])
+                else:
+                    nxt = new_by_title.get(normalize_chapter_title(contract.title))
+                    if nxt is None:
+                        nxt = ParsedChapter(order=contract.order, title=contract.title, body="")
+                    nxt.order = contract.order
+                    nxt.title = contract.title
+                    merged.append(nxt)
+            manuscript_md = assemble_manuscript(
+                title=str(data.get("title") or book_contract.title),
+                subtitle=str(data.get("subtitle") or book_contract.subtitle),
+                author=author,
+                chapters=merged,
+                disclaimer="",
+                sources="",
+            )
+            back = new_back or prior_back
+            if back:
+                manuscript_md = manuscript_md.rstrip() + "\n\n" + back + "\n"
     if not manuscript_md:
         raise ValueError("Correction generator returned empty content.")
 
@@ -1515,8 +1707,10 @@ def execute_correct_manuscript(
         token_outline_digest=str(pending.get("outline_digest") or ""),
         current_outline_digest=current_od,
     )
+    quality = validate_manuscript_quality(data, manuscript_md=cleaned, book_contract=book_contract)
+    apply_quality_to_workspace(data, quality)
     structure_findings = list(fidelity.get("findings") or [])
-    defects = list(structure_findings) + list(content_defects)
+    defects = list(structure_findings) + list(content_defects) + list(quality.finding_messages)
     chapters = manuscript_to_chapters(cleaned)
 
     charge = min(auth_max, remaining)
@@ -1653,20 +1847,23 @@ def build_acceptance_project_data() -> dict[str, Any]:
     if not o1:
         raise ValueError("Approved outline O1 missing from export.")
 
-    # Force the user-approved revised 10-chapter titles. Early export O1 headings
-    # must never override the revised approval (root cause of fidelity failure).
+    # Force the user-approved revised 10-chapter titles AND catalog purposes.
+    # Never copy a previous outline slot's purpose onto a new title.
+    from services.ebook_manuscript_engine import event_photo_catalog_by_title
+    from services.ebook_outline_fidelity import normalize_chapter_title as _norm_title
+
+    catalog = event_photo_catalog_by_title()
     revised_o1_chapters = []
-    old_chs = list(o1.get("chapters") or [])
     for i, chapter_title in enumerate(REVISED_ACCEPTANCE_OUTLINE_TITLES):
-        old = old_chs[i] if i < len(old_chs) and isinstance(old_chs[i], dict) else {}
+        spec = catalog.get(_norm_title(chapter_title))
+        purpose_bullets = [spec.purpose] if spec else [
+            f"Cover the approved chapter purpose for: {chapter_title}",
+        ]
         revised_o1_chapters.append(
             {
                 "n": i + 1,
                 "title": chapter_title,
-                "bullets": list(old.get("bullets") or [])
-                or [
-                    f"Cover the approved chapter purpose for: {chapter_title}",
-                ],
+                "bullets": purpose_bullets,
             }
         )
     o1 = dict(o1)
@@ -1788,9 +1985,23 @@ def upsert_acceptance_project(database_module, *, preserve_live_manuscript: bool
     """Create or update the labeled DRAFT acceptance project in Saved Projects.
 
     ``preserve_live_manuscript`` keeps an existing paid manuscript/ledger when
-    reseeding (production). Tests may pass False for isolation.
+    reseeding (production). Tests must pass False, which creates an isolated
+    temporary project and never overwrites the live LIVE ACCEPTANCE row.
     """
     data = build_acceptance_project_data()
+
+    if not preserve_live_manuscript:
+        data["acceptance_marker"] = f"{ACCEPTANCE_MARKER}_TEST"
+        data["ebook_workspace"]["marker"] = f"{ACCEPTANCE_MARKER}_TEST"
+        return database_module.create_project(
+            f"{ACCEPTANCE_PROJECT_NAME} [TEST]",
+            "ebook",
+            data,
+            user_saved=False,
+            system_test=True,
+            temporary=True,
+        )
+
     existing = None
     for p in database_module.list_projects(include_system=True):
         pdata = p.get("data") or {}
@@ -1807,84 +2018,83 @@ def upsert_acceptance_project(database_module, *, preserve_live_manuscript: bool
         data["artifact_revision"] = prev.get("artifact_revision") or 1
         data["artifact_state"] = "DRAFT"
 
-        if preserve_live_manuscript:
-            prev_ws = get_workspace(prev) or {}
-            prev_ledger = prev_ws.get("paid_call_ledger") if isinstance(prev_ws, dict) else None
-            new_ws = data["ebook_workspace"]
-            if isinstance(prev_ledger, dict):
-                prev_spent = float(prev_ledger.get("spent_usd") or 0)
-                seed_spent = float((new_ws.get("paid_call_ledger") or {}).get("spent_usd") or 0)
-                if prev_spent > seed_spent + 1e-9:
-                    new_ws["paid_call_ledger"] = copy.deepcopy(prev_ledger)
-                else:
-                    merged = dict(new_ws.get("paid_call_ledger") or {})
-                    for k in ("idempotency_keys", "consumed_tokens", "pending_estimate"):
-                        if prev_ledger.get(k) and not merged.get(k):
-                            merged[k] = copy.deepcopy(prev_ledger.get(k))
-                    prev_calls = list(prev_ledger.get("calls") or [])
-                    seed_calls = list(merged.get("calls") or [])
-                    extra = [
-                        c
-                        for c in prev_calls
+        prev_ws = get_workspace(prev) or {}
+        prev_ledger = prev_ws.get("paid_call_ledger") if isinstance(prev_ws, dict) else None
+        new_ws = data["ebook_workspace"]
+        if isinstance(prev_ledger, dict):
+            prev_spent = float(prev_ledger.get("spent_usd") or 0)
+            seed_spent = float((new_ws.get("paid_call_ledger") or {}).get("spent_usd") or 0)
+            if prev_spent > seed_spent + 1e-9:
+                new_ws["paid_call_ledger"] = copy.deepcopy(prev_ledger)
+            else:
+                merged = dict(new_ws.get("paid_call_ledger") or {})
+                for k in ("idempotency_keys", "consumed_tokens", "pending_estimate"):
+                    if prev_ledger.get(k) and not merged.get(k):
+                        merged[k] = copy.deepcopy(prev_ledger.get(k))
+                prev_calls = list(prev_ledger.get("calls") or [])
+                seed_calls = list(merged.get("calls") or [])
+                extra = [
+                    c
+                    for c in prev_calls
+                    if isinstance(c, dict)
+                    and c.get("purpose") in {"generate_manuscript", "correct_manuscript"}
+                ]
+                if extra:
+                    known = {
+                        (c.get("ts"), c.get("purpose"), c.get("idempotency_key"))
+                        for c in seed_calls
                         if isinstance(c, dict)
-                        and c.get("purpose") in {"generate_manuscript", "correct_manuscript"}
-                    ]
-                    if extra:
-                        known = {
-                            (c.get("ts"), c.get("purpose"), c.get("idempotency_key"))
-                            for c in seed_calls
-                            if isinstance(c, dict)
-                        }
-                        for c in extra:
-                            key = (c.get("ts"), c.get("purpose"), c.get("idempotency_key"))
-                            if key not in known:
-                                seed_calls.append(c)
-                        merged["calls"] = seed_calls
-                    new_ws["paid_call_ledger"] = merged
+                    }
+                    for c in extra:
+                        key = (c.get("ts"), c.get("purpose"), c.get("idempotency_key"))
+                        if key not in known:
+                            seed_calls.append(c)
+                    merged["calls"] = seed_calls
+                new_ws["paid_call_ledger"] = merged
 
-            has_ms = bool(
-                prev.get("content")
-                or prev.get("ebook")
-                or (
-                    (prev.get("ebook_document") or {})
-                    if isinstance(prev.get("ebook_document"), dict)
-                    else {}
-                ).get("manuscript_md")
+        has_ms = bool(
+            prev.get("content")
+            or prev.get("ebook")
+            or (
+                (prev.get("ebook_document") or {})
+                if isinstance(prev.get("ebook_document"), dict)
+                else {}
+            ).get("manuscript_md")
+        )
+        if has_ms:
+            data["content"] = prev.get("content") or prev.get("ebook") or ""
+            data["ebook"] = prev.get("ebook") or prev.get("content") or ""
+            if isinstance(prev.get("ebook_document"), dict):
+                data["ebook_document"] = copy.deepcopy(prev.get("ebook_document"))
+            for k in (
+                "manuscript_qa",
+                "manuscript_structure_findings",
+                "last_manuscript_generation",
+                "last_manuscript_correction",
+                "previous_manuscript_draft",
+            ):
+                if prev_ws.get(k) is not None:
+                    new_ws[k] = copy.deepcopy(prev_ws.get(k))
+            prev_ms = (
+                (prev_ws.get("rail") or {}).get("manuscript")
+                if isinstance(prev_ws.get("rail"), dict)
+                else None
             )
-            if has_ms:
-                data["content"] = prev.get("content") or prev.get("ebook") or ""
-                data["ebook"] = prev.get("ebook") or prev.get("content") or ""
-                if isinstance(prev.get("ebook_document"), dict):
-                    data["ebook_document"] = copy.deepcopy(prev.get("ebook_document"))
-                for k in (
-                    "manuscript_qa",
-                    "manuscript_structure_findings",
-                    "last_manuscript_generation",
-                    "last_manuscript_correction",
-                    "previous_manuscript_draft",
-                ):
-                    if prev_ws.get(k) is not None:
-                        new_ws[k] = copy.deepcopy(prev_ws.get(k))
-                prev_ms = (
-                    (prev_ws.get("rail") or {}).get("manuscript")
-                    if isinstance(prev_ws.get("rail"), dict)
-                    else None
+            if isinstance(prev_ms, dict) and prev_ms.get("status") not in {
+                None,
+                STATUS_NOT_STARTED,
+            }:
+                set_stage_status(
+                    new_ws,
+                    "manuscript",
+                    str(prev_ms.get("status")),
+                    note=str(prev_ms.get("note") or "Preserved manuscript draft"),
                 )
-                if isinstance(prev_ms, dict) and prev_ms.get("status") not in {
-                    None,
-                    STATUS_NOT_STARTED,
-                }:
-                    set_stage_status(
-                        new_ws,
-                        "manuscript",
-                        str(prev_ms.get("status")),
-                        note=str(prev_ms.get("note") or "Preserved manuscript draft"),
-                    )
-                data["release_status"] = prev.get("release_status") or data.get("release_status") or ""
-                data["release_messages"] = list(prev.get("release_messages") or [])
-                _recompute_next_action(new_ws)
+            data["release_status"] = prev.get("release_status") or data.get("release_status") or ""
+            data["release_messages"] = list(prev.get("release_messages") or [])
+            _recompute_next_action(new_ws)
 
-            data["ebook_workspace"] = new_ws
+        data["ebook_workspace"] = new_ws
 
         updated = database_module.update_project(
             existing["id"],

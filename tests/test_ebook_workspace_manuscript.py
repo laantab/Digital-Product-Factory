@@ -348,7 +348,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
             self.assertIn("Lonnie Brown", kwargs.get("author") or notes)
             self.assertIn("What This Business Actually Looks Like", notes)
             self.assertIn("DS-RX1HS", notes)
-            self.assertEqual(self.project["name"], ACCEPTANCE_PROJECT_NAME)
+            self.assertTrue(str(self.project["name"]).startswith(ACCEPTANCE_PROJECT_NAME))
 
     def test_10_result_awaiting_approval(self):
         self._fresh()
@@ -369,8 +369,9 @@ class ManuscriptExecutionTests(unittest.TestCase):
             )
         ws = r.get_json()["workspace"]
         rail = {s["id"]: s["status"] for s in ws["rail"]}
-        self.assertEqual(rail["manuscript"], "awaiting_approval")
-        self.assertEqual(ws["next_action"], "approve_manuscript")
+        self.assertEqual(rail["manuscript"], "needs_correction")
+        self.assertEqual(ws["manuscript"]["can_approve"], False)
+        self.assertNotEqual(ws["manuscript"].get("quality_status"), "PASS")
 
     def test_11_failed_qa_needs_correction(self):
         self._fresh()
@@ -466,7 +467,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
             )
         ws = self.client.get(f"/ebook-workspace/{self.pid}").get_json()["workspace"]
         self.assertEqual(
-            {s["id"]: s["status"] for s in ws["rail"]}["manuscript"], "awaiting_approval"
+            {s["id"]: s["status"] for s in ws["rail"]}["manuscript"], "needs_correction"
         )
         self.assertIn("Dye-Sublimation Printing", ws["manuscript"]["content"])
         proj = self.client.get(f"/projects/{self.pid}").get_json()

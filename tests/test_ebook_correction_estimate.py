@@ -305,7 +305,11 @@ class CorrectionEstimateWiringTests(unittest.TestCase):
         )
         self.assertEqual(
             after["ebook_workspace"]["rail"]["manuscript"]["status"],
-            "needs_correction",
+            before["ebook_workspace"]["rail"]["manuscript"]["status"],
+        )
+        self.assertEqual(
+            after["ebook_workspace"]["rail"]["manuscript"]["status"],
+            "awaiting_approval",
         )
         self.assertIsNone((after["ebook_workspace"]["paid_call_ledger"] or {}).get("pending_estimate"))
 

@@ -24,6 +24,7 @@
     "tests/test_ebook_workspace_manuscript.py",
     "tests/test_ebook_outline_fidelity.py",
     "tests/test_ebook_correction_estimate.py",
+    "tests/test_ebook_manuscript_quality.py",
     "tests/test_research_to_build_handoff.py",
     "tests/test_saved_projects_reopen_build.py",
     "tests/test_choose_idea_build_handoff.py",

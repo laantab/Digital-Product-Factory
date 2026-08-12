@@ -4797,11 +4797,13 @@ function showEbookWorkspaceStage(stageId) {
     `;
   } else if (stageId === "manuscript") {
     const m = ws.manuscript || {};
-    const findings = (m.structure_findings || m.qa_findings || []).map((f) => `<li>${escapeHtml(String(f))}</li>`).join("");
+    const findings = (m.chapter_findings || []).flatMap((ch) =>
+      (ch.findings || []).map((f) => `<li><b>Ch ${escapeHtml(String(ch.order || ""))} ${escapeHtml(ch.title || "")}:</b> ${escapeHtml(String(f.code || ""))} — ${escapeHtml(String(f.message || f))}</li>`)
+    ).join("") || (m.structure_findings || m.qa_findings || []).map((f) => `<li>${escapeHtml(String(f))}</li>`).join("");
     const chapters = (m.chapters || []).map((c) =>
-      `<li class="rounded-lg border border-slate-200 bg-white p-2 text-sm"><b>Ch ${escapeHtml(String(c.order || ""))}:</b> ${escapeHtml(c.title || "")}</li>`
+      `<li class="rounded-lg border border-slate-200 bg-white p-2 text-sm"><b>Ch ${escapeHtml(String(c.order || ""))}:</b> ${escapeHtml(c.title || "")}${c.quality_status ? ` · ${escapeHtml(String(c.quality_status))}` : ""}${c.word_count != null ? ` · ${escapeHtml(String(c.word_count))} words` : ""}</li>`
     ).join("");
-    const canApprove = m.can_approve === true && m.status === "awaiting_approval";
+    const canApprove = m.can_approve === true && m.status === "awaiting_approval" && m.quality_status === "PASS";
     const needsCorrection = m.status === "needs_correction";
     const contentPreview = (m.content || "").slice(0, 4000);
     const rem = Number((m.remaining_usd != null ? m.remaining_usd : (ws.budget || {}).remaining_usd) || 0);
@@ -4818,8 +4820,13 @@ function showEbookWorkspaceStage(stageId) {
           ? `<p class="text-sm text-orange-800 mb-2">Needs correction. The generated draft is preserved for inspection. Approve is blocked while structural FAIL findings remain.</p>`
           : ""
       }
+      ${
+        m.quality_status
+          ? `<p class="text-sm mb-2 ${m.quality_status === "PASS" ? "text-emerald-800" : "text-rose-800"}">Quality: <b>${escapeHtml(m.quality_status)}</b>${m.quality_status !== "PASS" ? " — Approve Manuscript is disabled until quality is PASS." : ""}</p>`
+          : ""
+      }
       ${chapters ? `<h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Generated chapter list</h4><ol class="space-y-1 mb-3">${chapters}</ol>` : ""}
-      ${findings ? `<h4 class="text-xs font-semibold uppercase text-rose-700 mb-1">Structural / QA findings</h4><ul class="list-disc pl-5 text-sm text-rose-700 mb-3">${findings}</ul>` : ""}
+      ${findings ? `<h4 class="text-xs font-semibold uppercase text-rose-700 mb-1">Chapter-level / QA findings</h4><ul class="list-disc pl-5 text-sm text-rose-700 mb-3">${findings}</ul>` : ""}
       ${contentPreview ? `<h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Preserved draft (preview)</h4><pre class="text-xs bg-white border border-slate-200 rounded-lg p-3 whitespace-pre-wrap max-h-64 overflow-auto font-mono">${escapeHtml(contentPreview)}</pre>` : ""}
       ${
         canApprove
