@@ -1002,6 +1002,15 @@ def _load_product_project(body):
     project = database.get_project(int(project_id))
     if not project:
         raise ValueError("Project not found.")
+    # Plans / research / ads are not exportable products. Allowing export here
+    # created orphan package folders that /download then blocked (403), so the
+    # Saved Projects "Download PDF" button looked broken for "the book".
+    ptype = str(project.get("type") or "").strip().lower()
+    if ptype not in {"product", "ebook"}:
+        raise ValueError(
+            "Only saved products can be downloaded. Open this plan and build "
+            "the product in Product Factory first."
+        )
     return project
 
 
@@ -1197,23 +1206,26 @@ def enforce_disclaimer_on_project_data(project):
 @app.post("/export-product")
 def export_product_route():
     body = request.get_json(silent=True) or {}
+    # Import before try/except so early ValueError from _load_product_project
+    # does not trip UnboundLocalError on ArtifactStateError in except clauses.
+    from services.quality.artifact_identity import (
+        stamp_artifact_identity,
+        verify_artifact_identity,
+    )
+    from services.quality.artifact_state import (
+        ArtifactState,
+        ArtifactStateError,
+        assert_packaging_allowed,
+        current_revision,
+        resolve_artifact_state,
+    )
+
     try:
         project = _load_product_project(body)
         # Deterministic disclaimer enforcement: the AI model may have dropped
         # the required disclaimer; insert it before PDF/ZIP rendering so the
         # customer never gets a non-compliant export. Idempotent.
         enforce_disclaimer_on_project_data(project)
-        from services.quality.artifact_identity import (
-            stamp_artifact_identity,
-            verify_artifact_identity,
-        )
-        from services.quality.artifact_state import (
-            ArtifactState,
-            ArtifactStateError,
-            assert_packaging_allowed,
-            current_revision,
-            resolve_artifact_state,
-        )
 
         data = project.get("data") or {}
         # Pass 2 packaging policy + identity: no silent content regeneration.
@@ -1276,6 +1288,34 @@ def export_product_route():
             return jsonify(result)
         data["export_package_id"] = result["package_id"]
         data["product_exports"] = result["exports"]
+        # Ebook release gate: Export Ready / customer downloads only on PASS.
+        is_ebook = (
+            project.get("type") == "ebook"
+            or str(data.get("product_type") or "").lower() == "ebook"
+            or bool(data.get("ebook"))
+        )
+        if is_ebook:
+            release_status = str(data.get("release_status") or "").upper()
+            cert = data.get("release_certificate") if isinstance(data.get("release_certificate"), dict) else None
+            export_ready = (
+                bool(data.get("export_ready"))
+                and release_status == "PASS"
+                and bool(cert)
+                and str(cert.get("issued_by") or "") == "server"
+                and str(cert.get("status") or "").upper() == "PASS"
+            )
+            data["export_ready"] = export_ready
+            result["release_status"] = release_status
+            result["release_certificate"] = cert
+            result["export_ready"] = export_ready
+            if not export_ready:
+                # Keep package for inspection; do not advertise Export Ready.
+                if release_status == "WARNING":
+                    data["stage"] = "publishing_preview_ready"
+                else:
+                    data["stage"] = data.get("stage") or "product_generated"
+            else:
+                data["stage"] = "export_ready"
         if data.get("is_pdf") or data.get("pdf_bytes"):
             stamp_artifact_identity(data)
         _persist_product_data(project, data)
@@ -1286,6 +1326,103 @@ def export_product_route():
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("export-product failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-release-check")
+def ebook_release_check_route():
+    """Server-authoritative ebook release PASS/WARNING/FAIL (no optimistic UI)."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_document import build_ebook_document_from_project
+        from services.ebook_release_validator import (
+            issue_release_certificate,
+            release_identity_from_doc,
+            validate_ebook_release,
+        )
+        from services.quality.artifact_state import current_revision
+
+        project = None
+        if body.get("project_id") is not None:
+            project = _load_product_project(body)
+        elif isinstance(body.get("project"), dict):
+            project = body.get("project")
+            if not isinstance(project.get("data"), dict):
+                project["data"] = {}
+            project.setdefault("type", "ebook")
+        else:
+            raise ValueError("project_id or project is required for ebook-release-check.")
+
+        data = dict(project.get("data") or {})
+        is_ebook = (
+            project.get("type") == "ebook"
+            or str(data.get("product_type") or "").lower() == "ebook"
+            or bool(data.get("ebook") or data.get("content"))
+        )
+        if not is_ebook:
+            raise ValueError("ebook-release-check is only for ebook projects.")
+
+        # Optional draft field overlay from the Builder (not persisted unless asked).
+        overlay = body.get("draft") if isinstance(body.get("draft"), dict) else {}
+        if overlay:
+            for key in (
+                "title",
+                "subtitle",
+                "content",
+                "ebook",
+                "outline",
+                "design_theme",
+                "cover_design",
+                "research_notes",
+                "fields",
+                "visual_plan",
+                "author_brand",
+            ):
+                if key in overlay:
+                    data[key] = overlay[key]
+            if overlay.get("content") is not None and not overlay.get("ebook"):
+                data["ebook"] = overlay.get("content")
+            project = {**project, "data": data}
+
+        doc = build_ebook_document_from_project(project, data)
+        identity = release_identity_from_doc(
+            doc,
+            project_id=project.get("id"),
+            artifact_id=str(
+                data.get("artifact_id")
+                or data.get("package_id")
+                or doc.identity.artifact_id
+                or ""
+            ),
+            revision=current_revision(data),
+        )
+        release = validate_ebook_release(doc)
+        cert = issue_release_certificate(release, identity)
+
+        # Persist server certificate on saved projects only (metadata; no manuscript rewrite).
+        if project.get("id") is not None and not overlay:
+            data["release_status"] = cert["status"]
+            data["release_certificate"] = cert
+            data["release_report"] = release.to_dict()
+            data["export_ready"] = bool(cert["export_ready"] and cert["status"] == "PASS")
+            data["ebook_manuscript_digest"] = identity["ebook_manuscript_digest"]
+            data["ebook_asset_manifest_digest"] = identity["ebook_asset_manifest_digest"]
+            _persist_product_data(project, data)
+
+        return jsonify(
+            {
+                "release_status": cert["status"],
+                "export_ready": cert["export_ready"],
+                "release_certificate": cert,
+                "blocking": cert.get("blocking") or [],
+                "issues": cert.get("issues") or [],
+                "identity": identity,
+            }
+        )
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook-release-check failed")
         return _error(str(exc), 500)
 
 

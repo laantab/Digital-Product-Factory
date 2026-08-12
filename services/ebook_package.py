@@ -452,12 +452,8 @@ def _coerce_plan(raw: dict, chapter_titles: list[str], title: str) -> dict:
             else:
                 seen_aid_titles[t] = 1
 
-        # Only add fallbacks if the AI provided fewer than 2 meaningful aids.
-        if len(meaningful_aids) < _MIN_AIDS_PER_CHAPTER:
-            meaningful_aids.extend(
-                _fallback_aids(chapter_name, _MIN_AIDS_PER_CHAPTER - len(meaningful_aids))
-            )
-
+        # Only keep meaningful AI-provided aids. Do not invent generic
+        # Key insight / Chapter action steps / Chapter at a glance fillers.
         for ai, aid in enumerate(meaningful_aids):
             aid["visual_id"] = f"v{i}_{ai}"
             aid["needs_image"] = aid["type"] in _IMAGE_GEN_TYPES
@@ -1195,11 +1191,17 @@ def _doc(
     body: str,
     cover_img: str = "",
     cover_design: dict | None = None,
+    design_theme: str = "studio_clean",
 ) -> str:
     cover_sub = f'<p class="sub">{_e(subtitle)}</p>' if subtitle else ""
     badge_char = (re.sub(r"\s", "", title)[:1] or "E").upper()
     if cover_design and cover_design.get("preview_html"):
-        cover_section = cover_design["preview_html"]
+        cover_section = re.sub(
+            r"letter-spacing\s*:\s*[^;\"'}]+;?",
+            "",
+            str(cover_design["preview_html"]),
+            flags=re.I,
+        )
     else:
         cover_section = (
             '<section class="sheet cover">'
@@ -1213,10 +1215,18 @@ def _doc(
             "</div>"
             "</section>"
         )
+    try:
+        from services.ebook_design_system import theme_css
+
+        theme_fragment = theme_css(design_theme or "studio_clean")
+    except Exception:
+        theme_fragment = ""
+    # Defense: never ship letter-spacing into ebook preview/PDF CSS.
+    css = re.sub(r"letter-spacing\s*:\s*[^;\"'}]+;?", "", _CSS + theme_fragment, flags=re.I)
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        f"<title>{_e(title)}</title><style>{_CSS}</style></head><body>"
+        f"<title>{_e(title)}</title><style>{css}</style></head><body>"
         '<div class="book">'
         f"{cover_section}"
         f"{body}"
@@ -1535,13 +1545,19 @@ def render_preview_html(
                 f'<section class="sheet chapter">{interleave_aids_in_html(_md_to_html(content_md), aids, package_id)}</section>'
             )
 
-    # Append deterministic back matter (Quick Reference + FAQ + Action Worksheet)
-    from services.back_matter import build_back_matter_html
+    # Back matter is optional and must come from the manuscript/outline itself.
+    # Never auto-inject generic FAQ / Quick Reference / Action Worksheet pools.
 
-    body.append(build_back_matter_html(title, topic, package_id))
-
+    theme_id = "studio_clean"
+    if isinstance(cover_design, dict) and cover_design.get("design_theme"):
+        theme_id = str(cover_design.get("design_theme") or theme_id)
     return _doc(
-        title, subtitle, "".join(body), _cover_img_html(package_id), cover_design=cover_design
+        title,
+        subtitle,
+        "".join(body),
+        _cover_img_html(package_id),
+        cover_design=cover_design,
+        design_theme=theme_id,
     )
 
 
@@ -1590,6 +1606,146 @@ _IMAGE_MODEL = "gpt-image-2"
 # Used by pdf_builder quality gate to surface real errors.
 _last_image_error: str = ""
 
+# Paid image generation requires an explicit user-approved generation action.
+# Save / Export / QA rechecks / diagnostic probes / missing-file probes must
+# never reach the OpenAI Images API without this authorization context.
+_paid_image_auth_depth: int = 0
+_paid_image_auth_reason: str = ""
+
+# Package-level hard cap on images.generate attempts (failures count).
+# Used for Thunder Volt full-book interiors: exactly 24 attempts, quality=medium.
+_package_image_budgets: dict[str, dict] = {}
+_active_image_budget_package: str = ""
+
+
+class PaidImageNotAuthorized(RuntimeError):
+    """Raised when image generation is attempted without user-approved stage auth."""
+
+
+class PaidImageBudgetExceeded(RuntimeError):
+    """Raised when a package has exhausted its authorized images.generate attempts."""
+
+
+def paid_image_generation_authorized() -> bool:
+    return _paid_image_auth_depth > 0
+
+
+class _PaidImageAuthToken:
+    def __init__(self, reason: str):
+        self.reason = str(reason or "user_approved_generation")
+
+    def __enter__(self):
+        global _paid_image_auth_depth, _paid_image_auth_reason
+        _paid_image_auth_depth += 1
+        _paid_image_auth_reason = self.reason
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        global _paid_image_auth_depth, _paid_image_auth_reason
+        _paid_image_auth_depth = max(0, _paid_image_auth_depth - 1)
+        if _paid_image_auth_depth == 0:
+            _paid_image_auth_reason = ""
+        return False
+
+
+def authorize_paid_image_generation(reason: str = "user_approved_generation") -> _PaidImageAuthToken:
+    """Context manager enabling paid image API calls for an approved generation stage."""
+    return _PaidImageAuthToken(reason)
+
+
+class _PackageImageBudgetToken:
+    """Hard-cap images.generate attempts for one package (failures count)."""
+
+    def __init__(self, package_id: str, *, max_attempts: int = 24, quality: str = "medium"):
+        pkg = str(package_id or "").strip()
+        if not pkg:
+            raise ValueError("package_id is required for an image budget")
+        q = str(quality or "").strip().lower()
+        if q != "medium":
+            raise ValueError(
+                f"Package image budget quality must be 'medium' (got {quality!r}). "
+                "auto/high are not permitted for authorized interior generation."
+            )
+        if int(max_attempts) < 1:
+            raise ValueError("max_attempts must be >= 1")
+        self.package_id = pkg
+        self.max_attempts = int(max_attempts)
+        self.quality = q
+        self._prior_active = ""
+
+    def __enter__(self):
+        global _active_image_budget_package
+        self._prior_active = _active_image_budget_package
+        # Fresh budget for this authorization window (do not carry prior attempts).
+        _package_image_budgets[self.package_id] = {
+            "max_attempts": self.max_attempts,
+            "attempts": 0,
+            "quality": self.quality,
+        }
+        _active_image_budget_package = self.package_id
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        global _active_image_budget_package
+        _active_image_budget_package = self._prior_active
+        return False
+
+
+def authorize_package_image_budget(
+    package_id: str,
+    *,
+    max_attempts: int = 24,
+    quality: str = "medium",
+) -> _PackageImageBudgetToken:
+    """Authorize a hard package-level images.generate attempt budget."""
+    return _PackageImageBudgetToken(
+        package_id, max_attempts=max_attempts, quality=quality
+    )
+
+
+def get_package_image_budget(package_id: str = "") -> dict:
+    """Return budget snapshot for a package (or the active budget)."""
+    pkg = str(package_id or _active_image_budget_package or "").strip()
+    if not pkg:
+        return {}
+    data = _package_image_budgets.get(pkg) or {}
+    return {
+        "package_id": pkg,
+        "max_attempts": int(data.get("max_attempts") or 0),
+        "attempts": int(data.get("attempts") or 0),
+        "quality": str(data.get("quality") or ""),
+        "remaining": max(
+            0, int(data.get("max_attempts") or 0) - int(data.get("attempts") or 0)
+        ),
+    }
+
+
+def reset_package_image_budgets() -> None:
+    """Test helper — clear all package image budgets."""
+    global _active_image_budget_package
+    _package_image_budgets.clear()
+    _active_image_budget_package = ""
+
+
+def _consume_package_image_attempt(package_id: str = "") -> None:
+    """Increment attempt counter before an API call. Raises if budget exhausted."""
+    global _last_image_error
+    pkg = str(package_id or _active_image_budget_package or "").strip()
+    if not pkg:
+        return
+    data = _package_image_budgets.get(pkg)
+    if not data:
+        return
+    used = int(data.get("attempts") or 0)
+    max_attempts = int(data.get("max_attempts") or 0)
+    if used >= max_attempts:
+        _last_image_error = (
+            f"Paid image budget exceeded for package {pkg}: "
+            f"{used}/{max_attempts} images.generate attempts used."
+        )
+        raise PaidImageBudgetExceeded(_last_image_error)
+    data["attempts"] = used + 1
+
 
 def get_last_image_error() -> str:
     return _last_image_error
@@ -1603,110 +1759,113 @@ def generate_visual_image(
     negative_prompt: str = "",
     max_prompt_chars: int = 1000,
     reference_image_path: str = "",
+    user_authorized: bool = False,
+    quality: str | None = None,
+    package_id: str = "",
+    allow_edit: bool = False,
+    allow_retries: bool = False,
 ) -> bool:
     """Generate one image and save it as a PNG. Returns True on success.
 
     If out_path already exists (pre-generated image), returns True immediately
     without calling the AI — allows external image sources to inject images.
 
+    Paid API calls require either ``user_authorized=True`` or an active
+    ``authorize_paid_image_generation(...)`` context from a user-approved
+    Factory generation stage (cover / sample / full). QA, Save, Export, and
+    ad-hoc diagnostic probes must not call the API.
+
+    Cost controls (Thunder Volt full-book interiors):
+      - When a package budget is active, ``quality`` is forced to ``medium``
+        (never ``auto`` / ``high``).
+      - Each ``images.generate`` attempt increments the package counter even on
+        failure / empty response; the counter hard-stops at the authorized max.
+      - ``images.edit``, alternate-size fallbacks, and automatic retries are
+        disabled (``allow_edit`` / ``allow_retries`` default False).
+
     Args:
         prompt: The positive image generation prompt.
         out_path: Where to save the output PNG.
         size: Image dimensions (e.g. "1024x1024", "1024x1536").
-        negative_prompt: What the model should avoid generating. Passed as the
-            "negative_prompt" kwarg if the model endpoint supports it; silently
-            ignored if the provider rejects it.
-        max_prompt_chars: Max prompt length sent to the image API. Ebook visuals
-            default to 1000; coloring books should pass a higher limit so scene
-            + character bible are not truncated.
-        reference_image_path: Optional reference image. Best-effort: if the
-            provider supports images.edit with an input image, it is tried first;
-            otherwise falls back to prompt-only images.generate. gpt-image
-            generate does not accept character-reference conditioning.
+        negative_prompt: Ignored for API kwargs (kept for call-site compatibility).
+            Negatives stay in the positive prompt text when the builder embeds them.
+        max_prompt_chars: Max prompt length sent to the image API.
+        reference_image_path: Ignored unless ``allow_edit=True`` (disabled by default).
+        user_authorized: Explicit per-call authorization (preferred for stages).
+        quality: Image quality tier. Budgeted interiors must use ``medium``.
+        package_id: Package whose attempt budget to consume (defaults to active).
+        allow_edit: If True, permits images.edit (default False — never for budgeted runs).
+        allow_retries: If True, permits alternate-size / second-call retries (default False).
     """
+    global _last_image_error
+    # negative_prompt is intentionally not sent to the API — embedding negatives in
+    # the positive prompt avoids unsupported-kwarg TypeErrors that previously
+    # triggered a second images.generate retry.
+    _ = negative_prompt
+    _ = allow_retries  # reserved; automatic retries are never performed
+    _ = allow_edit  # images.edit is disabled; reference_image_path is ignored
+    _ = reference_image_path
     prompt = (prompt or "").strip()
     if not prompt:
         return False
     # If a pre-generated image already exists, use it directly.
     if os.path.isfile(out_path):
         return True
-    global _last_image_error
+    if not (user_authorized or paid_image_generation_authorized()):
+        _last_image_error = (
+            "Paid image generation blocked: requires explicit user-approved "
+            "generation action (cover/sample/full). QA, Save, Export, and "
+            "diagnostic probes cannot call the image API."
+        )
+        raise PaidImageNotAuthorized(_last_image_error)
+
+    pkg = str(package_id or _active_image_budget_package or "").strip()
+    budget = _package_image_budgets.get(pkg) if pkg else None
+    q = str(quality or "").strip().lower()
+    if budget:
+        # Authorized interior budget: force medium; never auto/high.
+        q = "medium"
+        if str(quality or "").strip().lower() in {"auto", "high"}:
+            _last_image_error = (
+                f"Budgeted interiors require quality='medium' (got {quality!r})."
+            )
+            raise ValueError(_last_image_error)
+    elif q in {"", "auto"}:
+        # Non-budgeted callers: omit quality kwarg (do not send auto/high).
+        q = ""
+    elif q == "high":
+        _last_image_error = (
+            "quality='high' is not permitted for Factory image generation "
+            "without a separate explicit authorization."
+        )
+        raise ValueError(_last_image_error)
+
     _last_image_error = ""
     limit = max(256, int(max_prompt_chars or 1000))
     prompt_send = prompt[:limit]
 
-    # Best-effort image-to-image when a reference exists (not guaranteed).
-    ref = str(reference_image_path or "").strip()
-    if ref and os.path.isfile(ref):
-        try:
-            client = get_client()
-            with open(ref, "rb") as fh:
-                resp = client.images.edit(
-                    model=_IMAGE_MODEL,
-                    image=fh,
-                    prompt=prompt_send,
-                    size=size,
-                    n=1,
-                )
-            b64 = getattr(resp.data[0], "b64_json", None)
-            if b64:
-                os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-                with open(out_path, "wb") as out_fh:
-                    out_fh.write(base64.b64decode(b64))
-                return True
-        except Exception as exc:  # noqa: BLE001 — fall through to generate
-            _last_image_error = f"reference_edit_fallback: {type(exc).__name__}: {str(exc)[:160]}"
+    # Consume budget BEFORE the network call so failures / empty payloads count.
+    if budget is not None:
+        _consume_package_image_attempt(pkg)
 
     try:
         client = get_client()
-        kwargs = dict(model=_IMAGE_MODEL, prompt=prompt_send, size=size, n=1)
-        if negative_prompt:
-            kwargs["negative_prompt"] = negative_prompt[:500]
+        kwargs: dict = dict(model=_IMAGE_MODEL, prompt=prompt_send, size=size, n=1)
+        if q:
+            kwargs["quality"] = q
         resp = client.images.generate(**kwargs)
         b64 = getattr(resp.data[0], "b64_json", None)
         if not b64:
             _last_image_error = "Image generation returned no image data."
             return False
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
         with open(out_path, "wb") as fh:
             fh.write(base64.b64decode(b64))
         return True
-    except TypeError as exc:
-        # negative_prompt not supported by this provider — retry without it
-        if "negative_prompt" in str(exc) and negative_prompt:
-            _last_image_error = ""
-            try:
-                client = get_client()
-                resp = client.images.generate(
-                    model=_IMAGE_MODEL, prompt=prompt_send, size=size, n=1
-                )
-                b64 = getattr(resp.data[0], "b64_json", None)
-                if not b64:
-                    _last_image_error = "Image generation returned no image data."
-                    return False
-                os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                with open(out_path, "wb") as fh:
-                    fh.write(base64.b64decode(b64))
-                return True
-            except Exception as exc2:  # noqa: BLE001
-                _last_image_error = f"{type(exc2).__name__}: {str(exc2)[:200]}"
-                if size != "1024x1024":
-                    return generate_visual_image(
-                        prompt, out_path, size="1024x1024",
-                        max_prompt_chars=max_prompt_chars,
-                        reference_image_path="",
-                    )
-                return False
+    except PaidImageBudgetExceeded:
+        raise
+    except Exception as exc:  # noqa: BLE001 — no alternate-size / edit / second-call retries
         _last_image_error = f"{type(exc).__name__}: {str(exc)[:200]}"
-        return False
-    except Exception as exc:  # noqa: BLE001 -- graceful fallback (returns False, no silent placeholder)
-        _last_image_error = f"{type(exc).__name__}: {str(exc)[:200]}"
-        if size != "1024x1024":
-            return generate_visual_image(
-                prompt, out_path, size="1024x1024",
-                max_prompt_chars=max_prompt_chars,
-                reference_image_path="",
-            )
         return False
 
 
@@ -1752,7 +1911,7 @@ def _PACKAGE_ID_OK(package_id: str) -> bool:
 
 
 def _VISUAL_ID_OK(visual_id: str) -> bool:
-    return bool(_VISUAL_ID_RE.match(filename or ""))
+    return bool(_VISUAL_ID_RE.match(visual_id or ""))
 
 
 def is_allowed_download(filename: str) -> bool:
@@ -1877,6 +2036,9 @@ def build_ebook_package(title: str, content_md: str, fields: dict) -> dict:
         topic=(fields.get("topic") or ""),
     )
     preview_html = apply_cover_to_preview(preview_html, cover_design)
+    preview_html = re.sub(
+        r"letter-spacing\s*:\s*[^;\"'}]+;?", "", preview_html, flags=re.I
+    )
     txt_doc = render_txt(title, subtitle, content_md, chapters)
     visual_json = json.dumps(
         {

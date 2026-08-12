@@ -207,6 +207,66 @@ def run_ebook_quality_pipeline(
     if require_cover and not cover_ok:
         blocking.append("Finish the cover (Edit Cover) before final export.")
 
+    # 6. Ebook release validator (Stabilized) — does not mutate manuscript here.
+    try:
+        from services.ebook_document import build_ebook_document_from_project
+        from services.ebook_release_validator import validate_ebook_release
+
+        project_like = {
+            "data": {
+                **data,
+                "content": manuscript,
+                "ebook": manuscript,
+                "fields": fields,
+                "visual_plan": visual_plan,
+                "cover_design": cover_design,
+                "title": title,
+            }
+        }
+        doc = build_ebook_document_from_project(project_like)
+        # Prefer Stabilized identity fields for preview/export match when present.
+        identity = {
+            "artifact_id": str(data.get("artifact_id") or data.get("package_id") or ""),
+            "revision": data.get("artifact_revision") or data.get("revision") or 1,
+            "content_digest": str(data.get("content_digest") or doc.identity.content_digest),
+            "asset_manifest_digest": str(
+                data.get("asset_manifest_digest") or doc.identity.asset_manifest_digest
+            ),
+            "cover_reference": str(
+                data.get("cover_reference") or doc.identity.cover_reference or ""
+            ),
+            "design_theme_version": str(
+                data.get("design_theme_version") or doc.identity.design_theme_version
+            ),
+        }
+        release = validate_ebook_release(
+            doc,
+            # Identity fields only — do not require PDF/ZIP at pre-export gate.
+            preview_identity=None,
+            export_identity=None,
+        )
+        release_ok = release.status != "FAIL"
+        steps.append(
+            PipelineStepResult(
+                step="ebook_release",
+                passed=release_ok,
+                score=100.0 if release.status == "PASS" else (70.0 if release.status == "WARNING" else 20.0),
+                messages=release.blocking[:8] or [f"Release status: {release.status}"],
+                details=release.to_dict(),
+            )
+        )
+        if not release_ok:
+            blocking.extend(release.blocking[:6] or ["Ebook release validator FAILED."])
+    except Exception as exc:
+        steps.append(
+            PipelineStepResult(
+                step="ebook_release",
+                passed=False,
+                messages=[f"Release validator error: {exc}"],
+            )
+        )
+        blocking.append(f"Ebook release validator error: {exc}")
+
     # Overall score (weighted)
     weights = []
     scores = []

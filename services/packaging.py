@@ -342,6 +342,71 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
         fields = dict(data.get("fields") or {})
         if data.get("author_brand") and not fields.get("author_brand"):
             fields["author_brand"] = data.get("author_brand")
+
+        # Ebook release gate — validate only; packaging must not rewrite manuscript.
+        from services.ebook_document import build_ebook_document_from_project
+        from services.ebook_release_validator import (
+            issue_release_certificate,
+            release_identity_from_doc,
+            validate_ebook_release,
+            verify_release_certificate,
+        )
+        from services.quality.artifact_state import current_revision
+
+        doc = build_ebook_document_from_project(project, data)
+        identity = release_identity_from_doc(
+            doc,
+            project_id=project.get("id"),
+            artifact_id=str(
+                data.get("artifact_id")
+                or data.get("package_id")
+                or doc.identity.artifact_id
+                or ""
+            ),
+            revision=current_revision(data),
+        )
+        # Reject client-forged / stale PASS before rebuilding artifacts.
+        prior_cert = data.get("release_certificate")
+        if (
+            str(data.get("release_status") or "").upper() == "PASS"
+            or data.get("export_ready") is True
+        ):
+            ok, reason = verify_release_certificate(
+                prior_cert if isinstance(prior_cert, dict) else None,
+                identity,
+                require_pass=True,
+            )
+            if not ok:
+                data["release_status"] = "FAIL"
+                data["export_ready"] = False
+                data["release_certificate"] = None
+                project["data"] = data
+                raise ValueError(f"Ebook release blocked (stale/forged PASS): {reason}")
+
+        release = validate_ebook_release(doc)
+        cert = issue_release_certificate(release, identity)
+        data["release_status"] = cert["status"]
+        data["release_report"] = release.to_dict()
+        data["release_certificate"] = cert
+        data["export_ready"] = bool(cert["export_ready"] and cert["status"] == "PASS")
+        data["ebook_workflow_stage"] = doc.workflow_stage or data.get("ebook_workflow_stage")
+        # Metadata only — packaging must not rewrite manuscript/content digests.
+        data["ebook_document"] = doc.to_dict()
+        data["ebook_manuscript_digest"] = doc.identity.content_digest
+        data["ebook_asset_manifest_digest"] = doc.identity.asset_manifest_digest
+        project["data"] = data
+        if release.status == "FAIL":
+            data["quality_blocking"] = True
+            data["export_ready"] = False
+            project["data"] = data
+            raise ValueError(
+                "Ebook release validator blocked export: " + "; ".join(release.blocking[:8])
+            )
+        if release.status == "WARNING":
+            # Human review required — never Export Ready; allow DRAFT package build
+            # for inspection but UI download remains gated on PASS.
+            data["export_ready"] = False
+
         pipeline = run_ebook_quality_pipeline(
             title=(data.get("title") or project.get("name") or "Ebook"),
             manuscript=manuscript,
@@ -356,11 +421,29 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
             ),
         )
         data["pipeline"] = pipeline.to_dict()
-        project["data"] = data
+        # Keep the UI banner / reopen gate aligned with the live pipeline result
+        # so a stale quality_blocking flag cannot outlive a successful re-check.
+        data["quality_blocking"] = bool(pipeline.blocking)
         if pipeline.blocking:
+            from services.ebook_release_validator import EbookReleaseReport, ReleaseIssue
+
+            fail_report = EbookReleaseReport(
+                status="FAIL",
+                export_ready=False,
+                issues=[
+                    ReleaseIssue("pipeline_blocking", "fail", msg)
+                    for msg in (pipeline.blocking or ["Ebook quality pipeline blocked export."])
+                ],
+            )
+            data["release_status"] = "FAIL"
+            data["export_ready"] = False
+            data["release_certificate"] = issue_release_certificate(fail_report, identity)
+            data["release_report"] = fail_report.to_dict()
+            project["data"] = data
             raise ValueError(
                 "Ebook quality pipeline blocked export: " + "; ".join(pipeline.blocking)
             )
+        project["data"] = data
 
     if data.get("product_type") == "word_search" and data.get("is_pdf"):
         from services.product import normalize_word_search_project_data, rebuild_word_search_pdf_from_data

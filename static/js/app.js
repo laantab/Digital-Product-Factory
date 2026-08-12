@@ -805,9 +805,17 @@ function projectStage(p) {
     case "product_plan": derived = "product_plan_saved"; break;
     case "publishing_layout": derived = "publishing_preview_ready"; break;
     case "product":
-    case "ebook":
-      derived = (d.export_package_id || d.product_exports) ? "export_ready" : "product_generated";
+    case "ebook": {
+      const releaseFail = String(d.release_status || "").toUpperCase() === "FAIL";
+      const releaseWarn = String(d.release_status || "").toUpperCase() === "WARNING";
+      const ebookLike = p.type === "ebook" || String(d.product_type || "").toLowerCase() === "ebook";
+      if (ebookLike && (releaseFail || d.export_ready === false || String(d.release_status || "").toUpperCase() === "WARNING")) {
+        derived = releaseWarn ? "publishing_preview_ready" : "product_generated";
+      } else {
+        derived = (d.export_package_id || d.product_exports) ? "export_ready" : "product_generated";
+      }
       break;
+    }
     default: derived = null;
   }
   if (derived == null) return stored; // research / ad / youtube_resource: no workflow stage
@@ -946,8 +954,23 @@ function projectRow(p, opts) {
     ? `<span class="hidden xl:inline text-xs text-slate-500 max-w-[14rem] leading-snug" data-draft-revision-note>Approved version preserved; editing continues in a new draft.</span>`
     : "";
 
+  // Download / Launch only apply to finished products. Showing them on
+  // product_plan / research rows called /export-product, wrote orphan packages,
+  // then /download returned 403 — the classic "Download doesn't work" UX.
+  const canDownloadProduct =
+    p.type === "product" || p.type === "ebook";
+  const dlPdfBtn = canDownloadProduct
+    ? `<button class="rounded-lg ${isDash ? "bg-slate-100 hover:bg-slate-200 text-slate-600" : "bg-emerald-600 hover:bg-emerald-700 text-white"} text-xs font-semibold px-3 py-1.5" data-dl-pdf>${isDash ? "PDF" : "Download PDF"}</button>`
+    : "";
+  const dlZipBtn = canDownloadProduct && !isDash
+    ? `<button class="rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-1.5" data-dl-zip>Download ZIP</button>`
+    : "";
+  const launchBtn = canDownloadProduct && !isDash
+    ? `<button class="rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5" data-launch>Launch Package</button>`
+    : "";
+
   if (isDash) {
-    // Clean dashboard view: title + type + date + single Open button
+    // Clean dashboard view: title + type + date + Open (+ PDF when downloadable)
     row.innerHTML = `
       <div class="min-w-0 flex items-center gap-3 flex-1">
         ${typePill}
@@ -956,7 +979,7 @@ function projectRow(p, opts) {
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <button class="rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-1.5" data-open>Open</button>
-        <button class="rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium px-3 py-1.5" data-dl-pdf>PDF</button>
+        ${dlPdfBtn}
       </div>`;
   } else {
     // Full Saved Projects view
@@ -970,9 +993,9 @@ function projectRow(p, opts) {
         ${draftRevisionNote}
       </div>
       <div class="flex items-center gap-2 shrink-0">
-        <button class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5" data-dl-pdf>Download PDF</button>
-        <button class="rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-1.5" data-dl-zip>Download ZIP</button>
-        <button class="rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5" data-launch>Launch Package</button>
+        ${dlPdfBtn}
+        ${dlZipBtn}
+        ${launchBtn}
         ${nextLabel ? `<button class="rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-1.5" data-next>${escapeHtml(nextLabel)}</button>` : ""}
         ${draftRevisionBtn}
         <button class="text-sm font-medium text-brand-600 hover:text-brand-800" data-open>Open</button>
@@ -982,9 +1005,7 @@ function projectRow(p, opts) {
   // Direct download buttons: call /export-product and triggerDownload. Lazy:
   // only fetch when clicked. For projects that haven't been exported yet, the
   // first click builds the package; subsequent clicks reuse the cached
-  // product_exports on the data. Both buttons are visible for any saved
-  // project; if a particular file type isn't available, the click handler
-  // toasts a clear message instead of failing silently.
+  // product_exports on the data. Buttons render only for product/ebook rows.
   const dlPdf = row.querySelector("[data-dl-pdf]");
   const dlZip = row.querySelector("[data-dl-zip]");
   async function fetchAndDownload(fileKey, kindLabel) {
@@ -1001,7 +1022,7 @@ function projectRow(p, opts) {
       }
       const f = ex && ex[fileKey];
       if (f && f.url) {
-        triggerDownload(f.url, f.name || (p.name + "." + fileKey));
+        await triggerDownload(f.url, f.name || (p.name + "." + fileKey));
         toast(kindLabel + " download started.");
       } else {
         toast(kindLabel + " is not available for this project yet. Open the project to build it.", "error");
@@ -2533,7 +2554,7 @@ function renderProduct(d) {
         }
         const f = ex && ex.pdf;
         if (f && f.url) {
-          triggerDownload(f.url, f.name || ((d.title || "product") + ".pdf"));
+          await triggerDownload(f.url, f.name || ((d.title || "product") + ".pdf"));
           toast("Your PDF is downloading.");
         } else {
           toast("PDF is not available for this product yet.", "error");
@@ -2550,6 +2571,29 @@ function renderProduct(d) {
   // Save Project + all post-generation actions and stays as the LAST child so the
   // ebook enhancement section inserts above it.
   out.appendChild(nextStepsPanel(d));
+
+  // Honest QA banner for ebooks that are not export-ready — Download PDF will
+  // fail until content / cover issues are fixed (do not pretend it works).
+  if (d.product_type === "ebook") {
+    const blocked =
+      d.quality_blocking ||
+      (d.pipeline && Array.isArray(d.pipeline.blocking) && d.pipeline.blocking.length);
+    if (blocked) {
+      const reasons = (d.pipeline && d.pipeline.blocking) || [
+        "Content quality checks must pass before PDF download.",
+      ];
+      const banner = document.createElement("div");
+      banner.className =
+        "mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900";
+      banner.innerHTML =
+        `<p class="font-semibold">PDF download is blocked until quality checks pass</p>` +
+        `<ul class="mt-2 list-disc pl-5 space-y-1">${reasons
+          .map((r) => `<li>${escapeHtml(String(r))}</li>`)
+          .join("")}</ul>` +
+        `<p class="mt-2 text-amber-800">Revise the manuscript (remove marketing claims like “guaranteed”), finish the cover, then try Download PDF again.</p>`;
+      out.insertBefore(banner, out.lastElementChild);
+    }
+  }
 
   // ── Edit Cover (crossword / word search / coloring / ebook) ─────────────
   if (
@@ -3090,7 +3134,7 @@ function nextStepsPanel(d) {
         const ex = await ensureExports();
         const f = ex && ex.pdf;
         if (f && f.url) {
-          triggerDownload(f.url, f.name || (name + ".pdf"));
+          await triggerDownload(f.url, f.name || (name + ".pdf"));
           showMsg("PDF download started.");
         } else {
           showMsg("PDF is not available for this project yet. Try again or refresh.");
@@ -3108,7 +3152,7 @@ function nextStepsPanel(d) {
         const ex = await ensureExports();
         const f = ex && ex.zip;
         if (f && f.url) {
-          triggerDownload(f.url, f.name || (name + ".zip"));
+          await triggerDownload(f.url, f.name || (name + ".zip"));
           showMsg("ZIP download started.");
         } else {
           showMsg("ZIP is not available for this project yet. Try again or refresh.");
@@ -3943,7 +3987,7 @@ async function renderEbook(d) {
         }
         const f = ex && ex.pdf;
         if (f && f.url) {
-          triggerDownload(f.url, f.name || ((d.title || "ebook") + ".pdf"));
+          await triggerDownload(f.url, f.name || ((d.title || "ebook") + ".pdf"));
           toast("Your PDF is downloading.");
         } else {
           toast("PDF is not available for this project yet.", "error");
@@ -4035,11 +4079,11 @@ async function autoSaveEbookForWorkflow(d, saveBarEl) {
       const pdfF = files.pdf;
       const zipF = files.zip;
       if (pdfF && pdfF.url) {
-        triggerDownload(pdfF.url, pdfF.name || (name + ".pdf"));
+        await triggerDownload(pdfF.url, pdfF.name || (name + ".pdf"));
         toast("Your PDF is downloading. Find it in your browser's downloads.");
         firedDownload = true;
       } else if (zipF && zipF.url) {
-        triggerDownload(zipF.url, zipF.name || (name + ".zip"));
+        await triggerDownload(zipF.url, zipF.name || (name + ".zip"));
         toast("Your ZIP package is downloading. PDF wasn't available but the ZIP has the full content.");
         firedDownload = true;
       }
@@ -4068,10 +4112,195 @@ function ebookSaveBar(d) {
   const wrap = document.createElement("div");
   wrap.className = "mt-4 space-y-4";
 
+  // Connected Ebook Builder workflow (Stabilized recovery) — visible controls.
+  const workflow = document.createElement("div");
+  workflow.className = "rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3";
+  const stage = d.ebook_workflow_stage || "manuscript";
+  const release = String(d.release_status || "—");
+  const researchNotes = (d.research_notes || (d.fields && d.fields.research_notes) || d.pending_research || "").toString();
+  const outline = Array.isArray(d.outline)
+    ? d.outline
+    : ((d.ebook_document && d.ebook_document.outline) || []);
+  const visualPlan = d.visual_plan || {};
+  const visualChapters = (visualPlan.chapters || []).length;
+  const coverOk = !!(d.cover_design && (d.cover_design.local_generated || d.cover_design.image_path || d.cover_design.local_cover_pdf));
+  workflow.innerHTML = `
+    <h4 class="text-sm font-bold text-slate-900">Ebook Builder Workflow</h4>
+    <p class="text-xs text-slate-500">Stage: <b>${escapeHtml(stage)}</b> · Release: <b data-ebook-release>${escapeHtml(release)}</b> · Export Ready: <b data-ebook-ready>${d.export_ready === true ? "yes" : "no"}</b></p>
+    <label class="block text-xs font-semibold text-slate-700">Retained research
+      <textarea data-ebook-research class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm" rows="3">${escapeHtml(researchNotes)}</textarea>
+    </label>
+    <div class="grid gap-3 md:grid-cols-2">
+      <label class="block text-xs font-semibold text-slate-700">Title
+        <input data-ebook-title class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm" value="${escapeHtml(d.title || "")}" />
+      </label>
+      <label class="block text-xs font-semibold text-slate-700">Subtitle
+        <input data-ebook-subtitle class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm" value="${escapeHtml(d.subtitle || "")}" />
+      </label>
+    </div>
+    <label class="block text-xs font-semibold text-slate-700">Outline (one chapter title per line)
+      <textarea data-ebook-outline class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm" rows="4">${escapeHtml(
+        (outline.map ? outline.map(o => (o.title || o)).join("\n") : "") || ""
+      )}</textarea>
+    </label>
+    <label class="block text-xs font-semibold text-slate-700">Chapter manuscript (Markdown)
+      <textarea data-ebook-chapters class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm font-mono" rows="8">${escapeHtml(d.content || d.ebook || "")}</textarea>
+    </label>
+    <div class="grid gap-3 md:grid-cols-3 text-xs">
+      <div class="rounded-lg bg-white border border-slate-200 p-2">Visuals: <b>${visualChapters}</b> chapter slot group(s)</div>
+      <label class="block font-semibold text-slate-700">Design theme
+        <select data-ebook-theme class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm">
+          <option value="studio_clean"${(d.design_theme || "studio_clean") === "studio_clean" ? " selected" : ""}>Studio Clean</option>
+          <option value="ink_editorial"${d.design_theme === "ink_editorial" ? " selected" : ""}>Ink Editorial</option>
+        </select>
+      </label>
+      <div class="rounded-lg bg-white border border-slate-200 p-2">Cover: <b>${coverOk ? "local fixture present" : "missing"}</b>
+        <button type="button" data-ebook-cover class="mt-2 btn-secondary text-xs">Use local cover fixture</button>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" data-ebook-apply class="btn-secondary text-sm">Apply edits to draft</button>
+      <button type="button" data-ebook-preflight class="btn-secondary text-sm">Run ebook preflight</button>
+    </div>
+    <pre data-ebook-preflight-out class="hidden text-xs bg-white border border-slate-200 rounded-lg p-3 overflow-auto max-h-48"></pre>
+  `;
+  wrap.appendChild(workflow);
+
+  const syncFields = () => {
+    d.research_notes = workflow.querySelector("[data-ebook-research]").value;
+    d.title = workflow.querySelector("[data-ebook-title]").value.trim();
+    d.subtitle = workflow.querySelector("[data-ebook-subtitle]").value.trim();
+    d.content = workflow.querySelector("[data-ebook-chapters]").value;
+    d.ebook = d.content;
+    d.design_theme = workflow.querySelector("[data-ebook-theme]").value;
+    d.fields = Object.assign({}, d.fields || {}, {
+      subtitle: d.subtitle,
+      design_theme: d.design_theme,
+      research_notes: d.research_notes,
+      author_brand: d.author_brand || (d.fields && d.fields.author_brand) || "Digital Product Factory",
+    });
+    const lines = workflow.querySelector("[data-ebook-outline]").value.split("\n").map(s => s.trim()).filter(Boolean);
+    d.outline = lines.map((title, i) => ({ order: i + 1, title, approved: true }));
+    d.ebook_workflow_stage = "edit_chapters";
+  };
+  workflow.querySelector("[data-ebook-apply]").onclick = () => {
+    syncFields();
+    // Editing invalidates any prior server PASS immediately.
+    d.release_status = "";
+    d.export_ready = false;
+    d.release_certificate = null;
+    d.release_report = null;
+    const rel = workflow.querySelector("[data-ebook-release]");
+    const ready = workflow.querySelector("[data-ebook-ready]");
+    if (rel) rel.textContent = "—";
+    if (ready) ready.textContent = "no";
+    toast("Draft ebook fields updated (not approved). Prior release PASS cleared.");
+  };
+  workflow.querySelector("[data-ebook-cover]").onclick = () => {
+    d.cover_design = Object.assign({}, d.cover_design || {}, {
+      title: d.title || "EBOOK RECOVERY LOCAL FIXTURE — NOT FOR SALE",
+      local_generated: true,
+      fixture: true,
+      local_cover_pdf: (d.cover_design && d.cover_design.local_cover_pdf) || "local_fixture",
+    });
+    d.release_status = "";
+    d.export_ready = false;
+    d.release_certificate = null;
+    toast("Local cover fixture selected. Prior release PASS cleared.");
+  };
+  workflow.querySelector("[data-ebook-theme]").onchange = () => {
+    syncFields();
+    d.release_status = "";
+    d.export_ready = false;
+    d.release_certificate = null;
+    const rel = workflow.querySelector("[data-ebook-release]");
+    const ready = workflow.querySelector("[data-ebook-ready]");
+    if (rel) rel.textContent = "—";
+    if (ready) ready.textContent = "no";
+  };
+  workflow.querySelector("[data-ebook-preflight]").onclick = async () => {
+    syncFields();
+    const out = workflow.querySelector("[data-ebook-preflight-out]");
+    out.classList.remove("hidden");
+    out.textContent = "Running server ebook-release-check...";
+    try {
+      const draft = {
+        title: d.title,
+        subtitle: d.subtitle,
+        content: d.content || d.ebook,
+        ebook: d.content || d.ebook,
+        outline: d.outline || [],
+        design_theme: d.design_theme || "studio_clean",
+        cover_design: d.cover_design || {},
+        research_notes: d.research_notes || "",
+        fields: d.fields || {},
+        visual_plan: d.visual_plan || {},
+        author_brand: d.author_brand || "Digital Product Factory",
+      };
+      const body = d._project_id != null
+        ? { project_id: d._project_id, draft }
+        : { draft, type: "ebook", name: d.title || "Ebook", data: Object.assign({}, d, draft, { product_type: "ebook" }) };
+      // Prefer dedicated server release endpoint; never invent PASS locally.
+      let report;
+      try {
+        report = await api("/ebook-release-check", {
+          method: "POST",
+          body: JSON.stringify(
+            d._project_id != null
+              ? { project_id: d._project_id, draft }
+              : {
+                  // Unsaved draft: send inline project payload via existing loader patterns.
+                  project: {
+                    id: null,
+                    type: "ebook",
+                    name: d.title || "Ebook",
+                    data: Object.assign({}, d, draft, { product_type: "ebook" }),
+                  },
+                  draft,
+                }
+          ),
+        });
+      } catch (e) {
+        // If unsaved project payload is rejected, surface the server error; do not set PASS.
+        throw e;
+      }
+      d.release_status = report.release_status || "";
+      d.export_ready = report.export_ready === true && String(report.release_status || "").toUpperCase() === "PASS";
+      d.release_certificate = report.release_certificate || null;
+      d.release_report = {
+        status: report.release_status,
+        blocking: report.blocking || [],
+        issues: report.issues || [],
+      };
+      workflow.querySelector("[data-ebook-release]").textContent = d.release_status || "—";
+      workflow.querySelector("[data-ebook-ready]").textContent = d.export_ready === true ? "yes" : "no";
+      out.textContent = JSON.stringify(
+        {
+          release_status: d.release_status,
+          export_ready: d.export_ready,
+          issued_by: (d.release_certificate && d.release_certificate.issued_by) || null,
+          blocking: report.blocking || [],
+          issues: report.issues || [],
+          identity: report.identity || null,
+          note: "PASS/WARNING/FAIL are server-issued only. FAIL blocks Save-as-approved and PDF/ZIP.",
+        },
+        null,
+        2
+      );
+    } catch (e) {
+      d.release_status = "";
+      d.export_ready = false;
+      d.release_certificate = null;
+      workflow.querySelector("[data-ebook-release]").textContent = "—";
+      workflow.querySelector("[data-ebook-ready]").textContent = "no";
+      out.textContent = String(e.message || e);
+    }
+  };
+
   // Pre-save: single "Save as Project" button.
   const preSave = document.createElement("div");
   preSave.className = "flex flex-wrap items-center justify-between gap-3";
-  preSave.innerHTML = `<p class="text-sm text-slate-500">Save this ebook as a project to unlock downloads and selling options.</p>`;
+  preSave.innerHTML = `<p class="text-sm text-slate-500">Save this ebook as a project to unlock downloads and selling options (only after release PASS).</p>`;
   const saveBtn = document.createElement("button");
   saveBtn.className = "btn-primary";
   saveBtn.textContent = "Save as Project";
@@ -4079,16 +4308,33 @@ function ebookSaveBar(d) {
   wrap.appendChild(preSave);
 
   saveBtn.onclick = async () => {
+    syncFields();
+    const rs = String(d.release_status || "").toUpperCase();
+    const certOk = d.release_certificate && d.release_certificate.issued_by === "server" && String(d.release_certificate.status || "").toUpperCase() === "PASS";
+    if (rs === "FAIL" || (rs && rs !== "PASS") || d.export_ready === false || !certOk) {
+      // Allow DRAFT project save, but block advertising approved/export-ready save.
+      if (rs === "FAIL") {
+        toast("Release FAIL — fix preflight issues before Save-as-approved / export.", "error");
+        return;
+      }
+      if (rs !== "PASS" || !certOk) {
+        toast("Run ebook preflight and obtain server PASS before Save-as-approved / downloads.", "error");
+        // Still allow a plain draft save below only when user confirms? Brief says disable Save-as-approved.
+        // Keep Save as Project for draft persistence, but strip export_ready.
+        d.export_ready = false;
+      }
+    }
     const name = prompt("Name this project:", (d && d.title) || "Ebook") || "Ebook";
     if (!name) return;
     setBusyEl(saveBtn, true);
     try {
       const existingId = d && d._project_id != null ? d._project_id : null;
       const { _project_id, ...body } = d || {};
-      // Project data also carries the source metadata so /export-product can
-      // find the markdown content to render into PDF/ZIP.
       body.product_type = "ebook";
       body.title = name;
+      if (String(body.release_status || "").toUpperCase() !== "PASS" || !(body.release_certificate && body.release_certificate.issued_by === "server")) {
+        body.export_ready = false;
+      }
       markUserSaved(body);
       const saved = existingId != null
         ? await api(`/projects/${existingId}`, { method: "PUT", body: JSON.stringify({ name, type: "ebook", data: body }) })
@@ -4096,7 +4342,6 @@ function ebookSaveBar(d) {
       if (saved && saved.id != null) d._project_id = saved.id;
       loadProjects();
       toast(existingId != null ? "Project updated" : "Project saved");
-      // Replace the pre-save area with the post-save next-steps panel.
       preSave.remove();
       wrap.appendChild(postEbookNextSteps(d, saved.id, name));
     } catch (e) {
@@ -4193,14 +4438,29 @@ async function postEbookNextSteps(d, projectId, name) {
 
   // -- Primary: Download PDF / Download ZIP / Open Product
   async function runExport() {
+    const rs = String(d.release_status || "").toUpperCase();
+    const cert = d.release_certificate;
+    const certOk = cert && cert.issued_by === "server" && String(cert.status || "").toUpperCase() === "PASS";
+    if (rs !== "PASS" || d.export_ready !== true || !certOk) {
+      throw new Error(
+        "Ebook release is not server PASS — Export Ready/downloads are blocked. Run ebook preflight first."
+      );
+    }
     // Use the persisted exports if available, otherwise call /export-product.
-    if (d.product_exports && d.product_exports.files) return d.product_exports;
+    if (d.product_exports && d.product_exports.files && d.export_ready === true) return d.product_exports;
     const r = await api("/export-product", {
       method: "POST",
       body: JSON.stringify({ project_id: projectId }),
     });
     d.product_exports = r.exports;
     d.export_package_id = r.package_id;
+    if (r && r.release_status) d.release_status = r.release_status;
+    if (r && r.release_certificate) d.release_certificate = r.release_certificate;
+    if (r && typeof r.export_ready === "boolean") d.export_ready = r.export_ready;
+    if (r && r.exports) {
+      // Refresh release flags from server-persisted project if present later.
+      d.export_ready = d.export_ready !== false;
+    }
     return r.exports;
   }
   function showMsg(text) { msg.textContent = text; msg.classList.remove("hidden"); }
@@ -4212,7 +4472,7 @@ async function postEbookNextSteps(d, projectId, name) {
       const ex = await runExport();
       const f = (ex && ex.files && ex.files.pdf) || null;
       if (f && f.url) {
-        triggerDownload(f.url, f.name || (name + ".pdf"));
+        await triggerDownload(f.url, f.name || (name + ".pdf"));
         showMsg("PDF download started.");
       } else {
         showMsg("PDF is not available for this project yet. Try Export again or refresh.");
@@ -4235,7 +4495,7 @@ async function postEbookNextSteps(d, projectId, name) {
       const ex = await runExport();
       const f = (ex && ex.files && ex.files.zip) || null;
       if (f && f.url) {
-        triggerDownload(f.url, f.name || (name + ".zip"));
+        await triggerDownload(f.url, f.name || (name + ".zip"));
         showMsg("ZIP download started.");
       } else {
         showMsg("ZIP is not available for this project yet. Try Export again or refresh.");
@@ -4284,14 +4544,45 @@ async function postEbookNextSteps(d, projectId, name) {
   return wrap;
 }
 
-function triggerDownload(url, name) {
-  const a = document.createElement("a");
-  a.href = url;
-  if (name) a.download = name;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+async function triggerDownload(url, name) {
+  // Fetch first so download-gate 403/400 JSON is toasted instead of looking like
+  // a dead button (browser would otherwise "download" an error payload).
+  try {
+    const resp = await fetch(url, { credentials: "same-origin" });
+    const ct = (resp.headers.get("content-type") || "").toLowerCase();
+    if (!resp.ok || ct.includes("application/json")) {
+      let msg = "Download failed (" + resp.status + ").";
+      try {
+        const j = await resp.clone().json();
+        if (j && j.message) msg = j.message;
+        else if (j && j.error) msg = String(j.error);
+      } catch (_) {
+        /* keep status message */
+      }
+      throw new Error(msg);
+    }
+    const blob = await resp.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl;
+    if (name) a.download = name;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 2000);
+  } catch (err) {
+    // Fall back to direct navigation only for network failures after a OK was
+    // impossible to confirm; still surface the message to callers via throw.
+    if (err && err.message) throw err;
+    const a = document.createElement("a");
+    a.href = url;
+    if (name) a.download = name;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
 }
 
 function packageResultHtml(payload) {

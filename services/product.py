@@ -95,8 +95,10 @@ def _ebook(fields: dict) -> tuple[str, str, str]:
         else "Do not include worksheets."
     )
     images = (
-        "Include suggestions for charts, diagrams, and photo placements that support "
-        "the research points (visual plan will render them)."
+        "Do NOT write chart suggestions, diagram suggestions, photo placements, "
+        "image prompts, or 'Visual plan for this chapter' into the manuscript. "
+        "Visuals are planned and rendered by a separate visual system after writing. "
+        "Keep the customer manuscript free of production instructions."
         if images_requested
         else "Do not include images — text and formatting only."
     )
@@ -145,9 +147,9 @@ def _ebook(fields: dict) -> tuple[str, str, str]:
         "routines, troubleshooting, worksheets) appropriate to each chapter. "
         "Include plain-English explanation, at least one concrete example, and "
         "something the reader can try within 24 hours.\n"
-        "4. A Summary section.\n"
-        "5. An Action Steps section.\n"
-        "6. An optional Worksheet section if requested above.\n\n"
+        "4. Optional closing sections only when the outline explicitly includes them "
+        "(Summary, Action Steps, FAQ, Worksheet). Do NOT invent generic FAQ, "
+        "Takeaway, Apply, Key Practice, or Action Steps padding.\n\n"
         f"QUALITY CONTRACT:\n{contract_guidance}\n\n"
         f"{_NO_EMOJI}"
     )

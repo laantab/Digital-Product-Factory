@@ -11,7 +11,7 @@ Check list (pass = no error, fail = ERROR logged):
   7. placeholder_text          -- no generic takeaway / marketplace placeholder phrases
   8. toc_formatting           -- TOC entries don't have broken dotted leaders
   9. placeholder_visuals      -- no placeholder visual boxes with Etsy/trending text
- 10. back_matter_present      -- PDFs >= 6 pages contain QR + FAQ + Action Plan sections
+ 10. back_matter_present      -- back matter is optional; FAIL only on generic injected patterns
  11. malformed_content        -- no table-card squashed labels, no raw [brackets], no worksheet header corruption
 """
 
@@ -326,29 +326,41 @@ _BACK_MATTER_ALIASES = {
 
 
 def _check_back_matter_present(page_count: int, text: str, result: EbookQAResult) -> None:
-    if page_count < 6:
-        result.checks.append(ValidationCheck("back_matter_present", True, "Short PDF, back matter optional"))
+    """Back matter is optional. Fail only when generic injected patterns appear."""
+    text_lower = (text or "").lower()
+    generic_hits = []
+    for needle in (
+        "how do i stay motivated over time",
+        "is this approach right for me",
+        "will these principles work for me",
+        "apply one idea from this chapter today",
+        "key practice —",
+        "key practice -",
+        "chapter action steps",
+        "chapter at a glance",
+        "sub-goal #",
+    ):
+        if needle in text_lower:
+            generic_hits.append(needle)
+    if generic_hits:
+        result.errors.append(
+            f"Generic injected back matter present: {generic_hits[:4]}"
+        )
+        result.checks.append(
+            ValidationCheck(
+                "back_matter_present",
+                False,
+                f"Generic back matter must not be auto-injected: {generic_hits[:4]}",
+            )
+        )
         return
-    text_lower = text.lower()
-    found = []
-    for section in _BACK_MATTER_SECTIONS:
-        if section.lower() in text_lower:
-            found.append(section)
-        elif section in _BACK_MATTER_ALIASES:
-            # Check aliases
-            for alias in _BACK_MATTER_ALIASES[section]:
-                if alias in text_lower:
-                    found.append(section)
-                    break
-    missing = [s for s in _BACK_MATTER_SECTIONS if s not in found]
-    if missing:
-        result.errors.append(f"Back matter missing sections: {missing}")
-        result.checks.append(ValidationCheck(
-            "back_matter_present", False,
-            f"Missing back-matter sections: {missing} (found: {found})"
-        ))
-    else:
-        result.checks.append(ValidationCheck("back_matter_present", True))
+    result.checks.append(
+        ValidationCheck(
+            "back_matter_present",
+            True,
+            "Back matter optional; no generic FAQ/Key Practice/Action padding detected",
+        )
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -279,6 +279,10 @@ def rewrite_mechanical_headings(content_md: str, *, title: str = "", topic: str 
         "Skipping repair after conflict",
     ]
 
+    def _cycle(labels: list[str], idx: int) -> str:
+        # Rotate — never clamp to the last label (that created repeated scaffolding).
+        return labels[idx % len(labels)]
+
     out_lines: list[str] = []
     ch_idx = -1
     ti = mi = wi = ki = 0
@@ -287,29 +291,29 @@ def rewrite_mechanical_headings(content_md: str, *, title: str = "", topic: str 
             ch_idx += 1
         low = line.strip().lower()
         if re.match(r"^###\s*what this chapter helps", low):
-            label = why_labels[min(wi, len(why_labels) - 1)]
+            label = _cycle(why_labels, wi)
             wi += 1
             out_lines.append(f"### {label}")
             continue
         if re.match(r"^###\s*a step-by-step method", low):
-            label = methods[min(mi, len(methods) - 1)]
+            label = _cycle(methods, mi)
             mi += 1
             out_lines.append(f"### {label}")
             continue
         if re.match(r"^###\s*common mistakes", low):
-            label = mistakes[min(ki, len(mistakes) - 1)]
+            label = _cycle(mistakes, ki)
             ki += 1
             out_lines.append(f"### {label}")
             continue
         if re.match(r"^###\s*chapter takeaway", low):
-            label = takeaways[min(ti, len(takeaways) - 1)]
+            label = _cycle(takeaways, ti)
             ti += 1
             out_lines.append(f"### {label}")
             continue
         # Prose/label forms without markdown heading markers
         m_take = re.match(r"^(?:\*\*)?chapter takeaway(?:\*\*)?\s*[:.\-]\s*(.*)$", low, re.I)
         if m_take or re.match(r"^chapter takeaway\s*$", low):
-            label = takeaways[min(ti, len(takeaways) - 1)]
+            label = _cycle(takeaways, ti)
             ti += 1
             rest = line.split(":", 1)[1].strip() if ":" in line else ""
             out_lines.append(f"### {label}")
@@ -318,13 +322,13 @@ def rewrite_mechanical_headings(content_md: str, *, title: str = "", topic: str 
             continue
         m_step = re.match(r"^(?:\*\*)?a step-by-step method(?:\*\*)?\s*[:.\-]?\s*$", low)
         if m_step:
-            label = methods[min(mi, len(methods) - 1)]
+            label = _cycle(methods, mi)
             mi += 1
             out_lines.append(f"### {label}")
             continue
         m_mist = re.match(r"^(?:\*\*)?common mistakes(?: to avoid)?(?:\*\*)?\s*[:.\-]?\s*$", low)
         if m_mist:
-            label = mistakes[min(ki, len(mistakes) - 1)]
+            label = _cycle(mistakes, ki)
             ki += 1
             out_lines.append(f"### {label}")
             continue

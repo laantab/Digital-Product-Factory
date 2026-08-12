@@ -112,13 +112,33 @@ def build_action_worksheet_html(topic: str = "") -> str:
 # Combined back matter
 # ---------------------------------------------------------------------------
 
-def build_back_matter_html(title: str, topic: str = "", package_id: str = "") -> str:
-    """Build all three back-matter sections for the preview."""
-    return (
-        build_quick_reference_html(title, topic)
-        + build_faq_html(topic)
-        + build_action_worksheet_html(topic)
-    )
+def build_back_matter_html(
+    title: str,
+    topic: str = "",
+    package_id: str = "",
+    *,
+    include: bool = False,
+    sections: list[str] | None = None,
+) -> str:
+    """Build optional back-matter sections.
+
+    Default is omit. Generic FAQ / Quick Reference / Action Worksheet are never
+    injected merely to pad length. Callers must pass include=True and an explicit
+    section list (outline-backed) to opt in.
+    """
+    if not include:
+        return ""
+    wanted = {str(s).strip().lower() for s in (sections or []) if str(s).strip()}
+    if not wanted:
+        return ""
+    parts: list[str] = []
+    if "quick reference" in wanted or "qr" in wanted:
+        parts.append(build_quick_reference_html(title, topic))
+    if "faq" in wanted or "frequently asked questions" in wanted:
+        parts.append(build_faq_html(topic))
+    if "action" in wanted or "action plan" in wanted or "worksheet" in wanted:
+        parts.append(build_action_worksheet_html(topic))
+    return "".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +148,7 @@ def build_back_matter_html(title: str, topic: str = "", package_id: str = "") ->
 _BACK_MATTER_CSS = """
 .bm-section { border-top: 3px solid #ede9fe; margin-top: 32px; padding-top: 24px; }
 .bm-label { display: inline-block; background: #f5f3ff; color: #6d28d9; font-weight: 700;
-  font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  font-size: 11px; text-transform: uppercase;
   padding: 5px 12px; border-radius: 999px; margin-bottom: 14px; }
 .bm-title { font-size: 20px; font-weight: 800; color: #1e1b4b; margin-bottom: 12px; }
 .bm-intro { font-size: 14px; color: #475569; margin-bottom: 18px; }
@@ -426,13 +446,13 @@ _WORKSHEET_TEMPLATES = {
         "title": "My 30-Day Action Plan",
         "note": "Pick one action per day. Mark done when completed.",
         "rows": [
-            {"action": "Define the single most important outcome I want"},
-            {"action": "Break that outcome into 5 measurable sub-goals"},
+            {"action": "Define the single most important outcome I want this month"},
+            {"action": "Write three measurable milestones that prove progress"},
             {"action": "Schedule a daily 15-minute block for this project"},
-            {"action": "Complete sub-goal #1 and note what worked"},
-            {"action": "Complete sub-goal #2 and note what slowed me down"},
+            {"action": "Complete the first milestone and note what worked"},
+            {"action": "Complete the second milestone and note what slowed me down"},
             {"action": "Review notes and adjust my approach for the next week"},
-            {"action": "Complete sub-goal #3 while maintaining the habit"},
+            {"action": "Finish the third milestone while keeping the daily habit"},
         ],
     },
 }

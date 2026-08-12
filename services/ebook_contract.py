@@ -239,6 +239,15 @@ PLACEHOLDER_PHRASES = frozenset({
     "pull out the core idea",
     "apply what you learned",
     "key takeaway",
+    "sub-goal #1",
+    "sub-goal #2",
+    "sub-goal #3",
+    "visual plan for this chapter",
+    "chart suggestion",
+    "diagram suggestion",
+    "photo placement",
+    "insert image",
+    "generic takeaway",
 })
 
 

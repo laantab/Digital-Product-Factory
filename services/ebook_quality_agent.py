@@ -126,12 +126,63 @@ def _find_unsupported_claims(text: str) -> list[str]:
     return found
 
 
+# Honest disclaimer / risk language that uses a forever-forbidden token in the
+# negative ("it is not guaranteed", "nothing is guaranteed"). These must NOT
+# trip the marketing gate — the bare hype forms still must.
+_FORBIDDEN_NEGATION_BEFORE = re.compile(
+    r"(?:"
+    r"\bnot\b|"
+    r"\bnever\b|"
+    r"\bno\b|"
+    r"\bwithout\b|"
+    r"\bnothing\s+is\b|"
+    r"\bisn'?t\b|"
+    r"\baren'?t\b|"
+    r"\bwasn'?t\b|"
+    r"\bweren'?t\b|"
+    r"\bcannot\b|"
+    r"\bcan'?t\b|"
+    r"\bwon'?t\b"
+    r")"
+    r"(?:\s+\w+){0,3}\s*$",
+    re.IGNORECASE,
+)
+
+
+def _has_non_negated_forbidden_phrase(text: str, phrase: str) -> bool:
+    """True if ``phrase`` appears at least once without an honest negation."""
+    needle = (phrase or "").lower().strip()
+    if not needle:
+        return False
+    start = 0
+    while True:
+        idx = text.find(needle, start)
+        if idx < 0:
+            return False
+        # Require word-ish boundaries so "secret" does not match inside
+        # longer tokens, while still catching multi-word phrases.
+        before_ch = text[idx - 1] if idx > 0 else " "
+        after_idx = idx + len(needle)
+        after_ch = text[after_idx] if after_idx < len(text) else " "
+        if before_ch.isalnum() or after_ch.isalnum():
+            start = idx + 1
+            continue
+        window = text[max(0, idx - 48) : idx]
+        if not _FORBIDDEN_NEGATION_BEFORE.search(window):
+            return True
+        start = idx + 1
+
+
 def _find_forbidden_marketing(text: str) -> list[str]:
-    """Find hype/overclaim phrases that are always forbidden."""
+    """Find hype/overclaim phrases that are always forbidden.
+
+    Negated disclaimer uses (e.g. "it is not guaranteed") are allowed; bare
+    marketing uses of the same tokens still block export.
+    """
     found: list[str] = []
     t = _normalize(text)
     for phrase in FOREVER_FORBIDDEN_MARKETING:
-        if phrase.lower() in t:
+        if _has_non_negated_forbidden_phrase(t, phrase):
             found.append(phrase)
     return found
 
@@ -325,6 +376,25 @@ def validate_ebook_content(
         blocking_count += 1
     else:
         checks.append(QualityCheck("placeholder_content", True))
+
+    # ── 1b. Visual-production instructions must never enter customer manuscript ─
+    from services.ebook_document import find_customer_content_defects
+
+    content_defects = find_customer_content_defects(md_text)
+    leak_defects = [
+        d for d in content_defects
+        if d.startswith("leaked_visual_instruction")
+        or d.startswith("blocked_customer_phrase")
+    ]
+    if leak_defects:
+        errors.append(f"Manuscript content defects: {leak_defects[:8]}")
+        checks.append(QualityCheck(
+            "customer_content_integrity", False,
+            f"Found: {leak_defects[:6]}", "error"
+        ))
+        blocking_count += 1
+    else:
+        checks.append(QualityCheck("customer_content_integrity", True))
 
     # ── 2. Forbidden marketing/overclaim check ────────────────────────────────
     forbidden = _find_forbidden_marketing(md_text)

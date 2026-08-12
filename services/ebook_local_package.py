@@ -18,6 +18,12 @@ from services.ebook_interior_visuals import (
     screens_visual_plan,
 )
 from services.cover_agent import apply_cover_to_preview
+from services.ebook_document import (
+    attach_document_to_data,
+    build_ebook_document_from_project,
+    strip_visual_instructions,
+)
+from services.ebook_design_system import get_theme
 from services.ebook_package import (
     EXPORTS_DIR,
     _split_chapters,
@@ -63,6 +69,9 @@ def build_local_ebook_package(
     ).strip()
 
     content_md = rewrite_mechanical_headings(content_md, title=title, topic=topic)
+    # DRAFT-only path (caller gates mutation): strip visual-production instructions
+    # before they reach preview/customer manuscript.
+    content_md, _leaked = strip_visual_instructions(content_md)
     _intro, chapters_md = _split_chapters(content_md)
     chapter_titles = [c[0] for c in chapters_md if c and c[0]]
 
@@ -75,20 +84,71 @@ def build_local_ebook_package(
             )
             fields["audience"] = audience
     else:
+        # Topic-specific aids only — derive from manuscript tables/checklists.
+        # Never inject generic Key Practice / Apply / FAQ fillers.
         plan_chapters = []
-        for i, name in enumerate(chapter_titles):
-            aid = {
-                "type": "tip",
-                "title": f"Key practice — {name[:48]}",
-                "caption": "Apply one idea from this chapter today.",
-                "visual_id": f"v_local_{i+1}",
-                "body": (
-                    f"<table class='va-table'><tr><td><b>Try this:</b> "
-                    f"Choose one action from <em>{_escape(name)}</em> and schedule "
-                    f"it in the next 24 hours.</td></tr></table>"
-                ),
-            }
-            plan_chapters.append({"chapter": name, "aids": [aid]})
+        for i, (name, body) in enumerate(chapters_md):
+            aids = []
+            body = body or ""
+            if re.search(r"^\|.+\|$", body, re.M) and re.search(r"^\|\s*-+", body, re.M):
+                aids.append(
+                    {
+                        "type": "table",
+                        "title": f"{(name or 'Chapter')[:48]} matrix",
+                        "caption": "Reference table from this chapter.",
+                        "visual_id": f"v_local_table_{i+1}",
+                        "table": {"headers": [], "rows": []},
+                        "body": "",
+                    }
+                )
+            checklist = re.findall(r"^[-*]\s+(.+)$", body, re.M)
+            if len(checklist) >= 3:
+                aids.append(
+                    {
+                        "type": "checklist",
+                        "title": f"{(name or 'Chapter')[:48]} checklist",
+                        "caption": "Actions from this chapter.",
+                        "visual_id": f"v_local_check_{i+1}",
+                        "items": checklist[:6],
+                    }
+                )
+            numbered = re.findall(r"^\d+\.\s+(.+)$", body, re.M)
+            if len(numbered) >= 3 and not aids:
+                aids.append(
+                    {
+                        "type": "action step box",
+                        "title": f"{(name or 'Chapter')[:48]} steps",
+                        "caption": "Numbered steps from this chapter.",
+                        "visual_id": f"v_local_steps_{i+1}",
+                        "items": numbered[:6],
+                    }
+                )
+            plan_chapters.append({"chapter": name, "aids": aids})
+        # Ensure pipeline minimum of 3 research-supporting aids without generics.
+        flat = [a for ch in plan_chapters for a in (ch.get("aids") or [])]
+        if len(flat) < 3 and chapter_titles:
+            for i, name in enumerate(chapter_titles):
+                if len(flat) >= 3:
+                    break
+                ch = plan_chapters[i]
+                if ch.get("aids"):
+                    continue
+                aid = {
+                    "type": "table",
+                    "title": f"{name[:48]} focus points",
+                    "caption": "Topic-specific focus from the manuscript.",
+                    "visual_id": f"v_local_focus_{i+1}",
+                    "table": {
+                        "headers": ["Focus", "Reader action"],
+                        "rows": [
+                            ["Core idea", f"Carry forward one point from {name[:40]}"],
+                            ["Next check", "Schedule a follow-through block"],
+                        ],
+                    },
+                }
+                # Avoid banned generic titles
+                ch["aids"] = [aid]
+                flat.append(aid)
 
     # Ensure aids have renderable html via render_aid_html when type supported
     for ch in plan_chapters:
@@ -121,6 +181,7 @@ def build_local_ebook_package(
         audience=audience,
         fields=fields,
     )
+    cover_design["design_theme"] = fields.get("design_theme") or "studio_clean"
 
     preview_html = render_preview_html(
         title,
@@ -133,6 +194,10 @@ def build_local_ebook_package(
         topic=topic,
     )
     preview_html = apply_cover_to_preview(preview_html, cover_design)
+    # Cover composite CSS historically used letter-spacing; strip for PDF-safe output.
+    preview_html = re.sub(
+        r"letter-spacing\s*:\s*[^;\"'}]+;?", "", preview_html, flags=re.I
+    )
 
     txt_doc = render_txt(title, subtitle, content_md, plan_chapters)
     visual_plan = {"chapters": plan_chapters}
@@ -159,6 +224,29 @@ def build_local_ebook_package(
         },
     )
 
+    theme = get_theme(fields.get("design_theme") or "studio_clean")
+    doc = build_ebook_document_from_project(
+        {
+            "data": {
+                "title": title,
+                "subtitle": subtitle,
+                "content": content_md,
+                "ebook": content_md,
+                "visual_plan": visual_plan,
+                "cover_design": cover_design,
+                "fields": fields,
+                "author_brand": author,
+                "package_id": package_id,
+                "design_theme": theme.theme_id,
+                "reader_promise": product_summary,
+            }
+        }
+    )
+    doc.workflow_stage = "preview"
+    # Ebook-specific digests feed Stabilized data without replacing APPROVED
+    # content_digest / asset_manifest_digest stamped by artifact_identity.
+    data_sync = attach_document_to_data({}, doc)
+
     return {
         "package_id": package_id,
         "title": title,
@@ -173,6 +261,13 @@ def build_local_ebook_package(
         "image_jobs": [],  # never auto-queue paid images
         "local_only": True,
         "exports_dir": os.path.join(EXPORTS_DIR, package_id),
+        "ebook_document": data_sync.get("ebook_document"),
+        "ebook_manuscript_digest": doc.identity.content_digest,
+        "ebook_asset_manifest_digest": doc.identity.asset_manifest_digest,
+        "design_theme": theme.theme_id,
+        "design_theme_version": theme.version,
+        "ebook_workflow_stage": doc.workflow_stage,
+        "release_status": doc.release_status,
     }
 
 
@@ -234,6 +329,12 @@ def ensure_ebook_visual_package(project: dict) -> dict:
             "fields": built["fields"],
             "product_type": "ebook",
             "local_visual_package": True,
+            "ebook_document": built.get("ebook_document"),
+            "ebook_manuscript_digest": built.get("ebook_manuscript_digest"),
+            "ebook_asset_manifest_digest": built.get("ebook_asset_manifest_digest"),
+            "design_theme": built.get("design_theme"),
+            "design_theme_version": built.get("design_theme_version"),
+            "ebook_workflow_stage": built.get("ebook_workflow_stage"),
         }
     )
     invalidate_draft_export_references(data)
