@@ -835,6 +835,8 @@ function nextActionLabel(stage, p) {
   if (_isEbookProject(p) && (d.ebook_project_workspace || d.ebook_workspace)) {
     const next = (d.ebook_workspace && d.ebook_workspace.next_action) || "";
     if (next === "generate_manuscript") return "Generate Manuscript";
+    if (next === "approve_manuscript") return "Approve Manuscript";
+    if (next === "request_correction") return "Request Correction";
     return "Open Ebook Project";
   }
   switch (stage) {
@@ -4787,9 +4789,31 @@ function showEbookWorkspaceStage(stageId) {
       <ol class="space-y-2">${chapters}</ol>
     `;
   } else if (stageId === "manuscript") {
+    const m = ws.manuscript || {};
+    const findings = (m.qa_findings || []).map((f) => `<li>${escapeHtml(String(f))}</li>`).join("");
+    const chapters = (m.chapters || []).map((c) =>
+      `<li class="rounded-lg border border-slate-200 bg-white p-2 text-sm"><b>Ch ${escapeHtml(String(c.order || ""))}:</b> ${escapeHtml(c.title || "")}</li>`
+    ).join("");
+    const canApprove = m.status === "awaiting_approval";
+    const contentPreview = (m.content || "").slice(0, 4000);
     body = `
-      <h3 class="text-sm font-bold text-slate-900 mb-2">Manuscript · ${escapeHtml(stage.status_label || "")}</h3>
-      <p class="text-sm text-slate-600">Not started. Use <b>Generate Manuscript…</b> when ready. A cost estimate and explicit confirmation are required. No paid call runs when this page opens.</p>
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Manuscript · ${escapeHtml(stage.status_label || m.status_label || "")}</h3>
+      ${
+        m.status === "not_started"
+          ? `<p class="text-sm text-slate-600">Not started. Click <b>Generate Manuscript…</b> for a cost estimate. Nothing is spent until you click <b>Confirm and Generate Manuscript</b>.</p>`
+          : ""
+      }
+      ${chapters ? `<ol class="space-y-1 mb-3">${chapters}</ol>` : ""}
+      ${findings ? `<h4 class="text-xs font-semibold uppercase text-rose-700 mb-1">Content QA findings</h4><ul class="list-disc pl-5 text-sm text-rose-700 mb-3">${findings}</ul>` : ""}
+      ${contentPreview ? `<pre class="text-xs bg-white border border-slate-200 rounded-lg p-3 whitespace-pre-wrap max-h-64 overflow-auto font-mono">${escapeHtml(contentPreview)}</pre>` : ""}
+      ${
+        canApprove
+          ? `<div class="mt-3 flex flex-wrap gap-2">
+              <button type="button" class="btn-primary text-sm" data-ws-approve-manuscript>Approve Manuscript</button>
+              <button type="button" class="btn-secondary text-sm" data-ws-request-correction>Request Correction</button>
+            </div>`
+          : ""
+      }
     `;
   } else {
     body = `
@@ -4798,6 +4822,27 @@ function showEbookWorkspaceStage(stageId) {
     `;
   }
   panel.innerHTML = body;
+  const approveBtn = panel.querySelector("[data-ws-approve-manuscript]");
+  if (approveBtn) {
+    approveBtn.onclick = async () => {
+      try {
+        const res = await api(`/ebook-workspace/${ws.project_id}/approve`, {
+          method: "POST",
+          body: JSON.stringify({ stage: "manuscript" }),
+        });
+        renderEbookWorkspace(res.workspace);
+        toast("Manuscript approved.");
+      } catch (e) {
+        toast(e.message || String(e), "error");
+      }
+    };
+  }
+  const corrBtn = panel.querySelector("[data-ws-request-correction]");
+  if (corrBtn) {
+    corrBtn.onclick = () => {
+      toast("Request Correction: edit chapters or regenerate after fixing QA findings.", "error");
+    };
+  }
 }
 
 async function estimateManuscriptInWorkspace(projectId) {
@@ -4812,25 +4857,63 @@ async function estimateManuscriptInWorkspace(projectId) {
     });
     if (res.workspace) _ebookWorkspaceState = res.workspace;
     const est = res.estimate || {};
+    const ws = _ebookWorkspaceState || {};
+    const idempotencyKey =
+      "ms-" + String(projectId) + "-" + String(est.confirmation_token || "").slice(0, 12) + "-" + Date.now();
     confirmEl.innerHTML = `
       <h4 class="text-sm font-bold text-amber-900">Confirm paid action</h4>
       <p class="text-sm text-amber-900">${escapeHtml(est.label || "Generate Manuscript")}</p>
       <p class="text-sm">Estimated maximum: <b>$${Number(est.estimated_max_usd || 0).toFixed(3)}</b></p>
       <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
-      <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "Confirmation required before any paid call.")}</p>
+      <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "Confirmation required before any paid call. Opening this page does not spend.")}</p>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
-        <button type="button" class="btn-primary text-sm" data-ws-hold-confirm>I understand — do not run yet</button>
+        <button type="button" class="btn-primary text-sm" data-ws-confirm-generate>Confirm and Generate Manuscript</button>
       </div>
-      <p class="text-xs text-slate-500">Manuscript execution is intentionally not started from this integration step. Confirmation token was issued for later use inside the Factory.</p>
     `;
-    confirmEl.querySelector("[data-ws-cancel-confirm]").onclick = () => {
+    confirmEl.querySelector("[data-ws-cancel-confirm]").onclick = async () => {
+      try {
+        await api(`/ebook-workspace/${projectId}/cancel-estimate`, { method: "POST", body: "{}" });
+      } catch (e) { /* non-fatal */ }
       confirmEl.classList.add("hidden");
       confirmEl.innerHTML = "";
+      toast("Cancelled — nothing spent.");
     };
-    confirmEl.querySelector("[data-ws-hold-confirm]").onclick = () => {
-      toast("Cost confirmation recorded. Manuscript was not generated.");
-      confirmEl.classList.add("hidden");
+    confirmEl.querySelector("[data-ws-confirm-generate]").onclick = async () => {
+      const btn = confirmEl.querySelector("[data-ws-confirm-generate]");
+      setBusyEl(btn, true);
+      confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = true;
+      try {
+        const body = {
+          confirmation_token: est.confirmation_token,
+          expected_artifact_id: est.artifact_id || ws.artifact_id || "",
+          expected_revision: est.artifact_revision != null ? est.artifact_revision : (ws.artifact_revision || 1),
+          outline_digest: est.outline_digest || ws.outline_digest || "",
+          max_authorized_usd: est.max_authorized_usd != null ? est.max_authorized_usd : est.estimated_max_usd,
+          idempotency_key: idempotencyKey,
+        };
+        const gen = await api(`/ebook-workspace/${projectId}/generate-manuscript`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        if (gen.workspace) {
+          renderEbookWorkspace(gen.workspace);
+        }
+        confirmEl.classList.add("hidden");
+        confirmEl.innerHTML = "";
+        const st = (gen.result && gen.result.manuscript_status) || "";
+        if (gen.duplicate) {
+          toast("Already generated for this confirmation — no extra charge.");
+        } else if (st === "needs_correction") {
+          toast("Manuscript generated but content QA needs correction.", "error");
+        } else {
+          toast("Manuscript generated — awaiting your approval.");
+        }
+      } catch (e) {
+        toast(e.message || String(e), "error");
+        setBusyEl(btn, false);
+        confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = false;
+      }
     };
   } catch (e) {
     confirmEl.innerHTML = `<p class="text-sm text-rose-700">${escapeHtml(e.message || String(e))}</p>`;

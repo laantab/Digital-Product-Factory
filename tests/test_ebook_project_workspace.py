@@ -324,14 +324,18 @@ class EbookWorkspaceJsHtmlTests(unittest.TestCase):
             "estimateManuscriptInWorkspace",
             "data-ws-estimate-manuscript",
             "Confirm paid action",
+            "Confirm and Generate Manuscript",
             "Estimated maximum",
             "renderEbookWorkspace",
+            "generate-manuscript",
         ):
             self.assertIn(needle, js)
+        self.assertNotIn("I understand — do not run yet", js)
         # Must not auto-fire generate manuscript on open
         open_fn = re.search(r"async function openEbookWorkspace\([\s\S]*?\n\}", js)
         self.assertIsNotNone(open_fn)
         self.assertNotIn("/generate-ebook", open_fn.group(0))
+        self.assertNotIn("generate-manuscript", open_fn.group(0))
 
 
 if __name__ == "__main__":

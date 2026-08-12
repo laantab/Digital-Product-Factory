@@ -281,7 +281,13 @@ def _recompute_next_action(ws: dict) -> None:
         return
     if not is_approved(ws, "manuscript"):
         ws["current_stage"] = "manuscript"
-        ws["next_action"] = "generate_manuscript"
+        st = stage_status(ws, "manuscript")
+        if st == STATUS_AWAITING:
+            ws["next_action"] = "approve_manuscript"
+        elif st == STATUS_NEEDS_CORRECTION:
+            ws["next_action"] = "request_correction"
+        else:
+            ws["next_action"] = "generate_manuscript"
         return
     if not is_approved(ws, "visuals"):
         ws["current_stage"] = "visuals"
@@ -320,6 +326,157 @@ def assert_can_run_stage(ws: dict, stage: str) -> None:
     if stage == "export":
         # Export also requires server PASS — checked by caller using release_status.
         pass
+
+
+def outline_digest(data: dict | None) -> str:
+    """Stable digest of the approved outline used to detect stale generation requests."""
+    data = data or {}
+    outline = data.get("outline") or []
+    payload = [
+        {
+            "order": int(o.get("order") or 0),
+            "title": str(o.get("title") or "").strip(),
+            "purpose": str(o.get("purpose") or "").strip(),
+        }
+        for o in outline
+        if isinstance(o, dict)
+    ]
+    return _sha(payload)
+
+
+TOKEN_TTL_SECONDS = 30 * 60
+MANUSCRIPT_AUTH_MAX_USD = 1.50
+
+
+def _clear_manuscript_fields(data: dict) -> None:
+    data["content"] = ""
+    data["ebook"] = ""
+    data["export_ready"] = False
+    data["release_status"] = ""
+    data["release_certificate"] = None
+    ed = data.get("ebook_document")
+    if isinstance(ed, dict):
+        ed["manuscript_md"] = ""
+        ed["chapters"] = []
+        ed["release_status"] = ""
+    ws = data.get("ebook_workspace")
+    if isinstance(ws, dict):
+        ws["manuscript_qa"] = []
+        ws["last_manuscript_generation"] = None
+
+
+def _iso_to_ts(iso: str) -> float | None:
+    if not iso:
+        return None
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return None
+
+
+def build_research_notes_for_manuscript(data: dict) -> str:
+    """Assemble retained research + editorial constraints for the generator."""
+    ws = get_workspace(data) or {}
+    payload = ws.get("research_payload") or {}
+    parts: list[str] = []
+    parts.append(f"TOPIC: {ws.get('topic') or data.get('title') or ''}")
+    parts.append(f"AUDIENCE: {ws.get('audience') or ''}")
+    parts.append(f"OUTCOME: {ws.get('outcome') or ''}")
+    parts.append(
+        f"AUTHOR (listed only — do not invent biography or quotes): "
+        f"{ws.get('author') or data.get('author_brand') or ''}"
+    )
+    parts.append(f"TITLE: {data.get('title') or ''}")
+    parts.append(f"SUBTITLE: {data.get('subtitle') or ''}")
+
+    # Outline + editorial rules first so they survive the 12k cap.
+    outline = data.get("outline") or []
+    if outline:
+        parts.append(
+            "APPROVED OUTLINE (write exactly these chapters; do not invent extra "
+            "generic FAQ/Key Practice sections):"
+        )
+        for o in outline:
+            if not isinstance(o, dict):
+                continue
+            purpose = str(o.get("purpose") or "")[:800]
+            parts.append(f"Chapter {o.get('order')}: {o.get('title')}\n{purpose}")
+
+    rules = ws.get("editorial_rules_locked") or []
+    if rules:
+        parts.append(
+            "LOCKED EDITORIAL RULES (must obey):\n- " + "\n- ".join(str(r) for r in rules)
+        )
+
+    if payload.get("summary"):
+        parts.append("RESEARCH SUMMARY:\n" + str(payload["summary"])[:4000])
+    findings = payload.get("key_findings") or []
+    if findings:
+        parts.append("KEY FINDINGS:\n- " + "\n- ".join(str(f) for f in findings[:20]))
+
+    notes = payload.get("notes_sections") or {}
+    if isinstance(notes, dict):
+        for key, vals in notes.items():
+            if isinstance(vals, list) and vals:
+                parts.append(
+                    f"{key.upper()}:\n- " + "\n- ".join(str(v)[:240] for v in vals[:12])
+                )
+            elif vals:
+                parts.append(f"{key.upper()}:\n{str(vals)[:800]}")
+
+    printing = payload.get("printing_research") or {}
+    if printing:
+        parts.append("PRINTING RESEARCH:")
+        if printing.get("evidence_quality"):
+            parts.append(f"Evidence quality: {str(printing.get('evidence_quality'))[:400]}")
+        facts = printing.get("manufacturer_facts") or []
+        if facts:
+            rendered = []
+            for f in facts[:12]:
+                if isinstance(f, dict):
+                    rendered.append(str(f.get("text") or f.get("fact") or f.get("claim") or f)[:220])
+                else:
+                    rendered.append(str(f)[:220])
+            parts.append("Manufacturer facts:\n- " + "\n- ".join(rendered))
+        if printing.get("keepsake_notes"):
+            parts.append("Keepsake notes:\n" + str(printing.get("keepsake_notes"))[:800])
+
+    urls = payload.get("source_urls") or []
+    if urls:
+        parts.append(
+            "SOURCE URLS (paraphrase only; do not copy):\n- "
+            + "\n- ".join(str(u) for u in urls[:20])
+        )
+
+    parts.append(
+        "FORBIDDEN: inventing Lonnie Brown stories/clients/earnings/credentials/quotes; "
+        "generic FAQ; generic Key Practice; generic Takeaway/Apply scaffolding; "
+        "sub-goal #N; visual/production instructions; cover or image prompts."
+    )
+    return "\n\n".join(parts)[:12000]
+
+
+def build_manuscript_contract(data: dict):
+    from services.ebook_contract import build_contract
+
+    ws = get_workspace(data) or {}
+    outline = data.get("outline") or []
+    angles = []
+    for o in outline:
+        if isinstance(o, dict) and o.get("title"):
+            purpose = str(o.get("purpose") or "").strip()
+            angles.append(f"{o.get('title')}: {purpose}" if purpose else str(o.get("title")))
+    return build_contract(
+        topic=str(data.get("title") or ws.get("topic") or "Untitled"),
+        audience=str(ws.get("audience") or data.get("audience") or ""),
+        tone="practical and professional",
+        reading_level="General adult",
+        reader_problem=str(ws.get("outcome") or ""),
+        desired_transformation=str(ws.get("outcome") or ""),
+        chapter_count=max(3, len(outline) or 10),
+        research_requested=True,
+        worksheet_required=False,
+    )
 
 
 def sync_document_from_workspace(data: dict) -> dict:
@@ -439,11 +596,35 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
         "ebook_workflow_stage": data.get("ebook_workflow_stage") or "",
         "fine_stage_labels": FINE_STAGE_LABELS,
         "gates": {
-            "manuscript_enabled": is_approved(ws, "outline"),
+            "manuscript_enabled": is_approved(ws, "outline")
+            and stage_status(ws, "manuscript")
+            in {STATUS_NOT_STARTED, STATUS_NEEDS_CORRECTION, STATUS_IN_PROGRESS},
             "visuals_enabled": is_approved(ws, "manuscript"),
             "export_enabled": str(data.get("release_status") or "").upper() == "PASS"
             and data.get("export_ready") is True,
         },
+        "manuscript": {
+            "status": stage_status(ws, "manuscript"),
+            "status_label": STATUS_LABELS.get(stage_status(ws, "manuscript"), ""),
+            "content": str(data.get("content") or data.get("ebook") or "")[:200000],
+            "chapters": [
+                {"order": c.get("order"), "title": c.get("title"), "approved": bool(c.get("approved"))}
+                for c in (
+                    ((data.get("ebook_document") or {}).get("chapters") or [])
+                    if isinstance(data.get("ebook_document"), dict)
+                    else []
+                )
+            ]
+            or [
+                {"order": o.get("order"), "title": o.get("title"), "approved": False}
+                for o in (data.get("outline") or [])
+                if stage_status(ws, "manuscript")
+                in {STATUS_AWAITING, STATUS_NEEDS_CORRECTION, STATUS_APPROVED}
+            ],
+            "qa_findings": list(ws.get("manuscript_qa") or []),
+            "last_generation": ws.get("last_manuscript_generation"),
+        },
+        "outline_digest": outline_digest(data),
     }
 
 
@@ -485,7 +666,9 @@ def save_research(data: dict, research: dict, *, mark_awaiting: bool = True) -> 
         ws["outcome"] = str(research["outcome"])
     was_approved = is_approved(ws, "research")
     if was_approved:
-        invalidate_after(ws, "research", reason="Research edited after approval")
+        cleared = invalidate_after(ws, "research", reason="Research edited after approval")
+        if "manuscript" in cleared:
+            _clear_manuscript_fields(data)
         set_stage_status(ws, "research", STATUS_NEEDS_CORRECTION, note="Edited after approval")
     else:
         set_stage_status(
@@ -558,6 +741,22 @@ def approve_stage(data: dict, stage: str, *, choice_id: str | None = None) -> di
         set_stage_status(ws, "outline", STATUS_APPROVED)
         _append_history(ws, "approve", stage="outline", choice_id=ws.get("approved_outline_id"))
 
+    elif stage == "manuscript":
+        if not is_approved(ws, "outline"):
+            raise ValueError("Approve outline before manuscript.")
+        md = str(data.get("content") or data.get("ebook") or "").strip()
+        if not md:
+            raise ValueError("Cannot approve an empty manuscript.")
+        if stage_status(ws, "manuscript") == STATUS_NEEDS_CORRECTION:
+            raise ValueError("Resolve content QA findings before approving the manuscript.")
+        if stage_status(ws, "manuscript") not in {STATUS_AWAITING, STATUS_APPROVED}:
+            raise ValueError("Manuscript must be awaiting approval before it can be approved.")
+        qa = list(ws.get("manuscript_qa") or [])
+        if qa:
+            raise ValueError("Cannot approve manuscript while content QA findings remain.")
+        set_stage_status(ws, "manuscript", STATUS_APPROVED)
+        _append_history(ws, "approve", stage="manuscript")
+
     else:
         raise ValueError(f"Stage '{stage}' cannot be approved through this endpoint yet.")
 
@@ -575,7 +774,9 @@ def edit_title(data: dict, *, title: str, subtitle: str, options: list | None = 
     if options is not None:
         ws["title_options"] = list(options)
     if is_approved(ws, "title") or stage_status(ws, "title") != STATUS_NOT_STARTED:
-        invalidate_after(ws, "title", reason="Title edited")
+        cleared = invalidate_after(ws, "title", reason="Title edited")
+        if "manuscript" in cleared:
+            _clear_manuscript_fields(data)
     set_stage_status(ws, "title", STATUS_AWAITING if data["title"] and data["subtitle"] else STATUS_IN_PROGRESS)
     _append_history(ws, "edit_title")
     _recompute_next_action(ws)
@@ -602,7 +803,9 @@ def edit_outline(data: dict, *, chapters: list[dict], option_id: str | None = No
     if option_id:
         ws["approved_outline_id"] = option_id
     if is_approved(ws, "outline") or stage_status(ws, "outline") != STATUS_NOT_STARTED:
-        invalidate_after(ws, "outline", reason="Outline edited")
+        cleared = invalidate_after(ws, "outline", reason="Outline edited")
+        if "manuscript" in cleared:
+            _clear_manuscript_fields(data)
     set_stage_status(ws, "outline", STATUS_AWAITING)
     _append_history(ws, "edit_outline")
     _recompute_next_action(ws)
@@ -618,47 +821,87 @@ def estimate_paid_action(data: dict, action: str) -> dict:
     for req in spec["requires_approved"]:
         if not is_approved(ws, req):
             raise ValueError(f"Action '{action}' requires approved stage '{req}'.")
+    if action == "generate_manuscript":
+        assert_can_run_stage(ws, "manuscript")
+        if stage_status(ws, "manuscript") == STATUS_AWAITING and (
+            data.get("content") or data.get("ebook")
+        ):
+            raise ValueError(
+                "Manuscript already generated and awaits approval. Approve or request correction first."
+            )
     ledger = ws.setdefault("paid_call_ledger", empty_ledger())
     estimate = round(float(spec["default_estimate_usd"]), 4)
+    if action == "generate_manuscript":
+        estimate = min(estimate, MANUSCRIPT_AUTH_MAX_USD)
     remaining = round(float(ledger.get("remaining_usd") or 0), 4)
+    cap = round(float(ledger.get("budget_cap_usd") or DEFAULT_BUDGET_CAP_USD), 4)
+    spent = round(float(ledger.get("spent_usd") or 0), 4)
     if estimate > remaining + 1e-9:
         raise ValueError(
             f"Estimated cost ${estimate:.3f} exceeds remaining budget ${remaining:.3f}."
         )
+    if spent + estimate > cap + 1e-9:
+        raise ValueError(
+            f"Estimated cost would exceed project cap ${cap:.2f}."
+        )
     token = secrets.token_urlsafe(16)
+    created = _now()
+    expires_at = datetime.fromtimestamp(
+        (_iso_to_ts(created) or datetime.now(timezone.utc).timestamp()) + TOKEN_TTL_SECONDS,
+        tz=timezone.utc,
+    ).isoformat()
     pending = {
         "action": action,
         "label": spec["label"],
         "estimated_max_usd": estimate,
-        "spent_usd": ledger.get("spent_usd"),
+        "max_authorized_usd": estimate,
+        "spent_usd": spent,
         "remaining_usd": remaining,
-        "budget_cap_usd": ledger.get("budget_cap_usd"),
+        "budget_cap_usd": cap,
         "confirmation_token": token,
-        "created_at": _now(),
+        "created_at": created,
+        "expires_at": expires_at,
+        "artifact_id": str(data.get("artifact_id") or data.get("package_id") or ""),
+        "artifact_revision": int(data.get("artifact_revision") or 1),
+        "outline_digest": outline_digest(data),
+        "used": False,
         "expires_note": "Confirmation required before any paid call. Opening this page does not spend.",
     }
     ledger["pending_estimate"] = pending
     _append_history(ws, "estimate", action=action, estimated_max_usd=estimate)
     data["ebook_workspace"] = ws
+    # Customer-facing estimate omits nothing critical; token is required for confirm.
+    public_estimate = dict(pending)
     return {
         "ok": True,
-        "estimate": {k: v for k, v in pending.items()},
-        "workspace": workspace_public_view({"id": data.get("_project_id"), "name": data.get("title"), "data": data}),
+        "estimate": public_estimate,
+        "workspace": workspace_public_view(
+            {"id": data.get("_project_id"), "name": data.get("title"), "data": data}
+        ),
     }
 
 
 def consume_confirmation(data: dict, action: str, confirmation_token: str) -> dict:
-    """Validate confirmation without executing a paid call."""
+    """Validate confirmation without executing a paid call (does not mark used)."""
     data = ensure_workspace(data)
     ws = data["ebook_workspace"]
     ledger = ws.get("paid_call_ledger") or {}
     pending = ledger.get("pending_estimate") or {}
     if not pending:
         raise ValueError("No pending cost estimate. Request an estimate first.")
+    if pending.get("used") is True:
+        raise ValueError("Confirmation token has already been used.")
     if str(pending.get("action")) != str(action):
         raise ValueError("Confirmation does not match the pending paid action.")
     if not confirmation_token or str(pending.get("confirmation_token")) != str(confirmation_token):
         raise ValueError("Invalid or missing confirmation token.")
+    created_ts = _iso_to_ts(str(pending.get("created_at") or ""))
+    expires_ts = _iso_to_ts(str(pending.get("expires_at") or ""))
+    now_ts = datetime.now(timezone.utc).timestamp()
+    if expires_ts is not None and now_ts > expires_ts:
+        raise ValueError("Confirmation token has expired. Request a new cost estimate.")
+    if created_ts is not None and now_ts - created_ts > TOKEN_TTL_SECONDS:
+        raise ValueError("Confirmation token has expired. Request a new cost estimate.")
     return pending
 
 
@@ -667,6 +910,231 @@ def clear_pending_estimate(data: dict) -> dict:
     ledger = data["ebook_workspace"].setdefault("paid_call_ledger", empty_ledger())
     ledger["pending_estimate"] = None
     return data
+
+
+def cancel_paid_estimate(data: dict) -> dict:
+    """Cancel a pending estimate without spending."""
+    data = clear_pending_estimate(data)
+    _append_history(data["ebook_workspace"], "cancel_estimate")
+    return data
+
+
+def execute_generate_manuscript(
+    data: dict,
+    *,
+    confirmation_token: str,
+    expected_artifact_id: str,
+    expected_revision: int,
+    outline_digest_expected: str,
+    max_authorized_usd: float,
+    idempotency_key: str,
+    generate_fn=None,
+) -> dict:
+    """Server-authoritative manuscript generation after explicit cost confirmation.
+
+    ``generate_fn`` is injectable for tests (zero paid calls). Production passes
+    the real ``services.ebook.generate_ebook`` via the Flask route.
+    """
+    from services.ebook_document import (
+        find_customer_content_defects,
+        manuscript_to_chapters,
+        strip_visual_instructions,
+    )
+
+    data = ensure_workspace(data)
+    ws = data["ebook_workspace"]
+    assert_can_run_stage(ws, "manuscript")
+    if not (
+        is_approved(ws, "research")
+        and is_approved(ws, "title")
+        and is_approved(ws, "outline")
+    ):
+        raise ValueError("Research, title, and outline must all be approved.")
+
+    ledger = ws.setdefault("paid_call_ledger", empty_ledger())
+    idem_store = ledger.setdefault("idempotency_keys", {})
+    key = str(idempotency_key or "").strip()
+    if not key:
+        raise ValueError("Idempotency key is required.")
+    if key in idem_store:
+        # Duplicate click — return prior result without a second paid call.
+        prior = idem_store[key]
+        return {
+            "ok": True,
+            "duplicate": True,
+            "data": data,
+            "result": prior.get("result") or {},
+            "workspace_note": "Idempotent replay — no additional paid call.",
+        }
+
+    pending = consume_confirmation(data, "generate_manuscript", confirmation_token)
+
+    artifact_id = str(data.get("artifact_id") or data.get("package_id") or "")
+    revision = int(data.get("artifact_revision") or 1)
+    if str(expected_artifact_id or "") != artifact_id:
+        raise ValueError("Stale artifact ID — reopen the project and try again.")
+    if int(expected_revision) != revision:
+        raise ValueError("Stale artifact revision — reopen the project and try again.")
+    if str(pending.get("artifact_id") or "") != artifact_id:
+        raise ValueError("Confirmation token was issued for a different artifact.")
+    if int(pending.get("artifact_revision") or 0) != revision:
+        raise ValueError("Confirmation token was issued for a different revision.")
+
+    current_od = outline_digest(data)
+    if str(outline_digest_expected or "") != current_od:
+        raise ValueError("Outline changed since the estimate — request a new cost estimate.")
+    if str(pending.get("outline_digest") or "") != current_od:
+        raise ValueError("Confirmation token outline digest mismatch.")
+
+    auth_max = round(float(max_authorized_usd), 4)
+    pending_max = round(float(pending.get("max_authorized_usd") or pending.get("estimated_max_usd") or 0), 4)
+    if auth_max <= 0:
+        raise ValueError("Maximum authorized charge must be positive.")
+    if abs(auth_max - pending_max) > 1e-9:
+        raise ValueError("Authorized charge does not match the pending estimate.")
+    if auth_max > MANUSCRIPT_AUTH_MAX_USD + 1e-9:
+        raise ValueError(
+            f"Manuscript authorization exceeds ${MANUSCRIPT_AUTH_MAX_USD:.2f} maximum."
+        )
+
+    spent = round(float(ledger.get("spent_usd") or 0), 4)
+    remaining = round(float(ledger.get("remaining_usd") or 0), 4)
+    cap = round(float(ledger.get("budget_cap_usd") or DEFAULT_BUDGET_CAP_USD), 4)
+    if auth_max > remaining + 1e-9 or spent + auth_max > cap + 1e-9:
+        raise ValueError("Insufficient remaining budget for manuscript generation.")
+
+    # Mark token used BEFORE the provider call to prevent duplicate spends on retry storms.
+    pending["used"] = True
+    ledger["pending_estimate"] = pending
+    used_tokens = ledger.setdefault("consumed_tokens", [])
+    used_tokens.append(
+        {
+            "token": str(pending.get("confirmation_token")),
+            "action": "generate_manuscript",
+            "ts": _now(),
+            "idempotency_key": key,
+        }
+    )
+
+    if generate_fn is None:
+        from services.ebook import generate_ebook as generate_fn
+
+    research_notes = build_research_notes_for_manuscript(data)
+    contract = build_manuscript_contract(data)
+
+    set_stage_status(ws, "manuscript", STATUS_IN_PROGRESS, note="Generating manuscript")
+    source = str(data.get("title") or ws.get("topic") or "").strip()
+    author = str(ws.get("author") or data.get("author_brand") or "").strip()
+
+    raw = generate_fn(
+        source,
+        contract=contract,
+        author=author,
+        research_notes=research_notes,
+    )
+    if not isinstance(raw, dict):
+        raise ValueError("Manuscript generator returned an invalid payload.")
+    manuscript_md = str(raw.get("ebook") or raw.get("content") or "").strip()
+    if not manuscript_md:
+        raise ValueError("Manuscript generator returned empty content.")
+
+    cleaned, _removed = strip_visual_instructions(manuscript_md)
+    defects = find_customer_content_defects(cleaned)
+    chapters = manuscript_to_chapters(cleaned)
+
+    # Charge: record one ledger entry at the authorized max (conservative).
+    # Live metering can later refine; never exceed auth_max or remaining.
+    charge = min(auth_max, remaining)
+    ledger["spent_usd"] = round(spent + charge, 4)
+    ledger["remaining_usd"] = round(cap - float(ledger["spent_usd"]), 4)
+    ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + 1
+    call_rec = {
+        "ts": _now(),
+        "provider": "openai",
+        "purpose": "generate_manuscript",
+        "estimated_cost_usd": charge,
+        "idempotency_key": key,
+        "meta": {
+            "title": data.get("title"),
+            "outline_digest": current_od,
+            "artifact_id": artifact_id,
+            "artifact_revision": revision,
+        },
+    }
+    ledger.setdefault("calls", []).append(call_rec)
+    ledger["pending_estimate"] = None
+
+    data["content"] = cleaned
+    data["ebook"] = cleaned
+    data["title"] = data.get("title") or source
+    data["subtitle"] = data.get("subtitle") or ""
+    data["author_brand"] = author
+    data["product_type"] = "ebook"
+    data["export_ready"] = False
+    data["release_status"] = ""
+    data["release_certificate"] = None
+
+    ws["manuscript_qa"] = defects
+    ws["last_manuscript_generation"] = {
+        "ts": _now(),
+        "charge_usd": charge,
+        "idempotency_key": key,
+        "qa_defect_count": len(defects),
+        "chapter_count": len(chapters),
+    }
+    if defects:
+        set_stage_status(
+            ws,
+            "manuscript",
+            STATUS_NEEDS_CORRECTION,
+            note="Content QA found defects",
+        )
+    else:
+        set_stage_status(ws, "manuscript", STATUS_AWAITING, note="Awaiting human approval")
+
+    # Later stages stay blocked / not started
+    for later in ("visuals", "cover", "design", "preview", "preflight", "export"):
+        if stage_status(ws, later) != STATUS_NOT_STARTED:
+            set_stage_status(ws, later, STATUS_NOT_STARTED)
+
+    _recompute_next_action(ws)
+    data = sync_document_from_workspace(data)
+    # Persist chapters from manuscript onto document
+    doc = build_ebook_document_from_project(data=data)
+    doc.manuscript_md = cleaned
+    doc.chapters = chapters
+    doc.title = str(data.get("title") or doc.title)
+    doc.subtitle = str(data.get("subtitle") or doc.subtitle)
+    doc.author = author
+    if defects:
+        doc.release_status = "FAIL"
+        doc.release_messages = list(defects)
+    data = attach_document_to_data(data, doc, sync_manuscript=True)
+    data["ebook_workspace"] = ws
+
+    result = {
+        "ok": True,
+        "duplicate": False,
+        "manuscript_status": stage_status(ws, "manuscript"),
+        "qa_findings": defects,
+        "charge_usd": charge,
+        "paid_calls": ledger.get("paid_calls"),
+        "spent_usd": ledger.get("spent_usd"),
+        "remaining_usd": ledger.get("remaining_usd"),
+        "chapter_count": len(chapters),
+        "title": data.get("title"),
+        "subtitle": data.get("subtitle"),
+    }
+    idem_store[key] = {"result": result, "ts": _now(), "charge_usd": charge}
+    ledger["idempotency_keys"] = idem_store
+    _append_history(
+        ws,
+        "generate_manuscript",
+        charge_usd=charge,
+        qa_defects=len(defects),
+        status=stage_status(ws, "manuscript"),
+    )
+    return {"ok": True, "duplicate": False, "data": data, "result": result}
 
 
 def assert_no_paid_side_effects_on_read() -> None:
