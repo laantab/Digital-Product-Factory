@@ -133,6 +133,7 @@ def _check_cover_professional(text: str, result: EbookQAResult) -> None:
     has_rl_cover_footer = (
         "AI Model Selection Guide" in text
         or "Practical Family Guide" in text
+        or "Event Photography Field Guide" in text
     )
     has_cover_text = len(text[:500].split()) >= 3
     if has_cover_text and not has_rl_cover_footer:

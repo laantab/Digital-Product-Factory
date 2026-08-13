@@ -343,9 +343,17 @@ def assert_can_run_stage(ws: dict, stage: str) -> None:
         # Cover is separate from manuscript approval, but still requires manuscript present/approved path.
         if not is_approved(ws, "manuscript"):
             raise ValueError(f"{RAIL_LABELS.get(stage, stage)} is blocked until manuscript is approved.")
+    if stage == "cover" and not is_approved(ws, "visuals"):
+        raise ValueError("Cover is blocked until visuals are approved.")
+    if stage == "design" and not is_approved(ws, "cover"):
+        raise ValueError("Design is blocked until the cover is approved.")
+    if stage == "preview" and not is_approved(ws, "design"):
+        raise ValueError("Preview is blocked until design is approved.")
+    if stage == "preflight" and not is_approved(ws, "preview"):
+        raise ValueError("Preflight is blocked until preview is approved.")
     if stage == "export":
-        # Export also requires server PASS — checked by caller using release_status.
-        pass
+        if not is_approved(ws, "preflight"):
+            raise ValueError("Export is blocked until design preflight is approved.")
 
 
 def outline_digest(data: dict | None) -> str:
@@ -432,6 +440,13 @@ def _clear_manuscript_fields(data: dict) -> None:
     data["export_ready"] = False
     data["release_status"] = ""
     data["release_certificate"] = None
+    data["ebook_design"] = None
+    data["ebook_design_digest"] = ""
+    data["ebook_preview_html"] = ""
+    data["ebook_export_identity"] = None
+    data["ebook_design_preflight"] = None
+    data["cover_design"] = None
+    data["ebook_visual_manifest"] = None
     ed = data.get("ebook_document")
     if isinstance(ed, dict):
         ed["manuscript_md"] = ""
@@ -736,8 +751,14 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
             and bool(data.get("content") or data.get("ebook")),
             "approve_manuscript_enabled": can_approve,
             "visuals_enabled": is_approved(ws, "manuscript"),
+            "cover_enabled": is_approved(ws, "visuals"),
+            "design_enabled": is_approved(ws, "cover") and quality_status == QUALITY_PASS,
+            "preview_enabled": is_approved(ws, "design"),
+            "preflight_enabled": is_approved(ws, "preview"),
             "export_enabled": str(data.get("release_status") or "").upper() == "PASS"
-            and data.get("export_ready") is True,
+            and data.get("export_ready") is True
+            and str((data.get("ebook_design_preflight") or {}).get("status") or "").upper() == "PASS"
+            and is_approved(ws, "preflight"),
         },
         "manuscript": {
             "status": stage_status(ws, "manuscript"),
@@ -755,7 +776,21 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
             "remaining_usd": ledger.get("remaining_usd"),
         },
         "outline_digest": outline_digest(data),
+        "design": _design_view(data),
     }
+
+
+def _design_view(data: dict) -> dict:
+    from services.ebook_design_workspace import design_public_view
+
+    try:
+        return design_public_view(data)
+    except Exception:
+        return {
+            "themes": [],
+            "export_ready": False,
+            "paid_calls": False,
+        }
 
 
 def _manuscript_chapter_view(data: dict, ws: dict, chapter_quality: list | None = None) -> list[dict]:
@@ -982,6 +1017,81 @@ def approve_stage(data: dict, stage: str, *, choice_id: str | None = None) -> di
             )
         set_stage_status(ws, "manuscript", STATUS_APPROVED)
         _append_history(ws, "approve", stage="manuscript")
+
+    elif stage == "visuals":
+        if not is_approved(ws, "manuscript"):
+            raise ValueError("Approve the manuscript before visuals.")
+        from services.ebook_manuscript_engine import QUALITY_PASS, validate_manuscript_quality
+
+        md = str(data.get("content") or data.get("ebook") or "")
+        quality = validate_manuscript_quality(data, manuscript_md=md)
+        if quality.status != QUALITY_PASS:
+            raise ValueError("Only a manuscript-quality PASS may enter visuals or design.")
+        from services.ebook_design_export import visual_manifest_from_manuscript
+
+        manifest = visual_manifest_from_manuscript(md)
+        data["ebook_visual_manifest"] = manifest
+        data["ebook_visual_manifest_digest"] = manifest["digest"]
+        set_stage_status(ws, "visuals", STATUS_APPROVED, note="Manuscript-derived visuals; no paid images")
+        _append_history(ws, "approve", stage="visuals", paid_images=False)
+
+    elif stage == "cover":
+        if not is_approved(ws, "visuals"):
+            raise ValueError("Approve visuals before the cover.")
+        cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else None
+        if not cover:
+            raise ValueError("Generate a local cover before approving.")
+        from services.ebook_cover_local import generic_or_mismatched_cover_reason
+
+        reason = generic_or_mismatched_cover_reason(
+            cover,
+            title=str(data.get("title") or ""),
+            subtitle=str(data.get("subtitle") or ""),
+            author=str(data.get("author_brand") or data.get("author") or ""),
+            topic=str((data.get("fields") or {}).get("topic") or data.get("source") or data.get("title") or ""),
+        )
+        if reason:
+            raise ValueError(f"Cover cannot be approved: {reason.replace('_', ' ')}.")
+        set_stage_status(ws, "cover", STATUS_APPROVED)
+        _append_history(ws, "approve", stage="cover")
+
+    elif stage == "design":
+        if not is_approved(ws, "cover"):
+            raise ValueError("Approve the cover before design.")
+        from services.ebook_manuscript_engine import QUALITY_PASS, validate_manuscript_quality
+        from services.ebook_design_spec import design_is_stale
+
+        md = str(data.get("content") or data.get("ebook") or "")
+        quality = validate_manuscript_quality(data, manuscript_md=md)
+        if quality.status != QUALITY_PASS:
+            raise ValueError("Only a manuscript-quality PASS may enter design.")
+        design = data.get("ebook_design") if isinstance(data.get("ebook_design"), dict) else None
+        if not design:
+            raise ValueError("Select a theme before approving design.")
+        if design_is_stale(design, manuscript_digest=manuscript_digest(data)):
+            raise ValueError("Design is stale. Select a theme again after the manuscript change.")
+        set_stage_status(ws, "design", STATUS_APPROVED)
+        _append_history(ws, "approve", stage="design", theme_id=design.get("theme_id"))
+
+    elif stage == "preview":
+        if not is_approved(ws, "design"):
+            raise ValueError("Approve design before preview.")
+        if not (data.get("ebook_preview_html") or data.get("preview_html")):
+            raise ValueError("Build preview before approving.")
+        set_stage_status(ws, "preview", STATUS_APPROVED)
+        _append_history(ws, "approve", stage="preview")
+
+    elif stage == "preflight":
+        if not is_approved(ws, "preview"):
+            raise ValueError("Approve preview before preflight.")
+        pre = data.get("ebook_design_preflight") if isinstance(data.get("ebook_design_preflight"), dict) else {}
+        if str(pre.get("status") or "").upper() != "PASS":
+            raise ValueError("Preflight must PASS before it can be approved. The UI cannot invent PASS.")
+        set_stage_status(ws, "preflight", STATUS_APPROVED)
+        _append_history(ws, "approve", stage="preflight")
+
+    elif stage == "export":
+        raise ValueError("Export is a download of the approved artifact, not an approval stage.")
 
     else:
         raise ValueError(f"Stage '{stage}' cannot be approved through this endpoint yet.")

@@ -493,6 +493,135 @@ def seed_ebook_acceptance_workspace_route():
         return _error(str(exc), 500)
 
 
+@app.post("/ebook-workspace/<int:project_id>/visuals")
+def ebook_workspace_visuals_route(project_id: int):
+    """Approve manuscript-derived visuals. No paid image generation."""
+    try:
+        from services.ebook_design_workspace import approve_visuals_local
+        from services.ebook_project_workspace import workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = approve_visuals_local(dict(project.get("data") or {}))
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook visuals failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/cover")
+def ebook_workspace_cover_route(project_id: int):
+    """Generate or reject a deterministic local cover. No paid image generation."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_design_workspace import generate_and_stage_cover, reject_cover
+        from services.ebook_project_workspace import workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        action = str(body.get("action") or "generate").strip().lower()
+        data = dict(project.get("data") or {})
+        if action == "reject":
+            data = reject_cover(data)
+        else:
+            data = generate_and_stage_cover(data)
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook cover failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/design")
+def ebook_workspace_design_route(project_id: int):
+    """Select a local professional theme. No paid calls."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_design_workspace import select_and_stage_theme
+        from services.ebook_project_workspace import workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        theme_id = str(body.get("theme_id") or "").strip()
+        data = select_and_stage_theme(dict(project.get("data") or {}), theme_id)
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook design failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/preview")
+def ebook_workspace_preview_route(project_id: int):
+    """Render designed preview from the approved manuscript. No paid calls."""
+    try:
+        from services.ebook_design_workspace import build_preview
+        from services.ebook_project_workspace import workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = build_preview(dict(project.get("data") or {}))
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook preview failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/preflight")
+def ebook_workspace_preflight_route(project_id: int):
+    """Run hard design preflight. Server status is authoritative."""
+    try:
+        from services.ebook_design_workspace import run_preflight_stage
+        from services.ebook_project_workspace import workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = run_preflight_stage(dict(project.get("data") or {}))
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook preflight failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/rewind")
+def ebook_workspace_rewind_route(project_id: int):
+    """Go backward without losing approved manuscript work."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_design_workspace import rewind_to_stage
+        from services.ebook_project_workspace import workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = rewind_to_stage(dict(project.get("data") or {}), str(body.get("stage") or ""))
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook rewind failed")
+        return _error(str(exc), 500)
+
+
 def _brief_to_contract(brief):
     """Map a research/plan brief dict (the saved project data) to an EbookContract.
 

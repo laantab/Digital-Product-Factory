@@ -4845,6 +4845,81 @@ function showEbookWorkspaceStage(stageId) {
           : ""
       }
     `;
+  } else if (stageId === "visuals") {
+    const d = ws.design || {};
+    const slots = ((d.visual_manifest || {}).slots || []).map((s) =>
+      `<li class="text-sm">Ch ${escapeHtml(String(s.chapter || ""))}: ${escapeHtml(s.title || "")} · ${(s.kinds || []).map((k) => escapeHtml(k)).join(", ")}</li>`
+    ).join("") || `<li class="text-sm text-slate-500">Manuscript tables, checklists, and workflows become designed components. No paid images in this pass.</li>`;
+    body = `
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Visuals · ${escapeHtml(stage.status_label || "")}</h3>
+      <p class="text-sm text-slate-600 mb-3">Optional approved visuals are manuscript-derived. This stage never calls an image API.</p>
+      <ul class="list-disc pl-5 mb-3 space-y-1">${slots}</ul>
+      ${
+        ws.gates && ws.gates.visuals_enabled && stage.status !== "approved"
+          ? `<button type="button" class="btn-primary text-sm" data-ws-approve-visuals>Approve manuscript-derived visuals</button>`
+          : `<p class="text-xs text-slate-500">Server status: ${escapeHtml(stage.status_label || stage.status || "")}</p>`
+      }
+    `;
+  } else if (stageId === "cover") {
+    const c = (ws.design || {}).cover || {};
+    body = `
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Cover · ${escapeHtml(stage.status_label || "")}</h3>
+      <p class="text-sm text-slate-700"><b>${escapeHtml(c.title || ws.title || "")}</b></p>
+      <p class="text-sm text-slate-600">${escapeHtml(c.subtitle || ws.subtitle || "")}</p>
+      <p class="text-sm text-slate-600 mb-2">Author: ${escapeHtml(c.author || ws.author || "")}</p>
+      <p class="text-xs text-slate-500 mb-3">Theme: ${escapeHtml(c.theme || "—")} · Digest: ${escapeHtml((c.digest || "").slice(0, 16) || "—")}</p>
+      <div class="flex flex-wrap gap-2">
+        ${ws.gates && ws.gates.cover_enabled ? `<button type="button" class="btn-secondary text-sm" data-ws-generate-cover>Generate local cover</button>` : ""}
+        ${c.digest && stage.status !== "approved" ? `<button type="button" class="btn-primary text-sm" data-ws-approve-cover>Approve cover</button><button type="button" class="btn-secondary text-sm" data-ws-reject-cover>Reject cover</button>` : ""}
+      </div>
+    `;
+  } else if (stageId === "design") {
+    const d = ws.design || {};
+    const themes = (d.themes || []).map((t) => `
+      <button type="button" class="rounded-xl border p-3 text-left ${d.selected_theme === t.theme_id ? "border-brand-400 ring-2 ring-brand-300" : "border-slate-200"}" data-ws-select-theme="${escapeHtml(t.theme_id)}">
+        <div class="font-semibold text-slate-900">${escapeHtml(t.display_name)}</div>
+        <p class="text-xs text-slate-600 mt-1">${escapeHtml(t.summary || "")}</p>
+      </button>`).join("");
+    body = `
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Design · ${escapeHtml(stage.status_label || "")}</h3>
+      <p class="text-sm text-slate-600 mb-3">Preview and select a professional theme. Theme changes do not rewrite the manuscript. No paid calls.</p>
+      <div class="grid gap-2 sm:grid-cols-3 mb-3">${themes || "<p class='text-sm text-slate-500'>Themes unlock after cover approval.</p>"}</div>
+      <p class="text-xs text-slate-500 mb-3">Selected: ${escapeHtml(d.selected_theme || "—")} · Design digest: ${escapeHtml((d.design_digest || "").slice(0, 16) || "—")}</p>
+      ${d.selected_theme && stage.status !== "approved" ? `<button type="button" class="btn-primary text-sm" data-ws-approve-design>Approve design</button>` : ""}
+    `;
+  } else if (stageId === "preview") {
+    const d = ws.design || {};
+    body = `
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Preview · ${escapeHtml(stage.status_label || "")}</h3>
+      <p class="text-sm text-slate-600 mb-3">Preview identity is bound to the same manuscript, design, and cover digests as PDF/ZIP.</p>
+      ${d.preview_available ? `<p class="text-xs text-emerald-800 mb-2">Preview HTML is stored on the server.</p>` : `<p class="text-xs text-slate-500 mb-2">Build preview to inspect every designed page.</p>`}
+      <div class="flex flex-wrap gap-2">
+        ${ws.gates && ws.gates.preview_enabled ? `<button type="button" class="btn-secondary text-sm" data-ws-build-preview>Build preview</button>` : ""}
+        ${d.preview_available && stage.status !== "approved" ? `<button type="button" class="btn-primary text-sm" data-ws-approve-preview>Approve preview</button>` : ""}
+      </div>
+    `;
+  } else if (stageId === "preflight") {
+    const pre = (ws.design || {}).preflight || {};
+    const findings = (pre.findings || []).map((f) => `<li class="text-sm">${escapeHtml(String(f.code || ""))}: ${escapeHtml(String(f.message || f))}</li>`).join("");
+    const status = pre.status || "not run";
+    body = `
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Preflight · ${escapeHtml(stage.status_label || "")}</h3>
+      <p class="text-sm mb-2">Server status: <b class="${status === "PASS" ? "text-emerald-800" : "text-rose-800"}">${escapeHtml(status)}</b>. The UI cannot invent PASS or Export Ready.</p>
+      ${findings ? `<ul class="list-disc pl-5 mb-3 text-rose-800">${findings}</ul>` : `<p class="text-sm text-slate-600 mb-3">No findings yet, or preflight has not been run.</p>`}
+      <div class="flex flex-wrap gap-2">
+        ${ws.gates && ws.gates.preflight_enabled ? `<button type="button" class="btn-secondary text-sm" data-ws-run-preflight>Run preflight</button>` : ""}
+        ${status === "PASS" && stage.status !== "approved" ? `<button type="button" class="btn-primary text-sm" data-ws-approve-preflight>Approve preflight</button>` : ""}
+      </div>
+    `;
+  } else if (stageId === "export") {
+    const ready = !!(ws.gates && ws.gates.export_enabled);
+    const ident = (ws.design || {}).identity || {};
+    body = `
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Export · ${escapeHtml(stage.status_label || "")}</h3>
+      <p class="text-sm mb-2">${ready ? "Export Ready on the server. Preview, PDF, and ZIP share the same identity." : "Export is blocked until manuscript quality and design preflight both PASS on the server."}</p>
+      <p class="text-xs text-slate-500 mb-3">PDF ${escapeHtml((ident.pdf_sha256 || "").slice(0, 16) || "—")} · ZIP ${escapeHtml((ident.zip_sha256 || "").slice(0, 16) || "—")}</p>
+      ${ready ? `<p class="text-sm text-emerald-800">Download uses the saved project export buttons. This panel does not forge Export Ready.</p>` : `<button type="button" class="btn-secondary text-sm opacity-60 cursor-not-allowed" disabled>Export blocked</button>`}
+    `;
   } else {
     body = `
       <h3 class="text-sm font-bold text-slate-900 mb-2">${escapeHtml(stage.label || stageId)} · ${escapeHtml(stage.status_label || "Not started")}</h3>
@@ -4870,6 +4945,36 @@ function showEbookWorkspaceStage(stageId) {
   const corrBtn = panel.querySelector("[data-ws-request-correction]");
   if (corrBtn) {
     corrBtn.onclick = () => estimateCorrectionInWorkspace(ws.project_id);
+  }
+  const bind = (sel, fn) => {
+    const el = panel.querySelector(sel);
+    if (el) el.onclick = fn;
+  };
+  bind("[data-ws-approve-visuals]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/visuals`, {}, "Visuals approved."));
+  bind("[data-ws-generate-cover]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/cover`, { action: "generate" }, "Local cover generated."));
+  bind("[data-ws-reject-cover]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/cover`, { action: "reject" }, "Cover rejected."));
+  bind("[data-ws-approve-cover]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "cover" }, "Cover approved."));
+  panel.querySelectorAll("[data-ws-select-theme]").forEach((btn) => {
+    btn.onclick = () => postEbookWorkspaceAction(
+      `/ebook-workspace/${ws.project_id}/design`,
+      { theme_id: btn.getAttribute("data-ws-select-theme") },
+      "Theme selected."
+    );
+  });
+  bind("[data-ws-approve-design]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "design" }, "Design approved."));
+  bind("[data-ws-build-preview]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/preview`, {}, "Preview built."));
+  bind("[data-ws-approve-preview]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "preview" }, "Preview approved."));
+  bind("[data-ws-run-preflight]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/preflight`, {}, "Preflight finished."));
+  bind("[data-ws-approve-preflight]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "preflight" }, "Preflight approved."));
+}
+
+async function postEbookWorkspaceAction(url, body, okMessage) {
+  try {
+    const res = await api(url, { method: "POST", body: JSON.stringify(body || {}) });
+    if (res.workspace) renderEbookWorkspace(res.workspace);
+    if (okMessage) toast(okMessage);
+  } catch (e) {
+    toast(e.message || String(e), "error");
   }
 }
 

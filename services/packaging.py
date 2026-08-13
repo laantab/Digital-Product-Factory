@@ -327,6 +327,44 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
     if is_ebook and not (
         data.get("product_type") in {"word_search", "crossword", "coloring_book", "math_worksheet", "spelling_worksheet"}
     ):
+        from services.ebook_design_export import is_ebook_workspace
+
+        if is_ebook_workspace(data):
+            from services.ebook_design_export import apply_workspace_design_to_export
+
+            project = apply_workspace_design_to_export(project)
+            data = project.get("data") or {}
+            pdf_bytes = project.get("_design_export_pdf") or b""
+            zip_bytes = project.get("_design_export_zip") or b""
+            html_doc = str(data.get("ebook_preview_html") or data.get("preview_html") or "")
+            if not pdf_bytes.startswith(b"%PDF"):
+                raise ValueError("Designed ebook PDF is missing after preflight.")
+            package_id = str(data.get("package_id") or uuid.uuid4().hex)
+            pkg_dir = os.path.join(EXPORTS_DIR, package_id)
+            os.makedirs(pkg_dir, exist_ok=True)
+            files = {
+                "ebook.html": html_doc,
+                "ebook.pdf": pdf_bytes,
+                "manifest.json": json.dumps(data.get("ebook_export_identity") or {}, indent=2),
+            }
+            _write_package(package_id, files)
+            if zip_bytes:
+                zip_path = os.path.join(pkg_dir, "package.zip")
+                with open(zip_path, "wb") as fh:
+                    fh.write(zip_bytes)
+            exports_files = {
+                "html": {"name": "product.html", "url": _download_url(package_id, "ebook.html")},
+                "pdf": {"name": "product.pdf", "url": _download_url(package_id, "ebook.pdf")},
+                "zip": {"name": "product.zip", "url": _download_url(package_id, "package.zip")},
+            }
+            data["package_id"] = package_id
+            project["data"] = data
+            return _finalize_export_result(
+                package_id,
+                {"pdf_available": True, "files": exports_files},
+                data=data,
+            )
+
         from services.ebook_local_package import ensure_ebook_visual_package
         from services.ebook_pipeline_agents import run_ebook_quality_pipeline
 
