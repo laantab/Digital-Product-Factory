@@ -25,6 +25,7 @@ from services.ebook_manuscript_engine import (  # noqa: E402
     FROZEN_2472_SHA256,
     FROZEN_2472_SPENT_USD,
     QUALITY_PASS,
+    EXAMPLE_BUY_VS_RENT_VS_USED,
     assigned_research_for_chapter,
     build_book_contract,
     chapter_fn_from_full_manuscript,
@@ -127,6 +128,34 @@ class ChapterProductionTests(unittest.TestCase):
         self.assertEqual(seen["research"], expected_research)
         self.assertEqual(seen["title"], expected.title)
 
+    def test_02b_generate_one_chapter_prompt_lists_canonical_example_and_findings(self):
+        from services.ebook import generate_one_chapter
+
+        data = self._data()
+        book = build_book_contract(data)
+        ch3 = next(c for c in book.chapters if c.order == 3)
+        ch3.unresolved_findings = [
+            f"MISSING_REQUIRED_EXAMPLE: Missing required example: {EXAMPLE_BUY_VS_RENT_VS_USED}"
+        ]
+        ch3.prior_chapter_body = "Keep the starter-vs-event-kit table already drafted."
+        captured = {}
+
+        def _chat(*, system, user):
+            captured["system"] = system
+            captured["user"] = user
+            return f"## {ch3.title}\n\nToo thin.\n"
+
+        with patch("services.ebook.chat", side_effect=_chat):
+            generate_one_chapter(book, ch3)
+        user = captured["user"]
+        self.assertIn(EXAMPLE_BUY_VS_RENT_VS_USED, user)
+        self.assertIn("MANDATORY DELIVERABLE", user)
+        self.assertIn("UNRESOLVED FINDINGS FROM THE PRIOR ATTEMPT", user)
+        self.assertIn("MISSING_REQUIRED_EXAMPLE", user)
+        self.assertIn("Keep the starter-vs-event-kit table already drafted.", user)
+        self.assertIn("Do not invent current market prices", user)
+        self.assertIn("AUTHORITATIVE CHAPTER CONTRACT", user)
+
     def test_03_04_05_accepted_preserved_failure_stops_resume_from_failed(self):
         data = self._data()
         strong = build_event_photo_strong_manuscript()
@@ -168,6 +197,8 @@ class ChapterProductionTests(unittest.TestCase):
         def _resume(book, chapter):
             resume_calls.append(chapter.order)
             self.assertNotIn(chapter.order, (1, 2))
+            if chapter.order == 3:
+                self.assertTrue(chapter.unresolved_findings)
             return splitter(book, chapter)
 
         fixed = execute_correct_manuscript(

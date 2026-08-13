@@ -191,26 +191,27 @@ def generate_one_chapter(book, chapter) -> dict:
     import json
     from dataclasses import asdict
 
-    from services.ebook_manuscript_engine import assigned_research_for_chapter
+    from services.ebook_manuscript_engine import assigned_research_for_chapter, chapter_contract_prompt
 
     research = assigned_research_for_chapter(book, chapter)
     contract_payload = asdict(chapter)
     contract_json = json.dumps(contract_payload, ensure_ascii=False)
+    prompt = chapter_contract_prompt(book, chapter)
     text = chat(
         system=(
             "You are a professional non-fiction author. Write exactly one chapter. "
             "Do not write any other chapter. Do not add Disclaimer or Sources as H2 headings. "
-            "Follow the chapter contract exactly. Paraphrase research; never copy sentences. "
-            "Do not invent statistics, testimonials, or guaranteed income."
+            "Follow the chapter contract exactly. Every named mandatory deliverable and every "
+            "unresolved finding is required. Preserve valid existing chapter material when a "
+            "prior draft is supplied. Paraphrase research; never copy sentences. "
+            "Do not invent statistics, testimonials, guaranteed income, or current market prices."
         ),
         user=(
             f"Write EXACTLY one chapter as Markdown starting with ## {chapter.title}\n"
             "Do not write any other chapter.\n\n"
+            f"{prompt}\n\n"
             f"AUTHORITATIVE CHAPTER CONTRACT (do not alter):\n{contract_json}\n\n"
-            f"ASSIGNED RESEARCH (use only this slice):\n{research}\n\n"
-            f"Book title: {getattr(book, 'title', '')}\n"
-            f"Audience: {getattr(book, 'audience', '')}\n"
-            f"Author: {getattr(book, 'author', '')}\n"
+            f"ASSIGNED RESEARCH (use only this slice):\n{research}\n"
         ),
     )
     return {

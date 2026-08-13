@@ -1868,6 +1868,7 @@ def execute_correct_manuscript(
         apply_quality_to_workspace,
         assemble_manuscript,
         build_book_contract,
+        findings_by_order_from_quality,
         run_chapter_pipeline,
         split_front_chapters_back,
         validate_manuscript_quality,
@@ -2002,13 +2003,14 @@ def execute_correct_manuscript(
             )
         )
     accepted_orders = {c.order for c in stored_accepted}
+    prior_quality = validate_manuscript_quality(
+        data, manuscript_md=existing, book_contract=book_contract
+    )
+    findings_map = findings_by_order_from_quality(prior_quality)
     if stored_accepted:
         accepted_keep = stored_accepted
         failed_orders = [c.order for c in book_contract.chapters if c.order not in accepted_orders]
     else:
-        prior_quality = validate_manuscript_quality(
-            data, manuscript_md=existing, book_contract=book_contract
-        )
         failed_orders = [
             int(r["order"])
             for r in prior_quality.chapter_results
@@ -2029,6 +2031,8 @@ def execute_correct_manuscript(
         repair_orders=failed_orders,
         stop_on_failure=True,
         max_chapter_calls=max_calls,
+        prior_manuscript_md=existing,
+        findings_by_order=findings_map,
     )
     manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
     ws["accepted_chapters"] = [

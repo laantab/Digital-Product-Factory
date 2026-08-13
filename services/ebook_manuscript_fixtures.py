@@ -112,7 +112,22 @@ Printing equipment is a second station, not a lens. At kit level you need a dedi
 - Card reader and a backup drive for ingest
 - Print-station spare media and a documented stop quantity if prints are sold
 
-Used gear and rentals are cost-control tools. Example: rent the 70-200mm until a second paid ceremony exists, buy used backup batteries before a fourth lens, and only buy a printer after a dry run. The research notes say used purchases or rentals can reduce startup cost substantially; treat any percentage as one source’s claim, not a law. Stage upgrades around actual demand.
+Used gear and rentals are cost-control tools, not a shopping personality. Treat the next block as a hypothetical planning example, not current market prices.
+
+**Hypothetical planning example: Buy vs. Rent vs. Used**
+
+Use all three choices before you spend. These dollar figures are labeled planning numbers, not live asking prices.
+
+{_table(
+    ["Choice", "When it is the planning lean", "Hypothetical planning number", "Decision criteria"],
+    [
+        ["Buy", "Daily-driver coverage you will use at every paid event (24-70mm role)", "$1,800 planning allowance", "Buy when the item is on every shot list and a rental would repeat for the next three booked dates"],
+        ["Rent", "Specialty telephoto for one ceremony", "$120 hypothetical weekend rental", "Rent the 70-200mm when you need it for a single date and do not yet have a second paid ceremony on the calendar"],
+        ["Used", "Backup batteries, second body, spare flash", "$250 planning allowance", "Buy used when the item is backup-critical, has a service history you can inspect, and a rental would not already be in the bag if the primary fails"],
+    ],
+)}
+
+Decision criteria: if you would rent the same 70-200mm three times this season, the planning lean is buy (new or used). If you need it once, rent. If it must already be in the bag at call time, used is the planning lean. Do not invent or quote current market prices. The research notes say used purchases or rentals can reduce startup cost substantially; treat any percentage as one source’s claim, not a law. Stage upgrades around actual demand.
 """
 
     ch4 = f"""## Finding Clients and Turning Inquiries into Signed Bookings

@@ -24,10 +24,15 @@ from services.ebook_manuscript_engine import (  # noqa: E402
     QUALITY_FAIL,
     QUALITY_NEEDS_CORRECTION,
     QUALITY_PASS,
+    EXAMPLE_BUY_VS_RENT_VS_USED,
     build_book_contract,
+    canonical_example_id,
+    chapter_contract_prompt,
     chapter_fn_from_full_manuscript,
     remap_outline_purposes,
     run_chapter_pipeline,
+    split_front_chapters_back,
+    validate_chapter,
     validate_manuscript_quality,
     word_count,
 )
@@ -338,6 +343,229 @@ class ManuscriptQualityEngineTests(unittest.TestCase):
         self.assertIn('m.quality_status === "PASS"', js)
         self.assertIn("chapter_findings", js)
         self.assertIn("Chapter-level / QA findings", js)
+
+
+class Chapter3RequiredExampleContractTests(unittest.TestCase):
+    """Canonical BUY_VS_RENT_VS_USED must be in the prompt and the validator."""
+
+    def setUp(self):
+        app.config["TESTING"] = True
+        self.project = upsert_acceptance_project(database, preserve_live_manuscript=False)
+        self.pid = self.project["id"]
+        self._client_patch = patch("ai_client.get_client", side_effect=AssertionError("paid client"))
+        self._chat_patch = patch("ai_client.chat", side_effect=AssertionError("paid chat"))
+        self._json_patch = patch("ai_client.chat_json", side_effect=AssertionError("paid chat_json"))
+        self._client_patch.start()
+        self._chat_patch.start()
+        self._json_patch.start()
+
+    def tearDown(self):
+        self._client_patch.stop()
+        self._chat_patch.stop()
+        self._json_patch.stop()
+
+    def _data(self):
+        return dict(database.get_project(self.pid)["data"])
+
+    def _book_and_ch3(self):
+        book = build_book_contract(self._data())
+        ch3 = next(c for c in book.chapters if c.order == 3)
+        return book, ch3
+
+    def _strong_ch3(self):
+        strong = build_event_photo_strong_manuscript()
+        _front, chapters, back = split_front_chapters_back(strong)
+        ch3 = next(c for c in chapters if c.order == 3)
+        return strong, chapters, back, ch3
+
+    def _mention_only_body(self, good_body: str) -> str:
+        marker = "**Hypothetical planning example: Buy vs. Rent vs. Used**"
+        idx = good_body.find(marker)
+        self.assertGreaterEqual(idx, 0)
+        return (
+            good_body[:idx]
+            + "You might buy a camera or rent a lens. Used gear exists. "
+            + "For example, some photographers buy a second body.\n"
+        )
+
+    def test_canonical_id_aliases_and_chapter_3_contract(self):
+        self.assertEqual(canonical_example_id("used vs rent vs buy"), EXAMPLE_BUY_VS_RENT_VS_USED)
+        self.assertEqual(canonical_example_id("Buy vs. Rent vs. Used"), EXAMPLE_BUY_VS_RENT_VS_USED)
+        _book, ch3 = self._book_and_ch3()
+        self.assertEqual(ch3.required_examples, [EXAMPLE_BUY_VS_RENT_VS_USED])
+
+    def test_first_and_correction_prompts_require_labeled_three_way(self):
+        book, ch3 = self._book_and_ch3()
+        prompt = chapter_contract_prompt(book, ch3)
+        self.assertIn(EXAMPLE_BUY_VS_RENT_VS_USED, prompt)
+        self.assertIn("MANDATORY DELIVERABLE", prompt)
+        self.assertIn("Buy vs. Rent vs. Used", prompt)
+        self.assertIn("all three choices", prompt)
+        self.assertIn("hypothetical", prompt.lower())
+        self.assertIn("decision criteria", prompt.lower())
+        self.assertIn("Do not invent current market prices", prompt)
+        self.assertNotIn("UNRESOLVED FINDINGS FROM THE PRIOR ATTEMPT", prompt)
+
+        ch3.unresolved_findings = [
+            f"MISSING_REQUIRED_EXAMPLE: Missing required example: {EXAMPLE_BUY_VS_RENT_VS_USED}"
+        ]
+        ch3.prior_chapter_body = "Valid 24-70 and 70-200 kit material already drafted."
+        corr = chapter_contract_prompt(book, ch3)
+        self.assertIn("UNRESOLVED FINDINGS FROM THE PRIOR ATTEMPT", corr)
+        self.assertIn("MISSING_REQUIRED_EXAMPLE", corr)
+        self.assertIn(EXAMPLE_BUY_VS_RENT_VS_USED, corr)
+        self.assertIn("Preserve all valid material", corr)
+        self.assertIn("Valid 24-70 and 70-200 kit material already drafted.", corr)
+
+    def test_mention_of_buying_or_renting_still_fails(self):
+        book, contract = self._book_and_ch3()
+        _strong, _chapters, _back, good = self._strong_ch3()
+        mention = self._mention_only_body(good.body)
+        good.body = mention
+        findings = validate_chapter(good, contract, book=book)
+        example_findings = [f for f in findings if f.code == "MISSING_REQUIRED_EXAMPLE"]
+        self.assertTrue(example_findings, [f.code + ": " + f.message for f in findings])
+        self.assertTrue(
+            any(EXAMPLE_BUY_VS_RENT_VS_USED in f.message for f in example_findings)
+        )
+
+    def test_strong_three_way_example_is_accepted(self):
+        book, contract = self._book_and_ch3()
+        _strong, _chapters, _back, good = self._strong_ch3()
+        findings = validate_chapter(good, contract, book=book)
+        self.assertFalse(
+            [f for f in findings if f.code == "MISSING_REQUIRED_EXAMPLE"],
+            [f.code + ": " + f.message for f in findings],
+        )
+
+    def test_mocked_provider_following_correction_prompt_is_accepted(self):
+        data = self._data()
+        book = build_book_contract(data)
+        strong, chapters, back, good_ch3 = self._strong_ch3()
+        mention_body = self._mention_only_body(good_ch3.body)
+        prior_md = strong.replace(good_ch3.body, mention_body, 1)
+        accepted = [c for c in chapters if c.order in (1, 2)]
+        for ch in accepted:
+            ch.accepted = True
+        seen_orders = []
+
+        def _provider(book_c, chapter):
+            seen_orders.append(chapter.order)
+            prompt = chapter_contract_prompt(book_c, chapter)
+            self.assertNotIn(chapter.order, (1, 2))
+            self.assertIn(EXAMPLE_BUY_VS_RENT_VS_USED, prompt)
+            self.assertTrue(chapter.unresolved_findings)
+            self.assertTrue(
+                any("MISSING_REQUIRED_EXAMPLE" in f for f in chapter.unresolved_findings)
+            )
+            self.assertIn("PRIOR CHAPTER DRAFT TO PRESERVE AND REPAIR", prompt)
+            self.assertIn(chapter.prior_chapter_body[:80], prompt)
+            if EXAMPLE_BUY_VS_RENT_VS_USED in prompt and chapter.unresolved_findings:
+                return {"ebook": f"## {chapter.title}\n\n{good_ch3.body}"}
+            return {"ebook": f"## {chapter.title}\n\nYou might buy or rent.\n"}
+
+        pipe = run_chapter_pipeline(
+            book,
+            generate_chapter_fn=_provider,
+            accepted_chapters=accepted,
+            repair_orders=[3],
+            stop_on_failure=True,
+            max_chapter_calls=1,
+            prior_manuscript_md=prior_md,
+            findings_by_order={
+                3: [
+                    f"MISSING_REQUIRED_EXAMPLE: Missing required example: {EXAMPLE_BUY_VS_RENT_VS_USED}"
+                ]
+            },
+            back_matter=back,
+        )
+        self.assertEqual(seen_orders, [3])
+        self.assertEqual(pipe["chapter_calls"], 1)
+        self.assertEqual(pipe["failed_orders"], [])
+        accepted_orders = [c.order for c in pipe["accepted_chapters"]]
+        self.assertIn(3, accepted_orders)
+        ch3_out = next(c for c in pipe["accepted_chapters"] if c.order == 3)
+        findings = validate_chapter(
+            ch3_out,
+            next(c for c in book.chapters if c.order == 3),
+            book=book,
+        )
+        self.assertFalse(
+            [f for f in findings if f.code == "MISSING_REQUIRED_EXAMPLE"],
+            [f.code + ": " + f.message for f in findings],
+        )
+        kept = [c for c in pipe["accepted_chapters"] if c.order == 1]
+        self.assertEqual(kept[0].body, chapters[0].body)
+
+    def test_workspace_correction_does_not_regenerate_accepted_chapters(self):
+        data = self._data()
+        strong = build_event_photo_strong_manuscript()
+        splitter = chapter_fn_from_full_manuscript(strong)
+        calls = []
+
+        def _fail_at_three(book, chapter):
+            calls.append(chapter.order)
+            if chapter.order == 3:
+                _front, chapters, _back = split_front_chapters_back(strong)
+                ch3 = next(c for c in chapters if c.order == 3)
+                mention = self._mention_only_body(ch3.body)
+                return {"ebook": f"## {chapter.title}\n\n{mention}"}
+            return splitter(book, chapter)
+
+        est = estimate_paid_action(data, "generate_manuscript")
+        out = execute_generate_manuscript(
+            data,
+            confirmation_token=est["estimate"]["confirmation_token"],
+            expected_artifact_id=str(data.get("artifact_id") or ""),
+            expected_revision=int(data.get("artifact_revision") or 1),
+            outline_digest_expected=est["estimate"]["outline_digest"],
+            max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
+            idempotency_key="ch3-example-stop",
+            generate_chapter_fn=_fail_at_three,
+        )
+        self.assertEqual(calls, [1, 2, 3])
+        self.assertEqual(out["result"]["failed_orders"], [3])
+        first_body = out["data"]["ebook_workspace"]["accepted_chapters"][0]["body"]
+        second_body = out["data"]["ebook_workspace"]["accepted_chapters"][1]["body"]
+        qa = " ".join(out["data"]["ebook_workspace"].get("manuscript_qa") or [])
+        self.assertIn("MISSING_REQUIRED_EXAMPLE", qa)
+        self.assertIn(EXAMPLE_BUY_VS_RENT_VS_USED, qa)
+
+        resume_calls = []
+
+        def _resume(book, chapter):
+            resume_calls.append(chapter.order)
+            self.assertNotIn(chapter.order, (1, 2))
+            if chapter.order == 3:
+                prompt = chapter_contract_prompt(book, chapter)
+                self.assertIn(EXAMPLE_BUY_VS_RENT_VS_USED, prompt)
+                self.assertTrue(chapter.unresolved_findings)
+                self.assertTrue(
+                    any("MISSING_REQUIRED_EXAMPLE" in f for f in chapter.unresolved_findings)
+                )
+            return splitter(book, chapter)
+
+        corr = estimate_paid_action(out["data"], "correct_manuscript")
+        fixed = execute_correct_manuscript(
+            out["data"],
+            confirmation_token=corr["estimate"]["confirmation_token"],
+            expected_artifact_id=str(out["data"].get("artifact_id") or ""),
+            expected_revision=int(out["data"].get("artifact_revision") or 1),
+            outline_digest_expected=corr["estimate"]["outline_digest"],
+            max_authorized_usd=float(corr["estimate"]["max_authorized_usd"]),
+            idempotency_key="ch3-example-resume",
+            correct_chapter_fn=_resume,
+        )
+        self.assertEqual(resume_calls[0], 3)
+        self.assertNotIn(1, resume_calls)
+        self.assertNotIn(2, resume_calls)
+        kept = {
+            c["order"]: c["body"]
+            for c in fixed["data"]["ebook_workspace"]["accepted_chapters"]
+            if c["order"] in (1, 2)
+        }
+        self.assertEqual(kept[1], first_body)
+        self.assertEqual(kept[2], second_body)
 
 
 if __name__ == "__main__":

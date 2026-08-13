@@ -6,6 +6,7 @@ on a hard quality result: PASS, NEEDS_CORRECTION, or FAIL.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -75,9 +76,14 @@ class ChapterContract:
     prohibited_repetition: list[str] = field(default_factory=list)
     prohibited_claims: list[str] = field(default_factory=list)
     acceptance_criteria: list[str] = field(default_factory=list)
+    unresolved_findings: list[str] = field(default_factory=list)
+    prior_chapter_body: str = ""
 
     def digest(self) -> str:
-        return _sha(asdict(self))
+        payload = asdict(self)
+        payload.pop("unresolved_findings", None)
+        payload.pop("prior_chapter_body", None)
+        return _sha(payload)
 
 
 @dataclass
@@ -167,6 +173,71 @@ class ParsedChapter:
 
 
 # ---------------------------------------------------------------------------
+EXAMPLE_BUY_VS_RENT_VS_USED = "BUY_VS_RENT_VS_USED"
+EXAMPLE_REQUIREMENT_PROMPTS = {
+    EXAMPLE_BUY_VS_RENT_VS_USED: (
+        f"MANDATORY DELIVERABLE [{EXAMPLE_BUY_VS_RENT_VS_USED}]: Include a concrete, "
+        "clearly labeled 'Buy vs. Rent vs. Used' example or comparison that contains "
+        "all three choices. Use realistic hypothetical numbers or clearly labeled "
+        "decision criteria. Do not invent current market prices. Label the block as a "
+        "hypothetical/planning example."
+    ),
+}
+
+
+def canonical_example_id(raw: str) -> str:
+    text = str(raw or "").strip()
+    if text.upper() == EXAMPLE_BUY_VS_RENT_VS_USED:
+        return EXAMPLE_BUY_VS_RENT_VS_USED
+    key = re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+    key = key.replace(" versus ", " vs ")
+    aliases = {
+        "used vs rent vs buy",
+        "buy vs rent vs used",
+        "buy vs used vs rent",
+        "rent vs buy vs used",
+    }
+    if key in aliases:
+        return EXAMPLE_BUY_VS_RENT_VS_USED
+    return text
+
+
+def _has_buy_vs_rent_vs_used_example(body: str) -> bool:
+    """Require a labeled three-way comparison, not a passing mention of buying or renting."""
+    text = body or ""
+    low = (
+        text.lower()
+        .replace("versus", "vs")
+        .replace("vs.", "vs")
+        .replace("vs,", "vs")
+    )
+    labeled = bool(
+        re.search(
+            r"buy\s+vs\s+rent\s+vs\s+used"
+            r"|used\s+vs\s+rent\s+vs\s+buy"
+            r"|buy\s+vs\s+used\s+vs\s+rent"
+            r"|rent\s+vs\s+buy\s+vs\s+used",
+            low,
+        )
+    )
+    if not labeled:
+        return False
+    has_buy = bool(re.search(r"\bbuy(?:ing)?\b", low))
+    has_rent = bool(re.search(r"\brent(?:al|ing)?\b", low))
+    has_used = bool(re.search(r"\bused\b", low))
+    if not (has_buy and has_rent and has_used):
+        return False
+    has_numbers = bool(_MONEY_RE.search(text) or re.search(r"\b\d+\b", text))
+    has_criteria = bool(
+        re.search(
+            r"(?i)decision criteria|when to buy|when to rent|when used|"
+            r"if you .{8,120}(?:buy|rent|used)|planning (?:lean|choice|rule)",
+            text,
+        )
+    )
+    return bool(has_numbers or has_criteria)
+
+
 # Event-photography acceptance catalog (project #2472 outline)
 # ---------------------------------------------------------------------------
 
@@ -270,9 +341,13 @@ EVENT_PHOTO_CHAPTER_SPECS: list[ChapterContract] = [
             "How should printing equipment be planned without duplicating Chapter 8?",
         ],
         facts=["24-70", "70-200", "backup", "batteries", "memory cards", "printer"],
-        examples=["used vs rent vs buy"],
+        examples=[EXAMPLE_BUY_VS_RENT_VS_USED],
         table="starter-vs-event-kit",
         checklist="event-backup-kit",
+        extra_criteria=[
+            "Include a labeled Buy vs. Rent vs. Used comparison covering all three choices",
+            "Use hypothetical planning numbers or clearly labeled decision criteria; do not invent market prices",
+        ],
     ),
     _ch(
         4,
@@ -636,9 +711,37 @@ def chapter_contract_prompt(book: BookContract, chapter: ChapterContract) -> str
     if chapter.required_checklist:
         lines.append(f"REQUIRED CHECKLIST: {chapter.required_checklist}")
     if chapter.required_examples:
-        lines.append("REQUIRED EXAMPLES (label hypothetical/planning scenarios clearly):")
+        lines.append(
+            "MANDATORY REQUIRED EXAMPLES (each named ID is a required deliverable; "
+            "omitting any fails this chapter locally):"
+        )
         for e in chapter.required_examples:
-            lines.append(f"- {e}")
+            cid = canonical_example_id(e)
+            prompt = EXAMPLE_REQUIREMENT_PROMPTS.get(cid)
+            if prompt:
+                lines.append(f"- {prompt}")
+            else:
+                lines.append(
+                    f"- MANDATORY DELIVERABLE [{cid}]: {e}. "
+                    "Label it as a hypothetical/planning example."
+                )
+    if chapter.unresolved_findings:
+        lines.append(
+            "UNRESOLVED FINDINGS FROM THE PRIOR ATTEMPT "
+            "(each is a mandatory deliverable; do not omit any of them):"
+        )
+        for finding in chapter.unresolved_findings:
+            lines.append(f"- {finding}")
+        lines.append(
+            "Preserve all valid material already present in this chapter. "
+            "Repair only the missing or failed requirements. "
+            "Do not rewrite passing sections unless needed to insert the missing deliverable."
+        )
+    if (chapter.prior_chapter_body or "").strip():
+        lines.append(
+            "PRIOR CHAPTER DRAFT TO PRESERVE AND REPAIR:\n"
+            + chapter.prior_chapter_body.strip()[:12000]
+        )
     lines.append(f"MINIMUM USEFUL DEPTH: {chapter.min_useful_words} words of specific, usable content.")
     lines.append("Do not pad with repeated hedges. Do not add Conclusion/Disclaimer/Sources as H2.")
     if book.editorial_rules:
@@ -749,6 +852,14 @@ def assigned_research_for_chapter(book: BookContract, chapter: ChapterContract) 
         parts.append("ASSIGNED CITATIONS:\n" + "\n".join(f"- {c}" for c in cites))
     if chapter.purpose:
         parts.append("CHAPTER PURPOSE:\n" + str(chapter.purpose))
+    examples = [canonical_example_id(e) for e in (chapter.required_examples or [])]
+    if examples:
+        parts.append("ASSIGNED REQUIRED EXAMPLES:\n" + "\n".join(f"- {e}" for e in examples))
+    if chapter.unresolved_findings:
+        parts.append(
+            "UNRESOLVED FINDINGS (mandatory deliverables):\n"
+            + "\n".join(f"- {f}" for f in chapter.unresolved_findings)
+        )
     if book.editorial_rules:
         parts.append("EDITORIAL RULES:\n" + "\n".join(f"- {r}" for r in book.editorial_rules[:12]))
     return "\n\n".join(parts)
@@ -991,8 +1102,18 @@ def validate_chapter(
         add("MISSING_REQUIRED_CHECKLIST", f"Missing required checklist: {contract.required_checklist}")
     if contract.required_examples:
         blob = body.lower()
-        if not parsed.examples and "hypothetical" not in blob and "example" not in blob:
-            add("MISSING_REQUIRED_EXAMPLE", f"Missing required example: {contract.required_examples[0]}")
+        for raw in contract.required_examples:
+            cid = canonical_example_id(raw)
+            if cid == EXAMPLE_BUY_VS_RENT_VS_USED:
+                if not _has_buy_vs_rent_vs_used_example(body):
+                    add(
+                        "MISSING_REQUIRED_EXAMPLE",
+                        f"Missing required example: {EXAMPLE_BUY_VS_RENT_VS_USED}",
+                    )
+                continue
+            if not parsed.examples and "hypothetical" not in blob and "example" not in blob:
+                add("MISSING_REQUIRED_EXAMPLE", f"Missing required example: {raw}")
+                break
     if contract.required_table == "package-and-margin" and not _MONEY_RE.search(body):
         add("MISSING_DOLLAR_SCENARIO", "Pricing chapter has no labeled dollar amounts")
     low = body.lower()
@@ -1200,6 +1321,29 @@ def validate_manuscript_quality(
 # Chapter pipeline (providers injected; default path makes no network calls)
 # ---------------------------------------------------------------------------
 
+def findings_by_order_from_quality(quality: QualityResult | None) -> dict[int, list[str]]:
+    """Map chapter order -> unresolved finding lines for correction prompts."""
+    out: dict[int, list[str]] = {}
+    if quality is None:
+        return out
+    for row in quality.chapter_results or []:
+        msgs: list[str] = []
+        for finding in row.get("findings") or []:
+            if isinstance(finding, dict):
+                code = str(finding.get("code") or "")
+                message = str(finding.get("message") or "")
+            else:
+                code = str(getattr(finding, "code", "") or "")
+                message = str(getattr(finding, "message", "") or "")
+            line = f"{code}: {message}".strip(": ").strip()
+            if line:
+                msgs.append(line)
+        order = int(row.get("order") or 0)
+        if order and msgs:
+            out[order] = msgs
+    return out
+
+
 def run_chapter_pipeline(
     book: BookContract,
     *,
@@ -1211,6 +1355,8 @@ def run_chapter_pipeline(
     back_matter: str = "",
     stop_on_failure: bool = True,
     max_chapter_calls: int | None = None,
+    prior_manuscript_md: str = "",
+    findings_by_order: dict[int, list[str]] | None = None,
 ) -> dict[str, Any]:
     """Generate or repair chapters independently. Never silently rewrite accepted chapters.
 
@@ -1236,6 +1382,11 @@ def run_chapter_pipeline(
     failed_orders: list[int] = []
     skipped_ungenerated: list[int] = []
     provider_payloads: list[dict[str, Any]] = []
+    findings_map = dict(findings_by_order or {})
+    prior_bodies: dict[int, str] = {}
+    if prior_manuscript_md:
+        _prior_front, prior_chapters, _prior_back = split_front_chapters_back(prior_manuscript_md)
+        prior_bodies = {c.order: c.body for c in prior_chapters}
 
     for contract in book.chapters:
         if contract.order in accepted and (not repair or contract.order not in repair):
@@ -1246,7 +1397,10 @@ def run_chapter_pipeline(
         if max_chapter_calls is not None and chapter_calls >= max_chapter_calls:
             skipped_ungenerated.append(contract.order)
             continue
-        raw = generate_chapter_fn(book, contract)
+        work = copy.copy(contract)
+        work.unresolved_findings = list(findings_map.get(contract.order) or [])
+        work.prior_chapter_body = str(prior_bodies.get(contract.order) or "")
+        raw = generate_chapter_fn(book, work)
         chapter_calls += 1
         parsed = parse_chapter_response(raw, contract)
         parsed.order = contract.order
@@ -1259,7 +1413,8 @@ def run_chapter_pipeline(
             "order": contract.order,
             "title": contract.title,
             "contract_digest": contract.digest(),
-            "assigned_research": assigned_research_for_chapter(book, contract),
+            "assigned_research": assigned_research_for_chapter(book, work),
+            "unresolved_findings": list(work.unresolved_findings),
         }
         if isinstance(raw, dict):
             rec["provider_assigned_research"] = raw.get("assigned_research")
