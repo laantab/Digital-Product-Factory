@@ -73,21 +73,32 @@ def approve_visuals_local(data: dict) -> dict:
 
 
 def generate_and_stage_cover(data: dict) -> dict:
+    raise ValueError(
+        "Vector covers are disabled. Search Pexels or upload your own photograph."
+    )
+
+
+def stage_photo_cover(data: dict, *, project_id: int | None = None) -> dict:
+    """Keep the Cover rail awaiting after a photo-backed render. Does not approve."""
+    from services.ebook_photo_cover import PhotoCoverError
+
     ws = _ws(data)
     assert_can_run_stage(ws, "cover")
     _require_quality(data)
     if not is_approved(ws, "visuals"):
         raise ValueError("Approve visuals before generating a cover.")
-    data = generate_workspace_cover(data)
+    cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else None
+    if not cover or cover.get("workflow") != "photo_backed":
+        raise PhotoCoverError("Search Pexels or upload your own photograph.")
     data["ebook_design"] = None
     data["ebook_design_digest"] = ""
     data["ebook_preview_html"] = ""
     data["ebook_export_identity"] = None
     data["ebook_design_preflight"] = None
     data["export_ready"] = False
-    set_stage_status(ws, "cover", STATUS_AWAITING, note="Local cover generated; awaiting approval")
-    invalidate_after(ws, "cover", reason="Cover regenerated")
-    _append_history(ws, "generate_cover", local=True)
+    set_stage_status(ws, "cover", STATUS_AWAITING, note="Photo-backed cover awaiting selection")
+    invalidate_after(ws, "cover", reason="Cover photograph updated")
+    _append_history(ws, "photo_cover", local=True, paid=False)
     _recompute_next_action(ws)
     return sync_document_from_workspace(data)
 
@@ -319,7 +330,10 @@ def build_design_ready_fixture_data() -> dict[str, Any]:
     set_stage_status(ws, "manuscript", STATUS_AWAITING)
     data = approve_stage(data, "manuscript")
     data = approve_visuals_local(data)
-    data = generate_and_stage_cover(data)
+    from services.ebook_photo_cover import attach_licensed, select_layout
+
+    data = attach_licensed(data, "event_reception_night", project_id=None)
+    data = select_layout(data, "printed_moment", project_id=None)
     data = approve_stage(data, "cover")
     data = select_and_stage_theme(data, "studio_clean")
     data = approve_stage(data, "design")
@@ -338,6 +352,9 @@ def design_public_view(data: dict, *, project_id: int | None = None) -> dict[str
     cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
     design = data.get("ebook_design") if isinstance(data.get("ebook_design"), dict) else {}
     preview = cover_preview_public_fields(data, project_id=project_id)
+    from services.ebook_photo_cover import photo_cover_public_fields
+
+    photo = photo_cover_public_fields(data, project_id=project_id)
     return {
         "themes": catalog["themes"],
         "theme_samples": catalog["samples"],
@@ -351,9 +368,12 @@ def design_public_view(data: dict, *, project_id: int | None = None) -> dict[str
             "digest": cover.get("cover_digest"),
             "image_path": cover.get("image_path"),
             "local_generated": cover.get("local_generated") is True,
-            "preview_url": preview["preview_url"],
+            "preview_url": preview["preview_url"] or photo.get("preview_url") or "",
             "preview_download_url": preview["preview_download_url"],
-            "preview_verified": preview["preview_verified"],
+            "preview_verified": preview["preview_verified"] or bool(photo.get("approvable")),
+            "photo": photo,
+            "approvable": photo.get("approvable") is True,
+            "workflow": photo.get("workflow") or "",
         },
         "visual_manifest": data.get("ebook_visual_manifest") or {},
         "preflight": pre,

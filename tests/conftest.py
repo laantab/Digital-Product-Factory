@@ -18,6 +18,7 @@ def block_paid_and_external_network(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "")
     monkeypatch.setenv("TAVILY_API_KEY", "")
     monkeypatch.setenv("AI_INTEGRATIONS_OPENAI_API_KEY", "")
+    monkeypatch.setenv("PEXELS_API_KEY", "")
 
     original_connect = socket.socket.connect
     original_create_connection = socket.create_connection

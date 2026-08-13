@@ -1376,7 +1376,13 @@ def approve_stage(data: dict, stage: str, *, choice_id: str | None = None) -> di
             raise ValueError("Approve visuals before the cover.")
         cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else None
         if not cover:
-            raise ValueError("Generate a local cover before approving.")
+            raise ValueError("Upload or select a cover photograph before approving.")
+        from services.ebook_photo_cover import PhotoCoverError, assert_photo_cover_approvable
+
+        try:
+            assert_photo_cover_approvable(data, project_id=data.get("_project_id"))
+        except PhotoCoverError as exc:
+            raise ValueError(str(exc)) from exc
         from services.ebook_cover_local import generic_or_mismatched_cover_reason
 
         reason = generic_or_mismatched_cover_reason(

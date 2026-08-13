@@ -492,8 +492,9 @@ class EbookCoverPreviewTests(unittest.TestCase):
         self._json_patch.stop()
 
     def _awaiting_cover_project(self) -> tuple[int, dict]:
-        from services.ebook_design_workspace import approve_visuals_local, generate_and_stage_cover
+        from services.ebook_design_workspace import approve_visuals_local, stage_photo_cover
         from services.ebook_manuscript_fixtures import build_event_photo_strong_manuscript
+        from services.ebook_photo_cover import attach_licensed, select_layout
         from services.ebook_project_workspace import (
             approve_stage,
             build_acceptance_project_data,
@@ -513,7 +514,9 @@ class EbookCoverPreviewTests(unittest.TestCase):
         set_stage_status(ws, "manuscript", "awaiting_approval")
         data = approve_stage(data, "manuscript")
         data = approve_visuals_local(data)
-        data = generate_and_stage_cover(data)
+        data = attach_licensed(data, "event_reception_night", project_id=None)
+        data = select_layout(data, "printed_moment", project_id=None)
+        data = stage_photo_cover(data)
         project = database.create_project(
             "Cover Preview Isolated",
             "ebook",
@@ -524,6 +527,7 @@ class EbookCoverPreviewTests(unittest.TestCase):
         )
         pid = project["id"]
         data["_project_id"] = pid
+        data["cover_design"]["source"]["project_id"] = pid
         database.update_project(pid, None, data)
         return pid, dict(database.get_project(pid)["data"])
 

@@ -217,6 +217,14 @@ def run_design_preflight(
     )
     if cover_reason:
         _add(report, cover_reason, "fail", f"Cover rejected: {cover_reason.replace('_', ' ')}.")
+    if isinstance(cover, dict) and cover.get("workflow") == "photo_backed":
+        from services.ebook_photo_cover import photo_cover_preflight_failures
+
+        pid = data.get("_project_id")
+        for code, message in photo_cover_preflight_failures(
+            data, project_id=None if pid in (None, "") else int(pid)
+        ):
+            _add(report, code, "fail", message)
 
     placeholders = unresolved_placeholders(md) + ([m.group(0) for m in _PLACEHOLDER_FAIL.finditer(html or "")])
     if placeholders:
@@ -363,6 +371,7 @@ def run_design_preflight(
         "manuscript_digest": ms_digest,
         "design_digest": design_digest,
         "cover_digest": cover_digest,
+        "image_digest": str((cover or {}).get("image_digest") or ((cover or {}).get("source") or {}).get("sha256") or ""),
         "visual_manifest_digest": visual_digest,
         "pdf_sha256": pdf_sha,
         "zip_sha256": zip_sha,

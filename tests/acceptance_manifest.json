@@ -26,6 +26,7 @@
     "tests/test_ebook_correction_estimate.py",
     "tests/test_ebook_manuscript_quality.py",
     "tests/test_ebook_design_export.py",
+    "tests/test_ebook_photo_cover.py",
     "tests/test_ebook_chapter_production.py",
     "tests/test_research_to_build_handoff.py",
     "tests/test_saved_projects_reopen_build.py",

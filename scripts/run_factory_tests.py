@@ -65,6 +65,7 @@ def main() -> int:
     os.environ["OPENAI_API_KEY"] = ""
     os.environ["TAVILY_API_KEY"] = ""
     os.environ["AI_INTEGRATIONS_OPENAI_API_KEY"] = ""
+    os.environ["PEXELS_API_KEY"] = ""
 
     missing = check_dependencies()
     if missing:

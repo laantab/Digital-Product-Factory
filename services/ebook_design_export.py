@@ -84,6 +84,17 @@ def select_theme(data: dict, theme_id: str) -> dict:
             "subtitle": cover.get("subtitle") or data.get("subtitle"),
             "author": cover.get("author") or data.get("author_brand"),
             "theme": cover.get("theme"),
+            **(
+                {
+                    "image_digest": str(
+                        cover.get("image_digest")
+                        or (cover.get("source") or {}).get("sha256")
+                        or ""
+                    )
+                }
+                if (cover.get("image_digest") or (cover.get("source") or {}).get("sha256"))
+                else {}
+            ),
         },
         revision=revision,
     )

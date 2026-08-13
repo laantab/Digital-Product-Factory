@@ -636,27 +636,129 @@ def ebook_workspace_visuals_route(project_id: int):
 
 @app.post("/ebook-workspace/<int:project_id>/cover")
 def ebook_workspace_cover_route(project_id: int):
-    """Generate or reject a deterministic local cover. No paid image generation."""
+    """Photo-backed cover actions. Reject remains available. Never generates a vector cover."""
     body = request.get_json(silent=True) or {}
     try:
-        from services.ebook_design_workspace import generate_and_stage_cover, reject_cover
+        from services.ebook_design_workspace import reject_cover, stage_photo_cover
+        from services.ebook_pexels import PexelsError, search_pexels
+        from services.ebook_photo_cover import (
+            PhotoCoverError,
+            apply_editor,
+            attach_pexels,
+            select_layout,
+        )
         from services.ebook_project_workspace import workspace_public_view
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
             return err[0], err[1]
-        action = str(body.get("action") or "generate").strip().lower()
+        action = str(body.get("action") or "").strip().lower()
         data = dict(project.get("data") or {})
+        data["_project_id"] = project_id
         if action == "reject":
             data = reject_cover(data)
+        elif action == "pexels-search":
+            result = search_pexels(str(body.get("query") or ""), page=int(body.get("page") or 1))
+            ws = data.setdefault("ebook_workspace", {})
+            ws["pexels_cache"] = {
+                "query": result.get("query"),
+                "page": result.get("page"),
+                "photos": result.get("photos"),
+                "next_page": result.get("next_page"),
+            }
+        elif action == "pexels-select":
+            data = attach_pexels(data, str(body.get("photo_id") or ""), project_id=project_id)
+            data = stage_photo_cover(data, project_id=project_id)
+        elif action == "editor":
+            data = apply_editor(data, dict(body.get("editor") or {}), project_id=project_id)
+            data = stage_photo_cover(data, project_id=project_id)
+        elif action == "select":
+            data = select_layout(data, str(body.get("layout_id") or ""), project_id=project_id)
+            data = stage_photo_cover(data, project_id=project_id)
+        elif action in {"generate", "licensed"}:
+            return _error(
+                "Vector covers are disabled. Search Pexels or upload your own photograph.",
+                400,
+            )
         else:
-            data = generate_and_stage_cover(data)
+            return _error("Unknown cover action.", 400)
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
-    except ValueError as exc:
+    except (ValueError, PhotoCoverError, PexelsError) as exc:
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("ebook cover failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/cover-image")
+def ebook_workspace_cover_image_route(project_id: int):
+    """Upload a JPG/PNG cover photograph. Zero paid calls."""
+    try:
+        from services.ebook_design_workspace import stage_photo_cover
+        from services.ebook_photo_cover import PhotoCoverError, attach_upload
+        from services.ebook_project_workspace import workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        license_note = str(request.form.get("license_note") or "").strip()
+        owned = str(request.form.get("i_own_this") or "").strip().lower() in {"1", "true", "on", "yes"}
+        upload = request.files.get("file")
+        if upload is None or not upload.filename:
+            return _error("Choose a JPG or PNG photograph.", 400)
+        declared = str(upload.mimetype or "").lower()
+        if declared and declared not in {"image/jpeg", "image/jpg", "image/png", "application/octet-stream"}:
+            return _error("Unsupported or corrupted image. Upload a JPG or PNG.", 400)
+        raw = upload.read()
+        data = dict(project.get("data") or {})
+        data["_project_id"] = project_id
+        data = attach_upload(
+            data,
+            raw,
+            filename=str(upload.filename or "upload.png"),
+            license_note=license_note,
+            project_id=project_id,
+            owned=owned,
+        )
+        data = stage_photo_cover(data, project_id=project_id)
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except (ValueError, PhotoCoverError) as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook cover upload failed")
+        return _error(str(exc), 500)
+
+
+@app.get("/ebook-workspace/<int:project_id>/cover-variant")
+def ebook_workspace_cover_variant_route(project_id: int):
+    """Read-only photo-cover variant (full or thumbnail). Never generates."""
+    from io import BytesIO
+
+    from services.ebook_photo_cover import PhotoCoverError, verified_variant_asset
+    from services.ebook_project_workspace import assert_no_paid_side_effects_on_read
+
+    try:
+        assert_no_paid_side_effects_on_read()
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        asset = verified_variant_asset(
+            dict(project.get("data") or {}),
+            project_id=project_id,
+            layout=str(request.args.get("layout") or ""),
+            digest=str(request.args.get("digest") or ""),
+            size=str(request.args.get("size") or "full"),
+        )
+        response = send_file(BytesIO(asset["bytes"]), mimetype=asset["mimetype"])
+        response.headers["X-Ebook-Cover-Digest"] = asset["digest"]
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except PhotoCoverError as exc:
+        return _error(str(exc), 404)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook cover variant failed")
         return _error(str(exc), 500)
 
 

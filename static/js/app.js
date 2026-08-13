@@ -4862,28 +4862,99 @@ function showEbookWorkspaceStage(stageId) {
     `;
   } else if (stageId === "cover") {
     const c = (ws.design || {}).cover || {};
+    const photo = c.photo || {};
     const digest = String(c.digest || "");
     const previewUrl = (c.preview_verified && c.preview_url) ? String(c.preview_url) : "";
     const downloadUrl = previewUrl ? String(c.preview_download_url || `${previewUrl}${previewUrl.indexOf("?") >= 0 ? "&" : "?"}download=1`) : "";
     const awaiting = stage.status !== "approved";
+    const editor = photo.editor || {};
+    const variants = photo.variants || [];
+    const selected = String(photo.selected_layout || "");
+    const ai = photo.ai_cover || { enabled: false, configured: false, label: "Optional paid feature — not configured" };
+    const pexels = photo.pexels || {};
+    const variantCards = variants.map((v) => {
+      const on = selected && selected === v.layout_id;
+      return `<label class="block rounded-xl border ${on ? "border-brand-400 ring-2 ring-brand-300" : "border-slate-200"} p-2 bg-white">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <span class="text-sm font-semibold text-slate-900">${escapeHtml(v.label || v.layout_id)}</span>
+          <input type="radio" name="ws-cover-layout" data-ws-cover-layout="${escapeHtml(v.layout_id)}" ${on ? "checked" : ""} ${v.full_url ? "" : "disabled"} />
+        </div>
+        ${v.thumb_url ? `<img alt="${escapeHtml(v.label || "")} thumbnail" class="w-24 h-auto mx-auto mb-2 rounded border border-slate-200 object-contain" src="${escapeHtml(v.thumb_url)}" />` : `<p class="text-xs text-slate-500 mb-2">Thumbnail after a photograph is registered.</p>`}
+        ${v.full_url ? `<img ${on ? "data-ws-cover-preview" : ""} alt="${escapeHtml(v.label || "")} full preview" class="block max-h-80 w-auto max-w-full mx-auto rounded border border-slate-200 object-contain" src="${escapeHtml(v.full_url)}" />` : ""}
+        <p class="text-xs mt-1 ${v.quality_pass ? "text-emerald-800" : "text-rose-700"}">${v.quality_pass ? "Quality checks passed" : escapeHtml((v.findings || []).join(", ") || "Not rendered")}</p>
+      </label>`;
+    }).join("");
+    const suggested = (pexels.suggested || []).map((q) =>
+      `<button type="button" class="text-xs rounded-full border border-slate-300 px-2 py-1 bg-white" data-ws-cover-pexels-suggest="${escapeHtml(q)}">${escapeHtml(q)}</button>`
+    ).join("");
+    const pexelsPhotos = (pexels.photos || []).map((p) => `
+      <article class="rounded-xl border border-slate-200 bg-white p-2 text-xs">
+        ${p.preview_url ? `<img alt="${escapeHtml(p.attribution || "Pexels photo")}" class="w-full h-40 object-cover rounded mb-2" src="${escapeHtml(p.preview_url)}" />` : ""}
+        <p class="font-semibold text-slate-800">${escapeHtml(p.photographer || "Unknown photographer")}</p>
+        <p class="text-slate-600">${escapeHtml(String(p.width || ""))}×${escapeHtml(String(p.height || ""))} · ${escapeHtml(p.orientation || "")}</p>
+        ${p.page_url ? `<a class="text-brand-700 underline" href="${escapeHtml(p.page_url)}" target="_blank" rel="noopener">Photo on Pexels</a>` : `<p>${escapeHtml(p.attribution || "")}</p>`}
+        <button type="button" class="btn-secondary text-xs mt-2 w-full" data-ws-cover-pexels-select="${escapeHtml(String(p.photo_id || ""))}">Select</button>
+      </article>`).join("");
     body = `
       <h3 class="text-sm font-bold text-slate-900 mb-2">Cover · ${escapeHtml(stage.status_label || "")}</h3>
       <p class="text-sm text-slate-700"><b>${escapeHtml(c.title || ws.title || "")}</b></p>
       <p class="text-sm text-slate-600">${escapeHtml(c.subtitle || ws.subtitle || "")}</p>
       <p class="text-sm text-slate-600 mb-2">Author: ${escapeHtml(c.author || ws.author || "")}</p>
-      <p class="text-xs text-slate-500 mb-3">Theme: ${escapeHtml(c.theme || "—")} · Digest: ${escapeHtml((c.digest || "").slice(0, 16) || "—")}</p>
-      ${
-        previewUrl
-          ? `<div class="mb-3">
-              <img data-ws-cover-preview alt="Ebook cover preview" class="block max-h-[32rem] w-auto max-w-full mx-auto rounded-lg border border-slate-200 bg-slate-100 object-contain" src="${escapeHtml(previewUrl)}" />
-              <p data-ws-cover-preview-error class="hidden mt-2 text-sm text-rose-800">Cover preview unavailable — approval blocked</p>
-              ${downloadUrl ? `<p class="mt-2 text-center"><a data-ws-cover-download class="text-sm text-brand-700 underline" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener">Download / full-size preview</a></p>` : ""}
-            </div>`
-          : `<p data-ws-cover-preview-error class="text-sm text-rose-800 mb-3">Cover preview unavailable — approval blocked</p>`
-      }
+      <p class="text-xs text-amber-800 mb-3">Vector covers are rejected. Search Pexels or upload your own photograph. Approve stays off until a variant is selected and both full-size and thumbnail checks pass.</p>
+      ${photo.vector_rejected ? `<p class="text-sm text-rose-800 mb-3">The previous vector cover cannot be approved.</p>` : ""}
+      <p data-ws-cover-preview-error class="${previewUrl || variants.some((v) => v.full_url) ? "hidden" : ""} mt-2 mb-3 text-sm text-rose-800">Cover preview unavailable — approval blocked</p>
+      ${ws.gates && ws.gates.cover_enabled ? `
+      <div class="rounded-xl border border-slate-200 bg-white p-3 mb-3 space-y-2">
+        <h4 class="text-xs font-semibold uppercase text-slate-500">SEARCH PEXELS</h4>
+        ${pexels.configured ? "" : `<p class="text-sm text-amber-900">${escapeHtml(pexels.message || "Pexels is not configured. Add PEXELS_API_KEY or upload your own photograph.")}</p>`}
+        <label class="block text-sm text-slate-700">Search
+          <input data-ws-cover-pexels-query class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value="${escapeHtml(pexels.query || "")}" placeholder="event photographer camera" />
+        </label>
+        <div class="flex flex-wrap gap-1">${suggested}</div>
+        <button type="button" class="btn-secondary text-sm" data-ws-cover-pexels-search>Search Pexels</button>
+        <div class="grid gap-2 sm:grid-cols-3">${pexelsPhotos || "<p class='text-sm text-slate-500 sm:col-span-3'>Portrait results appear here. Nothing is selected until you choose a photograph.</p>"}</div>
+        ${pexels.next_page ? `<button type="button" class="btn-secondary text-sm" data-ws-cover-pexels-more>Load More</button>` : ""}
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-3 mb-3 space-y-2">
+        <h4 class="text-xs font-semibold uppercase text-slate-500">UPLOAD MY PHOTO</h4>
+        <p class="text-xs text-slate-600">JPG/JPEG/PNG only. Photographs of people, logos, artwork, or private property may require extra rights. This Factory never claims legal clearance.</p>
+        <label class="flex items-start gap-2 text-sm text-slate-800">
+          <input type="checkbox" data-ws-cover-own class="mt-1" />
+          <span>I own this image or have permission to use it commercially.</span>
+        </label>
+        <label class="block text-sm text-slate-700">Source / license note (optional)
+          <input data-ws-cover-license class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" placeholder="e.g. Personal photograph; I have rights to use this image" />
+        </label>
+        <input data-ws-cover-file type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" class="block text-sm" />
+        <button type="button" class="btn-secondary text-sm" data-ws-cover-upload>Upload My Photo</button>
+        ${photo.source && photo.source.filename ? `<p class="text-xs text-slate-600">Source: ${escapeHtml(photo.source.source_type || "")} · ${escapeHtml(photo.source.filename || "")} · ${escapeHtml(String(photo.source.width || ""))}×${escapeHtml(String(photo.source.height || ""))} · ${(photo.source.sha256 || "").slice(0, 16)}${photo.source.photographer ? " · " + escapeHtml(photo.source.photographer) : ""}</p>` : ""}
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-3 mb-3 grid gap-2 sm:grid-cols-2">
+        <h4 class="text-xs font-semibold uppercase text-slate-500 sm:col-span-2">2. Editor (approved text is locked)</h4>
+        <label class="text-xs">Zoom <input data-ws-cover-zoom type="range" min="1" max="2.4" step="0.05" value="${escapeHtml(String(editor.zoom || 1))}" /></label>
+        <label class="text-xs">Overlay <input data-ws-cover-overlay type="range" min="0.25" max="0.85" step="0.01" value="${escapeHtml(String(editor.overlay_strength || 0.58))}" /></label>
+        <label class="text-xs">Focal X <input data-ws-cover-fx type="range" min="0.08" max="0.92" step="0.01" value="${escapeHtml(String(editor.focal_x || 0.52))}" /></label>
+        <label class="text-xs">Focal Y <input data-ws-cover-fy type="range" min="0.08" max="0.92" step="0.01" value="${escapeHtml(String(editor.focal_y || 0.42))}" /></label>
+        <label class="text-xs">Title size <input data-ws-cover-title-size type="range" min="28" max="56" step="1" value="${escapeHtml(String(editor.title_size || 40))}" /></label>
+        <label class="text-xs">Subtitle size <input data-ws-cover-sub-size type="range" min="12" max="20" step="1" value="${escapeHtml(String(editor.subtitle_size || 14))}" /></label>
+        <label class="text-xs">Author size <input data-ws-cover-author-size type="range" min="13" max="24" step="1" value="${escapeHtml(String(editor.author_size || 16))}" /></label>
+        <label class="text-xs">Title position <input data-ws-cover-title-y type="range" min="0.04" max="0.22" step="0.01" value="${escapeHtml(String(editor.title_y || 0.07))}" /></label>
+        <label class="text-xs">Subtitle position <input data-ws-cover-sub-y type="range" min="0.16" max="0.42" step="0.01" value="${escapeHtml(String(editor.subtitle_y || 0.26))}" /></label>
+        <label class="text-xs">Author position <input data-ws-cover-author-y type="range" min="0.82" max="0.96" step="0.01" value="${escapeHtml(String(editor.author_y || 0.915))}" /></label>
+        <label class="text-xs">Accent <input data-ws-cover-accent type="color" value="${escapeHtml(editor.accent || "#d4a017")}" /></label>
+        <button type="button" class="btn-secondary text-sm sm:col-span-2" data-ws-cover-apply-editor>Apply crop and type settings</button>
+      </div>
+      <h4 class="text-xs font-semibold uppercase text-slate-500 mb-2">3. Variants (full size + thumbnail) — select one</h4>
+      <div class="grid gap-3 sm:grid-cols-3 mb-3">${variantCards || "<p class='text-sm text-slate-500'>Register a photograph to render the three layouts.</p>"}</div>
+      <details class="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <summary class="text-sm font-semibold text-slate-800">Optional AI cover</summary>
+        <p class="text-sm text-slate-600 mt-2">${escapeHtml(ai.label || "Optional paid feature — not configured")}</p>
+        <button type="button" class="btn-secondary text-sm mt-2 opacity-60 cursor-not-allowed" data-ws-cover-ai disabled>Optional paid feature — not configured</button>
+      </details>
+      ` : `<p class="text-xs text-slate-500">Server status: ${escapeHtml(stage.status_label || stage.status || "")}</p>`}
+      ${downloadUrl ? `<p class="mt-2 mb-3"><a data-ws-cover-download class="text-sm text-brand-700 underline" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener">Download / full-size preview</a></p>` : ""}
       <div class="flex flex-wrap gap-2">
-        ${ws.gates && ws.gates.cover_enabled ? `<button type="button" class="btn-secondary text-sm" data-ws-generate-cover>Generate local cover</button>` : ""}
-        ${digest && awaiting ? `<button type="button" class="btn-primary text-sm opacity-60 cursor-not-allowed" data-ws-approve-cover disabled>Approve cover</button><button type="button" class="btn-secondary text-sm" data-ws-reject-cover>Reject cover</button>` : ""}
+        ${awaiting ? `<button type="button" class="btn-primary text-sm opacity-60 cursor-not-allowed" data-ws-approve-cover disabled>Approve cover</button><button type="button" class="btn-secondary text-sm" data-ws-reject-cover>Reject cover</button>` : ""}
       </div>
     `;
   } else if (stageId === "design") {
@@ -4964,13 +5035,108 @@ function showEbookWorkspaceStage(stageId) {
     if (el) el.onclick = fn;
   };
   bind("[data-ws-approve-visuals]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/visuals`, {}, "Visuals approved."));
-  bind("[data-ws-generate-cover]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/cover`, { action: "generate" }, "Local cover generated."));
   bind("[data-ws-reject-cover]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/cover`, { action: "reject" }, "Cover rejected."));
+  const pexelsQuery = () => {
+    const el = panel.querySelector("[data-ws-cover-pexels-query]");
+    return el ? el.value : "";
+  };
+  bind("[data-ws-cover-pexels-search]", () => postEbookWorkspaceAction(
+    `/ebook-workspace/${ws.project_id}/cover`,
+    { action: "pexels-search", query: pexelsQuery(), page: 1 },
+    "Pexels results updated."
+  ));
+  bind("[data-ws-cover-pexels-more]", () => postEbookWorkspaceAction(
+    `/ebook-workspace/${ws.project_id}/cover`,
+    { action: "pexels-search", query: pexelsQuery(), page: Number((((((ws.design || {}).cover || {}).photo || {}).pexels) || {}).next_page || 2) },
+    "More Pexels results loaded."
+  ));
+  panel.querySelectorAll("[data-ws-cover-pexels-suggest]").forEach((btn) => {
+    btn.onclick = () => {
+      const q = btn.getAttribute("data-ws-cover-pexels-suggest") || "";
+      const inp = panel.querySelector("[data-ws-cover-pexels-query]");
+      if (inp) inp.value = q;
+      postEbookWorkspaceAction(
+        `/ebook-workspace/${ws.project_id}/cover`,
+        { action: "pexels-search", query: q, page: 1 },
+        "Pexels results updated."
+      );
+    };
+  });
+  panel.querySelectorAll("[data-ws-cover-pexels-select]").forEach((btn) => {
+    btn.onclick = () => postEbookWorkspaceAction(
+      `/ebook-workspace/${ws.project_id}/cover`,
+      { action: "pexels-select", photo_id: btn.getAttribute("data-ws-cover-pexels-select") },
+      "Pexels photograph registered. Select a layout."
+    );
+  });
+  bind("[data-ws-cover-apply-editor]", () => {
+    const num = (sel, fallback) => {
+      const el = panel.querySelector(sel);
+      const v = el ? Number(el.value) : fallback;
+      return Number.isFinite(v) ? v : fallback;
+    };
+    const accentEl = panel.querySelector("[data-ws-cover-accent]");
+    postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/cover`, {
+      action: "editor",
+      editor: {
+        zoom: num("[data-ws-cover-zoom]", 1),
+        overlay_strength: num("[data-ws-cover-overlay]", 0.58),
+        focal_x: num("[data-ws-cover-fx]", 0.52),
+        focal_y: num("[data-ws-cover-fy]", 0.42),
+        title_size: num("[data-ws-cover-title-size]", 40),
+        subtitle_size: num("[data-ws-cover-sub-size]", 14),
+        author_size: num("[data-ws-cover-author-size]", 16),
+        title_y: num("[data-ws-cover-title-y]", 0.07),
+        subtitle_y: num("[data-ws-cover-sub-y]", 0.26),
+        author_y: num("[data-ws-cover-author-y]", 0.915),
+        accent: accentEl ? accentEl.value : "#d4a017",
+      },
+    }, "Cover editor applied. Select a layout.");
+  });
+  bind("[data-ws-cover-upload]", async () => {
+    const fileEl = panel.querySelector("[data-ws-cover-file]");
+    const noteEl = panel.querySelector("[data-ws-cover-license]");
+    const ownEl = panel.querySelector("[data-ws-cover-own]");
+    const file = fileEl && fileEl.files && fileEl.files[0];
+    if (!file) {
+      toast("Choose a JPG or PNG photograph.", "error");
+      return;
+    }
+    if (!ownEl || !ownEl.checked) {
+      toast("Confirm that you own this image or have permission to use it commercially.", "error");
+      return;
+    }
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("license_note", noteEl ? noteEl.value : "");
+    fd.append("i_own_this", "1");
+    try {
+      const res = await fetch(`/ebook-workspace/${ws.project_id}/cover-image`, { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      if (data.workspace) renderEbookWorkspace(data.workspace);
+      toast("Photograph uploaded. Select a layout.");
+    } catch (e) {
+      toast(e.message || String(e), "error");
+    }
+  });
+  panel.querySelectorAll("[data-ws-cover-layout]").forEach((radio) => {
+    radio.onchange = () => {
+      if (!radio.checked) return;
+      postEbookWorkspaceAction(
+        `/ebook-workspace/${ws.project_id}/cover`,
+        { action: "select", layout_id: radio.getAttribute("data-ws-cover-layout") },
+        "Layout selected. Review full size and thumbnail before approving."
+      );
+    };
+  });
   const approveCover = panel.querySelector("[data-ws-approve-cover]");
   const coverImg = panel.querySelector("[data-ws-cover-preview]");
   const coverErr = panel.querySelector("[data-ws-cover-preview-error]");
+  const coverApprovable = !!(ws.design && ws.design.cover && ws.design.cover.approvable);
   const enableCoverApprove = () => {
     if (!approveCover) return;
+    if (!coverApprovable) return;
     approveCover.disabled = false;
     approveCover.classList.remove("opacity-60", "cursor-not-allowed");
     if (coverErr) coverErr.classList.add("hidden");
