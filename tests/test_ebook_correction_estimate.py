@@ -459,21 +459,25 @@ class CorrectionEstimateWiringTests(unittest.TestCase):
         )
 
     def test_project_4249_estimate_copy_does_not_change_manuscript_or_spend(self):
+        from services.ebook_project_workspace import accepted_chapter_digests, stage_status
+
         live = database.get_project(4249)
-        if not live:
-            self.skipTest("project 4249 not present")
+        self.assertIsNotNone(live, "project 4249 not present")
         data = copy.deepcopy(live["data"])
         data["_project_id"] = 4249
         before_spent = float((data["ebook_workspace"]["paid_call_ledger"] or {}).get("spent_usd") or 0)
         before_content = data.get("content") or ""
         before_qa = copy.deepcopy((data.get("ebook_workspace") or {}).get("manuscript_qa"))
-        from services.ebook_project_workspace import accepted_chapter_digests
-
         before_digests = accepted_chapter_digests(data)
         with patch("services.ebook.generate_one_chapter") as mocked:
-            est = estimate_paid_action(data, "correct_manuscript")
-            mocked.assert_not_called()
-        self.assertEqual(float(est["estimate"]["estimate_cost_usd"]), 0.0)
+            if stage_status(data["ebook_workspace"], "manuscript") != STATUS_NEEDS_CORRECTION:
+                with self.assertRaises(ValueError):
+                    estimate_paid_action(data, "correct_manuscript")
+                mocked.assert_not_called()
+            else:
+                est = estimate_paid_action(data, "correct_manuscript")
+                mocked.assert_not_called()
+                self.assertEqual(float(est["estimate"]["estimate_cost_usd"]), 0.0)
         self.assertEqual(
             float(data["ebook_workspace"]["paid_call_ledger"]["spent_usd"]),
             before_spent,

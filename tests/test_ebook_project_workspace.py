@@ -4,11 +4,14 @@ Zero paid/external calls. Uses Flask test client + HTML/JS structure checks.
 """
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import os
 import re
 import sys
 import unittest
+import uuid
 from pathlib import Path
 from unittest.mock import patch
 
@@ -455,6 +458,189 @@ class EbookWorkspaceJsHtmlTests(unittest.TestCase):
         self.assertIsNotNone(open_fn)
         self.assertNotIn("/generate-ebook", open_fn.group(0))
         self.assertNotIn("generate-manuscript", open_fn.group(0))
+
+    def test_cover_preview_is_gated_until_verified_image_loads(self):
+        js = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("data-ws-cover-preview", js)
+        self.assertIn("Cover preview unavailable — approval blocked", js)
+        self.assertIn("preview_url", js)
+        self.assertIn("preview_verified", js)
+        self.assertIn("data-ws-cover-download", js)
+        self.assertIn("data-ws-approve-cover disabled", js)
+        self.assertIn("data-ws-reject-cover", js)
+        self.assertIn("enableCoverApprove", js)
+        self.assertIn("blockCoverApprove", js)
+        self.assertIn("if (approveCover.disabled) return", js)
+
+
+class EbookCoverPreviewTests(unittest.TestCase):
+    """Existing local covers display through a digest-verified read-only route."""
+
+    def setUp(self):
+        self.client = app.test_client()
+        app.config["TESTING"] = True
+        self._client_patch = patch("ai_client.get_client", side_effect=AssertionError("paid client"))
+        self._chat_patch = patch("ai_client.chat", side_effect=AssertionError("paid chat"))
+        self._json_patch = patch("ai_client.chat_json", side_effect=AssertionError("paid chat_json"))
+        self._client_patch.start()
+        self._chat_patch.start()
+        self._json_patch.start()
+
+    def tearDown(self):
+        self._client_patch.stop()
+        self._chat_patch.stop()
+        self._json_patch.stop()
+
+    def _awaiting_cover_project(self) -> tuple[int, dict]:
+        from services.ebook_design_workspace import approve_visuals_local, generate_and_stage_cover
+        from services.ebook_manuscript_fixtures import build_event_photo_strong_manuscript
+        from services.ebook_project_workspace import (
+            approve_stage,
+            build_acceptance_project_data,
+            set_stage_status,
+        )
+
+        data = build_acceptance_project_data()
+        data["acceptance_marker"] = None
+        pkg = f"ebook-cvprev-{uuid.uuid4().hex[:16]}"
+        data["artifact_id"] = pkg
+        data["package_id"] = pkg
+        md = build_event_photo_strong_manuscript()
+        data["content"] = md
+        data["ebook"] = md
+        ws = data["ebook_workspace"]
+        ws["marker"] = None
+        set_stage_status(ws, "manuscript", "awaiting_approval")
+        data = approve_stage(data, "manuscript")
+        data = approve_visuals_local(data)
+        data = generate_and_stage_cover(data)
+        project = database.create_project(
+            "Cover Preview Isolated",
+            "ebook",
+            data,
+            user_saved=False,
+            system_test=True,
+            temporary=True,
+        )
+        pid = project["id"]
+        data["_project_id"] = pid
+        database.update_project(pid, None, data)
+        return pid, dict(database.get_project(pid)["data"])
+
+    def test_existing_cover_displays_without_regeneration(self):
+        from services.ebook_project_workspace import manuscript_digest
+
+        pid, data = self._awaiting_cover_project()
+        cover = data["cover_design"]
+        digest = cover["cover_digest"]
+        before_ms = manuscript_digest(data)
+        before_ledger = copy.deepcopy(data["ebook_workspace"]["paid_call_ledger"])
+        before_digest = digest
+        before_pdf = open(cover["local_cover_pdf"], "rb").read()
+
+        with patch("services.ebook_design_export.generate_workspace_cover") as gen:
+            with patch("services.ebook_design_workspace.generate_and_stage_cover") as stage:
+                ws = self.client.get(f"/ebook-workspace/{pid}").get_json()["workspace"]
+                preview = self.client.get(
+                    f"/ebook-workspace/{pid}/cover-preview",
+                    query_string={"digest": digest},
+                )
+                again = self.client.get(f"/ebook-workspace/{pid}")
+                gen.assert_not_called()
+                stage.assert_not_called()
+
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview.mimetype, "image/png")
+        self.assertTrue(preview.data.startswith(b"\x89PNG"))
+        self.assertEqual(preview.headers.get("X-Ebook-Cover-Digest"), digest)
+        c = ws["design"]["cover"]
+        self.assertTrue(c["preview_verified"])
+        self.assertIn(digest, c["preview_url"])
+        self.assertIn("download=1", c["preview_download_url"])
+        self.assertEqual(c["digest"], digest)
+        rail = {s["id"]: s["status"] for s in ws["rail"]}
+        self.assertEqual(rail["cover"], "awaiting_approval")
+
+        pdf = self.client.get(
+            f"/ebook-workspace/{pid}/cover-preview",
+            query_string={"digest": digest, "download": "1"},
+        )
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf.mimetype, "application/pdf")
+        self.assertTrue(pdf.data.startswith(b"%PDF"))
+        self.assertEqual(hashlib.sha256(pdf.data).hexdigest(), digest)
+        self.assertEqual(pdf.data, before_pdf)
+
+        stored = database.get_project(pid)["data"]
+        self.assertEqual(stored["cover_design"]["cover_digest"], before_digest)
+        self.assertEqual(manuscript_digest(stored), before_ms)
+        self.assertEqual(stored["ebook_workspace"]["paid_call_ledger"], before_ledger)
+        self.assertEqual(open(stored["cover_design"]["local_cover_pdf"], "rb").read(), before_pdf)
+        self.assertEqual(again.status_code, 200)
+
+    def test_stale_mismatched_and_cross_project_covers_fail(self):
+        pid_a, data_a = self._awaiting_cover_project()
+        pid_b, data_b = self._awaiting_cover_project()
+        digest_a = data_a["cover_design"]["cover_digest"]
+        digest_b = data_b["cover_design"]["cover_digest"]
+        self.assertNotEqual(digest_a, digest_b)
+
+        stale = self.client.get(
+            f"/ebook-workspace/{pid_a}/cover-preview",
+            query_string={"digest": "0" * 64},
+        )
+        self.assertEqual(stale.status_code, 404)
+        self.assertIn("unavailable", (stale.get_json() or {}).get("error", "").lower())
+
+        bad_fmt = self.client.get(
+            f"/ebook-workspace/{pid_a}/cover-preview",
+            query_string={"digest": digest_a[:16]},
+        )
+        self.assertEqual(bad_fmt.status_code, 400)
+
+        crossed = self.client.get(
+            f"/ebook-workspace/{pid_a}/cover-preview",
+            query_string={"digest": digest_b},
+        )
+        self.assertEqual(crossed.status_code, 404)
+
+        missing = self.client.post(
+            "/ebook-workspace",
+            json={
+                "topic": "No cover topic",
+                "audience": "testers",
+                "outcome": "none",
+                "author": "Test Author",
+                "name": "No Cover Preview Project",
+            },
+        )
+        self.assertEqual(missing.status_code, 200, missing.get_data(as_text=True))
+        missing_id = missing.get_json()["project"]["id"]
+        missing_r = self.client.get(
+            f"/ebook-workspace/{missing_id}/cover-preview",
+            query_string={"digest": digest_a},
+        )
+        self.assertEqual(missing_r.status_code, 404)
+
+        after_a = database.get_project(pid_a)["data"]
+        self.assertEqual(after_a["cover_design"]["cover_digest"], digest_a)
+
+    def test_frozen_2472_preview_does_not_mutate(self):
+        live = database.get_project(FROZEN_LIVE_EBOOK_PROJECT_ID)
+        self.assertIsNotNone(live)
+        before = copy.deepcopy(live["data"])
+        r = self.client.get(
+            f"/ebook-workspace/{FROZEN_LIVE_EBOOK_PROJECT_ID}/cover-preview",
+            query_string={"digest": "a" * 64},
+        )
+        self.assertIn(r.status_code, (400, 404))
+        after = database.get_project(FROZEN_LIVE_EBOOK_PROJECT_ID)["data"]
+        self.assertEqual(after.get("content"), before.get("content"))
+        self.assertEqual(
+            (after.get("ebook_workspace") or {}).get("paid_call_ledger"),
+            (before.get("ebook_workspace") or {}).get("paid_call_ledger"),
+        )
+        self.assertEqual(after.get("cover_design"), before.get("cover_design"))
 
 
 if __name__ == "__main__":

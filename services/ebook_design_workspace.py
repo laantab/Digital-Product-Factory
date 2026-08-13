@@ -4,6 +4,10 @@ Server-authoritative. UI cannot invent PASS or Export Ready. Zero paid calls.
 """
 from __future__ import annotations
 
+import hashlib
+import os
+import re
+from pathlib import Path
 from typing import Any
 
 from services.ebook_design_export import (
@@ -97,6 +101,115 @@ def reject_cover(data: dict) -> dict:
     _append_history(ws, "reject_cover")
     _recompute_next_action(ws)
     return sync_document_from_workspace(data)
+
+
+COVER_PREVIEW_UNAVAILABLE = "Cover preview unavailable — approval blocked"
+_COVER_DIGEST_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+class CoverPreviewUnavailable(ValueError):
+    """Read-only cover preview cannot be served."""
+
+    def __init__(self, message: str = COVER_PREVIEW_UNAVAILABLE, status_code: int = 404):
+        super().__init__(message)
+        self.status_code = int(status_code)
+
+
+def _cover_file_under_package(path: str, package_id: str) -> str | None:
+    from services.ebook_package import EXPORTS_DIR
+
+    if not path or not package_id or not os.path.isfile(path):
+        return None
+    try:
+        real = Path(path).resolve()
+        pkg_root = (Path(EXPORTS_DIR) / str(package_id)).resolve()
+        real.relative_to(pkg_root)
+    except (OSError, ValueError):
+        return None
+    return str(real)
+
+
+def verified_cover_preview_asset(
+    data: dict,
+    *,
+    project_id: int | None,
+    digest: str,
+    render_png: bool = False,
+) -> dict[str, Any]:
+    """Return stored cover bytes only when project + digest match. Never generates."""
+    requested = str(digest or "").strip().lower()
+    if not _COVER_DIGEST_RE.match(requested):
+        raise CoverPreviewUnavailable(COVER_PREVIEW_UNAVAILABLE, status_code=400)
+    cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else None
+    if not cover:
+        raise CoverPreviewUnavailable()
+    stored = str(cover.get("cover_digest") or data.get("ebook_cover_digest") or "").strip().lower()
+    if stored != requested:
+        raise CoverPreviewUnavailable()
+    pkg = str(data.get("package_id") or data.get("artifact_id") or "").strip()
+    cover_pkg = str(cover.get("package_id") or "").strip()
+    if not pkg or (cover_pkg and cover_pkg != pkg):
+        raise CoverPreviewUnavailable()
+    pdf_path = _cover_file_under_package(str(cover.get("local_cover_pdf") or ""), pkg)
+    if not pdf_path:
+        raise CoverPreviewUnavailable()
+    with open(pdf_path, "rb") as fh:
+        pdf_bytes = fh.read()
+    if hashlib.sha256(pdf_bytes).hexdigest() != stored:
+        raise CoverPreviewUnavailable()
+    png_path = _cover_file_under_package(str(cover.get("image_path") or ""), pkg)
+    png_bytes = b""
+    if render_png:
+        try:
+            import fitz
+
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            try:
+                pix = doc[0].get_pixmap(matrix=fitz.Matrix(2.0, 2.0), alpha=False)
+                png_bytes = pix.tobytes("png")
+            finally:
+                doc.close()
+        except Exception:
+            png_bytes = b""
+        if not png_bytes and png_path:
+            with open(png_path, "rb") as fh:
+                png_bytes = fh.read()
+        if not png_bytes:
+            raise CoverPreviewUnavailable()
+    return {
+        "project_id": project_id,
+        "digest": stored,
+        "package_id": pkg,
+        "pdf_path": pdf_path,
+        "pdf_bytes": pdf_bytes,
+        "png_path": png_path or "",
+        "png_bytes": png_bytes,
+        "paid_call": False,
+        "generated": False,
+    }
+
+
+def cover_preview_public_fields(data: dict, *, project_id: int | None) -> dict[str, Any]:
+    """Cheap verification for the workspace JSON. Does not rasterize or generate."""
+    cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
+    digest = str(cover.get("cover_digest") or "").strip()
+    pid = project_id if project_id is not None else data.get("_project_id")
+    preview_url = ""
+    preview_verified = False
+    if pid and digest:
+        try:
+            verified_cover_preview_asset(
+                data, project_id=int(pid), digest=digest, render_png=False
+            )
+            preview_verified = True
+            preview_url = f"/ebook-workspace/{int(pid)}/cover-preview?digest={digest}"
+        except (CoverPreviewUnavailable, TypeError, ValueError):
+            preview_verified = False
+    return {
+        "preview_url": preview_url,
+        "preview_download_url": f"{preview_url}&download=1" if preview_url else "",
+        "preview_verified": preview_verified,
+    }
 
 
 def select_and_stage_theme(data: dict, theme_id: str) -> dict:
@@ -218,12 +331,13 @@ def build_design_ready_fixture_data() -> dict[str, Any]:
     return data
 
 
-def design_public_view(data: dict) -> dict[str, Any]:
+def design_public_view(data: dict, *, project_id: int | None = None) -> dict[str, Any]:
     catalog = theme_catalog_payload()
     pre = data.get("ebook_design_preflight") if isinstance(data.get("ebook_design_preflight"), dict) else {}
     identity = data.get("ebook_export_identity") if isinstance(data.get("ebook_export_identity"), dict) else {}
     cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
     design = data.get("ebook_design") if isinstance(data.get("ebook_design"), dict) else {}
+    preview = cover_preview_public_fields(data, project_id=project_id)
     return {
         "themes": catalog["themes"],
         "theme_samples": catalog["samples"],
@@ -237,6 +351,9 @@ def design_public_view(data: dict) -> dict[str, Any]:
             "digest": cover.get("cover_digest"),
             "image_path": cover.get("image_path"),
             "local_generated": cover.get("local_generated") is True,
+            "preview_url": preview["preview_url"],
+            "preview_download_url": preview["preview_download_url"],
+            "preview_verified": preview["preview_verified"],
         },
         "visual_manifest": data.get("ebook_visual_manifest") or {},
         "preflight": pre,

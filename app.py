@@ -250,6 +250,61 @@ def get_ebook_workspace_route(project_id: int):
         return _error(str(exc), 500)
 
 
+@app.get("/ebook-workspace/<int:project_id>/cover-preview")
+def ebook_workspace_cover_preview_route(project_id: int):
+    """Read-only digest-verified cover bytes. Never generates or charges."""
+    from io import BytesIO
+
+    from services.ebook_design_workspace import (
+        COVER_PREVIEW_UNAVAILABLE,
+        CoverPreviewUnavailable,
+        verified_cover_preview_asset,
+    )
+    from services.ebook_project_workspace import assert_no_paid_side_effects_on_read
+
+    try:
+        assert_no_paid_side_effects_on_read()
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        digest = str(request.args.get("digest") or "").strip()
+        download = str(request.args.get("download") or "").strip().lower() in {
+            "1",
+            "true",
+            "pdf",
+        }
+        asset = verified_cover_preview_asset(
+            dict(project.get("data") or {}),
+            project_id=project_id,
+            digest=digest,
+            render_png=not download,
+        )
+        if download:
+            response = send_file(
+                BytesIO(asset["pdf_bytes"]),
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name="cover_preview.pdf",
+            )
+        else:
+            response = send_file(
+                BytesIO(asset["png_bytes"]),
+                mimetype="image/png",
+                as_attachment=False,
+                download_name="cover_preview.png",
+            )
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Ebook-Cover-Digest"] = asset["digest"]
+        return response
+    except CoverPreviewUnavailable as exc:
+        return _error(str(exc) or COVER_PREVIEW_UNAVAILABLE, int(exc.status_code or 404))
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook cover preview failed")
+        return _error(COVER_PREVIEW_UNAVAILABLE, 404)
+
+
 @app.post("/ebook-workspace/<int:project_id>/research")
 def save_ebook_workspace_research_route(project_id: int):
     body = request.get_json(silent=True) or {}

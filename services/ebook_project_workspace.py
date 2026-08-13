@@ -1120,7 +1120,7 @@ def _design_view(data: dict) -> dict:
     from services.ebook_design_workspace import design_public_view
 
     try:
-        return design_public_view(data)
+        return design_public_view(data, project_id=data.get("_project_id"))
     except Exception:
         return {
             "themes": [],

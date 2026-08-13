@@ -4862,15 +4862,28 @@ function showEbookWorkspaceStage(stageId) {
     `;
   } else if (stageId === "cover") {
     const c = (ws.design || {}).cover || {};
+    const digest = String(c.digest || "");
+    const previewUrl = (c.preview_verified && c.preview_url) ? String(c.preview_url) : "";
+    const downloadUrl = previewUrl ? String(c.preview_download_url || `${previewUrl}${previewUrl.indexOf("?") >= 0 ? "&" : "?"}download=1`) : "";
+    const awaiting = stage.status !== "approved";
     body = `
       <h3 class="text-sm font-bold text-slate-900 mb-2">Cover · ${escapeHtml(stage.status_label || "")}</h3>
       <p class="text-sm text-slate-700"><b>${escapeHtml(c.title || ws.title || "")}</b></p>
       <p class="text-sm text-slate-600">${escapeHtml(c.subtitle || ws.subtitle || "")}</p>
       <p class="text-sm text-slate-600 mb-2">Author: ${escapeHtml(c.author || ws.author || "")}</p>
       <p class="text-xs text-slate-500 mb-3">Theme: ${escapeHtml(c.theme || "—")} · Digest: ${escapeHtml((c.digest || "").slice(0, 16) || "—")}</p>
+      ${
+        previewUrl
+          ? `<div class="mb-3">
+              <img data-ws-cover-preview alt="Ebook cover preview" class="block max-h-[32rem] w-auto max-w-full mx-auto rounded-lg border border-slate-200 bg-slate-100 object-contain" src="${escapeHtml(previewUrl)}" />
+              <p data-ws-cover-preview-error class="hidden mt-2 text-sm text-rose-800">Cover preview unavailable — approval blocked</p>
+              ${downloadUrl ? `<p class="mt-2 text-center"><a data-ws-cover-download class="text-sm text-brand-700 underline" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener">Download / full-size preview</a></p>` : ""}
+            </div>`
+          : `<p data-ws-cover-preview-error class="text-sm text-rose-800 mb-3">Cover preview unavailable — approval blocked</p>`
+      }
       <div class="flex flex-wrap gap-2">
         ${ws.gates && ws.gates.cover_enabled ? `<button type="button" class="btn-secondary text-sm" data-ws-generate-cover>Generate local cover</button>` : ""}
-        ${c.digest && stage.status !== "approved" ? `<button type="button" class="btn-primary text-sm" data-ws-approve-cover>Approve cover</button><button type="button" class="btn-secondary text-sm" data-ws-reject-cover>Reject cover</button>` : ""}
+        ${digest && awaiting ? `<button type="button" class="btn-primary text-sm opacity-60 cursor-not-allowed" data-ws-approve-cover disabled>Approve cover</button><button type="button" class="btn-secondary text-sm" data-ws-reject-cover>Reject cover</button>` : ""}
       </div>
     `;
   } else if (stageId === "design") {
@@ -4953,7 +4966,36 @@ function showEbookWorkspaceStage(stageId) {
   bind("[data-ws-approve-visuals]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/visuals`, {}, "Visuals approved."));
   bind("[data-ws-generate-cover]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/cover`, { action: "generate" }, "Local cover generated."));
   bind("[data-ws-reject-cover]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/cover`, { action: "reject" }, "Cover rejected."));
-  bind("[data-ws-approve-cover]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "cover" }, "Cover approved."));
+  const approveCover = panel.querySelector("[data-ws-approve-cover]");
+  const coverImg = panel.querySelector("[data-ws-cover-preview]");
+  const coverErr = panel.querySelector("[data-ws-cover-preview-error]");
+  const enableCoverApprove = () => {
+    if (!approveCover) return;
+    approveCover.disabled = false;
+    approveCover.classList.remove("opacity-60", "cursor-not-allowed");
+    if (coverErr) coverErr.classList.add("hidden");
+  };
+  const blockCoverApprove = () => {
+    if (approveCover) {
+      approveCover.disabled = true;
+      approveCover.classList.add("opacity-60", "cursor-not-allowed");
+    }
+    if (coverErr) coverErr.classList.remove("hidden");
+  };
+  if (coverImg) {
+    coverImg.addEventListener("load", enableCoverApprove);
+    coverImg.addEventListener("error", blockCoverApprove);
+    if (coverImg.complete && coverImg.naturalWidth > 0) enableCoverApprove();
+    else if (coverImg.complete) blockCoverApprove();
+  } else if (approveCover) {
+    blockCoverApprove();
+  }
+  if (approveCover) {
+    approveCover.onclick = () => {
+      if (approveCover.disabled) return;
+      postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "cover" }, "Cover approved.");
+    };
+  }
   panel.querySelectorAll("[data-ws-select-theme]").forEach((btn) => {
     btn.onclick = () => postEbookWorkspaceAction(
       `/ebook-workspace/${ws.project_id}/design`,
