@@ -611,6 +611,127 @@ def reconcile_validated_preserved_chapters_into_project(database_module, project
     return updated
 
 
+def sanitize_preserved_chapter_content(data: dict, order: int) -> dict:
+    """Deterministic $0 cleanup of leaked production labels in one preserved chapter."""
+    from services.ebook_document import sanitize_leaked_production_labels
+    from services.ebook_manuscript_engine import split_front_chapters_back
+
+    data = ensure_workspace(data)
+    project_id = data.get("_project_id")
+    if project_id is not None and int(project_id) == FROZEN_LIVE_EBOOK_PROJECT_ID:
+        return data
+    md = str(data.get("content") or data.get("ebook") or "")
+    if not md.strip():
+        return data
+    _front, chapters, _back = split_front_chapters_back(md)
+    target = next((ch for ch in chapters if int(ch.order) == int(order)), None)
+    if target is None:
+        return data
+    cleaned, removed = sanitize_leaked_production_labels(target.body)
+    if cleaned == target.body or not removed:
+        return data
+    if md.count(target.body) != 1:
+        raise ValueError(
+            f"Refusing to sanitize Chapter {order}: manuscript body is not uniquely located."
+        )
+    new_md = md.replace(target.body, cleaned, 1)
+    ebook = str(data.get("ebook") or "")
+    data["content"] = new_md
+    if ebook == md or not ebook.strip():
+        data["ebook"] = new_md
+    elif ebook.count(target.body) == 1:
+        data["ebook"] = ebook.replace(target.body, cleaned, 1)
+    ws = data["ebook_workspace"]
+    record = {
+        "paid_call": False,
+        "provider_called": False,
+        "order": int(order),
+        "removed": removed,
+    }
+    ws["production_label_sanitization"] = record
+    _append_history(ws, "sanitize_leaked_production_labels", **record)
+    data["ebook_workspace"] = ws
+    return data
+
+
+def sanitize_and_reconcile_preserved_chapter_into_project(
+    database_module,
+    project_id: int,
+    order: int,
+) -> dict:
+    """Apply local leaked-label cleanup and promote the chapter only if it PASSes."""
+    from services.ebook_manuscript_engine import (
+        build_book_contract,
+        split_front_chapters_back,
+        validate_chapter,
+    )
+
+    pid = int(project_id)
+    if pid == FROZEN_LIVE_EBOOK_PROJECT_ID:
+        raise ValueError(
+            f"Refusing to modify frozen live project #{FROZEN_LIVE_EBOOK_PROJECT_ID}."
+        )
+    project = database_module.get_project(pid)
+    if not project:
+        raise ValueError(f"Project #{pid} was not found.")
+    data = dict(project.get("data") or {})
+    data["_project_id"] = pid
+    ws = get_workspace(data) or {}
+    ledger = ws.get("paid_call_ledger") or {}
+    spent_before = round(float(ledger.get("spent_usd") or 0), 4)
+    remaining_before = round(float(ledger.get("remaining_usd") or 0), 4)
+    paid_before = int(ledger.get("paid_calls") or 0)
+    calls_before = list(ledger.get("calls") or [])
+    accepted_before = [
+        {
+            "order": int(item.get("order") or 0),
+            "title": str(item.get("title") or ""),
+            "body": str(item.get("body") or ""),
+        }
+        for item in (ws.get("accepted_chapters") or [])
+        if isinstance(item, dict) and int(item.get("order") or 0) != int(order)
+    ]
+    data = sanitize_preserved_chapter_content(data, order)
+    book = build_book_contract(data)
+    md = str(data.get("content") or "")
+    _front, chapters, _back = split_front_chapters_back(md)
+    parsed = next((ch for ch in chapters if int(ch.order) == int(order)), None)
+    contract = next((c for c in book.chapters if int(c.order) == int(order)), None)
+    findings = []
+    if parsed is not None and contract is not None:
+        findings = validate_chapter(parsed, contract, book=book)
+    if not findings:
+        data = reconcile_validated_preserved_chapters(data)
+    ledger_after = (data.get("ebook_workspace") or {}).get("paid_call_ledger") or {}
+    if (
+        round(float(ledger_after.get("spent_usd") or 0), 4) != spent_before
+        or round(float(ledger_after.get("remaining_usd") or 0), 4) != remaining_before
+        or int(ledger_after.get("paid_calls") or 0) != paid_before
+        or list(ledger_after.get("calls") or []) != calls_before
+    ):
+        raise ValueError("Local sanitization must not charge or alter the paid-call ledger.")
+    accepted_after = {
+        int(item.get("order") or 0): str(item.get("body") or "")
+        for item in ((data.get("ebook_workspace") or {}).get("accepted_chapters") or [])
+        if isinstance(item, dict)
+    }
+    for prev in accepted_before:
+        if accepted_after.get(prev["order"]) != prev["body"]:
+            raise ValueError(
+                f"Local sanitization must not alter accepted Chapter {prev['order']}."
+            )
+    data["ebook_workspace"]["local_chapter_sanitization_result"] = {
+        "order": int(order),
+        "passed": not findings,
+        "finding_codes": [getattr(f, "code", "") for f in findings],
+        "paid_call": False,
+    }
+    updated = database_module.update_project(pid, None, data)
+    if not updated:
+        raise ValueError(f"Failed to update project #{pid}.")
+    return updated
+
+
 def authoritative_approved_outline(data: dict) -> list[dict]:
     """Return the stored approved outline chapters (order/title/purpose)."""
     from services.ebook_outline_fidelity import approved_outline_chapters

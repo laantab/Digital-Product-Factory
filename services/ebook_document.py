@@ -374,6 +374,77 @@ def strip_visual_instructions(md_text: str) -> tuple[str, list[str]]:
         out.append(line)
     cleaned = "\n".join(out)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip() + "\n"
+    cleaned, leaked = sanitize_leaked_production_labels(cleaned)
+    return cleaned, removed + leaked
+
+
+_STANDALONE_PRODUCTION_LABELS = {
+    "key takeaway",
+    "key takeaways",
+    "placeholder",
+    "insert image here",
+    "insert an image here",
+    "insert table here",
+    "insert a table here",
+    "insert chart here",
+    "insert a chart here",
+}
+
+_FINDING_ECHO_RE = re.compile(
+    r"^\s*(?:\*\*|__|#+\s*)?\s*"
+    r"(?:PLACEHOLDER|GENERIC_FILLER|THIN_CHAPTER|PURPOSE_MISALIGN|"
+    r"MISSING_[A-Z0-9_]+|PADDING_WITHOUT_SUBSTANCE|EXCESSIVE_HEDGING|"
+    r"UNSUPPORTED_CLAIM|CHAPTER_[A-Z0-9_]+)\s*:",
+    re.I,
+)
+
+_PROSE_PLACEHOLDER_REWRITES = (
+    (re.compile(r"\bkey takeaways\b", re.I), "practical points"),
+    (re.compile(r"\bkey takeaway\b", re.I), "practical point"),
+)
+
+
+def _bare_production_label(line: str) -> str:
+    text = str(line or "").strip()
+    text = re.sub(r"^#{1,6}\s+", "", text)
+    text = re.sub(r"^\*\*(.+?)\*\*$", r"\1", text)
+    text = re.sub(r"^__(.+?)__$", r"\1", text)
+    text = text.strip().strip("*").strip("_").strip(":").strip()
+    return re.sub(r"\s+", " ", text).lower()
+
+
+def sanitize_leaked_production_labels(md_text: str) -> tuple[str, list[str]]:
+    """Remove standalone leaked headings/finding echoes. Preserve operational prose.
+
+    Does not call a provider. Phrase rewrites only replace forbidden production
+    labels that would otherwise fail PLACEHOLDER validation.
+    """
+    if not md_text:
+        return "", []
+    keep_trailing_nl = md_text.endswith("\n")
+    removed: list[str] = []
+    out: list[str] = []
+    for line in md_text.splitlines():
+        bare = _bare_production_label(line)
+        if bare in _STANDALONE_PRODUCTION_LABELS:
+            removed.append(line.strip()[:160])
+            continue
+        if _FINDING_ECHO_RE.match(line or ""):
+            removed.append(line.strip()[:160])
+            continue
+        if "placeholder/production instruction" in (line or "").lower():
+            removed.append(line.strip()[:160])
+            continue
+        out.append(line)
+    cleaned = "\n".join(out)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    for pat, repl in _PROSE_PLACEHOLDER_REWRITES:
+        cleaned, n = pat.subn(repl, cleaned)
+        if n:
+            removed.append(f"rewrote forbidden production label x{n}")
+    cleaned = cleaned.strip()
+    if keep_trailing_nl and cleaned:
+        cleaned += "\n"
     return cleaned, removed
 
 

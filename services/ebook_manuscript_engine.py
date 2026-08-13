@@ -682,6 +682,39 @@ def book_contract_digest(contract: BookContract) -> str:
     return contract.digest()
 
 
+def format_unresolved_findings_for_prompt(findings: list[str]) -> list[str]:
+    """Turn findings into repair instructions that must not be copied as content."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in findings or []:
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        code = text.split(":", 1)[0].strip().upper()
+        if code == "PLACEHOLDER" or text.upper().startswith("PLACEHOLDER"):
+            instruction = (
+                "DELETE leaked production labels and instruction headings "
+                "(standalone Key Takeaway, Placeholder, or Insert image/table/chart here, "
+                "and any line that repeats a defect code or defect message). "
+                "Do not copy the defect code or defect message into the chapter. "
+                "Keep the surrounding operational prose."
+            )
+        elif code.startswith("MISSING_") or text.upper().startswith("MISSING_"):
+            instruction = (
+                "ADD the missing required deliverable named in the contract above. "
+                f"Repair class {code}. Do not quote this finding as a heading or bold label."
+            )
+        else:
+            instruction = (
+                f"Repair defect class {code} without copying the finding text into the chapter."
+            )
+        if instruction in seen:
+            continue
+        seen.add(instruction)
+        out.append(instruction)
+    return out
+
+
 def chapter_contract_prompt(book: BookContract, chapter: ChapterContract) -> str:
     lines = [
         f"BOOK TITLE: {book.title}",
@@ -727,15 +760,16 @@ def chapter_contract_prompt(book: BookContract, chapter: ChapterContract) -> str
                 )
     if chapter.unresolved_findings:
         lines.append(
-            "UNRESOLVED FINDINGS FROM THE PRIOR ATTEMPT "
-            "(each is a mandatory deliverable; do not omit any of them):"
+            "UNRESOLVED DEFECTS FROM THE PRIOR ATTEMPT "
+            "(repair these; never copy defect codes or messages into the chapter):"
         )
-        for finding in chapter.unresolved_findings:
-            lines.append(f"- {finding}")
+        for instruction in format_unresolved_findings_for_prompt(chapter.unresolved_findings):
+            lines.append(f"- {instruction}")
         lines.append(
             "Preserve all valid material already present in this chapter. "
             "Repair only the missing or failed requirements. "
-            "Do not rewrite passing sections unless needed to insert the missing deliverable."
+            "Do not rewrite passing sections unless needed to insert the missing deliverable. "
+            "Do not reprint findings as headings, bold labels, or body text."
         )
     if (chapter.prior_chapter_body or "").strip():
         lines.append(
@@ -857,8 +891,8 @@ def assigned_research_for_chapter(book: BookContract, chapter: ChapterContract) 
         parts.append("ASSIGNED REQUIRED EXAMPLES:\n" + "\n".join(f"- {e}" for e in examples))
     if chapter.unresolved_findings:
         parts.append(
-            "UNRESOLVED FINDINGS (mandatory deliverables):\n"
-            + "\n".join(f"- {f}" for f in chapter.unresolved_findings)
+            "UNRESOLVED DEFECTS (repair; never copy into the chapter):\n"
+            + "\n".join(f"- {item}" for item in format_unresolved_findings_for_prompt(chapter.unresolved_findings))
         )
     if book.editorial_rules:
         parts.append("EDITORIAL RULES:\n" + "\n".join(f"- {r}" for r in book.editorial_rules[:12]))
@@ -928,6 +962,8 @@ def assemble_manuscript(
 
 
 def parse_chapter_response(raw: Any, expected: ChapterContract) -> ParsedChapter:
+    from services.ebook_document import sanitize_leaked_production_labels
+
     if isinstance(raw, dict):
         text = str(raw.get("ebook") or raw.get("content") or raw.get("chapter") or "")
     else:
@@ -935,16 +971,19 @@ def parse_chapter_response(raw: Any, expected: ChapterContract) -> ParsedChapter
     _front, chapters, _back = split_front_chapters_back(text)
     if not chapters:
         body = re.sub(r"^#\s+.*\n", "", text).strip()
+        body, _removed = sanitize_leaked_production_labels(body)
         return ParsedChapter(order=expected.order, title=expected.title, body=body)
     # Prefer the chapter whose title matches; else the first H2 body.
     for ch in chapters:
         if normalize_chapter_title(ch.title) == normalize_chapter_title(expected.title):
             ch.order = expected.order
             ch.title = expected.title
+            ch.body, _removed = sanitize_leaked_production_labels(ch.body)
             return ch
     ch = chapters[0]
     ch.order = expected.order
     ch.title = expected.title
+    ch.body, _removed = sanitize_leaked_production_labels(ch.body)
     return ch
 
 

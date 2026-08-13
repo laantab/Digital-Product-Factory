@@ -150,11 +150,23 @@ class ChapterProductionTests(unittest.TestCase):
         user = captured["user"]
         self.assertIn(EXAMPLE_BUY_VS_RENT_VS_USED, user)
         self.assertIn("MANDATORY DELIVERABLE", user)
-        self.assertIn("UNRESOLVED FINDINGS FROM THE PRIOR ATTEMPT", user)
+        self.assertIn("UNRESOLVED DEFECTS FROM THE PRIOR ATTEMPT", user)
         self.assertIn("MISSING_REQUIRED_EXAMPLE", user)
         self.assertIn("Keep the starter-vs-event-kit table already drafted.", user)
         self.assertIn("Do not invent current market prices", user)
         self.assertIn("AUTHORITATIVE CHAPTER CONTRACT", user)
+        self.assertIn("never copy finding codes", captured["system"])
+
+        ch3.unresolved_findings = [
+            "PLACEHOLDER: Placeholder/production instruction: key takeaway",
+            "PLACEHOLDER: Placeholder/production instruction: placeholder",
+        ]
+        with patch("services.ebook.chat", side_effect=_chat):
+            generate_one_chapter(book, ch3)
+        leak_user = captured["user"].lower()
+        self.assertNotIn("placeholder/production instruction: key takeaway", leak_user)
+        self.assertIn("delete leaked production labels", leak_user)
+        self.assertIn("never copy finding codes", captured["system"])
 
     def test_03_04_05_accepted_preserved_failure_stops_resume_from_failed(self):
         data = self._data()

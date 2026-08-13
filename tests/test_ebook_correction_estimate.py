@@ -843,5 +843,195 @@ class ValidatedChapterReconciliationTests(unittest.TestCase):
             )
 
 
+class PlaceholderLeakLocalSanitizationTests(unittest.TestCase):
+    """Leaked production labels are stripped locally at $0 and never billed."""
+
+    def setUp(self):
+        self.client = app.test_client()
+        app.config["TESTING"] = True
+        self._client_patch = patch("ai_client.get_client", side_effect=AssertionError("paid client"))
+        self._chat_patch = patch("ai_client.chat", side_effect=AssertionError("paid chat"))
+        self._json_patch = patch("ai_client.chat_json", side_effect=AssertionError("paid chat_json"))
+        self._gen_patch = patch(
+            "services.ebook.generate_one_chapter",
+            side_effect=AssertionError("provider generate_one_chapter"),
+        )
+        self._client_patch.start()
+        self._chat_patch.start()
+        self._json_patch.start()
+        self._gen_patch.start()
+
+    def tearDown(self):
+        self._client_patch.stop()
+        self._chat_patch.stop()
+        self._json_patch.stop()
+        self._gen_patch.stop()
+
+    def _isolated_ch8_leak(self, *, thin_after_leak: bool = False) -> tuple[int, dict]:
+        from services.ebook_manuscript_engine import (
+            assemble_manuscript,
+            split_front_chapters_back,
+        )
+        from services.ebook_manuscript_fixtures import build_event_photo_strong_manuscript
+        from services.ebook_project_workspace import build_acceptance_project_data
+
+        data = build_acceptance_project_data()
+        data["acceptance_marker"] = None
+        data["artifact_id"] = "ebook-ws-ch8-placeholder-leak"
+        data["artifact_revision"] = 1
+        data["artifact_state"] = "DRAFT"
+        strong = build_event_photo_strong_manuscript()
+        _front, chapters, _back = split_front_chapters_back(strong)
+        ch8 = next(c for c in chapters if c.order == 8)
+        if thin_after_leak:
+            ch8.body = (
+                "Too thin to pass this chapter.\n\n"
+                "**PLACEHOLDER: Placeholder/production instruction: key takeaway**\n"
+            )
+        else:
+            ch8.body = (
+                "The key takeaway from the comparison is operational. "
+                "The DS-RX1HS is positioned for throughput.\n\n"
+                + ch8.body
+                + "\n\n**PLACEHOLDER: Placeholder/production instruction: key takeaway**\n"
+            )
+        md = assemble_manuscript(
+            title=str(data.get("title") or "From First Booking to On-Site Prints"),
+            subtitle=str(data.get("subtitle") or ""),
+            author="Lonnie Brown",
+            chapters=chapters[:8],
+            disclaimer="",
+            sources="",
+        )
+        data["content"] = md
+        data["ebook"] = md
+        ws = data["ebook_workspace"]
+        ws["marker"] = None
+        ws["accepted_chapters"] = [
+            {"order": c.order, "title": c.title, "body": c.body}
+            for c in chapters[:7]
+        ]
+        ledger = ws["paid_call_ledger"]
+        ledger["spent_usd"] = 1.5
+        ledger["remaining_usd"] = 0.3
+        ledger["budget_cap_usd"] = 1.8
+        ledger["paid_calls"] = 10
+        ledger["calls"] = [
+            {"purpose": "generate_manuscript", "estimated_cost_usd": 1.05},
+            {"purpose": "correct_manuscript", "estimated_cost_usd": 0.45},
+        ]
+        set_stage_status(ws, "manuscript", STATUS_NEEDS_CORRECTION, note="ch8 placeholder leak")
+        _recompute_next_action(ws)
+        project = database.create_project(
+            "Sanitize Ch8 Placeholder Isolated",
+            "ebook",
+            data,
+            user_saved=False,
+            system_test=True,
+            temporary=True,
+        )
+        pid = project["id"]
+        data["_project_id"] = pid
+        database.update_project(pid, None, data)
+        return pid, dict(database.get_project(pid)["data"])
+
+    def test_local_sanitization_accepts_ch8_preserves_1_7_and_ledger(self):
+        from services.ebook_project_workspace import (
+            chapter_pipeline_stats,
+            manuscript_digest,
+            sanitize_and_reconcile_preserved_chapter_into_project,
+        )
+
+        pid, data = self._isolated_ch8_leak()
+        data["_project_id"] = pid
+        before_ms = manuscript_digest(data)
+        before_accepted = copy.deepcopy(data["ebook_workspace"]["accepted_chapters"])
+        before_ledger = copy.deepcopy(data["ebook_workspace"]["paid_call_ledger"])
+        before_bodies = {int(c["order"]): c["body"] for c in before_accepted}
+
+        updated = sanitize_and_reconcile_preserved_chapter_into_project(database, pid, 8)
+        stored = dict(
+            (updated.get("data") if isinstance(updated, dict) else None)
+            or database.get_project(pid)["data"]
+        )
+        stored["_project_id"] = pid
+        result = stored["ebook_workspace"]["local_chapter_sanitization_result"]
+        self.assertTrue(result["passed"])
+        self.assertFalse(result["paid_call"])
+        self.assertEqual(result["finding_codes"], [])
+        self.assertNotEqual(manuscript_digest(stored), before_ms)
+        kept = {
+            int(c["order"]): c["body"]
+            for c in stored["ebook_workspace"]["accepted_chapters"]
+        }
+        for order in range(1, 8):
+            self.assertEqual(kept[order], before_bodies[order])
+        self.assertIn(8, kept)
+        self.assertNotIn("PLACEHOLDER:", kept[8])
+        self.assertNotIn("key takeaway", kept[8].lower())
+        self.assertIn("DS-RX1HS is positioned for throughput", kept[8])
+        self.assertIn("from the comparison is operational", kept[8])
+        ledger = stored["ebook_workspace"]["paid_call_ledger"]
+        self.assertEqual(ledger["calls"], before_ledger["calls"])
+        self.assertEqual(int(ledger["paid_calls"]), int(before_ledger["paid_calls"]))
+        self.assertAlmostEqual(float(ledger["spent_usd"]), 1.5, places=3)
+        self.assertAlmostEqual(float(ledger["remaining_usd"]), 0.3, places=3)
+        self.assertAlmostEqual(float(ledger["budget_cap_usd"]), 1.8, places=3)
+        stats = chapter_pipeline_stats(stored)
+        self.assertEqual(int(stats["accepted_chapter_count"]), 8)
+        self.assertEqual(int(stats["pending_chapter_count"]), 2)
+        self.assertEqual(int(stats["resume_from_order"]), 9)
+        est = estimate_paid_action(stored, "correct_manuscript")["estimate"]
+        self.assertEqual(int(est["accepted_chapter_count"]), 8)
+        self.assertEqual(int(est["pending_chapter_count"]), 2)
+        self.assertEqual(int(est["resume_from_order"]), 9)
+        self.assertAlmostEqual(float(est["max_total_usd"]), 0.3, places=3)
+        self.assertAlmostEqual(float(est["spent_usd"]), 1.5, places=3)
+        self.assertAlmostEqual(float(est["remaining_usd"]), 0.3, places=3)
+        self.assertAlmostEqual(float(est["budget_cap_usd"]), 1.8, places=3)
+        self.assertAlmostEqual(float(est["estimate_cost_usd"]), 0.0, places=3)
+        live_after = database.get_project(pid)["data"]
+        self.assertEqual(live_after["ebook_workspace"]["paid_call_ledger"]["calls"], before_ledger["calls"])
+
+    def test_substantive_remaining_defect_is_not_accepted(self):
+        from services.ebook_project_workspace import (
+            chapter_pipeline_stats,
+            sanitize_and_reconcile_preserved_chapter_into_project,
+            stage_status,
+        )
+
+        pid, data = self._isolated_ch8_leak(thin_after_leak=True)
+        data["_project_id"] = pid
+        before_accepted = [int(c["order"]) for c in data["ebook_workspace"]["accepted_chapters"]]
+        before_calls = copy.deepcopy(data["ebook_workspace"]["paid_call_ledger"]["calls"])
+        updated = sanitize_and_reconcile_preserved_chapter_into_project(database, pid, 8)
+        stored = dict(
+            (updated.get("data") if isinstance(updated, dict) else None)
+            or database.get_project(pid)["data"]
+        )
+        stored["_project_id"] = pid
+        result = stored["ebook_workspace"]["local_chapter_sanitization_result"]
+        self.assertFalse(result["passed"])
+        self.assertNotIn("PLACEHOLDER", result["finding_codes"])
+        self.assertTrue(result["finding_codes"])
+        accepted = [int(c["order"]) for c in stored["ebook_workspace"]["accepted_chapters"]]
+        self.assertEqual(accepted, before_accepted)
+        self.assertNotIn(8, accepted)
+        stats = chapter_pipeline_stats(stored)
+        self.assertEqual(int(stats["resume_from_order"]), 8)
+        self.assertEqual(stored["ebook_workspace"]["paid_call_ledger"]["calls"], before_calls)
+        self.assertEqual(stage_status(stored["ebook_workspace"], "manuscript"), STATUS_NEEDS_CORRECTION)
+
+    def test_frozen_2472_is_not_sanitized(self):
+        from services.ebook_project_workspace import (
+            sanitize_and_reconcile_preserved_chapter_into_project,
+        )
+
+        with self.assertRaises(ValueError):
+            sanitize_and_reconcile_preserved_chapter_into_project(
+                database, FROZEN_LIVE_EBOOK_PROJECT_ID, 8
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

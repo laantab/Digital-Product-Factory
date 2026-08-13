@@ -191,18 +191,27 @@ def generate_one_chapter(book, chapter) -> dict:
     import json
     from dataclasses import asdict
 
-    from services.ebook_manuscript_engine import assigned_research_for_chapter, chapter_contract_prompt
+    from services.ebook_manuscript_engine import (
+        assigned_research_for_chapter,
+        chapter_contract_prompt,
+        format_unresolved_findings_for_prompt,
+    )
 
     research = assigned_research_for_chapter(book, chapter)
     contract_payload = asdict(chapter)
+    if contract_payload.get("unresolved_findings"):
+        contract_payload["unresolved_findings"] = format_unresolved_findings_for_prompt(
+            list(contract_payload.get("unresolved_findings") or [])
+        )
     contract_json = json.dumps(contract_payload, ensure_ascii=False)
     prompt = chapter_contract_prompt(book, chapter)
     text = chat(
         system=(
             "You are a professional non-fiction author. Write exactly one chapter. "
             "Do not write any other chapter. Do not add Disclaimer or Sources as H2 headings. "
-            "Follow the chapter contract exactly. Every named mandatory deliverable and every "
-            "unresolved finding is required. Preserve valid existing chapter material when a "
+            "Follow the chapter contract exactly. Every named mandatory deliverable is required. "
+            "Repair unresolved defects; never copy finding codes, finding messages, or "
+            "production labels into the chapter. Preserve valid existing chapter material when a "
             "prior draft is supplied. Paraphrase research; never copy sentences. "
             "Do not invent statistics, testimonials, guaranteed income, or current market prices."
         ),

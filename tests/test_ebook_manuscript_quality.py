@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -29,6 +30,8 @@ from services.ebook_manuscript_engine import (  # noqa: E402
     canonical_example_id,
     chapter_contract_prompt,
     chapter_fn_from_full_manuscript,
+    format_unresolved_findings_for_prompt,
+    parse_chapter_response,
     remap_outline_purposes,
     run_chapter_pipeline,
     split_front_chapters_back,
@@ -404,14 +407,14 @@ class Chapter3RequiredExampleContractTests(unittest.TestCase):
         self.assertIn("hypothetical", prompt.lower())
         self.assertIn("decision criteria", prompt.lower())
         self.assertIn("Do not invent current market prices", prompt)
-        self.assertNotIn("UNRESOLVED FINDINGS FROM THE PRIOR ATTEMPT", prompt)
+        self.assertNotIn("UNRESOLVED DEFECTS FROM THE PRIOR ATTEMPT", prompt)
 
         ch3.unresolved_findings = [
             f"MISSING_REQUIRED_EXAMPLE: Missing required example: {EXAMPLE_BUY_VS_RENT_VS_USED}"
         ]
         ch3.prior_chapter_body = "Valid 24-70 and 70-200 kit material already drafted."
         corr = chapter_contract_prompt(book, ch3)
-        self.assertIn("UNRESOLVED FINDINGS FROM THE PRIOR ATTEMPT", corr)
+        self.assertIn("UNRESOLVED DEFECTS FROM THE PRIOR ATTEMPT", corr)
         self.assertIn("MISSING_REQUIRED_EXAMPLE", corr)
         self.assertIn(EXAMPLE_BUY_VS_RENT_VS_USED, corr)
         self.assertIn("Preserve all valid material", corr)
@@ -566,6 +569,104 @@ class Chapter3RequiredExampleContractTests(unittest.TestCase):
         }
         self.assertEqual(kept[1], first_body)
         self.assertEqual(kept[2], second_body)
+
+
+class PlaceholderLeakSanitizationTests(unittest.TestCase):
+    """Finding labels must not leak into customer chapter content."""
+
+    def setUp(self):
+        app.config["TESTING"] = True
+        self._client_patch = patch("ai_client.get_client", side_effect=AssertionError("paid client"))
+        self._chat_patch = patch("ai_client.chat", side_effect=AssertionError("paid chat"))
+        self._json_patch = patch("ai_client.chat_json", side_effect=AssertionError("paid chat_json"))
+        self._client_patch.start()
+        self._chat_patch.start()
+        self._json_patch.start()
+
+    def tearDown(self):
+        self._client_patch.stop()
+        self._chat_patch.stop()
+        self._json_patch.stop()
+
+    def test_placeholder_findings_are_delete_instructions_not_content(self):
+        from services.ebook_project_workspace import build_acceptance_project_data
+
+        findings = [
+            "PLACEHOLDER: Placeholder/production instruction: key takeaway",
+            "PLACEHOLDER: Placeholder/production instruction: placeholder",
+        ]
+        instructions = format_unresolved_findings_for_prompt(findings)
+        blob = "\n".join(instructions).lower()
+        self.assertTrue(instructions)
+        self.assertIn("delete", blob)
+        self.assertNotIn("placeholder/production instruction: key takeaway", blob)
+        data = build_acceptance_project_data()
+        book = build_book_contract(data)
+        ch8 = next(c for c in book.chapters if c.order == 8)
+        ch8.unresolved_findings = findings
+        prompt = chapter_contract_prompt(book, ch8)
+        self.assertIn("never copy defect codes", prompt.lower())
+        self.assertNotIn("Placeholder/production instruction: key takeaway", prompt)
+        self.assertNotIn("- PLACEHOLDER: Placeholder/production instruction: placeholder", prompt)
+        self.assertNotIn("mandatory deliverable: placeholder", prompt.lower())
+
+    def test_standalone_production_headings_removed_prose_kept(self):
+        from services.ebook_document import sanitize_leaked_production_labels
+
+        body = (
+            "The DS-RX1HS is positioned for throughput.\n\n"
+            "**PLACEHOLDER: Placeholder/production instruction: key takeaway**  \n\n"
+            "### Key Takeaway\n\n"
+            "Placeholder\n\n"
+            "Insert image here\n\n"
+            "Choose the printer around your busiest likely workflow.\n"
+        )
+        cleaned, removed = sanitize_leaked_production_labels(body)
+        self.assertIn("DS-RX1HS is positioned for throughput", cleaned)
+        self.assertIn("Choose the printer around your busiest likely workflow", cleaned)
+        self.assertNotIn("PLACEHOLDER:", cleaned)
+        self.assertNotIn("Insert image here", cleaned)
+        self.assertFalse(re.search(r"(?im)^placeholder$", cleaned))
+        self.assertTrue(removed)
+
+    def test_parser_strips_finding_echo_before_validate(self):
+        from services.ebook_manuscript_fixtures import build_event_photo_strong_manuscript
+        from services.ebook_project_workspace import build_acceptance_project_data
+
+        data = build_acceptance_project_data()
+        book = build_book_contract(data)
+        contract = next(c for c in book.chapters if c.order == 8)
+        strong = build_event_photo_strong_manuscript()
+        ch8 = next(c for c in split_front_chapters_back(strong)[1] if c.order == 8)
+        leaked = (
+            f"## {contract.title}\n\n{ch8.body}\n\n"
+            "**PLACEHOLDER: Placeholder/production instruction: key takeaway**\n"
+        )
+        parsed = parse_chapter_response({"ebook": leaked}, contract)
+        self.assertNotIn("PLACEHOLDER:", parsed.body)
+        findings = validate_chapter(parsed, contract, book=book)
+        self.assertFalse(
+            [f for f in findings if f.code == "PLACEHOLDER"],
+            [f.code + ": " + f.message for f in findings],
+        )
+
+    def test_running_prose_key_takeaway_is_rewritten_not_deleted(self):
+        from services.ebook_document import sanitize_leaked_production_labels
+
+        body = (
+            "The key takeaway from the comparison is operational. "
+            "The DS-RX1HS is positioned for throughput. "
+            "The DS620A is the slower, more portable option. "
+            "The QW410 sits in between for mixed guest volume.\n"
+        )
+        cleaned, removed = sanitize_leaked_production_labels(body)
+        self.assertIn("DS-RX1HS is positioned for throughput", cleaned)
+        self.assertIn("DS620A is the slower, more portable option", cleaned)
+        self.assertIn("QW410 sits in between", cleaned)
+        self.assertIn("from the comparison is operational", cleaned)
+        self.assertNotIn("key takeaway", cleaned.lower())
+        self.assertIn("practical point", cleaned.lower())
+        self.assertTrue(removed)
 
 
 if __name__ == "__main__":
