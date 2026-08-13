@@ -143,7 +143,14 @@ def _fitz_layout_issues(pdf_bytes: bytes) -> list[PreflightFinding]:
                     PreflightFinding("clipped_text", "fail", "Text or object extends outside the page box.", page=i + 1)
                 )
             if overlapping:
-                report.details.setdefault("overlap_candidates", []).append(i + 1)
+                findings.append(
+                    PreflightFinding(
+                        "clipped_or_overlapped_text",
+                        "fail",
+                        "Overlapping text or objects on the page.",
+                        page=i + 1,
+                    )
+                )
             # Isolated heading: only a short heading-like line on the page
             page_text = (page.get_text("text") or "").strip()
             lines = [ln.strip() for ln in page_text.splitlines() if ln.strip()]
@@ -250,8 +257,23 @@ def run_design_preflight(
     texts, dims, page_count = _pdf_pages(pdf_bytes)
     report.page_count = page_count
     if pdf_bytes:
-        if page_count < 8:
-            _add(report, "too_few_pages", "fail", f"Designed book has too few pages ({page_count}).")
+        n_ch = len(chapters)
+        min_pages = max(8, n_ch + 5) if n_ch >= 8 else 8
+        if page_count < min_pages:
+            _add(
+                report,
+                "too_few_pages",
+                "fail",
+                f"Designed book has too few pages ({page_count}); need at least {min_pages} "
+                f"for {n_ch} numbered chapters with professional pagination.",
+            )
+        if n_ch >= 8 and page_count <= n_ch:
+            _add(
+                report,
+                "packed_chapters",
+                "fail",
+                f"A {n_ch}-chapter practical guide cannot pass in {page_count} total pages.",
+            )
         unique_dims = {(round(w, 1), round(h, 1)) for w, h in dims if w and h}
         if len(unique_dims) > 1:
             _add(report, "inconsistent_page_geometry", "fail", "Page sizes are not consistent.")
@@ -266,8 +288,21 @@ def run_design_preflight(
                 _add(report, "sparse_page", "fail", "Sparse page defect.", page=i + 1)
             if "OVERLAP_TEST" in (text or "") or "CLIPPED_TEST" in (text or ""):
                 _add(report, "clipped_or_overlapped_text", "fail", "Clipped or overlapping text.", page=i + 1)
-            if len(words) > 1200:
+            if len(words) > 750:
                 _add(report, "overcrowded_page", "fail", "Overcrowded page.", page=i + 1)
+            # Chapter openers are "Chapter N" immediately followed by the title
+            # (xhtml2pdf concatenates the label and heading). Body cross-references
+            # like "see Chapter 8" must not count as packed chapters.
+            openers = re.findall(r"Chapter\s+(\d+)(?=[A-Z])", text or "")
+            uniq_openers = list(dict.fromkeys(openers))
+            if len(uniq_openers) >= 2:
+                _add(
+                    report,
+                    "packed_chapters",
+                    "fail",
+                    "Multiple numbered chapters share a page.",
+                    page=i + 1,
+                )
             if 8 <= len(words) < 12:
                 report.details.setdefault("sparse_page_candidates", []).append(i + 1)
             if len(key) >= 40:

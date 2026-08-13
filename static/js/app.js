@@ -4996,9 +4996,11 @@ async function estimateCorrectionInWorkspace(projectId) {
     confirmEl.innerHTML = `
       <h4 class="text-sm font-bold text-amber-900">Confirm paid correction</h4>
       <p class="text-sm text-amber-900">${escapeHtml(est.label || "Request Correction")}</p>
-      <p class="text-sm">Estimated maximum: <b>$${Number(est.estimated_max_usd || 0).toFixed(3)}</b></p>
+      <p class="text-sm">Maximum total: <b>$${Number(est.max_total_usd != null ? est.max_total_usd : est.estimated_max_usd || 0).toFixed(3)}</b></p>
+      <p class="text-sm">Per-chapter maximum: <b>$${Number(est.per_chapter_max_usd || 0.15).toFixed(3)}</b></p>
+      <p class="text-sm">Accepted chapters: <b>${Number(est.accepted_chapter_count || 0)}</b> · Pending chapters: <b>${Number(est.pending_chapter_count || 0)}</b></p>
       <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
-      <p class="text-xs text-slate-600">Uses the preserved manuscript and the exact approved outline. Confirmation required before any paid call.</p>
+      <p class="text-xs text-slate-600">Uses the preserved manuscript and the exact approved outline. Resume starts at the failed chapter only. Confirmation required before any paid call.</p>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
         <button type="button" class="btn-primary text-sm" data-ws-confirm-correct>Confirm and Correct Manuscript</button>
@@ -5071,7 +5073,9 @@ async function estimateManuscriptInWorkspace(projectId) {
     confirmEl.innerHTML = `
       <h4 class="text-sm font-bold text-amber-900">Confirm paid action</h4>
       <p class="text-sm text-amber-900">${escapeHtml(est.label || "Generate Manuscript")}</p>
-      <p class="text-sm">Estimated maximum: <b>$${Number(est.estimated_max_usd || 0).toFixed(3)}</b></p>
+      <p class="text-sm">Maximum total: <b>$${Number(est.max_total_usd != null ? est.max_total_usd : est.estimated_max_usd || 0).toFixed(3)}</b></p>
+      <p class="text-sm">Per-chapter maximum: <b>$${Number(est.per_chapter_max_usd || 0.15).toFixed(3)}</b></p>
+      <p class="text-sm">Accepted chapters: <b>${Number(est.accepted_chapter_count || 0)}</b> · Pending chapters: <b>${Number(est.pending_chapter_count || 0)}</b></p>
       <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
       <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "Confirmation required before any paid call. Opening this page does not spend.")}</p>
       <div class="flex flex-wrap gap-2">

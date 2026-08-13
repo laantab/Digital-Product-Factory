@@ -27,14 +27,14 @@ def _sha(obj: Any) -> str:
 
 @dataclass
 class TypographyScale:
-    body_pt: float = 11.0
+    body_pt: float = 11.5
     h1_pt: float = 26.0
     h2_pt: float = 20.0
     h3_pt: float = 14.0
     caption_pt: float = 9.0
     footer_pt: float = 9.0
-    line_height: float = 1.55
-    paragraph_spacing_em: float = 0.85
+    line_height: float = 1.62
+    paragraph_spacing_em: float = 1.0
     min_font_pt: float = 9.0
 
 

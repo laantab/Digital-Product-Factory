@@ -102,13 +102,13 @@ THEMES: dict[str, EbookTheme] = {
         color_text="#1e293b",
         color_muted="#64748b",
         color_rule="#99f6e4",
-        body_size_pt=11.0,
-        line_height=1.55,
+        body_size_pt=11.5,
+        line_height=1.62,
         h1_size_pt=28.0,
         h2_size_pt=20.0,
         h3_size_pt=14.0,
-        margin_in=0.75,
-        paragraph_spacing_em=0.85,
+        margin_in=0.8,
+        paragraph_spacing_em=1.0,
         chapter_opener="stacked_label",
         table_header_bg="#f0fdfa",
         callout_bg="#ecfdf5",
@@ -125,13 +125,13 @@ THEMES: dict[str, EbookTheme] = {
         color_text="#1c1917",
         color_muted="#78716c",
         color_rule="#e7e5e4",
-        body_size_pt=11.0,
-        line_height=1.62,
+        body_size_pt=11.5,
+        line_height=1.68,
         h1_size_pt=30.0,
         h2_size_pt=21.0,
         h3_size_pt=14.0,
-        margin_in=0.8,
-        paragraph_spacing_em=0.9,
+        margin_in=0.85,
+        paragraph_spacing_em=1.05,
         chapter_opener="rule_under",
         table_header_bg="#fafaf9",
         callout_bg="#fffbeb",
@@ -148,13 +148,13 @@ THEMES: dict[str, EbookTheme] = {
         color_text="#0f172a",
         color_muted="#475569",
         color_rule="#bfdbfe",
-        body_size_pt=11.0,
-        line_height=1.52,
+        body_size_pt=11.5,
+        line_height=1.6,
         h1_size_pt=26.0,
         h2_size_pt=18.0,
         h3_size_pt=13.5,
-        margin_in=0.7,
-        paragraph_spacing_em=0.8,
+        margin_in=0.75,
+        paragraph_spacing_em=0.95,
         chapter_opener="minimal",
         table_header_bg="#eff6ff",
         callout_bg="#f0f9ff",
@@ -202,10 +202,11 @@ body {{
   line-height: {t.line_height};
   background: {t.page_bg};
 }}
-h1, h2, h3, h4, .chapter-title, .book-title {{
+h1, h2, h3, h4, .chapter-title, .book-title, .chapter-num {{
   font-family: {t.font_heading};
   color: {t.color_primary};
   page-break-after: avoid;
+  page-break-inside: avoid;
 }}
 h1, .book-title {{ font-size: {t.h1_size_pt}pt; margin: 0 0 0.4em; line-height: 1.2; }}
 h2, .chapter-title {{
@@ -214,9 +215,13 @@ h2, .chapter-title {{
   line-height: 1.25;
   {opener_h2}
 }}
-h3 {{ font-size: {t.h3_size_pt}pt; margin: 1.05em 0 0.4em; }}
-h4 {{ font-size: 12pt; margin: 0.9em 0 0.35em; color: {t.color_accent}; }}
-p {{ margin: 0 0 {t.paragraph_spacing_em}em; }}
+h3 {{ font-size: {t.h3_size_pt}pt; margin: 1.05em 0 0.4em; page-break-after: avoid; }}
+h4 {{ font-size: 12pt; margin: 0.9em 0 0.35em; color: {t.color_accent}; page-break-after: avoid; }}
+p {{
+  margin: 0 0 {t.paragraph_spacing_em}em;
+  orphans: 3;
+  widows: 3;
+}}
 .chapter-num {{
   font-size: 9.5pt;
   font-weight: 700;
@@ -237,6 +242,9 @@ table, .ebook-table, .va-table {{
   margin: 10pt 0 14pt;
   page-break-inside: avoid;
 }}
+thead {{ display: table-header-group; }}
+tbody {{ display: table-row-group; }}
+tr {{ page-break-inside: avoid; }}
 th, td {{
   border: 1pt solid {t.color_rule};
   padding: 6pt 8pt;
@@ -253,6 +261,7 @@ ul.checklist, .checklist {{
   list-style: none;
   margin: 8pt 0 14pt 0;
   padding: 0;
+  page-break-inside: avoid;
 }}
 ul.checklist li, .checklist li {{
   margin: 5pt 0;
@@ -262,6 +271,7 @@ ul.checklist li, .checklist li {{
 ol.workflow, .workflow {{
   margin: 8pt 0 14pt 18pt;
   padding: 0;
+  page-break-inside: avoid;
 }}
 ol.workflow li, .workflow li {{
   margin: 6pt 0;
@@ -291,11 +301,11 @@ ol.workflow li, .workflow li {{
   border-top: 1pt solid {t.color_rule};
   padding-top: 6pt;
 }}
-.title-page {{ page-break-after: always; text-align: center; padding-top: 1.4in; }}
-.legal-page {{ page-break-after: always; }}
-.toc-page {{ page-break-after: always; }}
-.chapter-page {{ page-break-before: always; -pdf-page-break: before; }}
-.back-matter-page {{ page-break-before: always; -pdf-page-break: before; }}
+.title-page {{ text-align: center; padding-top: 1.8in; }}
+.legal-page {{ }}
+.toc-page {{ }}
+.chapter-page {{ }}
+.back-matter-page {{ }}
 .toc-list {{ list-style: none; margin: 0; padding: 0; }}
 .toc-list li {{ padding: 7pt 0; border-bottom: 1pt solid {t.color_rule}; }}
 .toc-list a {{ color: {t.color_primary}; text-decoration: none; font-weight: 700; }}

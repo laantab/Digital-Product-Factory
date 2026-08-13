@@ -733,6 +733,64 @@ def split_front_chapters_back(md_text: str) -> tuple[str, list[ParsedChapter], s
     return front, chapters, back
 
 
+def assigned_research_for_chapter(book: BookContract, chapter: ChapterContract) -> str:
+    """Deterministic research slice for one chapter. Does not mutate inputs."""
+    parts: list[str] = []
+    if book.research_brief:
+        parts.append("BOOK RESEARCH BRIEF:\n" + str(book.research_brief))
+    facts = list(chapter.required_facts or [])
+    if facts:
+        parts.append("ASSIGNED FACTS:\n" + "\n".join(f"- {f}" for f in facts))
+    cites = list(chapter.required_citations or [])
+    if not cites and book.citations:
+        primary = book.citations[(max(int(chapter.order), 1) - 1) % len(book.citations)]
+        cites = [primary]
+    if cites:
+        parts.append("ASSIGNED CITATIONS:\n" + "\n".join(f"- {c}" for c in cites))
+    if chapter.purpose:
+        parts.append("CHAPTER PURPOSE:\n" + str(chapter.purpose))
+    if book.editorial_rules:
+        parts.append("EDITORIAL RULES:\n" + "\n".join(f"- {r}" for r in book.editorial_rules[:12]))
+    return "\n\n".join(parts)
+
+
+def assemble_back_matter(book: BookContract) -> tuple[str, str]:
+    """Unnumbered Disclaimer and Sources. Never numbered chapters."""
+    disclaimer = (
+        "This guide is for practical planning and general educational use. "
+        "It does not provide legal, tax, insurance, or financial advice. "
+        "Use qualified local professionals for business registration, contract review, "
+        "insurance selection, and tax decisions. Any pricing, margin, or media examples "
+        "are hypothetical planning scenarios only, not current market-price claims or income promises. "
+        "Printer specifications must be verified against current manufacturer documentation and suppliers."
+    )
+    if book.citations:
+        sources = "\n".join(f"- {u}" for u in book.citations)
+    else:
+        sources = "Research notes used for this manuscript are listed in the project research brief."
+    return disclaimer, sources
+
+
+def chapter_fn_from_full_manuscript(md: str) -> Callable[..., Any]:
+    """Test helper: split a full book into one-chapter provider responses."""
+    _front, chapters, _back = split_front_chapters_back(md)
+    by_title = {normalize_chapter_title(c.title): c for c in chapters}
+
+    def _fn(book: BookContract, chapter: ChapterContract) -> dict[str, Any]:
+        research = assigned_research_for_chapter(book, chapter)
+        found = by_title.get(normalize_chapter_title(chapter.title))
+        body = found.body if found is not None else ""
+        text = f"## {chapter.title}\n\n{body}".strip() + "\n"
+        return {
+            "chapter": text,
+            "ebook": text,
+            "assigned_research": research,
+            "chapter_contract": asdict(chapter),
+        }
+
+    return _fn
+
+
 def assemble_manuscript(
     *,
     title: str,
@@ -1151,84 +1209,142 @@ def run_chapter_pipeline(
     repair_orders: list[int] | None = None,
     generate_fn_kwargs: dict[str, Any] | None = None,
     back_matter: str = "",
+    stop_on_failure: bool = True,
+    max_chapter_calls: int | None = None,
 ) -> dict[str, Any]:
-    """Generate or repair chapters independently. Never silently rewrite accepted chapters."""
+    """Generate or repair chapters independently. Never silently rewrite accepted chapters.
+
+    Production validates each chapter before accepting it, stops immediately on
+    the first non-PASS chapter, and assembles Disclaimer/Sources only after
+    every numbered chapter PASSes.
+    """
+    if generate_chapter_fn is None:
+        raise ValueError(
+            "Chapter pipeline requires generate_chapter_fn "
+            "(one approved chapter per provider request). One-shot generate_fn is blocked."
+        )
+    if generate_fn is not None:
+        raise ValueError(
+            "One-shot generate_fn cannot bypass the chapter engine. "
+            "Pass generate_chapter_fn only."
+        )
+
     accepted = {c.order: c for c in (accepted_chapters or [])}
     repair = set(repair_orders or [])
     produced: list[ParsedChapter] = []
     chapter_calls = 0
+    failed_orders: list[int] = []
+    skipped_ungenerated: list[int] = []
+    provider_payloads: list[dict[str, Any]] = []
 
-    if generate_chapter_fn is not None:
-        for contract in book.chapters:
-            if contract.order in accepted and (not repair or contract.order not in repair):
-                kept = accepted[contract.order]
-                kept.accepted = True
-                produced.append(kept)
-                continue
-            raw = generate_chapter_fn(book, contract)
-            chapter_calls += 1
-            parsed = parse_chapter_response(raw, contract)
-            parsed.order = contract.order
-            parsed.title = contract.title
-            produced.append(parsed)
-    else:
-        if generate_fn is None:
-            raise ValueError("generate_chapter_fn or generate_fn is required")
-        raw = generate_fn(**(generate_fn_kwargs or {}))
-        chapter_calls = 1
-        text = raw.get("ebook") if isinstance(raw, dict) else str(raw or "")
+    for contract in book.chapters:
+        if contract.order in accepted and (not repair or contract.order not in repair):
+            kept = accepted[contract.order]
+            kept.accepted = True
+            produced.append(kept)
+            continue
+        if max_chapter_calls is not None and chapter_calls >= max_chapter_calls:
+            skipped_ungenerated.append(contract.order)
+            continue
+        raw = generate_chapter_fn(book, contract)
+        chapter_calls += 1
+        parsed = parse_chapter_response(raw, contract)
+        parsed.order = contract.order
+        parsed.title = contract.title
+        findings = validate_chapter(parsed, contract, book=book)
+        chapter_pass = not findings
+        parsed.accepted = chapter_pass
+        produced.append(parsed)
+        rec = {
+            "order": contract.order,
+            "title": contract.title,
+            "contract_digest": contract.digest(),
+            "assigned_research": assigned_research_for_chapter(book, contract),
+        }
         if isinstance(raw, dict):
-            text = str(raw.get("ebook") or raw.get("content") or "")
-        _front, split_chs, _back = split_front_chapters_back(text)
-        by_title = {normalize_chapter_title(c.title): c for c in split_chs}
-        for contract in book.chapters:
-            if contract.order in accepted and (not repair or contract.order not in repair):
-                kept = accepted[contract.order]
-                kept.accepted = True
-                produced.append(kept)
-                continue
-            parsed = by_title.get(normalize_chapter_title(contract.title))
-            if parsed is None:
-                parsed = ParsedChapter(order=contract.order, title=contract.title, body="")
-            parsed.order = contract.order
-            parsed.title = contract.title
-            produced.append(parsed)
-        # If generate_fn returned a full book, capture back matter from it.
-        full_md = text
-    assembled = assemble_manuscript(
-        title=book.title,
-        subtitle=book.subtitle,
-        author=book.author,
-        chapters=produced,
-        disclaimer="",
-        sources="",
-    )
-    # Preserve unnumbered back matter from a one-shot payload or caller.
-    if generate_chapter_fn is None and generate_fn is not None:
-        orig = text if "text" in locals() else assembled
-        _f2, _c2, back = split_front_chapters_back(orig)
-        if back:
-            assembled = assembled.rstrip() + "\n\n" + back.strip() + "\n"
-    elif back_matter:
-        assembled = assembled.rstrip() + "\n\n" + back_matter.strip() + "\n"
+            rec["provider_assigned_research"] = raw.get("assigned_research")
+            rec["provider_contract"] = raw.get("chapter_contract")
+        provider_payloads.append(rec)
+        if not chapter_pass:
+            failed_orders.append(contract.order)
+            if stop_on_failure:
+                # Do not generate or charge later chapters.
+                remaining = [
+                    c.order
+                    for c in book.chapters
+                    if c.order > contract.order and c.order not in accepted
+                ]
+                skipped_ungenerated.extend(remaining)
+                break
+
+    all_present = len(produced) == len(book.chapters)
+    all_accepted = all_present and all(getattr(c, "accepted", False) for c in produced)
+    disc, sources = ("", "")
+    if all_accepted:
+        if back_matter:
+            assembled = assemble_manuscript(
+                title=book.title,
+                subtitle=book.subtitle,
+                author=book.author,
+                chapters=produced,
+                disclaimer="",
+                sources="",
+            )
+            assembled = assembled.rstrip() + "\n\n" + back_matter.strip() + "\n"
+        else:
+            disc, sources = assemble_back_matter(book)
+            assembled = assemble_manuscript(
+                title=book.title,
+                subtitle=book.subtitle,
+                author=book.author,
+                chapters=produced,
+                disclaimer=disc,
+                sources=sources,
+            )
+    else:
+        assembled = assemble_manuscript(
+            title=book.title,
+            subtitle=book.subtitle,
+            author=book.author,
+            chapters=produced,
+            disclaimer="",
+            sources="",
+        )
+        if back_matter:
+            assembled = assembled.rstrip() + "\n\n" + back_matter.strip() + "\n"
 
     quality = validate_manuscript_quality(manuscript_md=assembled, book_contract=book)
     accepted_out: list[ParsedChapter] = []
-    failed_orders: list[int] = []
     ch_status = {r["order"]: r["status"] for r in quality.chapter_results}
     for ch in produced:
-        if ch_status.get(ch.order) == QUALITY_PASS:
-            ch.accepted = True
-            accepted_out.append(ch)
-        else:
+        if ch_status.get(ch.order) == QUALITY_PASS or getattr(ch, "accepted", False) and ch.order not in failed_orders:
+            if ch_status.get(ch.order) == QUALITY_PASS:
+                ch.accepted = True
+                accepted_out.append(ch)
+            elif getattr(ch, "accepted", False) and ch.order not in failed_orders:
+                # Independent chapter PASS can be kept even when the incomplete
+                # book-level quality result is not yet PASS.
+                accepted_out.append(ch)
+        elif ch.order not in failed_orders:
             failed_orders.append(ch.order)
+    # Deduplicate accepted by order, preserving first body.
+    seen_acc: set[int] = set()
+    unique_acc: list[ParsedChapter] = []
+    for ch in accepted_out:
+        if ch.order in seen_acc:
+            continue
+        seen_acc.add(ch.order)
+        unique_acc.append(ch)
     return {
         "manuscript_md": assembled,
         "chapters": produced,
-        "accepted_chapters": accepted_out,
+        "accepted_chapters": unique_acc,
         "failed_orders": failed_orders,
+        "skipped_ungenerated": skipped_ungenerated,
+        "assembled_complete": all_accepted,
         "quality": quality,
         "chapter_calls": chapter_calls,
+        "provider_payloads": provider_payloads,
     }
 
 

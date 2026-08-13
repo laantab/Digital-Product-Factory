@@ -98,16 +98,16 @@ def research_route():
 
 @app.post("/generate-ebook")
 def generate_ebook_route():
+    """LEGACY non-workspace Factory ebook generation.
+
+    Cannot create Export Ready workspace ebooks. Workspace manuscripts must
+    use POST /ebook-workspace/<id>/generate-manuscript (chapter pipeline).
+    """
     body = request.get_json(silent=True) or {}
     try:
-        # Workspace-gated manuscripts require outline approval + paid confirmation.
         project_id = body.get("project_id")
         if project_id is not None:
-            from services.ebook_project_workspace import (
-                assert_can_run_stage,
-                consume_confirmation,
-                get_workspace,
-            )
+            from services.ebook_project_workspace import get_workspace
 
             project = database.get_project(int(project_id))
             if not project:
@@ -115,14 +115,13 @@ def generate_ebook_route():
             data = dict(project.get("data") or {})
             ws = get_workspace(data)
             if ws is not None:
-                assert_can_run_stage(ws, "manuscript")
-                token = str(body.get("confirmation_token") or "").strip()
-                if not token:
-                    return _error(
-                        "Generate Manuscript requires an explicit cost confirmation token.",
-                        400,
-                    )
-                consume_confirmation(data, "generate_manuscript", token)
+                return _error(
+                    "Workspace ebooks must generate manuscripts through the chapter "
+                    "pipeline (/ebook-workspace/<id>/generate-manuscript). "
+                    "The one-shot /generate-ebook route is legacy and cannot create "
+                    "Export Ready workspace ebooks.",
+                    400,
+                )
         brief = body.get("contract")
         contract = _brief_to_contract(brief)
         author = (body.get("author") or body.get("author_brand") or "").strip()

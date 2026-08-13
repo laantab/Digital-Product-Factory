@@ -78,6 +78,12 @@ def generate_ebook(
     author: str = "",
     research_notes: str = "",
 ) -> dict:
+    """LEGACY one-shot full-book generator.
+
+    Cannot create Export Ready workspace ebooks. Workspace manuscripts must
+    use ``generate_one_chapter`` through the chapter pipeline. Kept only for
+    the non-workspace Factory ``/generate-ebook`` route.
+    """
     source = (source or "").strip()
     if not source:
         raise ValueError("Please enter a topic or URL.")
@@ -172,6 +178,46 @@ def generate_ebook(
         "research_notes": research_notes,
         "source_content": content,
         "originality": originality.to_dict(),
+        "legacy_oneshot": True,
+    }
+
+
+def generate_one_chapter(book, chapter) -> dict:
+    """Production chapter provider: exactly one approved chapter per request.
+
+    Uses that chapter's authoritative contract and assigned research only.
+    Tests inject mocks; live calls go through ``ai_client.chat``.
+    """
+    import json
+    from dataclasses import asdict
+
+    from services.ebook_manuscript_engine import assigned_research_for_chapter
+
+    research = assigned_research_for_chapter(book, chapter)
+    contract_payload = asdict(chapter)
+    contract_json = json.dumps(contract_payload, ensure_ascii=False)
+    text = chat(
+        system=(
+            "You are a professional non-fiction author. Write exactly one chapter. "
+            "Do not write any other chapter. Do not add Disclaimer or Sources as H2 headings. "
+            "Follow the chapter contract exactly. Paraphrase research; never copy sentences. "
+            "Do not invent statistics, testimonials, or guaranteed income."
+        ),
+        user=(
+            f"Write EXACTLY one chapter as Markdown starting with ## {chapter.title}\n"
+            "Do not write any other chapter.\n\n"
+            f"AUTHORITATIVE CHAPTER CONTRACT (do not alter):\n{contract_json}\n\n"
+            f"ASSIGNED RESEARCH (use only this slice):\n{research}\n\n"
+            f"Book title: {getattr(book, 'title', '')}\n"
+            f"Audience: {getattr(book, 'audience', '')}\n"
+            f"Author: {getattr(book, 'author', '')}\n"
+        ),
+    )
+    return {
+        "chapter": text,
+        "ebook": text,
+        "assigned_research": research,
+        "chapter_contract": contract_payload,
     }
 
 

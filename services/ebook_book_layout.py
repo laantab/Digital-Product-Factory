@@ -97,6 +97,32 @@ def _promote_numbered_paragraphs(soup: BeautifulSoup) -> None:
         p.replace_with(wrapper)
 
 
+def _ensure_table_headers(soup: BeautifulSoup) -> None:
+    for table in soup.find_all("table"):
+        if table.find("thead"):
+            continue
+        first_tr = table.find("tr")
+        if first_tr is None:
+            continue
+        thead = soup.new_tag("thead")
+        first_tr.extract()
+        for cell in first_tr.find_all("td"):
+            cell.name = "th"
+        thead.append(first_tr)
+        table.insert(0, thead)
+        remaining = [
+            tr
+            for tr in table.find_all("tr")
+            if tr.parent is not None and tr.parent.name != "thead"
+        ]
+        if remaining and table.find("tbody") is None:
+            tbody = soup.new_tag("tbody")
+            for tr in remaining:
+                tr.extract()
+                tbody.append(tr)
+            table.append(tbody)
+
+
 def _decorate_structured_html(fragment: str) -> str:
     soup = BeautifulSoup(fragment or "", "html.parser")
     for table in soup.find_all("table"):
@@ -134,6 +160,7 @@ def _decorate_structured_html(fragment: str) -> str:
             ol["class"] = (ol.get("class") or []) + ["workflow"]
 
     _promote_numbered_paragraphs(soup)
+    _ensure_table_headers(soup)
     return str(soup)
 
 
@@ -159,22 +186,23 @@ def render_designed_ebook_html(
     css = re.sub(r"letter-spacing\s*:\s*[^;\"']+;?", "", css, flags=re.I)
 
     parts: list[str] = [
-        '<!doctype html><html lang="en"><head><meta charset="utf-8"/>',
+        '<!doctype html><html lang="en" xmlns:pdf="http://www.xhtml2pdf.com/ns/"><head><meta charset="utf-8"/>',
         f"<title>{_e(title)}</title>",
         f"<style>{css}</style></head><body>",
         '<section class="title-page" id="title-page">',
-        f'<h1 class="book-title">{_e(title)}</h1>',
+        f'<h1 class="book-title">{_e(title)} </h1>',
     ]
     if subtitle:
-        parts.append(f'<p class="title-sub">{_e(subtitle)}</p>')
-    parts.append(f'<p class="title-author">{_e(author or "")}</p>')
+        parts.append(f'<p class="title-sub">{_e(subtitle)} </p>')
+    parts.append(f'<p class="title-author">{_e(author or "")} </p>')
     if audience:
         parts.append(f'<p class="caption">For {_e(audience)}</p>')
     parts.append("</section>")
+    parts.append("<pdf:nextpage />")
 
     parts.append('<section class="legal-page" id="copyright">')
-    parts.append('<p class="back-matter-label">Copyright</p>')
-    parts.append("<h2>Copyright</h2>")
+    parts.append('<p class="back-matter-label">Copyright </p>')
+    parts.append("<h2>Copyright </h2>")
     parts.append(
         f"<p>Title: {_e(title)}. Author: {_e(author)}. All rights reserved. "
         "This interior is typeset from the approved manuscript. Design does not rewrite manuscript content.</p>"
@@ -187,6 +215,7 @@ def render_designed_ebook_html(
         "They are not numbered chapters.</p>"
     )
     parts.append("</section>")
+    parts.append("<pdf:nextpage />")
 
     if chapters:
         parts.append('<section class="toc-page" id="toc"><h2>Contents</h2><ol class="toc-list">')
@@ -197,20 +226,22 @@ def render_designed_ebook_html(
     for i, (ctitle, cmd) in enumerate(chapters, start=1):
         body = _strip_leading_heading(_md_fragment(cmd), ctitle)
         body = _decorate_structured_html(body)
+        parts.append("<pdf:nextpage />")
         parts.append(
             f'<section class="chapter-page" id="chapter-{i}">'
-            f'<p class="chapter-num">Chapter {i}</p>'
-            f'<h2 class="chapter-title">{_e(ctitle)}</h2>'
+            f'<p class="chapter-num">Chapter {i} </p>'
+            f'<h2 class="chapter-title">{_e(ctitle)} </h2>'
             f"{body}"
             "</section>"
         )
 
     if disclaimer_md:
         disc_html = _md_fragment(disclaimer_md)
+        parts.append("<pdf:nextpage />")
         parts.append(
             '<section class="back-matter-page" id="disclaimer">'
-            '<p class="back-matter-label">Unnumbered</p>'
-            "<h2>Disclaimer</h2>"
+            '<p class="back-matter-label">Unnumbered </p>'
+            "<h2>Disclaimer </h2>"
             f"{disc_html}"
             "</section>"
         )
@@ -220,10 +251,11 @@ def render_designed_ebook_html(
         ul = soup.find("ul")
         if ul:
             ul["class"] = (ul.get("class") or []) + ["sources-list"]
+        parts.append("<pdf:nextpage />")
         parts.append(
             '<section class="back-matter-page" id="sources">'
-            '<p class="back-matter-label">Unnumbered</p>'
-            "<h2>Sources</h2>"
+            '<p class="back-matter-label">Unnumbered </p>'
+            "<h2>Sources </h2>"
             f"{str(soup)}"
             "</section>"
         )

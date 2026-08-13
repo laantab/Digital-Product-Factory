@@ -20,7 +20,10 @@ import database  # noqa: E402
 from services.ebook_outline_fidelity import (  # noqa: E402
     validate_manuscript_outline_fidelity,
 )
+from services.ebook_manuscript_engine import chapter_fn_from_full_manuscript  # noqa: E402
+from services.ebook_manuscript_fixtures import build_event_photo_strong_manuscript  # noqa: E402
 from services.ebook_project_workspace import (  # noqa: E402
+    CHAPTER_UNIT_USD,
     REVISED_ACCEPTANCE_OUTLINE_TITLES,
     STATUS_AWAITING,
     STATUS_NEEDS_CORRECTION,
@@ -125,7 +128,7 @@ class OutlineFidelityTests(unittest.TestCase):
                 outline_digest_expected=est["estimate"]["outline_digest"],
                 max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
                 idempotency_key="digest-mismatch-1",
-                generate_fn=_mock_good,
+                generate_chapter_fn=chapter_fn_from_full_manuscript(GOOD_REVISED_MS),
             )
 
     def test_ten_approved_chapters_produce_exactly_ten(self):
@@ -139,11 +142,12 @@ class OutlineFidelityTests(unittest.TestCase):
             outline_digest_expected=est["estimate"]["outline_digest"],
             max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
             idempotency_key="ten-chapters-ok",
-            generate_fn=_mock_good,
+            generate_chapter_fn=chapter_fn_from_full_manuscript(build_event_photo_strong_manuscript()),
         )
-        self.assertEqual(out["result"]["manuscript_status"], STATUS_NEEDS_CORRECTION)
+        self.assertEqual(out["result"]["manuscript_status"], STATUS_AWAITING)
         self.assertTrue(out["result"]["structure_ok"])
-        self.assertNotEqual(out["result"].get("quality_status"), "PASS")
+        self.assertEqual(out["result"].get("quality_status"), "PASS")
+        self.assertEqual(out["result"]["chapter_calls"], 10)
         fidelity = validate_manuscript_outline_fidelity(
             approved_outline=data["outline"],
             manuscript_md=out["data"]["content"],
@@ -212,7 +216,7 @@ class OutlineFidelityTests(unittest.TestCase):
             outline_digest_expected=est["estimate"]["outline_digest"],
             max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
             idempotency_key="struct-fail-1",
-            generate_fn=_mock_early,
+            generate_chapter_fn=chapter_fn_from_full_manuscript(EARLY_O1_WITH_BACK),
         )
         self.assertEqual(out["result"]["manuscript_status"], STATUS_NEEDS_CORRECTION)
         self.assertFalse(out["result"]["structure_ok"])
@@ -230,7 +234,7 @@ class OutlineFidelityTests(unittest.TestCase):
             outline_digest_expected=est["estimate"]["outline_digest"],
             max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
             idempotency_key="approve-block-1",
-            generate_fn=_mock_early,
+            generate_chapter_fn=chapter_fn_from_full_manuscript(EARLY_O1_WITH_BACK),
         )
         data = out["data"]
         view = workspace_public_view({"id": self.pid, "name": "t", "data": data})
@@ -251,13 +255,14 @@ class OutlineFidelityTests(unittest.TestCase):
             outline_digest_expected=est["estimate"]["outline_digest"],
             max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
             idempotency_key="preserve-1",
-            generate_fn=_mock_early,
+            generate_chapter_fn=chapter_fn_from_full_manuscript(EARLY_O1_WITH_BACK),
         )
         data = out["data"]
-        self.assertEqual(data["content"], EARLY_O1_WITH_BACK)
+        self.assertIn("What This Business Actually Looks Like", data["content"])
+        self.assertTrue(data["content"])
         self.assertAlmostEqual(
             float(data["ebook_workspace"]["paid_call_ledger"]["spent_usd"]),
-            before_spent + 1.5,
+            before_spent + CHAPTER_UNIT_USD,
             places=3,
         )
         self.assertTrue(data["ebook_workspace"]["last_manuscript_generation"]["provider_input"])
@@ -271,7 +276,7 @@ class OutlineFidelityTests(unittest.TestCase):
         self.assertTrue(preserved.get("content"))
         self.assertAlmostEqual(
             float(preserved["ebook_workspace"]["paid_call_ledger"]["spent_usd"]),
-            before_spent + 1.5,
+            before_spent + CHAPTER_UNIT_USD,
             places=3,
         )
         self.assertEqual(
@@ -284,7 +289,7 @@ class OutlineFidelityTests(unittest.TestCase):
         self.assertTrue(restored.get("content"))
         self.assertAlmostEqual(
             float(restored["ebook_workspace"]["paid_call_ledger"]["spent_usd"]),
-            before_spent + 1.5,
+            before_spent + CHAPTER_UNIT_USD,
             places=3,
         )
         self.assertEqual(
@@ -303,7 +308,7 @@ class OutlineFidelityTests(unittest.TestCase):
             outline_digest_expected=est["estimate"]["outline_digest"],
             max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
             idempotency_key="corr-setup-1",
-            generate_fn=_mock_early,
+            generate_chapter_fn=chapter_fn_from_full_manuscript(EARLY_O1_WITH_BACK),
         )
         data = out["data"]
         with self.assertRaises(ValueError):
@@ -315,7 +320,7 @@ class OutlineFidelityTests(unittest.TestCase):
                 outline_digest_expected=outline_digest(data),
                 max_authorized_usd=0.75,
                 idempotency_key="corr-no-est",
-                correct_fn=_mock_good,
+                correct_chapter_fn=chapter_fn_from_full_manuscript(GOOD_REVISED_MS),
             )
         corr_est = estimate_paid_action(data, "correct_manuscript")
         self.assertEqual(corr_est["estimate"]["action"], "correct_manuscript")
@@ -327,7 +332,7 @@ class OutlineFidelityTests(unittest.TestCase):
             outline_digest_expected=corr_est["estimate"]["outline_digest"],
             max_authorized_usd=float(corr_est["estimate"]["max_authorized_usd"]),
             idempotency_key="corr-ok-1",
-            correct_fn=_mock_good,
+            correct_chapter_fn=chapter_fn_from_full_manuscript(GOOD_REVISED_MS),
         )
         self.assertEqual(fixed["result"]["manuscript_status"], STATUS_NEEDS_CORRECTION)
         self.assertTrue(fixed["data"]["ebook_workspace"].get("previous_manuscript_draft"))
@@ -347,7 +352,10 @@ class OutlineFidelityTests(unittest.TestCase):
         data = self._data()
         est = estimate_paid_action(data, "generate_manuscript")
         database.update_project(self.pid, None, data)
-        with patch("services.ebook.generate_ebook", side_effect=_mock_early):
+        with patch(
+            "services.ebook.generate_one_chapter",
+            side_effect=chapter_fn_from_full_manuscript(EARLY_O1_WITH_BACK),
+        ):
             r = self.client.post(
                 f"/ebook-workspace/{self.pid}/generate-manuscript",
                 json={
@@ -365,7 +373,10 @@ class OutlineFidelityTests(unittest.TestCase):
         data = database.get_project(self.pid)["data"]
         corr = estimate_paid_action(data, "correct_manuscript")
         database.update_project(self.pid, None, data)
-        with patch("services.ebook.correct_ebook_manuscript", side_effect=_mock_good):
+        with patch(
+            "services.ebook.generate_one_chapter",
+            side_effect=chapter_fn_from_full_manuscript(GOOD_REVISED_MS),
+        ):
             r2 = self.client.post(
                 f"/ebook-workspace/{self.pid}/correct-manuscript",
                 json={

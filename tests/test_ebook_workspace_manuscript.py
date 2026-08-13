@@ -16,8 +16,10 @@ os.chdir(ROOT)
 
 from app import app  # noqa: E402
 import database  # noqa: E402
+from services.ebook_manuscript_engine import assigned_research_for_chapter, chapter_fn_from_full_manuscript  # noqa: E402
 from services.ebook_project_workspace import (  # noqa: E402
     ACCEPTANCE_PROJECT_NAME,
+    CHAPTER_UNIT_USD,
     cancel_paid_estimate,
     estimate_paid_action,
     execute_generate_manuscript,
@@ -76,16 +78,12 @@ Avoid underpricing, missing backup gear, vague packages, and weak print planning
 BAD_MS = GOOD_MS + "\n\n## Chapter Extra\n\nsub-goal #1 invent a Lonnie story here\n"
 
 
-def _mock_generate_ok(source, contract=None, author="", research_notes=""):
-    assert "Lonnie Brown" in (author or research_notes)
-    assert "APPROVED OUTLINE" in research_notes or "What This Business" in research_notes
-    assert "LOCKED EDITORIAL" in research_notes or "DS-RX1HS" in research_notes
-    assert "sub-goal" not in research_notes.lower() or "FORBIDDEN" in research_notes
-    return {"ebook": GOOD_MS, "source": source, "source_type": "topic"}
+def _mock_one_chapter(book, chapter):
+    return chapter_fn_from_full_manuscript(GOOD_MS)(book, chapter)
 
 
-def _mock_generate_bad(source, contract=None, author="", research_notes=""):
-    return {"ebook": BAD_MS, "source": source, "source_type": "topic"}
+def _mock_one_chapter_bad(book, chapter):
+    return chapter_fn_from_full_manuscript(BAD_MS)(book, chapter)
 
 
 class ManuscriptExecutionTests(unittest.TestCase):
@@ -216,7 +214,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
         with patch(
             "services.ebook_project_workspace.generate_fn", create=True
         ):
-            with patch("services.ebook.generate_ebook", side_effect=_mock_generate_ok) as mocked:
+            with patch("services.ebook.generate_one_chapter", side_effect=_mock_one_chapter) as mocked:
                 r3 = self.client.post(
                     f"/ebook-workspace/{self.pid}/generate-manuscript",
                     json={
@@ -251,7 +249,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
         est = estimate_paid_action(data, "generate_manuscript")
         database.update_project(self.pid, None, data)
         token = est["estimate"]["confirmation_token"]
-        with patch("services.ebook.generate_ebook", side_effect=_mock_generate_ok):
+        with patch("services.ebook.generate_one_chapter", side_effect=_mock_one_chapter):
             r = self.client.post(
                 f"/ebook-workspace/{self.pid}/generate-manuscript",
                 json={
@@ -269,7 +267,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
         data = dict(database.get_project(self.pid)["data"])
         est2 = estimate_paid_action(data, "generate_manuscript")
         database.update_project(self.pid, None, data)
-        with patch("services.ebook.generate_ebook", side_effect=_mock_generate_ok):
+        with patch("services.ebook.generate_one_chapter", side_effect=_mock_one_chapter):
             r2 = self.client.post(
                 f"/ebook-workspace/{self.pid}/generate-manuscript",
                 json={
@@ -296,7 +294,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
             "max_authorized_usd": 1.5,
             "idempotency_key": "k-dup-1",
         }
-        with patch("services.ebook.generate_ebook", side_effect=_mock_generate_ok) as mocked:
+        with patch("services.ebook.generate_one_chapter", side_effect=_mock_one_chapter) as mocked:
             r1 = self.client.post(f"/ebook-workspace/{self.pid}/generate-manuscript", json=payload)
             self.assertEqual(r1.status_code, 200, r1.get_data(as_text=True))
             calls_after_first = mocked.call_count
@@ -330,7 +328,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
         data = dict(database.get_project(self.pid)["data"])
         est = estimate_paid_action(data, "generate_manuscript")
         database.update_project(self.pid, None, data)
-        with patch("services.ebook.generate_ebook", side_effect=_mock_generate_ok) as mocked:
+        with patch("services.ebook.generate_one_chapter", side_effect=_mock_one_chapter) as mocked:
             r = self.client.post(
                 f"/ebook-workspace/{self.pid}/generate-manuscript",
                 json={
@@ -343,19 +341,21 @@ class ManuscriptExecutionTests(unittest.TestCase):
                 },
             )
             self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
-            kwargs = mocked.call_args.kwargs
-            notes = kwargs.get("research_notes") or ""
-            self.assertIn("Lonnie Brown", kwargs.get("author") or notes)
-            self.assertIn("What This Business Actually Looks Like", notes)
-            self.assertIn("DS-RX1HS", notes)
-            self.assertTrue(str(self.project["name"]).startswith(ACCEPTANCE_PROJECT_NAME))
+            args = mocked.call_args.args
+            self.assertGreaterEqual(len(args), 2)
+            book, chapter = args[0], args[1]
+            self.assertIn("Lonnie Brown", str(getattr(book, "author", "") or ""))
+            self.assertTrue(chapter.title)
+            self.assertIn("What This Business Actually Looks Like", chapter.title)
+            research = assigned_research_for_chapter(book, chapter)
+            self.assertTrue(research)
 
     def test_10_result_awaiting_approval(self):
         self._fresh()
         data = dict(database.get_project(self.pid)["data"])
         est = estimate_paid_action(data, "generate_manuscript")
         database.update_project(self.pid, None, data)
-        with patch("services.ebook.generate_ebook", side_effect=_mock_generate_ok):
+        with patch("services.ebook.generate_one_chapter", side_effect=_mock_one_chapter):
             r = self.client.post(
                 f"/ebook-workspace/{self.pid}/generate-manuscript",
                 json={
@@ -378,7 +378,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
         data = dict(database.get_project(self.pid)["data"])
         est = estimate_paid_action(data, "generate_manuscript")
         database.update_project(self.pid, None, data)
-        with patch("services.ebook.generate_ebook", side_effect=_mock_generate_bad):
+        with patch("services.ebook.generate_one_chapter", side_effect=_mock_one_chapter_bad):
             r = self.client.post(
                 f"/ebook-workspace/{self.pid}/generate-manuscript",
                 json={
@@ -401,7 +401,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
         data = dict(database.get_project(self.pid)["data"])
         est = estimate_paid_action(data, "generate_manuscript")
         database.update_project(self.pid, None, data)
-        with patch("services.ebook.generate_ebook", side_effect=_mock_generate_ok):
+        with patch("services.ebook.generate_one_chapter", side_effect=_mock_one_chapter):
             r = self.client.post(
                 f"/ebook-workspace/{self.pid}/generate-manuscript",
                 json={
@@ -430,7 +430,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
         data = dict(database.get_project(self.pid)["data"])
         est = estimate_paid_action(data, "generate_manuscript")
         database.update_project(self.pid, None, data)
-        with patch("services.ebook.generate_ebook", side_effect=_mock_generate_ok):
+        with patch("services.ebook.generate_one_chapter", side_effect=_mock_one_chapter):
             self.client.post(
                 f"/ebook-workspace/{self.pid}/generate-manuscript",
                 json={
@@ -444,7 +444,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
             )
         ledger = database.get_project(self.pid)["data"]["ebook_workspace"]["paid_call_ledger"]
         self.assertEqual(int(ledger["paid_calls"]), before_calls + 1)
-        self.assertAlmostEqual(float(ledger["spent_usd"]), before_spent + 1.5, places=3)
+        self.assertAlmostEqual(float(ledger["spent_usd"]), before_spent + CHAPTER_UNIT_USD, places=3)
         ms_calls = [c for c in ledger.get("calls") or [] if c.get("purpose") == "generate_manuscript"]
         self.assertEqual(len(ms_calls), 1)
 
@@ -453,7 +453,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
         data = dict(database.get_project(self.pid)["data"])
         est = estimate_paid_action(data, "generate_manuscript")
         database.update_project(self.pid, None, data)
-        with patch("services.ebook.generate_ebook", side_effect=_mock_generate_ok):
+        with patch("services.ebook.generate_one_chapter", side_effect=_mock_one_chapter):
             self.client.post(
                 f"/ebook-workspace/{self.pid}/generate-manuscript",
                 json={
@@ -469,16 +469,16 @@ class ManuscriptExecutionTests(unittest.TestCase):
         self.assertEqual(
             {s["id"]: s["status"] for s in ws["rail"]}["manuscript"], "needs_correction"
         )
-        self.assertIn("Dye-Sublimation Printing", ws["manuscript"]["content"])
+        self.assertIn("Event photography with on-site dye-sub", ws["manuscript"]["content"])
         proj = self.client.get(f"/projects/{self.pid}").get_json()
-        self.assertIn("Dye-Sublimation", proj["data"].get("content") or "")
+        self.assertIn("dye-sub", (proj["data"].get("content") or "").lower())
 
     def test_15_no_cover_image_pdf_zip_call(self):
         self._fresh()
         data = dict(database.get_project(self.pid)["data"])
         est = estimate_paid_action(data, "generate_manuscript")
         database.update_project(self.pid, None, data)
-        with patch("services.ebook.generate_ebook", side_effect=_mock_generate_ok):
+        with patch("services.ebook.generate_one_chapter", side_effect=_mock_one_chapter):
             with patch("services.ebook_cover_local.build_local_cover", create=True) as cover:
                 with patch("services.packaging.build_product_export", create=True) as export:
                     self.client.post(

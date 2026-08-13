@@ -74,7 +74,7 @@ from services.ebook_project_workspace import (  # noqa: E402
     workspace_public_view,
 )
 
-FIXTURE_DIR = ROOT / "exports" / "ebook_design_fixture_pass_b"
+FIXTURE_DIR = ROOT / "exports" / "ebook_design_fixture_pass_c"
 
 
 def _pages_pdf(pages: list[str]) -> bytes:
@@ -222,6 +222,15 @@ class EbookDesignExportTests(unittest.TestCase):
         split = _pages_pdf(["Cover", "SPLIT_TABLE_TEST row broken"])
         r5 = run_design_preflight(data, pdf_bytes=split)
         self.assertTrue(any(f.code == "split_table" for f in r5.findings))
+        packed = _pages_pdf(
+            ["Cover title Lonnie Brown"]
+            + ["Chapter 1OpeningTitle Chapter 2SecondTitle extra body text here"] * 2
+        )
+        r6 = run_design_preflight(data, pdf_bytes=packed)
+        self.assertTrue(any(f.code == "packed_chapters" for f in r6.findings))
+        dense = _pages_pdf(["Cover title Lonnie Brown", "\n".join(["word"] * 800)])
+        r7 = run_design_preflight(data, pdf_bytes=dense)
+        self.assertTrue(any(f.code == "overcrowded_page" for f in r7.findings))
         self.assertNotEqual(r.status, PREFLIGHT_PASS)
 
     def test_stale_orphan_tampered_exports_fail(self):
@@ -286,7 +295,7 @@ class EbookDesignExportTests(unittest.TestCase):
         FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
         bundle = render_strong_fixture_bundle(FIXTURE_DIR)
         inspection = bundle["inspection"]
-        self.assertGreaterEqual(inspection["page_count"], 8)
+        self.assertGreaterEqual(inspection["page_count"], 16)
         self.assertTrue(Path(inspection["pdf_path"]).is_file())
         self.assertTrue(Path(inspection["zip_path"]).is_file())
         self.assertTrue(Path(inspection["contact_sheet"]).is_file())
@@ -294,6 +303,8 @@ class EbookDesignExportTests(unittest.TestCase):
         blankish = [p for p in inspection["pages"] if p.get("nearly_blank") and p["page"] > 1]
         self.assertFalse(blankish, blankish[:3])
         html = bundle["html"]
+        self.assertIn("<pdf:nextpage", html)
+        self.assertGreaterEqual(html.count("<pdf:nextpage"), 12)
         self.assertIn("Chapter 1", html)
         self.assertIn("Disclaimer", html)
         self.assertIn("Sources", html)

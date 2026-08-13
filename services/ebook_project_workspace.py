@@ -401,6 +401,59 @@ def normalize_paid_action(action: str) -> str:
 TOKEN_TTL_SECONDS = 30 * 60
 MANUSCRIPT_AUTH_MAX_USD = 1.50
 CORRECTION_AUTH_MAX_USD = 0.75
+CHAPTER_UNIT_USD = 0.15
+ONESHOT_WORKSPACE_BLOCKED = (
+    "One-shot workspace generation is blocked. "
+    "Workspace ebooks must use the chapter pipeline "
+    "(exactly one approved chapter per provider request)."
+)
+
+
+def accepted_chapter_digests(data: dict) -> list[str]:
+    """Stable digests of preserved accepted chapters (resume/idempotency binding)."""
+    ws = get_workspace(data) or {}
+    out: list[str] = []
+    for item in ws.get("accepted_chapters") or []:
+        if not isinstance(item, dict):
+            continue
+        out.append(
+            _sha(
+                {
+                    "order": int(item.get("order") or 0),
+                    "title": str(item.get("title") or ""),
+                    "body": str(item.get("body") or ""),
+                }
+            )
+        )
+    return out
+
+
+def chapter_pipeline_stats(data: dict) -> dict[str, Any]:
+    """Accepted vs pending chapter counts for estimates and the confirmation UI."""
+    from services.ebook_manuscript_engine import build_book_contract
+
+    book = build_book_contract(data)
+    ws = get_workspace(data) or {}
+    accepted = [
+        c
+        for c in (ws.get("accepted_chapters") or [])
+        if isinstance(c, dict) and str(c.get("body") or "").strip()
+    ]
+    accepted_orders = {int(c.get("order") or 0) for c in accepted}
+    n_total = len(book.chapters)
+    n_accepted = len(accepted_orders)
+    n_pending = max(0, n_total - n_accepted)
+    return {
+        "accepted_chapter_count": n_accepted,
+        "pending_chapter_count": n_pending,
+        "total_chapter_count": n_total,
+        "per_chapter_max_usd": CHAPTER_UNIT_USD,
+        "accepted_chapter_digests": accepted_chapter_digests(data),
+        "resume_from_order": min(
+            (c.order for c in book.chapters if c.order not in accepted_orders),
+            default=None,
+        ),
+    }
 
 
 def authoritative_approved_outline(data: dict) -> list[dict]:
@@ -1185,11 +1238,16 @@ def estimate_paid_action(data: dict, action: str) -> dict:
         if not (data.get("content") or data.get("ebook")):
             raise ValueError("Correction requires the preserved manuscript draft.")
     ledger = ws.setdefault("paid_call_ledger", empty_ledger())
-    estimate = round(float(spec["default_estimate_usd"]), 4)
-    if action == "generate_manuscript":
-        estimate = min(estimate, MANUSCRIPT_AUTH_MAX_USD)
-    if action == "correct_manuscript":
-        estimate = min(estimate, CORRECTION_AUTH_MAX_USD)
+    stats = chapter_pipeline_stats(data)
+    n_pending = int(stats["pending_chapter_count"] or 0)
+    if action in {"generate_manuscript", "correct_manuscript"}:
+        estimate = round(max(n_pending, 1) * CHAPTER_UNIT_USD, 4)
+        if action == "generate_manuscript":
+            estimate = min(estimate, MANUSCRIPT_AUTH_MAX_USD)
+        else:
+            estimate = min(estimate, CORRECTION_AUTH_MAX_USD)
+    else:
+        estimate = round(float(spec["default_estimate_usd"]), 4)
     remaining = round(float(ledger.get("remaining_usd") or 0), 4)
     cap = round(float(ledger.get("budget_cap_usd") or DEFAULT_BUDGET_CAP_USD), 4)
     spent = round(float(ledger.get("spent_usd") or 0), 4)
@@ -1235,6 +1293,14 @@ def estimate_paid_action(data: dict, action: str) -> dict:
         "chapter_contract_digests": [c.digest() for c in book_contract.chapters],
         "manuscript_digest": manuscript_digest(data),
         "structural_findings_digest": structural_findings_digest(data),
+        "accepted_chapter_digests": list(stats.get("accepted_chapter_digests") or []),
+        "per_chapter_max_usd": CHAPTER_UNIT_USD,
+        "accepted_chapter_count": int(stats.get("accepted_chapter_count") or 0),
+        "pending_chapter_count": (
+            n_pending if action in {"generate_manuscript", "correct_manuscript"} else None
+        ),
+        "max_total_usd": estimate,
+        "resume_from_order": stats.get("resume_from_order"),
         "used": False,
         "confirmation_required": True,
         "expires_note": "Confirmation required before any paid call. Opening this page does not spend.",
@@ -1304,9 +1370,13 @@ def execute_generate_manuscript(
 ) -> dict:
     """Server-authoritative manuscript generation after explicit cost confirmation.
 
-    ``generate_fn`` is injectable for tests (zero paid calls). Production passes
-    the real ``services.ebook.generate_ebook`` via the Flask route.
+    Production uses the chapter pipeline (one approved chapter per provider
+    request). ``generate_chapter_fn`` is injectable for tests (zero paid calls).
+    One-shot ``generate_fn`` is blocked and cannot create Export Ready workspace ebooks.
     """
+    if generate_fn is not None and generate_chapter_fn is None:
+        raise ValueError(ONESHOT_WORKSPACE_BLOCKED)
+
     from services.ebook_document import (
         find_customer_content_defects,
         manuscript_to_chapters,
@@ -1377,6 +1447,11 @@ def execute_generate_manuscript(
     pending_book_digest = str(pending.get("book_contract_digest") or "")
     if pending_book_digest and pending_book_digest != book_contract.digest():
         raise ValueError("Book/chapter contract changed since the estimate — request a new cost estimate.")
+    token_accepted = list(pending.get("accepted_chapter_digests") or [])
+    if token_accepted != accepted_chapter_digests(data):
+        raise ValueError(
+            "Accepted chapters changed since the estimate — request a new cost estimate."
+        )
 
     approved_outline = authoritative_approved_outline(data)
     if len(approved_outline) < 3:
@@ -1411,8 +1486,10 @@ def execute_generate_manuscript(
         }
     )
 
-    if generate_chapter_fn is None and generate_fn is None:
-        from services.ebook import generate_ebook as generate_fn
+    if generate_fn is not None and generate_chapter_fn is None:
+        raise ValueError(ONESHOT_WORKSPACE_BLOCKED)
+    if generate_chapter_fn is None:
+        from services.ebook import generate_one_chapter as generate_chapter_fn
 
     research_notes = build_research_notes_for_manuscript(data)
     contract = build_manuscript_contract(data)
@@ -1440,32 +1517,44 @@ def execute_generate_manuscript(
         "research_notes_prefix": research_notes[:2000],
         "book_contract_digest": book_contract.digest(),
         "chapter_titles": [c.title for c in book_contract.chapters],
+        "chapter_contract_digests": [c.digest() for c in book_contract.chapters],
+        "pipeline": "one_chapter_per_request",
     }
 
-    if generate_chapter_fn is not None:
-        pipeline = run_chapter_pipeline(
-            book_contract,
-            generate_chapter_fn=generate_chapter_fn,
+    from services.ebook_manuscript_engine import ParsedChapter
+
+    stored_accepted = []
+    for item in ws.get("accepted_chapters") or []:
+        if not isinstance(item, dict):
+            continue
+        stored_accepted.append(
+            ParsedChapter(
+                order=int(item.get("order") or 0),
+                title=str(item.get("title") or ""),
+                body=str(item.get("body") or ""),
+                accepted=True,
+            )
         )
-        manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
-        ws["accepted_chapters"] = [
-            {"order": c.order, "title": c.title, "body": c.body}
-            for c in pipeline.get("accepted_chapters") or []
-        ]
-        ws["chapter_pipeline"] = {
-            "chapter_calls": pipeline.get("chapter_calls"),
-            "failed_orders": pipeline.get("failed_orders"),
-        }
-    else:
-        raw = generate_fn(
-            source,
-            contract=contract,
-            author=author,
-            research_notes=research_notes,
-        )
-        if not isinstance(raw, dict):
-            raise ValueError("Manuscript generator returned an invalid payload.")
-        manuscript_md = str(raw.get("ebook") or raw.get("content") or "").strip()
+    max_calls = max(1, int(auth_max / CHAPTER_UNIT_USD + 1e-9))
+    pipeline = run_chapter_pipeline(
+        book_contract,
+        generate_chapter_fn=generate_chapter_fn,
+        accepted_chapters=stored_accepted,
+        stop_on_failure=True,
+        max_chapter_calls=max_calls,
+    )
+    manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
+    ws["accepted_chapters"] = [
+        {"order": c.order, "title": c.title, "body": c.body}
+        for c in pipeline.get("accepted_chapters") or []
+    ]
+    ws["chapter_pipeline"] = {
+        "chapter_calls": pipeline.get("chapter_calls"),
+        "failed_orders": pipeline.get("failed_orders"),
+        "skipped_ungenerated": pipeline.get("skipped_ungenerated"),
+        "assembled_complete": pipeline.get("assembled_complete"),
+        "provider_payloads": pipeline.get("provider_payloads"),
+    }
     if not manuscript_md:
         raise ValueError("Manuscript generator returned empty content.")
 
@@ -1484,12 +1573,13 @@ def execute_generate_manuscript(
     defects = list(structure_findings) + list(content_defects) + list(quality.finding_messages)
     chapters = manuscript_to_chapters(cleaned)
 
-    # Record spend for the provider call that already ran. Structurally invalid
-    # drafts are never accepted as Awaiting approval.
-    charge = min(auth_max, remaining)
+    # Charge only the chapter provider requests that ran. Later chapters after
+    # a failure are not generated and not charged.
+    chapter_calls = int(pipeline.get("chapter_calls") or 0)
+    charge = round(min(chapter_calls * CHAPTER_UNIT_USD, auth_max, remaining), 4)
     ledger["spent_usd"] = round(spent + charge, 4)
     ledger["remaining_usd"] = round(cap - float(ledger["spent_usd"]), 4)
-    ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + 1
+    ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + chapter_calls
     call_rec = {
         "ts": _now(),
         "provider": "openai",
@@ -1502,6 +1592,8 @@ def execute_generate_manuscript(
             "artifact_id": artifact_id,
             "artifact_revision": revision,
             "structure_ok": bool(fidelity.get("ok")),
+            "chapter_calls": chapter_calls,
+            "failed_orders": pipeline.get("failed_orders"),
         },
     }
     ledger.setdefault("calls", []).append(call_rec)
@@ -1531,6 +1623,9 @@ def execute_generate_manuscript(
         "structure_ok": bool(fidelity.get("ok")),
         "quality_status": quality.status,
         "confirmation_token": str(pending.get("confirmation_token") or ""),
+        "chapter_calls": chapter_calls,
+        "failed_orders": list(pipeline.get("failed_orders") or []),
+        "assembled_complete": bool(pipeline.get("assembled_complete")),
     }
     quality_blocked = quality.status != QUALITY_PASS
     if content_defects or not fidelity.get("ok") or quality_blocked:
@@ -1580,6 +1675,8 @@ def execute_generate_manuscript(
         "spent_usd": ledger.get("spent_usd"),
         "remaining_usd": ledger.get("remaining_usd"),
         "chapter_count": len(chapters),
+        "chapter_calls": chapter_calls,
+        "failed_orders": list(pipeline.get("failed_orders") or []),
         "title": data.get("title"),
         "subtitle": data.get("subtitle"),
     }
@@ -1695,6 +1792,11 @@ def execute_correct_manuscript(
     pending_book_digest = str(pending.get("book_contract_digest") or "")
     if pending_book_digest and pending_book_digest != book_contract.digest():
         raise ValueError("Book/chapter contract changed since the estimate — request a new correction estimate.")
+    if "accepted_chapter_digests" in pending:
+        if list(pending.get("accepted_chapter_digests") or []) != accepted_chapter_digests(data):
+            raise ValueError(
+                "Accepted chapters changed since the estimate — request a new correction estimate."
+            )
     auth_max = round(float(max_authorized_usd), 4)
     pending_max = round(float(pending.get("max_authorized_usd") or pending.get("estimated_max_usd") or 0), 4)
     if auth_max <= 0 or abs(auth_max - pending_max) > 1e-9:
@@ -1730,81 +1832,70 @@ def execute_correct_manuscript(
             "Correction prompt outline does not match the token-bound approved outline."
         )
 
-    if correct_fn is None and correct_chapter_fn is None:
-        from services.ebook import correct_ebook_manuscript as correct_fn
+    if correct_fn is not None and correct_chapter_fn is None:
+        raise ValueError(ONESHOT_WORKSPACE_BLOCKED)
+    if correct_chapter_fn is None:
+        from services.ebook import generate_one_chapter as correct_chapter_fn
 
     set_stage_status(ws, "manuscript", STATUS_IN_PROGRESS, note="Correcting manuscript")
     author = str(ws.get("author") or data.get("author_brand") or "").strip()
-    prior_quality = validate_manuscript_quality(
-        data, manuscript_md=existing, book_contract=book_contract
-    )
-    failed_orders = [
-        int(r["order"])
-        for r in prior_quality.chapter_results
-        if r.get("status") != QUALITY_PASS
-    ]
-    if not prior_quality.outline_ok:
-        failed_orders = [c.order for c in book_contract.chapters]
-    _front, prior_chapters, prior_back = split_front_chapters_back(existing)
-    accepted_keep = [
-        ch for ch in prior_chapters if ch.order not in set(failed_orders)
-    ]
-
-    if correct_chapter_fn is not None:
-        pipeline = run_chapter_pipeline(
-            book_contract,
-            generate_chapter_fn=correct_chapter_fn,
-            accepted_chapters=accepted_keep,
-            repair_orders=failed_orders,
-            back_matter=prior_back,
-        )
-        manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
-        if prior_back and "**disclaimer**" not in manuscript_md.lower():
-            manuscript_md = manuscript_md.rstrip() + "\n\n" + prior_back + "\n"
-        ws["chapter_pipeline"] = {
-            "chapter_calls": pipeline.get("chapter_calls"),
-            "failed_orders": pipeline.get("failed_orders"),
-            "preserved_orders": [c.order for c in accepted_keep],
-        }
-    else:
-        raw = correct_fn(
-            existing_manuscript=existing,
-            approved_outline=approved_outline,
-            author=author,
-            research_notes=research_notes,
-            title=str(data.get("title") or ""),
-            subtitle=str(data.get("subtitle") or ""),
-        )
-        if not isinstance(raw, dict):
-            raise ValueError("Correction generator returned an invalid payload.")
-        manuscript_md = str(raw.get("ebook") or raw.get("content") or "").strip()
-        # Preserve accepted chapters when the full-book corrector returns a new book.
-        if accepted_keep and prior_quality.outline_ok:
-            _nf, new_chs, new_back = split_front_chapters_back(manuscript_md)
-            keep_by_order = {c.order: c for c in accepted_keep}
-            merged: list[ParsedChapter] = []
-            new_by_title = {normalize_chapter_title(c.title): c for c in new_chs}
-            for contract in book_contract.chapters:
-                if contract.order in keep_by_order:
-                    merged.append(keep_by_order[contract.order])
-                else:
-                    nxt = new_by_title.get(normalize_chapter_title(contract.title))
-                    if nxt is None:
-                        nxt = ParsedChapter(order=contract.order, title=contract.title, body="")
-                    nxt.order = contract.order
-                    nxt.title = contract.title
-                    merged.append(nxt)
-            manuscript_md = assemble_manuscript(
-                title=str(data.get("title") or book_contract.title),
-                subtitle=str(data.get("subtitle") or book_contract.subtitle),
-                author=author,
-                chapters=merged,
-                disclaimer="",
-                sources="",
+    stored_accepted: list = []
+    for item in ws.get("accepted_chapters") or []:
+        if not isinstance(item, dict):
+            continue
+        body = str(item.get("body") or "").strip()
+        if not body:
+            continue
+        stored_accepted.append(
+            ParsedChapter(
+                order=int(item.get("order") or 0),
+                title=str(item.get("title") or ""),
+                body=body,
+                accepted=True,
             )
-            back = new_back or prior_back
-            if back:
-                manuscript_md = manuscript_md.rstrip() + "\n\n" + back + "\n"
+        )
+    accepted_orders = {c.order for c in stored_accepted}
+    if stored_accepted:
+        accepted_keep = stored_accepted
+        failed_orders = [c.order for c in book_contract.chapters if c.order not in accepted_orders]
+    else:
+        prior_quality = validate_manuscript_quality(
+            data, manuscript_md=existing, book_contract=book_contract
+        )
+        failed_orders = [
+            int(r["order"])
+            for r in prior_quality.chapter_results
+            if r.get("status") != QUALITY_PASS
+        ]
+        if not prior_quality.outline_ok:
+            failed_orders = [c.order for c in book_contract.chapters]
+        _front, prior_chapters, _prior_back = split_front_chapters_back(existing)
+        accepted_keep = [ch for ch in prior_chapters if ch.order not in set(failed_orders)]
+        for ch in accepted_keep:
+            ch.accepted = True
+
+    max_calls = max(1, int(auth_max / CHAPTER_UNIT_USD + 1e-9))
+    pipeline = run_chapter_pipeline(
+        book_contract,
+        generate_chapter_fn=correct_chapter_fn,
+        accepted_chapters=accepted_keep,
+        repair_orders=failed_orders,
+        stop_on_failure=True,
+        max_chapter_calls=max_calls,
+    )
+    manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
+    ws["accepted_chapters"] = [
+        {"order": c.order, "title": c.title, "body": c.body}
+        for c in pipeline.get("accepted_chapters") or []
+    ]
+    ws["chapter_pipeline"] = {
+        "chapter_calls": pipeline.get("chapter_calls"),
+        "failed_orders": pipeline.get("failed_orders"),
+        "skipped_ungenerated": pipeline.get("skipped_ungenerated"),
+        "preserved_orders": [c.order for c in accepted_keep],
+        "assembled_complete": pipeline.get("assembled_complete"),
+        "provider_payloads": pipeline.get("provider_payloads"),
+    }
     if not manuscript_md:
         raise ValueError("Correction generator returned empty content.")
 
@@ -1823,10 +1914,11 @@ def execute_correct_manuscript(
     defects = list(structure_findings) + list(content_defects) + list(quality.finding_messages)
     chapters = manuscript_to_chapters(cleaned)
 
-    charge = min(auth_max, remaining)
+    chapter_calls = int((ws.get("chapter_pipeline") or {}).get("chapter_calls") or 0)
+    charge = round(min(chapter_calls * CHAPTER_UNIT_USD, auth_max, remaining), 4)
     ledger["spent_usd"] = round(spent + charge, 4)
     ledger["remaining_usd"] = round(cap - float(ledger["spent_usd"]), 4)
-    ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + 1
+    ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + chapter_calls
     ledger.setdefault("calls", []).append(
         {
             "ts": _now(),
@@ -1837,6 +1929,7 @@ def execute_correct_manuscript(
             "meta": {
                 "outline_digest": current_od,
                 "structure_ok": bool(fidelity.get("ok")),
+                "chapter_calls": chapter_calls,
             },
         }
     )
@@ -1891,6 +1984,8 @@ def execute_correct_manuscript(
         "spent_usd": ledger.get("spent_usd"),
         "remaining_usd": ledger.get("remaining_usd"),
         "chapter_count": len(chapters),
+        "chapter_calls": chapter_calls,
+        "failed_orders": list((ws.get("chapter_pipeline") or {}).get("failed_orders") or []),
     }
     idem_store[key] = {"result": result, "ts": _now(), "charge_usd": charge}
     ledger["idempotency_keys"] = idem_store

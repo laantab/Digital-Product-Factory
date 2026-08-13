@@ -25,6 +25,7 @@ from services.ebook_manuscript_engine import (  # noqa: E402
     QUALITY_NEEDS_CORRECTION,
     QUALITY_PASS,
     build_book_contract,
+    chapter_fn_from_full_manuscript,
     remap_outline_purposes,
     run_chapter_pipeline,
     validate_manuscript_quality,
@@ -127,9 +128,10 @@ class ManuscriptQualityEngineTests(unittest.TestCase):
             idempotency_key="ch-contract-1",
             generate_chapter_fn=_chapter_fn,
         )
-        self.assertEqual(seen, REVISED_ACCEPTANCE_OUTLINE_TITLES)
+        self.assertEqual(seen, [REVISED_ACCEPTANCE_OUTLINE_TITLES[0]])
         self.assertEqual(out["result"]["manuscript_status"], STATUS_NEEDS_CORRECTION)
-        self.assertEqual(out["data"]["ebook_workspace"]["chapter_pipeline"]["chapter_calls"], 10)
+        self.assertEqual(out["data"]["ebook_workspace"]["chapter_pipeline"]["chapter_calls"], 1)
+        self.assertEqual(out["result"]["failed_orders"], [1])
 
     def test_chapters_validated_independently_and_preserved_on_repair(self):
         data = self._data()
@@ -249,7 +251,7 @@ class ManuscriptQualityEngineTests(unittest.TestCase):
             outline_digest_expected=est["estimate"]["outline_digest"],
             max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
             idempotency_key="strong-pass-1",
-            generate_fn=lambda *a, **k: {"ebook": md},
+            generate_chapter_fn=chapter_fn_from_full_manuscript(md),
         )
         self.assertEqual(out["result"]["manuscript_status"], STATUS_AWAITING)
         self.assertEqual(out["result"].get("quality_status"), QUALITY_PASS)
@@ -270,7 +272,7 @@ class ManuscriptQualityEngineTests(unittest.TestCase):
             outline_digest_expected=est["estimate"]["outline_digest"],
             max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
             idempotency_key="thin-no-approve",
-            generate_fn=lambda *a, **k: {"ebook": _thin_ms()},
+            generate_chapter_fn=chapter_fn_from_full_manuscript(_thin_ms()),
         )
         view = workspace_public_view({"id": self.pid, "data": out["data"]})
         self.assertFalse(view["manuscript"]["can_approve"])
@@ -318,7 +320,7 @@ class ManuscriptQualityEngineTests(unittest.TestCase):
                         outline_digest_expected=est["estimate"]["outline_digest"],
                         max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
                         idempotency_key="zero-calls",
-                        generate_fn=lambda *a, **k: {"ebook": _thin_ms()},
+                        generate_chapter_fn=chapter_fn_from_full_manuscript(_thin_ms()),
                     )
                     chat.assert_not_called()
                     chat_json.assert_not_called()
