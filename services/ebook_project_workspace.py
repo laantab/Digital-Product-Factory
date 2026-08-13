@@ -28,6 +28,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ACCEPTANCE_EXPORT_DIR = ROOT / "exports" / "ebook_live_acceptance_lonnie_event_photo"
 ACCEPTANCE_PROJECT_NAME = "LIVE ACCEPTANCE — EVENT PHOTOGRAPHY EBOOK"
 ACCEPTANCE_MARKER = "live_acceptance_event_photography_ebook_v1"
+# Frozen live manuscript project — never a seed target.
+FROZEN_LIVE_EBOOK_PROJECT_ID = 2472
 
 # User-facing stage rail (coarse). Maps onto fine WORKFLOW_STAGES internally.
 RAIL_STAGES = (
@@ -2002,6 +2004,196 @@ def execute_correct_manuscript(
 def assert_no_paid_side_effects_on_read() -> None:
     """Documentation hook — read/render paths must not call this to spend."""
     return None
+
+
+def apply_pre_manuscript_acceptance_seed(
+    target_data: dict,
+    source_data: dict,
+    *,
+    budget_cap_usd: float = MANUSCRIPT_AUTH_MAX_USD,
+) -> dict[str, Any]:
+    """Copy approved pre-manuscript inputs only into a separate DRAFT workspace.
+
+    Never copies manuscript, quality results, design, exports, ledger, spend,
+    tokens, provider responses, or correction history. Always assigns a new
+    artifact identity and a fresh $0 / cap ledger.
+    """
+    source = dict(source_data or {})
+    src_ws = get_workspace(source)
+    if not src_ws:
+        raise ValueError("Source project is not an Ebook workspace.")
+    for stage in ("research", "title", "outline"):
+        if not is_approved(src_ws, stage):
+            raise ValueError(
+                f"Source must have approved {stage} before pre-manuscript seed."
+            )
+
+    src_content = str(source.get("content") or source.get("ebook") or "")
+    src_doc = source.get("ebook_document") if isinstance(source.get("ebook_document"), dict) else {}
+    src_doc_md = str(src_doc.get("manuscript_md") or "")
+
+    target = ensure_workspace(dict(target_data or {}))
+    _clear_manuscript_fields(target)
+    ws = target["ebook_workspace"]
+    created_at = ws.get("created_at") or _now()
+
+    author = "Lonnie Brown"
+    title = str(source.get("title") or "").strip()
+    subtitle = str(source.get("subtitle") or "").strip()
+    if not title:
+        raise ValueError("Source is missing an approved title.")
+    outline = copy.deepcopy(source.get("outline") or [])
+    if len(outline) != 10:
+        raise ValueError("Source approved outline must contain exactly 10 chapters.")
+
+    ws["topic"] = str(src_ws.get("topic") or source.get("source") or title)
+    ws["audience"] = str(src_ws.get("audience") or source.get("audience") or "")
+    ws["outcome"] = str(src_ws.get("outcome") or source.get("reader_promise") or "")
+    ws["author"] = author
+    ws["editorial_rules_locked"] = copy.deepcopy(list(src_ws.get("editorial_rules_locked") or []))
+    ws["research_payload"] = copy.deepcopy(src_ws.get("research_payload") or {})
+    ws["title_options"] = copy.deepcopy(list(src_ws.get("title_options") or []))
+    ws["approved_title_id"] = src_ws.get("approved_title_id")
+    ws["outline_options"] = copy.deepcopy(list(src_ws.get("outline_options") or []))
+    ws["approved_outline_id"] = src_ws.get("approved_outline_id")
+    ws["marker"] = None
+    ws["paid_call_ledger"] = empty_ledger(spent_usd=0.0, paid_calls=0, cap_usd=budget_cap_usd)
+    ws["approval_history"] = []
+    ws["accepted_chapters"] = []
+    ws["manuscript_qa"] = []
+    ws["manuscript_structure_findings"] = []
+    ws["last_manuscript_generation"] = None
+    ws["last_manuscript_correction"] = None
+    ws["previous_manuscript_draft"] = None
+    ws.pop("consumed_tokens", None)
+    ws["created_at"] = created_at
+    ws["updated_at"] = _now()
+
+    set_stage_status(ws, "research", STATUS_APPROVED, note="Seeded approved research (pre-manuscript only)")
+    set_stage_status(ws, "title", STATUS_APPROVED, note="Seeded approved title (pre-manuscript only)")
+    set_stage_status(ws, "outline", STATUS_APPROVED, note="Seeded approved outline (pre-manuscript only)")
+    for stage in ("manuscript", "visuals", "cover", "design", "preview", "preflight", "export"):
+        set_stage_status(ws, stage, STATUS_NOT_STARTED)
+    _append_history(
+        ws,
+        "seed_pre_manuscript",
+        title=title,
+        subtitle=subtitle,
+        outline_id=ws.get("approved_outline_id"),
+        spent_usd=0.0,
+        budget_cap_usd=float(budget_cap_usd),
+    )
+    _recompute_next_action(ws)
+
+    target["title"] = title
+    target["subtitle"] = subtitle
+    target["author"] = author
+    target["author_brand"] = author
+    target["audience"] = ws["audience"]
+    target["reader_promise"] = ws["outcome"]
+    target["source"] = title
+    target["outline"] = outline
+    target["artifact_state"] = "DRAFT"
+    target["artifact_revision"] = 1
+    target["artifact_id"] = f"ebook-ws-{uuid.uuid4().hex[:12]}"
+    target["product_type"] = "ebook"
+    target["ebook_project_workspace"] = True
+    target["export_ready"] = False
+    target["release_status"] = ""
+    target["release_messages"] = []
+    target["content"] = ""
+    target["ebook"] = ""
+    target.pop("package_id", None)
+    target.pop("acceptance_marker", None)
+    target.pop("acceptance_export_dir", None)
+    for drop in (
+        "visual_plan",
+        "ebook_cover_reference",
+        "cover_design",
+        "ebook_design",
+        "ebook_design_digest",
+        "ebook_preview_html",
+        "ebook_export_identity",
+        "ebook_design_preflight",
+        "ebook_visual_manifest",
+        "release_certificate",
+    ):
+        target.pop(drop, None)
+
+    target["ebook_workspace"] = ws
+    target = sync_document_from_workspace(target)
+    _clear_manuscript_fields(target)
+    # sync_document_from_workspace may restore empty-doc manuscript fields; keep bytes empty.
+    target["content"] = ""
+    target["ebook"] = ""
+    if src_content and src_content[:80] and src_content[:80] in str(target.get("content") or ""):
+        raise ValueError("Refusing seed: source manuscript leaked into target.")
+    if src_doc_md and src_doc_md[:80] and src_doc_md[:80] in str(
+        ((target.get("ebook_document") or {}) if isinstance(target.get("ebook_document"), dict) else {}).get(
+            "manuscript_md"
+        )
+        or ""
+    ):
+        raise ValueError("Refusing seed: source manuscript document leaked into target.")
+    ed = target.get("ebook_document")
+    if isinstance(ed, dict):
+        ed["manuscript_md"] = ""
+        ed["chapters"] = []
+        ed["release_status"] = ""
+    target["artifact_state"] = "DRAFT"
+    return target
+
+
+def seed_pre_manuscript_into_project(
+    database_module,
+    target_project_id: int,
+    *,
+    source_project_id: int,
+    budget_cap_usd: float = MANUSCRIPT_AUTH_MAX_USD,
+) -> dict:
+    """Apply pre-manuscript seed to an existing empty workspace. Never mutates the source."""
+    target_id = int(target_project_id)
+    source_id = int(source_project_id)
+    if target_id == FROZEN_LIVE_EBOOK_PROJECT_ID:
+        raise ValueError(f"Refusing to modify frozen live project #{FROZEN_LIVE_EBOOK_PROJECT_ID}.")
+    if target_id == source_id:
+        raise ValueError("Refusing to seed a project into itself.")
+    target = database_module.get_project(target_id)
+    source = database_module.get_project(source_id)
+    if not target:
+        raise ValueError(f"Target project #{target_id} was not found.")
+    if not source:
+        raise ValueError(f"Source project #{source_id} was not found.")
+    tdata = dict(target.get("data") or {})
+    tws = get_workspace(tdata) or {}
+    if (
+        tdata.get("content")
+        or tdata.get("ebook")
+        or (
+            isinstance(tdata.get("ebook_document"), dict)
+            and str((tdata.get("ebook_document") or {}).get("manuscript_md") or "").strip()
+        )
+        or tws.get("last_manuscript_generation")
+        or tws.get("accepted_chapters")
+    ):
+        raise ValueError("Target already has manuscript or generation history; refuse to overwrite.")
+    if stage_status(tws, "manuscript") not in {STATUS_NOT_STARTED, ""}:
+        raise ValueError("Target manuscript stage is not Not started; refuse to overwrite.")
+
+    seeded = apply_pre_manuscript_acceptance_seed(
+        tdata,
+        dict(source.get("data") or {}),
+        budget_cap_usd=budget_cap_usd,
+    )
+    updated = database_module.update_project(
+        target_id,
+        target.get("name"),
+        seeded,
+        type_=target.get("type") or "ebook",
+    )
+    if not updated:
+        raise ValueError(f"Failed to update target project #{target_id}.")
+    return updated
 
 
 def build_acceptance_project_data() -> dict[str, Any]:

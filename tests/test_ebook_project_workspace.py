@@ -21,6 +21,9 @@ import database  # noqa: E402
 from services.ebook_project_workspace import (  # noqa: E402
     ACCEPTANCE_MARKER,
     ACCEPTANCE_PROJECT_NAME,
+    CHAPTER_UNIT_USD,
+    FROZEN_LIVE_EBOOK_PROJECT_ID,
+    MANUSCRIPT_AUTH_MAX_USD,
     approve_stage,
     build_acceptance_project_data,
     edit_outline,
@@ -28,6 +31,7 @@ from services.ebook_project_workspace import (  # noqa: E402
     estimate_paid_action,
     get_workspace,
     save_research,
+    seed_pre_manuscript_into_project,
     stage_status,
     upsert_acceptance_project,
 )
@@ -323,6 +327,112 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
         body = r.get_json()
         self.assertEqual(body["type"], "product")
         self.assertNotIn("ebook_workspace", body.get("data") or {})
+
+    def test_17_pre_manuscript_seed_copies_approved_inputs_only(self):
+        source = upsert_acceptance_project(database, preserve_live_manuscript=False)
+        source_data = dict(source["data"] or {})
+        src_ws = get_workspace(source_data)
+        leak = "UNIQUE_SOURCE_MANUSCRIPT_LEAK_PROBE_2472SEED"
+        source_data["content"] = leak + " chapter body must never copy."
+        source_data["ebook"] = source_data["content"]
+        src_ws["last_manuscript_generation"] = {"provider": "openai", "raw": leak}
+        src_ws["last_manuscript_correction"] = {"note": leak}
+        src_ws["paid_call_ledger"]["spent_usd"] = 3.178
+        src_ws["paid_call_ledger"]["remaining_usd"] = 0.322
+        src_ws["paid_call_ledger"]["calls"] = [{"purpose": "generate_manuscript", "usd": 1.5}]
+        database.update_project(source["id"], None, source_data)
+
+        target, _ = self._create_workspace(
+            name="Final Acceptance Seed Target",
+            topic="Empty event photography workspace",
+            author="Lonnie Brown",
+        )
+        target_id = target["id"]
+        source_artifact = (source["data"] or {}).get("artifact_id")
+
+        r = self.client.post(
+            "/ebook-workspace/seed-acceptance",
+            json={
+                "target_project_id": target_id,
+                "source_project_id": source["id"],
+                "budget_cap_usd": MANUSCRIPT_AUTH_MAX_USD,
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        body = r.get_json()
+        ws = body["workspace"]
+        rail = {s["id"]: s["status"] for s in ws["rail"]}
+        self.assertEqual(rail["research"], "approved")
+        self.assertEqual(rail["title"], "approved")
+        self.assertEqual(rail["outline"], "approved")
+        self.assertEqual(rail["manuscript"], "not_started")
+        self.assertEqual(rail["visuals"], "not_started")
+        self.assertEqual(ws["next_action"], "generate_manuscript")
+        self.assertEqual(ws["next_action_label"], "Generate Manuscript")
+        self.assertEqual(ws["artifact_state"], "DRAFT")
+        self.assertEqual(ws["author"], "Lonnie Brown")
+        self.assertEqual(ws["title"], "From First Booking to On-Site Prints")
+        self.assertIn("Dye-Sublimation Printing", ws["subtitle"])
+        self.assertEqual(len(ws["outline"]), 10)
+        self.assertAlmostEqual(float(ws["budget"]["spent_usd"]), 0.0, places=3)
+        self.assertAlmostEqual(float(ws["budget"]["remaining_usd"]), 1.50, places=2)
+        self.assertAlmostEqual(float(ws["budget"]["cap_usd"]), 1.50, places=2)
+        self.assertEqual(int(ws["budget"]["paid_calls"] or 0), 0)
+        self.assertTrue(ws["artifact_id"])
+        self.assertNotEqual(ws["artifact_id"], source_artifact)
+        self.assertTrue(str(ws["artifact_id"]).startswith("ebook-ws-"))
+        stored = database.get_project(target_id)["data"]
+        self.assertFalse(stored.get("content"))
+        self.assertFalse(stored.get("ebook"))
+        self.assertNotIn(leak, json.dumps(stored, default=str))
+        self.assertIsNone((get_workspace(stored) or {}).get("last_manuscript_generation"))
+        self.assertFalse((get_workspace(stored) or {}).get("marker"))
+
+        reopened = self.client.get(f"/ebook-workspace/{target_id}").get_json()["workspace"]
+        self.assertEqual(reopened["next_action"], "generate_manuscript")
+        self.assertTrue(reopened["gates"]["manuscript_enabled"])
+
+        est = self.client.post(
+            f"/ebook-workspace/{target_id}/estimate-cost",
+            json={"action": "generate_manuscript"},
+        )
+        self.assertEqual(est.status_code, 200, est.get_data(as_text=True))
+        estimate = est.get_json()["estimate"]
+        self.assertEqual(int(estimate["pending_chapter_count"]), 10)
+        self.assertEqual(int(estimate["accepted_chapter_count"]), 0)
+        self.assertAlmostEqual(float(estimate["per_chapter_max_usd"]), CHAPTER_UNIT_USD, places=2)
+        self.assertAlmostEqual(float(estimate["max_total_usd"]), 1.50, places=2)
+        self.assertAlmostEqual(float(estimate["estimated_max_usd"]), 1.50, places=2)
+        self.client.post(f"/ebook-workspace/{target_id}/cancel-estimate", json={})
+
+        # Source must keep its manuscript and spend.
+        src_after = database.get_project(source["id"])["data"]
+        self.assertIn(leak, str(src_after.get("content") or ""))
+        self.assertAlmostEqual(
+            float((get_workspace(src_after) or {}).get("paid_call_ledger", {}).get("spent_usd") or 0),
+            3.178,
+            places=3,
+        )
+
+    def test_18_pre_manuscript_seed_refuses_frozen_and_unlabeled(self):
+        unlabeled = self.client.post("/ebook-workspace/seed-acceptance", json={})
+        self.assertEqual(unlabeled.status_code, 400)
+        frozen = self.client.post(
+            "/ebook-workspace/seed-acceptance",
+            json={
+                "target_project_id": FROZEN_LIVE_EBOOK_PROJECT_ID,
+                "source_project_id": FROZEN_LIVE_EBOOK_PROJECT_ID,
+            },
+        )
+        self.assertEqual(frozen.status_code, 400)
+        self.assertIn("frozen", (frozen.get_json() or {}).get("error", "").lower())
+        empty, _ = self._create_workspace(name="Seed Self Refuse")
+        with self.assertRaises(ValueError):
+            seed_pre_manuscript_into_project(
+                database,
+                empty["id"],
+                source_project_id=empty["id"],
+            )
 
 
 class EbookWorkspaceJsHtmlTests(unittest.TestCase):

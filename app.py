@@ -468,14 +468,34 @@ def correct_ebook_workspace_manuscript_route(project_id: int):
 
 @app.post("/ebook-workspace/seed-acceptance")
 def seed_ebook_acceptance_workspace_route():
-    """Upsert the LIVE ACCEPTANCE DRAFT from preserved export materials (local only)."""
+    """Seed approved pre-manuscript inputs into an existing empty workspace.
+
+    Requires ``target_project_id`` and ``source_project_id``. Never upserts the
+    frozen live manuscript project. Copies research/title/outline only.
+    """
+    body = request.get_json(silent=True) or {}
     try:
         from services.ebook_project_workspace import (
-            upsert_acceptance_project,
+            MANUSCRIPT_AUTH_MAX_USD,
+            seed_pre_manuscript_into_project,
             workspace_public_view,
         )
 
-        project = upsert_acceptance_project(database)
+        target_id = body.get("target_project_id")
+        source_id = body.get("source_project_id")
+        if target_id is None or source_id is None:
+            return _error(
+                "target_project_id and source_project_id are required. "
+                "Unlabeled upsert is disabled to protect the frozen live project.",
+                400,
+            )
+        cap = body.get("budget_cap_usd")
+        project = seed_pre_manuscript_into_project(
+            database,
+            int(target_id),
+            source_project_id=int(source_id),
+            budget_cap_usd=float(cap if cap is not None else MANUSCRIPT_AUTH_MAX_USD),
+        )
         return jsonify(
             {
                 "ok": True,
