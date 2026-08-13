@@ -4838,8 +4838,8 @@ function showEbookWorkspaceStage(stageId) {
       ${
         needsCorrection
           ? `<div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-              <p class="text-sm text-amber-900">Estimated maximum correction cost: <b>$${corrEst.toFixed(3)}</b></p>
-              <p class="text-xs text-amber-800">Remaining project budget: <b>$${rem.toFixed(3)}</b>. Correction uses the existing manuscript and the exact approved outline — it does not restart research.</p>
+              <p class="text-sm text-amber-900">Request Correction first issues a <b>free $0 estimate</b>. Nothing is spent until you check authorization and click <b>Confirm and Correct Manuscript</b>.</p>
+              <p class="text-xs text-amber-800">Remaining project budget: <b>$${rem.toFixed(3)}</b>. Estimated maximum remaining work if confirmed: <b>$${corrEst.toFixed(3)}</b>. Correction uses the existing manuscript and the exact approved outline — it does not restart research.</p>
               <button type="button" class="btn-primary text-sm" data-ws-request-correction>Request Correction…</button>
             </div>`
           : ""
@@ -4994,18 +4994,30 @@ async function estimateCorrectionInWorkspace(projectId) {
     const idempotencyKey =
       "corr-" + String(projectId) + "-" + String(est.confirmation_token || "").slice(0, 12) + "-" + Date.now();
     confirmEl.innerHTML = `
-      <h4 class="text-sm font-bold text-amber-900">Confirm paid correction</h4>
+      <h4 class="text-sm font-bold text-amber-900">Correction estimate (free)</h4>
+      <p class="text-sm text-emerald-800">This estimate cost <b>$0.000</b>. No provider was called.</p>
       <p class="text-sm text-amber-900">${escapeHtml(est.label || "Request Correction")}</p>
-      <p class="text-sm">Maximum total: <b>$${Number(est.max_total_usd != null ? est.max_total_usd : est.estimated_max_usd || 0).toFixed(3)}</b></p>
+      <p class="text-sm">Maximum remaining work if you confirm: <b>$${Number(est.max_total_usd != null ? est.max_total_usd : est.estimated_max_usd || 0).toFixed(3)}</b></p>
       <p class="text-sm">Per-chapter maximum: <b>$${Number(est.per_chapter_max_usd || 0.15).toFixed(3)}</b></p>
       <p class="text-sm">Accepted chapters: <b>${Number(est.accepted_chapter_count || 0)}</b> · Pending chapters: <b>${Number(est.pending_chapter_count || 0)}</b></p>
       <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
-      <p class="text-xs text-slate-600">Uses the preserved manuscript and the exact approved outline. Resume starts at the failed chapter only. Confirmation required before any paid call.</p>
+      <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "This estimate costs $0. Confirmation required before any paid call.")}</p>
+      <label class="flex items-start gap-2 text-sm text-slate-800">
+        <input type="checkbox" data-ws-authorize-paid class="mt-1">
+        <span>I authorize a paid correction. Charge $0.15 per attempted chapter, up to the maximum above. Resume starts at the failed chapter only.</span>
+      </label>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
-        <button type="button" class="btn-primary text-sm" data-ws-confirm-correct>Confirm and Correct Manuscript</button>
+        <button type="button" class="btn-primary text-sm" data-ws-confirm-correct disabled>Confirm and Correct Manuscript</button>
       </div>
     `;
+    const authorizeBox = confirmEl.querySelector("[data-ws-authorize-paid]");
+    const confirmBtn = confirmEl.querySelector("[data-ws-confirm-correct]");
+    if (authorizeBox && confirmBtn) {
+      authorizeBox.onchange = () => {
+        confirmBtn.disabled = !authorizeBox.checked;
+      };
+    }
     confirmEl.querySelector("[data-ws-cancel-confirm]").onclick = async () => {
       try {
         await api(`/ebook-workspace/${projectId}/cancel-estimate`, { method: "POST", body: "{}" });
@@ -5015,6 +5027,11 @@ async function estimateCorrectionInWorkspace(projectId) {
       toast("Cancelled — nothing spent.");
     };
     confirmEl.querySelector("[data-ws-confirm-correct]").onclick = async () => {
+      const paidBox = confirmEl.querySelector("[data-ws-authorize-paid]");
+      if (!paidBox || !paidBox.checked) {
+        toast("Check the paid-authorization box before confirming. The estimate itself cost $0.", "error");
+        return;
+      }
       const btn = confirmEl.querySelector("[data-ws-confirm-correct]");
       setBusyEl(btn, true);
       confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = true;
@@ -5026,6 +5043,7 @@ async function estimateCorrectionInWorkspace(projectId) {
           outline_digest: est.outline_digest || ws.outline_digest || "",
           max_authorized_usd: est.max_authorized_usd != null ? est.max_authorized_usd : est.estimated_max_usd,
           idempotency_key: idempotencyKey,
+          authorize_paid_call: true,
         };
         const gen = await api(`/ebook-workspace/${projectId}/correct-manuscript`, {
           method: "POST",

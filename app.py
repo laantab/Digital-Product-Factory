@@ -354,7 +354,17 @@ def estimate_ebook_workspace_cost_route(project_id: int):
         action = str(body.get("action") or "").strip()
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
+        spent_before = float(
+            ((data.get("ebook_workspace") or {}).get("paid_call_ledger") or {}).get("spent_usd")
+            or 0
+        )
         result = estimate_paid_action(data, action)
+        spent_after = float(
+            ((data.get("ebook_workspace") or {}).get("paid_call_ledger") or {}).get("spent_usd")
+            or 0
+        )
+        if abs(spent_after - spent_before) > 1e-9:
+            return _error("Estimate issuance must not charge.", 500)
         # Persist pending estimate only (still zero paid spend).
         project = database.update_project(project_id, None, data) or project
         result["workspace"] = workspace_public_view(project)
@@ -382,6 +392,37 @@ def cancel_ebook_workspace_estimate_route(project_id: int):
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("cancel ebook estimate failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/authorize-budget")
+def authorize_ebook_workspace_budget_route(project_id: int):
+    """Raise the project cap as user authorization metadata. Does not spend."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_project_workspace import (
+            authorize_workspace_budget_into_project,
+            workspace_public_view,
+        )
+
+        if "budget_cap_usd" not in body:
+            return _error("budget_cap_usd is required.", 400)
+        project = authorize_workspace_budget_into_project(
+            database,
+            project_id,
+            float(body.get("budget_cap_usd")),
+            reason=str(body.get("reason") or ""),
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "workspace": workspace_public_view(project),
+            }
+        )
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook budget authorization failed")
         return _error(str(exc), 500)
 
 
@@ -438,6 +479,12 @@ def correct_ebook_workspace_manuscript_route(project_id: int):
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
             return err[0], err[1]
+        if body.get("authorize_paid_call") is not True:
+            return _error(
+                "Correction requires explicit paid authorization. "
+                "Request Correction is a free estimate only.",
+                400,
+            )
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
         out = execute_correct_manuscript(

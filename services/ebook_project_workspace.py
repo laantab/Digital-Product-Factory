@@ -404,6 +404,21 @@ TOKEN_TTL_SECONDS = 30 * 60
 MANUSCRIPT_AUTH_MAX_USD = 1.50
 CORRECTION_AUTH_MAX_USD = 0.75
 CHAPTER_UNIT_USD = 0.15
+
+
+def correction_auth_max_usd(ledger: dict | None) -> float:
+    """Per-confirmation correction ceiling.
+
+    Default remains $0.75. After an explicit user budget-cap authorization,
+    remaining authorized work may use the project's remaining budget.
+    """
+    ledger = ledger or {}
+    remaining = round(float(ledger.get("remaining_usd") or 0), 4)
+    if ledger.get("budget_authorizations"):
+        return remaining
+    return round(float(CORRECTION_AUTH_MAX_USD), 4)
+
+
 ONESHOT_WORKSPACE_BLOCKED = (
     "One-shot workspace generation is blocked. "
     "Workspace ebooks must use the chapter pipeline "
@@ -827,7 +842,11 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
             "chapter_findings": chapter_quality,
             "last_generation": ws.get("last_manuscript_generation"),
             "can_approve": can_approve,
-            "correction_estimate_usd": CORRECTION_AUTH_MAX_USD,
+            "correction_estimate_usd": min(
+                round(max(int(chapter_pipeline_stats(data).get("pending_chapter_count") or 1), 1) * CHAPTER_UNIT_USD, 4),
+                correction_auth_max_usd(ledger),
+                round(float(ledger.get("remaining_usd") or 0), 4),
+            ),
             "remaining_usd": ledger.get("remaining_usd"),
         },
         "outline_digest": outline_digest(data),
@@ -1207,6 +1226,99 @@ def edit_outline(data: dict, *, chapters: list[dict], option_id: str | None = No
     return sync_document_from_workspace(data)
 
 
+def authorize_workspace_budget_cap(
+    data: dict,
+    new_cap_usd: float,
+    *,
+    reason: str = "",
+    authorized_by: str = "user",
+) -> dict:
+    """Raise the hard project cap without spending or changing manuscript state.
+
+    Records user authorization metadata on the ledger. Does not create a paid
+    call, change spend, artifact identity, accepted chapters, or findings.
+    """
+    data = ensure_workspace(dict(data or {}))
+    project_id = data.get("_project_id")
+    if project_id is not None and int(project_id) == FROZEN_LIVE_EBOOK_PROJECT_ID:
+        raise ValueError(
+            f"Refusing to modify frozen live project #{FROZEN_LIVE_EBOOK_PROJECT_ID}."
+        )
+    ws = data["ebook_workspace"]
+    ledger = ws.setdefault("paid_call_ledger", empty_ledger())
+    old_cap = round(float(ledger.get("budget_cap_usd") or DEFAULT_BUDGET_CAP_USD), 4)
+    spent = round(float(ledger.get("spent_usd") or 0), 4)
+    new_cap = round(float(new_cap_usd), 4)
+    if new_cap + 1e-9 < spent:
+        raise ValueError(
+            f"New cap ${new_cap:.2f} is below already-spent ${spent:.2f}."
+        )
+    if new_cap + 1e-9 < old_cap:
+        raise ValueError(
+            f"Budget authorization can only raise the cap (old ${old_cap:.2f})."
+        )
+    remaining = round(new_cap - spent, 4)
+    ledger["budget_cap_usd"] = new_cap
+    ledger["spent_usd"] = spent
+    ledger["remaining_usd"] = remaining
+    record = {
+        "ts": _now(),
+        "event": "authorize_budget_cap",
+        "old_cap_usd": old_cap,
+        "new_cap_usd": new_cap,
+        "spent_usd": spent,
+        "remaining_usd": remaining,
+        "paid_call": False,
+        "reason": str(reason or "User authorized additional remaining chapter work"),
+        "authorized_by": str(authorized_by or "user"),
+    }
+    auths = list(ledger.get("budget_authorizations") or [])
+    auths.append(record)
+    ledger["budget_authorizations"] = auths
+    _append_history(
+        ws,
+        "authorize_budget_cap",
+        old_cap_usd=old_cap,
+        new_cap_usd=new_cap,
+        spent_usd=spent,
+        remaining_usd=remaining,
+        paid_call=False,
+        reason=record["reason"],
+    )
+    data["ebook_workspace"] = ws
+    return data
+
+
+def authorize_workspace_budget_into_project(
+    database_module,
+    project_id: int,
+    new_cap_usd: float,
+    *,
+    reason: str = "",
+) -> dict:
+    """Persist a user budget-cap authorization. Never mutates project #2472."""
+    pid = int(project_id)
+    if pid == FROZEN_LIVE_EBOOK_PROJECT_ID:
+        raise ValueError(
+            f"Refusing to modify frozen live project #{FROZEN_LIVE_EBOOK_PROJECT_ID}."
+        )
+    project = database_module.get_project(pid)
+    if not project:
+        raise ValueError(f"Project #{pid} was not found.")
+    data = dict(project.get("data") or {})
+    data["_project_id"] = pid
+    data = authorize_workspace_budget_cap(
+        data,
+        new_cap_usd,
+        reason=reason,
+        authorized_by="user",
+    )
+    updated = database_module.update_project(pid, None, data)
+    if not updated:
+        raise ValueError(f"Failed to update project #{pid}.")
+    return updated
+
+
 def estimate_paid_action(data: dict, action: str) -> dict:
     data = ensure_workspace(data)
     ws = data["ebook_workspace"]
@@ -1240,6 +1352,10 @@ def estimate_paid_action(data: dict, action: str) -> dict:
         if not (data.get("content") or data.get("ebook")):
             raise ValueError("Correction requires the preserved manuscript draft.")
     ledger = ws.setdefault("paid_call_ledger", empty_ledger())
+    spent_before = round(float(ledger.get("spent_usd") or 0), 4)
+    remaining_before = round(float(ledger.get("remaining_usd") or 0), 4)
+    paid_calls_before = int(ledger.get("paid_calls") or 0)
+    calls_before = list(ledger.get("calls") or [])
     stats = chapter_pipeline_stats(data)
     n_pending = int(stats["pending_chapter_count"] or 0)
     if action in {"generate_manuscript", "correct_manuscript"}:
@@ -1247,7 +1363,7 @@ def estimate_paid_action(data: dict, action: str) -> dict:
         if action == "generate_manuscript":
             estimate = min(estimate, MANUSCRIPT_AUTH_MAX_USD)
         else:
-            estimate = min(estimate, CORRECTION_AUTH_MAX_USD)
+            estimate = min(estimate, correction_auth_max_usd(ledger))
     else:
         estimate = round(float(spec["default_estimate_usd"]), 4)
     remaining = round(float(ledger.get("remaining_usd") or 0), 4)
@@ -1303,12 +1419,26 @@ def estimate_paid_action(data: dict, action: str) -> dict:
         ),
         "max_total_usd": estimate,
         "resume_from_order": stats.get("resume_from_order"),
+        "failed_chapter_order": stats.get("resume_from_order"),
         "used": False,
         "confirmation_required": True,
-        "expires_note": "Confirmation required before any paid call. Opening this page does not spend.",
+        "estimate_cost_usd": 0.0,
+        "estimate_is_free": True,
+        "expires_note": (
+            "This estimate costs $0. No provider is called. "
+            "Confirmation required before any paid call. Opening this page does not spend."
+        ),
     }
     ledger["pending_estimate"] = pending
-    _append_history(ws, "estimate", action=action, estimated_max_usd=estimate)
+    if (
+        round(float(ledger.get("spent_usd") or 0), 4) != spent_before
+        or round(float(ledger.get("remaining_usd") or 0), 4) != remaining_before
+        or int(ledger.get("paid_calls") or 0) != paid_calls_before
+        or list(ledger.get("calls") or []) != calls_before
+        or pending.get("used") is True
+    ):
+        raise ValueError("Estimate issuance must not charge, call a provider, or mark a token used.")
+    _append_history(ws, "estimate", action=action, estimated_max_usd=estimate, estimate_cost_usd=0.0)
     data["ebook_workspace"] = ws
     public_estimate = dict(pending)
     return {
@@ -1353,7 +1483,21 @@ def clear_pending_estimate(data: dict) -> dict:
 
 def cancel_paid_estimate(data: dict) -> dict:
     """Cancel a pending estimate without spending."""
+    data = ensure_workspace(data)
+    ledger = data["ebook_workspace"].setdefault("paid_call_ledger", empty_ledger())
+    spent_before = round(float(ledger.get("spent_usd") or 0), 4)
+    remaining_before = round(float(ledger.get("remaining_usd") or 0), 4)
+    paid_calls_before = int(ledger.get("paid_calls") or 0)
+    calls_before = list(ledger.get("calls") or [])
     data = clear_pending_estimate(data)
+    ledger = data["ebook_workspace"].setdefault("paid_call_ledger", empty_ledger())
+    if (
+        round(float(ledger.get("spent_usd") or 0), 4) != spent_before
+        or round(float(ledger.get("remaining_usd") or 0), 4) != remaining_before
+        or int(ledger.get("paid_calls") or 0) != paid_calls_before
+        or list(ledger.get("calls") or []) != calls_before
+    ):
+        raise ValueError("Cancel estimate must not charge.")
     _append_history(data["ebook_workspace"], "cancel_estimate")
     return data
 
@@ -1803,9 +1947,10 @@ def execute_correct_manuscript(
     pending_max = round(float(pending.get("max_authorized_usd") or pending.get("estimated_max_usd") or 0), 4)
     if auth_max <= 0 or abs(auth_max - pending_max) > 1e-9:
         raise ValueError("Authorized charge does not match the pending correction estimate.")
-    if auth_max > CORRECTION_AUTH_MAX_USD + 1e-9:
+    corr_max = correction_auth_max_usd(ledger)
+    if auth_max > corr_max + 1e-9:
         raise ValueError(
-            f"Correction authorization exceeds ${CORRECTION_AUTH_MAX_USD:.2f} maximum."
+            f"Correction authorization exceeds ${corr_max:.2f} maximum."
         )
     spent = round(float(ledger.get("spent_usd") or 0), 4)
     remaining = round(float(ledger.get("remaining_usd") or 0), 4)

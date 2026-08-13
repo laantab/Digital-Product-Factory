@@ -386,6 +386,7 @@ class OutlineFidelityTests(unittest.TestCase):
                     "outline_digest": corr["estimate"]["outline_digest"],
                     "max_authorized_usd": corr["estimate"]["max_authorized_usd"],
                     "idempotency_key": "route-corr-ok",
+                    "authorize_paid_call": True,
                 },
             )
         self.assertEqual(r2.status_code, 200)

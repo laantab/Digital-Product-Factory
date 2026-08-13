@@ -15,11 +15,16 @@ os.chdir(ROOT)
 from app import app  # noqa: E402
 import database  # noqa: E402
 from services.ebook_project_workspace import (  # noqa: E402
+    CHAPTER_UNIT_USD,
+    FROZEN_LIVE_EBOOK_PROJECT_ID,
     PAID_ACTIONS,
     STATUS_NEEDS_CORRECTION,
+    authorize_workspace_budget_cap,
+    authorize_workspace_budget_into_project,
     cancel_paid_estimate,
     estimate_paid_action,
     execute_correct_manuscript,
+    get_workspace,
     manuscript_digest,
     normalize_paid_action,
     outline_digest,
@@ -333,6 +338,9 @@ class CorrectionEstimateWiringTests(unittest.TestCase):
         self.assertIn("Confirm and Correct Manuscript", js)
         self.assertIn("/estimate-cost", js)
         self.assertIn("/correct-manuscript", js)
+        self.assertIn("authorize_paid_call: true", js)
+        self.assertIn("This estimate cost", js)
+        self.assertIn("data-ws-authorize-paid", js)
         # Request Correction click handler estimates only; execute is a later confirm click.
         idx_est = js.index("async function estimateCorrectionInWorkspace")
         idx_confirm = js.index("data-ws-confirm-correct", idx_est)
@@ -340,6 +348,271 @@ class CorrectionEstimateWiringTests(unittest.TestCase):
         first_exec = js.index("/correct-manuscript", idx_est)
         self.assertLess(first_api, idx_confirm)
         self.assertGreater(first_exec, idx_confirm)
+
+    def test_estimate_route_never_calls_provider_or_charges(self):
+        data = self._reload()
+        database.update_project(self.pid, None, data)
+        before_spent = float(data["ebook_workspace"]["paid_call_ledger"]["spent_usd"])
+        before_calls = list(data["ebook_workspace"]["paid_call_ledger"].get("calls") or [])
+        before_content = data["content"]
+        with patch("services.ebook.generate_one_chapter") as mocked:
+            r1 = self.client.post(
+                f"/ebook-workspace/{self.pid}/estimate-cost",
+                json={"action": "correct_manuscript"},
+            )
+            self.assertEqual(r1.status_code, 200, r1.get_data(as_text=True))
+            r2 = self.client.post(
+                f"/ebook-workspace/{self.pid}/estimate-cost",
+                json={"action": "request_correction"},
+            )
+            self.assertEqual(r2.status_code, 200, r2.get_data(as_text=True))
+            mocked.assert_not_called()
+        est = r2.get_json()["estimate"]
+        self.assertEqual(float(est["estimate_cost_usd"]), 0.0)
+        self.assertTrue(est["estimate_is_free"])
+        self.assertFalse(est["used"])
+        self.assertTrue(est["confirmation_required"])
+        self.assertEqual(float(est["spent_usd"]), before_spent)
+        after = database.get_project(self.pid)["data"]
+        ledger = after["ebook_workspace"]["paid_call_ledger"]
+        self.assertEqual(float(ledger["spent_usd"]), before_spent)
+        self.assertEqual(list(ledger.get("calls") or []), before_calls)
+        self.assertEqual(after["content"], before_content)
+        self.assertFalse((ledger.get("pending_estimate") or {}).get("used"))
+        r3 = self.client.post(f"/ebook-workspace/{self.pid}/cancel-estimate", json={})
+        self.assertEqual(r3.status_code, 200)
+        cancelled = database.get_project(self.pid)["data"]
+        self.assertEqual(
+            float(cancelled["ebook_workspace"]["paid_call_ledger"]["spent_usd"]),
+            before_spent,
+        )
+        self.assertIsNone(cancelled["ebook_workspace"]["paid_call_ledger"].get("pending_estimate"))
+        with patch("services.ebook.generate_one_chapter") as mocked:
+            reopened = self.client.get(f"/ebook-workspace/{self.pid}")
+            self.assertEqual(reopened.status_code, 200)
+            mocked.assert_not_called()
+        self.assertEqual(
+            float(reopened.get_json()["workspace"]["budget"]["spent_usd"]),
+            before_spent,
+        )
+
+    def test_correct_route_rejects_estimate_without_paid_authorization(self):
+        data = self._reload()
+        est = estimate_paid_action(data, "correct_manuscript")
+        database.update_project(self.pid, None, data)
+        spent = float(data["ebook_workspace"]["paid_call_ledger"]["spent_usd"])
+        with patch("services.ebook.generate_one_chapter") as mocked:
+            r = self.client.post(
+                f"/ebook-workspace/{self.pid}/correct-manuscript",
+                json={
+                    "confirmation_token": est["estimate"]["confirmation_token"],
+                    "expected_artifact_id": est["estimate"]["artifact_id"],
+                    "expected_revision": est["estimate"]["artifact_revision"],
+                    "outline_digest": est["estimate"]["outline_digest"],
+                    "max_authorized_usd": est["estimate"]["max_authorized_usd"],
+                    "idempotency_key": "no-auth-flag",
+                },
+            )
+            mocked.assert_not_called()
+        self.assertEqual(r.status_code, 400)
+        after = database.get_project(self.pid)["data"]
+        self.assertEqual(
+            float(after["ebook_workspace"]["paid_call_ledger"]["spent_usd"]),
+            spent,
+        )
+
+    def test_duplicate_confirmation_does_not_double_charge(self):
+        data = self._reload()
+        est = estimate_paid_action(data, "correct_manuscript")
+        spent_before = float(data["ebook_workspace"]["paid_call_ledger"]["spent_usd"])
+
+        def _one_failed_chapter(book, chapter):
+            return f"## {chapter.title}\n\nShort failing body without required example.\n"
+
+        first = execute_correct_manuscript(
+            data,
+            confirmation_token=est["estimate"]["confirmation_token"],
+            expected_artifact_id=str(data.get("artifact_id") or ""),
+            expected_revision=int(data.get("artifact_revision") or 1),
+            outline_digest_expected=est["estimate"]["outline_digest"],
+            max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
+            idempotency_key="dup-corr-once",
+            correct_chapter_fn=_one_failed_chapter,
+        )
+        spent_after = float(first["data"]["ebook_workspace"]["paid_call_ledger"]["spent_usd"])
+        self.assertAlmostEqual(spent_after, spent_before + 0.15, places=2)
+        self.assertEqual(int(first["result"]["chapter_calls"]), 1)
+        replay = execute_correct_manuscript(
+            first["data"],
+            confirmation_token=est["estimate"]["confirmation_token"],
+            expected_artifact_id=str(data.get("artifact_id") or ""),
+            expected_revision=int(data.get("artifact_revision") or 1),
+            outline_digest_expected=est["estimate"]["outline_digest"],
+            max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
+            idempotency_key="dup-corr-once",
+            correct_chapter_fn=_one_failed_chapter,
+        )
+        self.assertTrue(replay.get("duplicate"))
+        self.assertEqual(
+            float(replay["data"]["ebook_workspace"]["paid_call_ledger"]["spent_usd"]),
+            spent_after,
+        )
+
+    def test_project_4249_estimate_copy_does_not_change_manuscript_or_spend(self):
+        live = database.get_project(4249)
+        if not live:
+            self.skipTest("project 4249 not present")
+        data = copy.deepcopy(live["data"])
+        data["_project_id"] = 4249
+        before_spent = float((data["ebook_workspace"]["paid_call_ledger"] or {}).get("spent_usd") or 0)
+        before_content = data.get("content") or ""
+        before_qa = copy.deepcopy((data.get("ebook_workspace") or {}).get("manuscript_qa"))
+        from services.ebook_project_workspace import accepted_chapter_digests
+
+        before_digests = accepted_chapter_digests(data)
+        with patch("services.ebook.generate_one_chapter") as mocked:
+            est = estimate_paid_action(data, "correct_manuscript")
+            mocked.assert_not_called()
+        self.assertEqual(float(est["estimate"]["estimate_cost_usd"]), 0.0)
+        self.assertEqual(
+            float(data["ebook_workspace"]["paid_call_ledger"]["spent_usd"]),
+            before_spent,
+        )
+        self.assertEqual(data.get("content") or "", before_content)
+        self.assertEqual(data["ebook_workspace"].get("manuscript_qa"), before_qa)
+        self.assertEqual(accepted_chapter_digests(data), before_digests)
+        stored = database.get_project(4249)["data"]
+        self.assertEqual(stored.get("content") or "", before_content)
+        self.assertEqual(
+            float(stored["ebook_workspace"]["paid_call_ledger"]["spent_usd"]),
+            before_spent,
+        )
+
+
+class ProjectBudgetAuthorizationTests(unittest.TestCase):
+    """User cap raise is metadata, not a paid call. Isolated from #2472 and #4249."""
+
+    def setUp(self):
+        self.client = app.test_client()
+        app.config["TESTING"] = True
+
+    def _isolated_stopped_at_ch3(self) -> tuple[int, dict]:
+        from services.ebook_project_workspace import build_acceptance_project_data
+
+        data = build_acceptance_project_data()
+        data["acceptance_marker"] = None
+        data["artifact_id"] = "ebook-ws-budget-auth-test"
+        data["artifact_revision"] = 1
+        data["artifact_state"] = "DRAFT"
+        md = "# Budget Auth Test\n\n## What This Business Actually Looks Like\n\nCh1 body.\n\n## Startup Reality Check: Budget, Legal Basics, and Insurance\n\nCh2 body.\n\n## Core Camera Kit, Printing Equipment, and Backup Gear\n\nCh3 missing used-vs-rent-vs-buy.\n"
+        data["content"] = md
+        data["ebook"] = md
+        ws = data["ebook_workspace"]
+        ws["marker"] = None
+        ws["accepted_chapters"] = [
+            {"order": 1, "title": REVISED[0], "body": "Ch1 preserved body"},
+            {"order": 2, "title": REVISED[1], "body": "Ch2 preserved body"},
+        ]
+        ws["manuscript_qa"] = [
+            "Ch3 MISSING_REQUIRED_EXAMPLE: Missing required example: used vs rent vs buy"
+        ]
+        ws["manuscript_structure_findings"] = list(ws["manuscript_qa"])
+        ws["last_manuscript_generation"] = {"ts": "test", "charge_usd": 0.45}
+        ledger = ws["paid_call_ledger"]
+        ledger["spent_usd"] = 0.45
+        ledger["remaining_usd"] = 1.05
+        ledger["budget_cap_usd"] = 1.50
+        ledger["paid_calls"] = 3
+        ledger["calls"] = [
+            {"purpose": "generate_manuscript", "estimated_cost_usd": 0.45, "meta": {"failed_orders": [3]}}
+        ]
+        ledger["idempotency_keys"] = ["ms-test-budget-auth"]
+        set_stage_status(ws, "manuscript", STATUS_NEEDS_CORRECTION, note="ch3 fail")
+        _recompute_next_action(ws)
+        project = database.create_project(
+            "Budget Auth Isolated Ebook",
+            "ebook",
+            data,
+            user_saved=False,
+            system_test=True,
+            temporary=True,
+        )
+        pid = project["id"]
+        data["_project_id"] = pid
+        database.update_project(pid, None, data)
+        return pid, dict(database.get_project(pid)["data"])
+
+    def test_cap_raise_preserves_manuscript_and_unlocks_1_20_correction(self):
+        pid, data = self._isolated_stopped_at_ch3()
+        before_content = data["content"]
+        before_calls = copy.deepcopy(data["ebook_workspace"]["paid_call_ledger"]["calls"])
+        before_accepted = copy.deepcopy(data["ebook_workspace"]["accepted_chapters"])
+        before_qa = copy.deepcopy(data["ebook_workspace"]["manuscript_qa"])
+        before_artifact = data.get("artifact_id")
+        before_rev = data.get("artifact_revision")
+        before_gen = copy.deepcopy(data["ebook_workspace"]["last_manuscript_generation"])
+        before_paid = int(data["ebook_workspace"]["paid_call_ledger"]["paid_calls"])
+
+        r = self.client.post(
+            f"/ebook-workspace/{pid}/authorize-budget",
+            json={
+                "budget_cap_usd": 1.65,
+                "reason": "User authorized Chapter 3 correction plus Chapters 4-10",
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        ws = r.get_json()["workspace"]
+        self.assertAlmostEqual(float(ws["budget"]["cap_usd"]), 1.65, places=2)
+        self.assertAlmostEqual(float(ws["budget"]["spent_usd"]), 0.45, places=2)
+        self.assertAlmostEqual(float(ws["budget"]["remaining_usd"]), 1.20, places=2)
+        self.assertEqual(int(ws["budget"]["paid_calls"] or 0), 3)
+        self.assertEqual(ws["next_action"], "request_correction")
+
+        stored = database.get_project(pid)["data"]
+        self.assertEqual(stored["content"], before_content)
+        self.assertEqual(stored["artifact_id"], before_artifact)
+        self.assertEqual(stored["artifact_revision"], before_rev)
+        self.assertEqual(stored["ebook_workspace"]["accepted_chapters"], before_accepted)
+        self.assertEqual(stored["ebook_workspace"]["manuscript_qa"], before_qa)
+        self.assertEqual(stored["ebook_workspace"]["last_manuscript_generation"], before_gen)
+        self.assertEqual(stored["ebook_workspace"]["paid_call_ledger"]["calls"], before_calls)
+        self.assertEqual(int(stored["ebook_workspace"]["paid_call_ledger"]["paid_calls"]), before_paid)
+        auths = stored["ebook_workspace"]["paid_call_ledger"]["budget_authorizations"]
+        self.assertEqual(len(auths), 1)
+        self.assertFalse(auths[0]["paid_call"])
+        self.assertAlmostEqual(float(auths[0]["old_cap_usd"]), 1.50, places=2)
+        self.assertAlmostEqual(float(auths[0]["new_cap_usd"]), 1.65, places=2)
+
+        est_data = dict(stored)
+        est_data["_project_id"] = pid
+        est = estimate_paid_action(est_data, "correct_manuscript")["estimate"]
+        self.assertEqual(int(est["accepted_chapter_count"]), 2)
+        self.assertEqual(int(est["pending_chapter_count"]), 8)
+        self.assertEqual(int(est["resume_from_order"]), 3)
+        self.assertEqual(int(est["failed_chapter_order"]), 3)
+        self.assertAlmostEqual(float(est["per_chapter_max_usd"]), CHAPTER_UNIT_USD, places=2)
+        self.assertAlmostEqual(float(est["max_total_usd"]), 1.20, places=2)
+        self.assertAlmostEqual(float(est["estimated_max_usd"]), 1.20, places=2)
+        self.assertAlmostEqual(float(est["spent_usd"]), 0.45, places=2)
+        self.assertAlmostEqual(float(est["remaining_usd"]), 1.20, places=2)
+        self.assertAlmostEqual(float(est["budget_cap_usd"]), 1.65, places=2)
+        self.assertTrue(est["confirmation_required"])
+        # In-memory estimate must not be the persisted live path for #4249; cancel if routed.
+        live = database.get_project(pid)["data"]
+        self.assertEqual(live["content"], before_content)
+
+    def test_refuses_frozen_2472_and_does_not_lower_cap(self):
+        frozen = self.client.post(
+            f"/ebook-workspace/{FROZEN_LIVE_EBOOK_PROJECT_ID}/authorize-budget",
+            json={"budget_cap_usd": 1.65},
+        )
+        self.assertEqual(frozen.status_code, 400)
+        self.assertIn("frozen", (frozen.get_json() or {}).get("error", "").lower())
+        pid, data = self._isolated_stopped_at_ch3()
+        with self.assertRaises(ValueError):
+            authorize_workspace_budget_cap(data, 1.00)
+        with self.assertRaises(ValueError):
+            authorize_workspace_budget_into_project(database, pid, 1.40)
 
 
 if __name__ == "__main__":
