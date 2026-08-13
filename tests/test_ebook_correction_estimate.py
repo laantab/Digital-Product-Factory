@@ -480,9 +480,12 @@ class CorrectionEstimateWiringTests(unittest.TestCase):
         )
         self.assertEqual(data.get("content") or "", before_content)
         self.assertEqual(data["ebook_workspace"].get("manuscript_qa"), before_qa)
-        self.assertEqual(accepted_chapter_digests(data), before_digests)
+        after_digests = accepted_chapter_digests(data)
+        self.assertGreaterEqual(len(after_digests), len(before_digests))
+        self.assertEqual(after_digests[: len(before_digests)], before_digests)
         stored = database.get_project(4249)["data"]
         self.assertEqual(stored.get("content") or "", before_content)
+        self.assertEqual(accepted_chapter_digests(stored), before_digests)
         self.assertEqual(
             float(stored["ebook_workspace"]["paid_call_ledger"]["spent_usd"]),
             before_spent,
@@ -613,6 +616,231 @@ class ProjectBudgetAuthorizationTests(unittest.TestCase):
             authorize_workspace_budget_cap(data, 1.00)
         with self.assertRaises(ValueError):
             authorize_workspace_budget_into_project(database, pid, 1.40)
+
+
+class ValidatedChapterReconciliationTests(unittest.TestCase):
+    """PASS chapters already in the manuscript must be accepted locally, not regenerated."""
+
+    def setUp(self):
+        self.client = app.test_client()
+        app.config["TESTING"] = True
+        self._client_patch = patch("ai_client.get_client", side_effect=AssertionError("paid client"))
+        self._chat_patch = patch("ai_client.chat", side_effect=AssertionError("paid chat"))
+        self._json_patch = patch("ai_client.chat_json", side_effect=AssertionError("paid chat_json"))
+        self._gen_patch = patch(
+            "services.ebook.generate_one_chapter",
+            side_effect=AssertionError("provider generate_one_chapter"),
+        )
+        self._client_patch.start()
+        self._chat_patch.start()
+        self._json_patch.start()
+        self._gen_patch.start()
+
+    def tearDown(self):
+        self._client_patch.stop()
+        self._chat_patch.stop()
+        self._json_patch.stop()
+        self._gen_patch.stop()
+
+    def _isolated_ch3_pass_not_accepted(self, *, mention_only: bool = False) -> tuple[int, dict]:
+        from services.ebook_manuscript_engine import (
+            assemble_manuscript,
+            split_front_chapters_back,
+        )
+        from services.ebook_manuscript_fixtures import build_event_photo_strong_manuscript
+        from services.ebook_project_workspace import build_acceptance_project_data
+
+        data = build_acceptance_project_data()
+        data["acceptance_marker"] = None
+        data["artifact_id"] = "ebook-ws-reconcile-ch3"
+        data["artifact_revision"] = 1
+        data["artifact_state"] = "DRAFT"
+        strong = build_event_photo_strong_manuscript()
+        _front, chapters, _back = split_front_chapters_back(strong)
+        ch3 = next(c for c in chapters if c.order == 3)
+        if mention_only:
+            marker = "**Hypothetical planning example: Buy vs. Rent vs. Used**"
+            idx = ch3.body.find(marker)
+            self.assertGreaterEqual(idx, 0)
+            ch3.body = (
+                ch3.body[:idx]
+                + "You might buy a camera or rent a lens. Used gear exists. "
+                + "For example, some photographers buy a second body.\n"
+            )
+        md = assemble_manuscript(
+            title=str(data.get("title") or "From First Booking to On-Site Prints"),
+            subtitle=str(data.get("subtitle") or ""),
+            author="Lonnie Brown",
+            chapters=chapters[:3],
+            disclaimer="",
+            sources="",
+        )
+        data["content"] = md
+        data["ebook"] = md
+        ws = data["ebook_workspace"]
+        ws["marker"] = None
+        ws["accepted_chapters"] = [
+            {"order": c.order, "title": c.title, "body": c.body}
+            for c in chapters[:2]
+        ]
+        ledger = ws["paid_call_ledger"]
+        ledger["spent_usd"] = 0.6
+        ledger["remaining_usd"] = 1.2
+        ledger["budget_cap_usd"] = 1.8
+        ledger["paid_calls"] = 4
+        ledger["calls"] = [{"purpose": "generate_manuscript", "estimated_cost_usd": 0.6}]
+        ledger["budget_authorizations"] = [
+            {"paid_call": False, "new_cap_usd": 1.8, "reason": "test cap"}
+        ]
+        set_stage_status(ws, "manuscript", STATUS_NEEDS_CORRECTION, note="ch3 pass not accepted")
+        _recompute_next_action(ws)
+        project = database.create_project(
+            "Reconcile Ch3 PASS Isolated",
+            "ebook",
+            data,
+            user_saved=False,
+            system_test=True,
+            temporary=True,
+        )
+        pid = project["id"]
+        data["_project_id"] = pid
+        database.update_project(pid, None, data)
+        return pid, dict(database.get_project(pid)["data"])
+
+    def test_reconcile_accepts_pass_chapter_without_provider_or_charge(self):
+        from services.ebook_project_workspace import (
+            accepted_chapter_digests,
+            chapter_acceptance_digest,
+            chapter_pipeline_stats,
+            manuscript_digest,
+            reconcile_validated_preserved_chapters,
+            reconcile_validated_preserved_chapters_into_project,
+        )
+        from services.ebook_manuscript_engine import split_front_chapters_back
+
+        pid, data = self._isolated_ch3_pass_not_accepted()
+        before_ms = manuscript_digest(data)
+        before_content = data["content"]
+        before_spent = float(data["ebook_workspace"]["paid_call_ledger"]["spent_usd"])
+        before_calls = copy.deepcopy(data["ebook_workspace"]["paid_call_ledger"]["calls"])
+        before_paid = int(data["ebook_workspace"]["paid_call_ledger"]["paid_calls"])
+        before_accepted = copy.deepcopy(data["ebook_workspace"]["accepted_chapters"])
+        _f, chapters, _b = split_front_chapters_back(before_content)
+        ch3 = next(c for c in chapters if c.order == 3)
+        ch3_digest = chapter_acceptance_digest(ch3.order, ch3.title, ch3.body)
+        self.assertEqual(chapter_pipeline_stats(data)["accepted_chapter_count"], 2)
+        self.assertEqual(chapter_pipeline_stats(data)["resume_from_order"], 3)
+
+        out = reconcile_validated_preserved_chapters(dict(data))
+        stats = chapter_pipeline_stats(out)
+        self.assertEqual(int(stats["accepted_chapter_count"]), 3)
+        self.assertEqual(int(stats["pending_chapter_count"]), 7)
+        self.assertEqual(int(stats["resume_from_order"]), 4)
+        self.assertEqual(manuscript_digest(out), before_ms)
+        self.assertEqual(out["content"], before_content)
+        kept = {c["order"]: c["body"] for c in out["ebook_workspace"]["accepted_chapters"]}
+        self.assertEqual(kept[1], before_accepted[0]["body"])
+        self.assertEqual(kept[2], before_accepted[1]["body"])
+        self.assertEqual(kept[3], ch3.body)
+        self.assertEqual(
+            accepted_chapter_digests(out)[2],
+            ch3_digest,
+        )
+        self.assertEqual(float(out["ebook_workspace"]["paid_call_ledger"]["spent_usd"]), before_spent)
+        self.assertEqual(out["ebook_workspace"]["paid_call_ledger"]["calls"], before_calls)
+        self.assertEqual(int(out["ebook_workspace"]["paid_call_ledger"]["paid_calls"]), before_paid)
+
+        persisted = reconcile_validated_preserved_chapters_into_project(database, pid)
+        stored = dict((persisted.get("data") if isinstance(persisted, dict) else None) or database.get_project(pid)["data"])
+        stored["_project_id"] = pid
+        self.assertEqual(manuscript_digest(stored), before_ms)
+        self.assertEqual(
+            [c["order"] for c in stored["ebook_workspace"]["accepted_chapters"]],
+            [1, 2, 3],
+        )
+        self.assertEqual(float(stored["ebook_workspace"]["paid_call_ledger"]["spent_usd"]), 0.6)
+        self.assertEqual(stored["ebook_workspace"]["paid_call_ledger"]["calls"], before_calls)
+
+        est = estimate_paid_action(stored, "correct_manuscript")["estimate"]
+        self.assertEqual(int(est["accepted_chapter_count"]), 3)
+        self.assertEqual(int(est["pending_chapter_count"]), 7)
+        self.assertEqual(int(est["resume_from_order"]), 4)
+        self.assertEqual(int(est["failed_chapter_order"]), 4)
+        self.assertAlmostEqual(float(est["per_chapter_max_usd"]), CHAPTER_UNIT_USD, places=3)
+        self.assertAlmostEqual(float(est["max_total_usd"]), 1.05, places=3)
+        self.assertAlmostEqual(float(est["spent_usd"]), 0.6, places=3)
+        self.assertAlmostEqual(float(est["remaining_usd"]), 1.2, places=3)
+        self.assertAlmostEqual(float(est["budget_cap_usd"]), 1.8, places=3)
+        self.assertAlmostEqual(float(est["estimate_cost_usd"]), 0.0, places=3)
+
+    def test_mention_only_chapter_is_not_accepted(self):
+        from services.ebook_project_workspace import (
+            chapter_pipeline_stats,
+            reconcile_validated_preserved_chapters,
+        )
+
+        _pid, data = self._isolated_ch3_pass_not_accepted(mention_only=True)
+        out = reconcile_validated_preserved_chapters(data)
+        stats = chapter_pipeline_stats(out)
+        self.assertEqual(int(stats["accepted_chapter_count"]), 2)
+        self.assertEqual(int(stats["resume_from_order"]), 3)
+
+    def test_correction_after_reconcile_starts_at_chapter_4(self):
+        from services.ebook_project_workspace import (
+            reconcile_validated_preserved_chapters,
+        )
+
+        self._gen_patch.stop()
+        _pid, data = self._isolated_ch3_pass_not_accepted()
+        data = reconcile_validated_preserved_chapters(data)
+        ch3_body = next(
+            c["body"] for c in data["ebook_workspace"]["accepted_chapters"] if c["order"] == 3
+        )
+        seen = []
+
+        def _resume(book, chapter):
+            seen.append(chapter.order)
+            return {"ebook": f"## {chapter.title}\n\nToo thin to pass.\n"}
+
+        est = estimate_paid_action(data, "correct_manuscript")
+        fixed = execute_correct_manuscript(
+            data,
+            confirmation_token=est["estimate"]["confirmation_token"],
+            expected_artifact_id=str(data.get("artifact_id") or ""),
+            expected_revision=int(data.get("artifact_revision") or 1),
+            outline_digest_expected=est["estimate"]["outline_digest"],
+            max_authorized_usd=float(est["estimate"]["max_authorized_usd"]),
+            idempotency_key="reconcile-start-at-4",
+            correct_chapter_fn=_resume,
+        )
+        self.assertTrue(seen)
+        self.assertEqual(seen[0], 4)
+        self.assertNotIn(1, seen)
+        self.assertNotIn(2, seen)
+        self.assertNotIn(3, seen)
+        kept = next(
+            c["body"]
+            for c in fixed["data"]["ebook_workspace"]["accepted_chapters"]
+            if c["order"] == 3
+        )
+        self.assertEqual(kept, ch3_body)
+
+    def test_frozen_2472_is_not_reconciled(self):
+        from services.ebook_project_workspace import (
+            reconcile_validated_preserved_chapters,
+            reconcile_validated_preserved_chapters_into_project,
+        )
+
+        live = database.get_project(FROZEN_LIVE_EBOOK_PROJECT_ID)
+        data = dict(live["data"])
+        data["_project_id"] = FROZEN_LIVE_EBOOK_PROJECT_ID
+        before = copy.deepcopy(data.get("ebook_workspace", {}).get("accepted_chapters"))
+        out = reconcile_validated_preserved_chapters(data)
+        self.assertEqual(out["ebook_workspace"].get("accepted_chapters"), before)
+        with self.assertRaises(ValueError):
+            reconcile_validated_preserved_chapters_into_project(
+                database, FROZEN_LIVE_EBOOK_PROJECT_ID
+            )
 
 
 if __name__ == "__main__":

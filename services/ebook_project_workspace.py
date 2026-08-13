@@ -426,6 +426,17 @@ ONESHOT_WORKSPACE_BLOCKED = (
 )
 
 
+def chapter_acceptance_digest(order: int, title: str, body: str) -> str:
+    """Stable digest of one preserved chapter (order + title + body)."""
+    return _sha(
+        {
+            "order": int(order or 0),
+            "title": str(title or ""),
+            "body": str(body or ""),
+        }
+    )
+
+
 def accepted_chapter_digests(data: dict) -> list[str]:
     """Stable digests of preserved accepted chapters (resume/idempotency binding)."""
     ws = get_workspace(data) or {}
@@ -434,12 +445,10 @@ def accepted_chapter_digests(data: dict) -> list[str]:
         if not isinstance(item, dict):
             continue
         out.append(
-            _sha(
-                {
-                    "order": int(item.get("order") or 0),
-                    "title": str(item.get("title") or ""),
-                    "body": str(item.get("body") or ""),
-                }
+            chapter_acceptance_digest(
+                int(item.get("order") or 0),
+                str(item.get("title") or ""),
+                str(item.get("body") or ""),
             )
         )
     return out
@@ -471,6 +480,135 @@ def chapter_pipeline_stats(data: dict) -> dict[str, Any]:
             default=None,
         ),
     }
+
+
+def reconcile_validated_preserved_chapters(data: dict) -> dict:
+    """Accept preserved manuscript chapters that now PASS, without a provider call.
+
+    Used when a validator repair makes already-written chapter bytes PASS.
+    Copies bodies byte-for-byte from the current manuscript. Does not generate,
+    rewrite, charge, or mutate frozen project #2472. Already-accepted chapters
+    are kept unchanged.
+    """
+    from services.ebook_manuscript_engine import (
+        build_book_contract,
+        split_front_chapters_back,
+        validate_chapter,
+    )
+    from services.ebook_outline_fidelity import normalize_chapter_title
+
+    data = ensure_workspace(data)
+    project_id = data.get("_project_id")
+    if project_id is not None and int(project_id) == FROZEN_LIVE_EBOOK_PROJECT_ID:
+        return data
+    md = str(data.get("content") or data.get("ebook") or "")
+    if not md.strip():
+        return data
+    book = build_book_contract(data)
+    _front, parsed_chapters, _back = split_front_chapters_back(md)
+    by_order = {int(ch.order): ch for ch in parsed_chapters}
+    ws = data["ebook_workspace"]
+    existing_by_order: dict[int, dict] = {}
+    for item in ws.get("accepted_chapters") or []:
+        if not isinstance(item, dict):
+            continue
+        if not str(item.get("body") or "").strip():
+            continue
+        existing_by_order[int(item.get("order") or 0)] = {
+            "order": int(item.get("order") or 0),
+            "title": str(item.get("title") or ""),
+            "body": str(item.get("body") or ""),
+        }
+    accepted_out: list[dict] = []
+    promoted: list[dict] = []
+    for contract in book.chapters:
+        prev = existing_by_order.get(int(contract.order))
+        if prev:
+            accepted_out.append(prev)
+            continue
+        parsed = by_order.get(int(contract.order))
+        if parsed is None:
+            continue
+        if int(parsed.order) != int(contract.order):
+            continue
+        if normalize_chapter_title(parsed.title) != normalize_chapter_title(contract.title):
+            continue
+        if str(parsed.title).strip() != str(contract.title).strip():
+            continue
+        body = str(parsed.body or "")
+        content_digest = chapter_acceptance_digest(parsed.order, parsed.title, body)
+        contract_aligned_digest = chapter_acceptance_digest(contract.order, contract.title, body)
+        if content_digest != contract_aligned_digest:
+            continue
+        findings = validate_chapter(parsed, contract, book=book)
+        if findings:
+            continue
+        accepted_out.append(
+            {
+                "order": int(contract.order),
+                "title": str(contract.title),
+                "body": body,
+            }
+        )
+        promoted.append(
+            {
+                "order": int(contract.order),
+                "title": str(contract.title),
+                "digest": content_digest,
+                "contract_digest": contract.digest(),
+            }
+        )
+    accepted_out.sort(key=lambda row: int(row["order"]))
+    if promoted:
+        ws["accepted_chapters"] = accepted_out
+        record = {
+            "paid_call": False,
+            "provider_called": False,
+            "promoted_orders": [row["order"] for row in promoted],
+            "promoted": promoted,
+            "accepted_orders": [row["order"] for row in accepted_out],
+        }
+        ws["validated_chapter_reconciliation"] = record
+        _append_history(ws, "reconcile_validated_chapters", **record)
+    data["ebook_workspace"] = ws
+    return data
+
+
+def reconcile_validated_preserved_chapters_into_project(database_module, project_id: int) -> dict:
+    """Persist local PASS reconciliation. Never mutates project #2472 or spend."""
+    pid = int(project_id)
+    if pid == FROZEN_LIVE_EBOOK_PROJECT_ID:
+        raise ValueError(
+            f"Refusing to modify frozen live project #{FROZEN_LIVE_EBOOK_PROJECT_ID}."
+        )
+    project = database_module.get_project(pid)
+    if not project:
+        raise ValueError(f"Project #{pid} was not found.")
+    data = dict(project.get("data") or {})
+    data["_project_id"] = pid
+    ws = get_workspace(data) or {}
+    ledger = ws.get("paid_call_ledger") or {}
+    spent_before = round(float(ledger.get("spent_usd") or 0), 4)
+    remaining_before = round(float(ledger.get("remaining_usd") or 0), 4)
+    paid_before = int(ledger.get("paid_calls") or 0)
+    calls_before = list(ledger.get("calls") or [])
+    content_before = str(data.get("content") or "")
+    ebook_before = str(data.get("ebook") or "")
+    data = reconcile_validated_preserved_chapters(data)
+    ledger_after = (data.get("ebook_workspace") or {}).get("paid_call_ledger") or {}
+    if str(data.get("content") or "") != content_before or str(data.get("ebook") or "") != ebook_before:
+        raise ValueError("Reconciliation must not rewrite manuscript text.")
+    if (
+        round(float(ledger_after.get("spent_usd") or 0), 4) != spent_before
+        or round(float(ledger_after.get("remaining_usd") or 0), 4) != remaining_before
+        or int(ledger_after.get("paid_calls") or 0) != paid_before
+        or list(ledger_after.get("calls") or []) != calls_before
+    ):
+        raise ValueError("Reconciliation must not charge or alter the paid-call ledger.")
+    updated = database_module.update_project(pid, None, data)
+    if not updated:
+        raise ValueError(f"Failed to update project #{pid}.")
+    return updated
 
 
 def authoritative_approved_outline(data: dict) -> list[dict]:
@@ -733,6 +871,9 @@ def sync_document_from_workspace(data: dict) -> dict:
 def workspace_public_view(project: dict) -> dict[str, Any]:
     """Customer-safe payload for the Ebook Project workspace UI (no raw dump of secrets)."""
     data = dict(project.get("data") or {})
+    if project.get("id") is not None:
+        data["_project_id"] = project.get("id")
+    data = reconcile_validated_preserved_chapters(data)
     ws = get_workspace(data) or new_workspace()
     ledger = ws.get("paid_call_ledger") or empty_ledger()
     rail = []
@@ -1351,6 +1492,8 @@ def estimate_paid_action(data: dict, action: str) -> dict:
             raise ValueError("Correction is only available when manuscript status is Needs correction.")
         if not (data.get("content") or data.get("ebook")):
             raise ValueError("Correction requires the preserved manuscript draft.")
+        data = reconcile_validated_preserved_chapters(data)
+        ws = data["ebook_workspace"]
     ledger = ws.setdefault("paid_call_ledger", empty_ledger())
     spent_before = round(float(ledger.get("spent_usd") or 0), 4)
     remaining_before = round(float(ledger.get("remaining_usd") or 0), 4)
@@ -1901,6 +2044,10 @@ def execute_correct_manuscript(
             "result": prior.get("result") or {},
             "workspace_note": "Idempotent replay — no additional paid call.",
         }
+
+    data = reconcile_validated_preserved_chapters(data)
+    ws = data["ebook_workspace"]
+    ledger = ws.setdefault("paid_call_ledger", empty_ledger())
 
     pending = consume_confirmation(data, "correct_manuscript", confirmation_token)
     artifact_id = str(data.get("artifact_id") or data.get("package_id") or "")
