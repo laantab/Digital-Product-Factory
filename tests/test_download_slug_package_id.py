@@ -19,6 +19,7 @@ os.chdir(ROOT)
 
 from app import app, _PACKAGE_ID_RE  # noqa: E402
 from services.ebook_package import _PACKAGE_ID_OK  # noqa: E402
+from tests._test_paths import resolve_test_exports_root  # noqa: E402
 
 
 class DownloadSlugPackageIdTests(unittest.TestCase):
@@ -32,7 +33,7 @@ class DownloadSlugPackageIdTests(unittest.TestCase):
 
     def test_save_export_download_slug_package(self):
         pkg = "farm_friends_animals_1786212765"
-        pdf_path = ROOT / "exports" / pkg / "farm_friends.pdf"
+        pdf_path = resolve_test_exports_root() / pkg / "farm_friends.pdf"
         if not pdf_path.is_file():
             # Sanitized source packages intentionally exclude generated PDFs.
             # Create a small valid local fixture so this test is self-contained.

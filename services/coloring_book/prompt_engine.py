@@ -33,7 +33,10 @@ THUNDER_VOLT_CHARACTER_LOCK = (
     "- Original Black male superhero named Thunder Volt\n"
     "- Adult, approximately 30-35 years old\n"
     "- Tall, muscular, athletic build\n"
-    "- Deep-brown skin\n"
+    "- Deep-brown skin identity — on INTERIOR coloring pages his face, neck, arms, hands, "
+    "and all visible skin must remain unfilled white coloring regions; preserve Black identity "
+    "via facial structure, hairstyle, beard outline, costume, and this bible — never gray "
+    "shading or solid skin-tone fill on interiors\n"
     "- Short, neatly shaped black hair\n"
     "- Neatly trimmed short beard and mustache\n"
     "- Strong jawline\n"
@@ -45,6 +48,15 @@ THUNDER_VOLT_CHARACTER_LOCK = (
     "- No costume color or design changes between pages or on the cover\n"
     "- No additional lightning emblems\n"
     "- No resemblance to any existing copyrighted superhero"
+)
+
+THUNDER_VOLT_OPEN_SKIN_INTERIOR_RULE = (
+    "INTERIOR SKIN COLORING RULE (Thunder Volt — all interior pages):\n"
+    "- Face, neck, arms, hands, and all visible skin = pure white open coloring regions\n"
+    "- Preserve Black identity through facial structure, hairstyle, beard outline, costume, "
+    "and character bible — not gray shading or solid skin-tone fill\n"
+    "- Hair and beard may use clear outline/detail; avoid large solid-black facial fill areas\n"
+    "- Do not fill skin with gray stipple, hatching, or solid black"
 )
 
 # Locked factory standard for sellable coloring-book covers (all future covers).
@@ -110,7 +122,9 @@ NEGATIVE_CONSTRAINTS = (
     "- No guns, gore, blood, or firearms\n"
     "- No text, letters, numbers, logos, watermarks, speech bubbles, or captions in the art\n"
     "- No bank signs, street signs, storefront lettering, dollar-sign labels, or readable plaques\n"
+    "- No dollar signs on money bags; no letters/numbers embedded in interior artwork\n"
     "- No color/gray/shading/gradients on interior pages; no solid-black costume fills\n"
+    "- Thunder Volt visible skin on interiors stays unfilled white (open coloring regions)\n"
     "- Scene instructions may change only action, camera angle, pose, simplified background, "
     "and whether police/bank employees appear — never redefine Thunder Volt or robber identity/costume"
 )
@@ -202,8 +216,33 @@ SUPPORTS_IMAGE_SEED = False
 SUPPORTS_IMAGE_TO_IMAGE = False  # attempted best-effort via images.edit; not guaranteed
 
 
-# Canonical 12-scene bank-rescue sequence (unique camera / pose each page)
+# Canonical 25-scene bank-rescue sequence (unique camera / pose each page).
+# Full Thunder Volt story: NYC → bank robbery → getaway stopped → civilians safe.
 BANK_RESCUE_SCENES: list[dict[str, str]] = [
+    {
+        "id": "nyc_establishing",
+        "topic": "New York City Establishing Scene",
+        "includes_robbers": False,
+        "includes_police": False,
+        "max_foreground": 2,
+        "beat": (
+            "Wide establishing shot: simplified New York skyline and street canyon. "
+            "Thunder Volt flies in as a large focal figure. No robbers yet. Sparse windows; "
+            "large open sky coloring regions; no crowds; no tiny floating figures."
+        ),
+    },
+    {
+        "id": "bank_exterior",
+        "topic": "Bank Exterior in New York",
+        "includes_robbers": False,
+        "includes_police": False,
+        "max_foreground": 2,
+        "beat": (
+            "Street-level view of a simplified New York bank exterior with columns and steps. "
+            "Thunder Volt approaches from the side, large in frame. Minimal brick detail; "
+            "no lettering; open sidewalk coloring space."
+        ),
+    },
     {
         "id": "alarm_skyline",
         "topic": "Bank Alarm Over the New York Skyline",
@@ -211,9 +250,33 @@ BANK_RESCUE_SCENES: list[dict[str, str]] = [
         "includes_police": False,
         "max_foreground": 3,
         "beat": (
-            "Establishing shot: simplified New York skyline and a bank entrance with an alarm "
-            "strobe. Thunder Volt approaches in the air. Exactly two robbers (Robber One and "
-            "Robber Two) are visible at the bank doors. Sparse background; large open spaces."
+            "Establishing shot: bank entrance with an alarm strobe. Thunder Volt approaches "
+            "in the air. Exactly two adult robbers (Robber One and Robber Two) at the doors. "
+            "Sparse background; large open spaces."
+        ),
+    },
+    {
+        "id": "robbery_in_progress",
+        "topic": "Robbery in Progress Inside the Bank",
+        "includes_robbers": True,
+        "includes_police": False,
+        "max_foreground": 3,
+        "beat": (
+            "Interior bank lobby (simplified): exactly two adult robbers take one money bag. "
+            "Thunder Volt is visible through the door frame noticing the danger. No guns; "
+            "no crowd; large open floor coloring regions."
+        ),
+    },
+    {
+        "id": "hero_notices",
+        "topic": "Thunder Volt Notices the Danger",
+        "includes_robbers": True,
+        "includes_police": False,
+        "max_foreground": 3,
+        "beat": (
+            "Close three-quarter: Thunder Volt's focused face and lightning emblem as he "
+            "spots exactly two adult robbers exiting. Large hero figure (main subject); "
+            "simplified street behind; open coloring spaces."
         ),
     },
     {
@@ -223,9 +286,20 @@ BANK_RESCUE_SCENES: list[dict[str, str]] = [
         "includes_police": False,
         "max_foreground": 3,
         "beat": (
-            "Low-angle street shot: exactly two robbers burst from simplified bank doors onto "
-            "a mostly empty sidewalk. Robber One carries one money bag. Thunder Volt appears "
-            "above. No crowd; no third robber."
+            "Low-angle street shot: exactly two adult robbers burst from simplified bank doors. "
+            "Robber One carries one money bag. Thunder Volt appears above. No crowd; no third robber."
+        ),
+    },
+    {
+        "id": "hero_arrives",
+        "topic": "Thunder Volt Arrives on the Scene",
+        "includes_robbers": True,
+        "includes_police": False,
+        "max_foreground": 3,
+        "beat": (
+            "Dynamic arrival: Thunder Volt lands mid-stride as the clear focal point. "
+            "Exactly two adult robbers react. Simplified New York building silhouettes; "
+            "large open coloring regions."
         ),
     },
     {
@@ -235,9 +309,19 @@ BANK_RESCUE_SCENES: list[dict[str, str]] = [
         "includes_police": False,
         "max_foreground": 3,
         "beat": (
-            "Three-quarter hero landing: Thunder Volt touches down as the clear focal point. "
-            "Exactly two robbers react in mid-distance. Simplified skyscraper silhouettes; "
-            "large open coloring regions; no tiny crowd."
+            "Three-quarter hero landing: Thunder Volt touches down large in frame. "
+            "Exactly two adult robbers in mid-distance. Sparse skyscraper outlines; no tiny crowd."
+        ),
+    },
+    {
+        "id": "protects_civilians",
+        "topic": "Thunder Volt Protects Civilians",
+        "includes_robbers": True,
+        "includes_police": False,
+        "max_foreground": 4,
+        "beat": (
+            "Protective pose: Thunder Volt stands between exactly two adult robbers and one or "
+            "two unmasked civilians. Large hero figure; open sidewalk; child-safe non-graphic action."
         ),
     },
     {
@@ -248,7 +332,7 @@ BANK_RESCUE_SCENES: list[dict[str, str]] = [
         "max_foreground": 3,
         "beat": (
             "Confrontational mid-shot: Thunder Volt blocks the path with one palm raised and "
-            "simple lightning arcs. Exactly two robbers skid to a halt. Minimal street detail."
+            "simple lightning arcs. Exactly two adult robbers skid to a halt. Minimal street detail."
         ),
     },
     {
@@ -258,19 +342,41 @@ BANK_RESCUE_SCENES: list[dict[str, str]] = [
         "includes_police": False,
         "max_foreground": 3,
         "beat": (
-            "Side action shot: exactly two robbers sprint toward one getaway car. Thunder Volt "
-            "pursues. Simplified curb and building outlines only; no taxi clutter; no crowds."
+            "Side action shot: exactly two adult robbers sprint toward one getaway car to get away. "
+            "Thunder Volt pursues. Simplified curb and building outlines; no taxi clutter; no crowds."
         ),
     },
     {
-        "id": "lightning_disables_car",
-        "topic": "Lightning Disables the Getaway Car",
+        "id": "blocks_vehicle_path",
+        "topic": "Thunder Volt Blocks the Getaway Vehicle Path",
         "includes_robbers": True,
         "includes_police": False,
         "max_foreground": 3,
         "beat": (
-            "Diagonal action shot: Thunder Volt (focal point) sends controlled lightning into "
-            "the car engine bay. Exactly two robbers recoil. No fire, no guns, sparse background."
+            "Thunder Volt stands large in front of one getaway car, arms wide, stopping the escape. "
+            "Exactly two adult robbers inside/at the car. No crash; no guns; open street coloring space."
+        ),
+    },
+    {
+        "id": "lightning_disables_car",
+        "topic": "Lightning Safely Disables the Getaway Car",
+        "includes_robbers": True,
+        "includes_police": False,
+        "max_foreground": 3,
+        "beat": (
+            "Diagonal action: Thunder Volt (focal) sends controlled lightning into the car engine bay "
+            "to safely stop the vehicle. Exactly two adult robbers recoil. No fire, no guns, sparse background."
+        ),
+    },
+    {
+        "id": "controlled_lightning",
+        "topic": "Controlled Lightning Action",
+        "includes_robbers": True,
+        "includes_police": False,
+        "max_foreground": 3,
+        "beat": (
+            "Thunder Volt channels neat lightning arcs that wrap and stop exactly two adult robbers "
+            "without harm. Large open energy shapes for coloring; New York street simplified behind."
         ),
     },
     {
@@ -280,20 +386,20 @@ BANK_RESCUE_SCENES: list[dict[str, str]] = [
         "includes_police": False,
         "max_foreground": 3,
         "beat": (
-            "Protective pose: Thunder Volt creates a simple energy shield for one or two "
-            "unmasked pedestrians. Exactly two robbers stay outside the shield in mid-ground. "
+            "Protective shield pose: Thunder Volt creates a simple energy shield for one or two "
+            "unmasked pedestrians. Exactly two adult robbers outside the shield in mid-ground. "
             "No crowd; simplified bank/street background."
         ),
     },
     {
         "id": "removes_bag",
-        "topic": "Thunder Volt Takes the Money Bag",
+        "topic": "Thunder Volt Recovers the Money Bag",
         "includes_robbers": True,
         "includes_police": False,
         "max_foreground": 3,
         "beat": (
             "Close mid-shot: Thunder Volt firmly takes the single money bag from Robber One. "
-            "Robber Two stands nearby shocked. Exactly two robbers total. Sparse background."
+            "Robber Two stands nearby shocked. Exactly two adult robbers total. Sparse background."
         ),
     },
     {
@@ -303,8 +409,19 @@ BANK_RESCUE_SCENES: list[dict[str, str]] = [
         "includes_police": False,
         "max_foreground": 3,
         "beat": (
-            "Dynamic capture pose: Thunder Volt restrains Robber Two with a non-lethal lightning "
-            "hold. Robber One is visible nearby, already subdued. Exactly two robbers; no third."
+            "Dynamic capture: Thunder Volt restrains Robber Two with a non-lethal lightning hold. "
+            "Robber One already subdued nearby. Exactly two adult robbers; no third."
+        ),
+    },
+    {
+        "id": "robbers_surrender",
+        "topic": "Robbers Surrender",
+        "includes_robbers": True,
+        "includes_police": False,
+        "max_foreground": 3,
+        "beat": (
+            "Exactly two adult robbers sit or kneel with hands raised in surrender. Thunder Volt "
+            "stands tall as the large focal hero holding the money bag. Child-safe; no violence."
         ),
     },
     {
@@ -314,9 +431,19 @@ BANK_RESCUE_SCENES: list[dict[str, str]] = [
         "includes_police": True,
         "max_foreground": 5,
         "beat": (
-            "Police-arrival scene: one or two clearly unmasked officers approach. Thunder Volt "
-            "stands with the money bag over exactly two subdued robbers. Officers are not masked "
-            "and must not look like robbers. Simplified street; no crowd of criminals."
+            "One or two clearly unmasked officers approach. Thunder Volt stands with the money bag "
+            "over exactly two subdued adult robbers. Officers must not look like robbers. Sparse street."
+        ),
+    },
+    {
+        "id": "money_recovered",
+        "topic": "Money Being Recovered",
+        "includes_robbers": True,
+        "includes_police": True,
+        "max_foreground": 4,
+        "beat": (
+            "Thunder Volt hands the recovered money bag toward an unmasked officer while exactly "
+            "two adult robbers remain secured. Large figures; simplified New York bank behind."
         ),
     },
     {
@@ -327,19 +454,52 @@ BANK_RESCUE_SCENES: list[dict[str, str]] = [
         "max_foreground": 3,
         "beat": (
             "Warm handoff: Thunder Volt returns one money bag to one unmasked bank employee at "
-            "a simplified bank entrance. Exactly two robbers remain secured in the background. "
-            "No cluttered signage or lettering in the image."
+            "a simplified bank entrance. Exactly two adult robbers secured in the background. "
+            "No signage lettering in the art."
+        ),
+    },
+    {
+        "id": "civilians_safe",
+        "topic": "Civilians Are Safe",
+        "includes_robbers": False,
+        "includes_police": False,
+        "max_foreground": 3,
+        "beat": (
+            "Calm aftermath: Thunder Volt reassures one or two unmasked civilians on the sidewalk. "
+            "No robbers in foreground. Large open sky and street for coloring; New York simplified."
+        ),
+    },
+    {
+        "id": "city_cheers",
+        "topic": "Safe Streets After the Rescue",
+        "includes_robbers": False,
+        "includes_police": False,
+        "max_foreground": 2,
+        "beat": (
+            "Thunder Volt walks a quiet New York sidewalk after the rescue — peaceful, safe mood. "
+            "Large hero figure; minimal background detail; big open coloring regions."
+        ),
+    },
+    {
+        "id": "skyline_patrol",
+        "topic": "Thunder Volt Watches Over the City",
+        "includes_robbers": False,
+        "includes_police": False,
+        "max_foreground": 1,
+        "beat": (
+            "Thunder Volt stands on a simplified rooftop overlooking New York. Solo heroic pose, "
+            "large in frame, open sky for coloring; no text; no tiny skyline clutter."
         ),
     },
     {
         "id": "heroic_finale",
-        "topic": "Thunder Volt Heroic Finale",
+        "topic": "Thunder Volt Heroic Finale in New York",
         "includes_robbers": True,
         "includes_police": False,
         "max_foreground": 3,
         "beat": (
-            "Heroic finale: Thunder Volt stands on a rooftop overlooking a simplified New York "
-            "skyline. Exactly two bound robbers sit behind him. Large open sky for coloring; "
+            "Final heroic New York scene: Thunder Volt stands tall on a rooftop overlooking a "
+            "simplified skyline. Exactly two bound adult robbers sit behind him. Large open sky; "
             "triumphant focal pose; no text in the art."
         ),
     },
@@ -365,6 +525,7 @@ class CharacterBible:
             return (
                 "CHARACTER BIBLE (must match exactly on every page and the cover):\n"
                 f"{THUNDER_VOLT_CHARACTER_LOCK}\n"
+                f"{THUNDER_VOLT_OPEN_SKIN_INTERIOR_RULE}\n"
                 f"{ROBBER_ONE_LOCK}\n"
                 f"{ROBBER_TWO_LOCK}\n"
                 f"- Location: {self.location}\n"
@@ -423,6 +584,61 @@ class CoverCopy:
     subtitle: str
     badge: str = "Jumbo Coloring & Activity Book"
     overlay_style: str = "retail_jumbo_banner"
+
+
+# Customer-facing Factory author used by ebooks and other products.
+FACTORY_COLORING_AUTHOR = "Lonnie Brown"
+
+
+def resolve_coloring_book_author(*candidates: object) -> str:
+    """Return the first non-empty author, else the Factory ebook author convention."""
+    for raw in candidates:
+        text = str(raw or "").strip()
+        if text:
+            return text[:80]
+    return FACTORY_COLORING_AUTHOR
+
+
+def coloring_cover_draws_author(overlay_style: str = "") -> bool:
+    """Thunder Volt / bank-rescue uses clean_title (title+subtitle only, hashes locked)."""
+    style = str(overlay_style or "").strip().lower()
+    return style not in {"clean_title", "clean", "superhero_clean"}
+
+
+def stamp_coloring_author_fields(
+    payload: dict,
+    author: str = "",
+    *,
+    overlay_style: str = "",
+) -> dict:
+    """Persist author on coloring payload, fields, and retail cover_design."""
+    data = payload if isinstance(payload, dict) else {}
+    resolved = resolve_coloring_book_author(
+        author,
+        data.get("author"),
+        data.get("author_name"),
+        data.get("author_brand"),
+        (data.get("fields") or {}).get("author_brand") if isinstance(data.get("fields"), dict) else "",
+        (data.get("fields") or {}).get("author") if isinstance(data.get("fields"), dict) else "",
+        (data.get("cover_design") or {}).get("author") if isinstance(data.get("cover_design"), dict) else "",
+    )
+    data["author"] = resolved
+    data["author_name"] = resolved
+    data["author_brand"] = resolved
+    data["author_byline"] = f"by {resolved}"
+    fields = dict(data.get("fields") or {}) if isinstance(data.get("fields"), dict) else {}
+    fields["author"] = resolved
+    fields["author_brand"] = resolved
+    data["fields"] = fields
+    cover = dict(data.get("cover_design") or {}) if isinstance(data.get("cover_design"), dict) else {}
+    style = str(overlay_style or cover.get("overlay_style") or "")
+    if coloring_cover_draws_author(style):
+        cover["author"] = resolved
+        data["cover_design"] = cover
+    elif cover:
+        cover["author"] = ""
+        data["cover_design"] = cover
+    return data
 
 
 def _normalize_theme(theme: str) -> str:
@@ -564,9 +780,11 @@ def build_character_bible(
             "Robber Two: shorter heavier stockier adult man, round face, different knit cap, "
             "dark eye mask, plain jacket over light shirt, plain pants"
         )
+        # Keep the user's full theme authoritative — do not shorten to a generic summary.
         story = (
-            f"{hero} is stopping two men from robbing a bank in {location}. "
-            "Exactly two robbers — never three. No guns, no gore."
+            f"{theme_n} "
+            "Exactly two adult robbers — never three. No guns, no gore. "
+            "Thunder Volt protects people and resolves danger safely."
         )
         product_kind = "superhero coloring book"
     elif farm:
@@ -639,21 +857,74 @@ def derive_cover_copy(theme: str, *, product_title: str = "", subtitle: str = ""
             title = bible.hero_name.upper()
 
     sub = (subtitle or "").strip()
-    if not sub:
-        if bible.is_bank_rescue:
-            sub = "New York Bank Rescue" if "new york" in theme.lower() else "Bank Rescue"
-        elif is_farm_theme(theme):
+    # Thunder Volt / bank-rescue: lock retail copy — ignore stale "New York Bank Rescue"
+    # and other jumbo-era subtitles from Cover Editor / older payloads.
+    if bible.is_bank_rescue:
+        sub = "A Superhero Coloring Adventure"
+    elif not sub:
+        if is_farm_theme(theme):
             sub = "Barnyard Coloring Fun"
         else:
             sub = "Coloring & Activity Fun"
 
-    badge = "Jumbo Coloring & Activity Book"
+    # Thunder Volt / bank-rescue: clean title overlay (no JUMBO chrome clutter).
+    if bible.is_bank_rescue:
+        badge = "Coloring Book"
+        overlay = "clean_title"
+    else:
+        badge = "Jumbo Coloring & Activity Book"
+        overlay = "retail_jumbo_banner"
     return CoverCopy(
         title=title,
         subtitle=sub,
         badge=badge,
-        overlay_style="retail_jumbo_banner",
+        overlay_style=overlay,
     )
+
+
+def normalize_coloring_cover_design(
+    cover_design: dict | None,
+    *,
+    theme: str = "",
+    product_title: str = "",
+    subtitle: str = "",
+    author: str = "",
+) -> dict:
+    """Force bank-rescue covers onto clean_title before any PDF/preview render.
+
+    Cover Editor / apply / stale payloads often omit overlay_style or still carry
+    retail_jumbo_banner + JUMBO badge. The final renderer must not honor that.
+    """
+    design = dict(cover_design or {})
+    theme_s = str(theme or design.get("theme") or design.get("full_theme") or "").strip()
+    title_s = str(product_title or design.get("title") or "").strip()
+    sub_in = str(subtitle or design.get("subtitle") or "").strip()
+    probe = f"{theme_s} {title_s} {sub_in}".strip()
+    if not theme_s and "thunder volt" in title_s.lower():
+        # Cover Editor may send title-only; keep bank-rescue detection alive.
+        theme_s = (
+            "Thunder Volt is a Black superhero. "
+            "He is stopping two adult men from robbing a bank and getting away in New York City."
+        )
+        probe = theme_s
+    copy = derive_cover_copy(theme_s or probe or title_s, product_title=title_s, subtitle=sub_in)
+    design["title"] = copy.title
+    design["subtitle"] = copy.subtitle
+    design["badge"] = copy.badge
+    design["overlay_style"] = copy.overlay_style
+    if copy.overlay_style == "clean_title":
+        design["layout"] = "full_bleed_clean_title"
+        design.pop("author", None)
+        design["author"] = ""
+    else:
+        design.setdefault("layout", "full_bleed_retail_jumbo")
+        design["author"] = resolve_coloring_book_author(
+            author, design.get("author"), design.get("author_brand")
+        )
+    if theme_s:
+        design["theme"] = theme_s
+    design["text_overlay"] = True
+    return design
 
 
 def _farm_story_scenes() -> list[dict[str, str]]:
@@ -733,6 +1004,14 @@ def story_scenes_for_theme(theme: str, page_count: int, bible: CharacterBible | 
         return []
     if len(scenes) >= page_count:
         return scenes[:page_count]
+    # Bank-rescue must never pad with "Alternate Angle" clones — each page needs
+    # a unique story beat (25 canonical scenes cover the Thunder Volt acceptance book).
+    if bible.is_bank_rescue or is_bank_rescue_theme(theme):
+        raise ValueError(
+            f"Thunder Volt bank-rescue books require unique scenes for every page. "
+            f"Requested {page_count} pages but only {len(scenes)} unique story beats "
+            f"are defined. Use at most {len(scenes)} interior pages."
+        )
     out = list(scenes)
     n = 1
     while len(out) < page_count:
@@ -994,7 +1273,9 @@ def finalize_interior_prompt(prompt: str, bible: CharacterBible, art_style: str 
     return prompt
 
 
-def pdf_metadata_for_theme(theme: str = "", *, product_title: str = "") -> dict[str, str]:
+def pdf_metadata_for_theme(
+    theme: str = "", *, product_title: str = "", author: str = ""
+) -> dict[str, str]:
     """Canonical PDF document info for Thunder Volt / coloring books."""
     if is_bank_rescue_theme(theme) or "thunder volt" in (theme or "").lower() or (
         product_title or ""
@@ -1011,7 +1292,7 @@ def pdf_metadata_for_theme(theme: str = "", *, product_title: str = "") -> dict[
     title = (product_title or "Coloring Book").strip() or "Coloring Book"
     return {
         "title": title,
-        "author": "Digital Product Factory",
+        "author": resolve_coloring_book_author(author),
         "subject": (theme or title)[:200],
         "keywords": "coloring book",
     }

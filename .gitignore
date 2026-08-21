@@ -37,3 +37,7 @@ Thumbs.db
 test-results/
 coverage.xml
 junit.xml
+
+# Bulk visual-swap image caches (94MB of PNGs)
+_visual_swap_4249_candidates/
+_visual_swap_4249_snapshot/

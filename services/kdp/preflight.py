@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -191,7 +192,7 @@ def _merge_settings(
     merged_meta = {
         "title": data.get("title") or data.get("listing_title") or "",
         "subtitle": data.get("subtitle") or "",
-        "author": data.get("author_name") or data.get("author") or "",
+        "author": data.get("author_name") or data.get("author") or data.get("author_brand") or "",
         "authors": data.get("authors"),
         "description": data.get("listing_description") or data.get("description") or "",
         "language": data.get("language") or "en",
@@ -296,7 +297,8 @@ def _export_hash_issues(data: Mapping[str, Any], repo_root: Path) -> list[str]:
     ).strip()
     if not package_id:
         return issues
-    folder = repo_root / "exports" / package_id
+    exports_root = Path(os.environ.get("FACTORY_EXPORTS_DIR") or (repo_root / "exports"))
+    folder = exports_root / package_id
     for kind in ("pdf", "zip"):
         meta = files.get(kind) if isinstance(files, dict) else None
         if not isinstance(meta, dict):

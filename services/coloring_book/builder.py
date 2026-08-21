@@ -755,6 +755,8 @@ def _generate_line_art_image(
     *,
     reference_image_path: str = "",
     force: bool = False,
+    package_id: str = "",
+    quality: str = "medium",
 ) -> bool:
     """Generate one line-art image and save to out_path. Returns True on success.
 
@@ -765,8 +767,9 @@ def _generate_line_art_image(
     constraints, it is sent as-is. Otherwise the legacy Bold & Easy Kawaii wrapper
     is applied for backward-compatible non-narrative themes.
 
-    reference_image_path: optional approved cover used as best-effort image edit
-    reference when the provider supports it (not guaranteed for gpt-image generate).
+    Cost controls: quality defaults to ``medium``; images.edit / retries / alternate
+    sizes are disabled. ``reference_image_path`` is prompt-context only (not sent to
+    images.edit). Package budgets count every images.generate attempt.
     """
     prompt = str(prompt or "").strip()
     if force and os.path.isfile(out_path):
@@ -790,6 +793,11 @@ def _generate_line_art_image(
     else:
         line_art_prompt = _kawaii_line_art_wrapper(prompt)
 
+    # Cover path is for consistency notes / human reference only — never images.edit.
+    _ = reference_image_path
+
+    from services.ebook_package import PaidImageBudgetExceeded
+
     try:
         # Portrait US Letter art + long scene/bible prompts (do not truncate to 1000).
         return generate_visual_image(
@@ -798,10 +806,60 @@ def _generate_line_art_image(
             size="1024x1536",
             negative_prompt=COLORING_NEGATIVE_PROMPT,
             max_prompt_chars=4000,
-            reference_image_path=reference_image_path or "",
+            reference_image_path="",
+            user_authorized=True,
+            quality=quality or "medium",
+            package_id=package_id or "",
+            allow_edit=False,
+            allow_retries=False,
         )
+    except PaidImageBudgetExceeded:
+        raise
     except Exception:  # noqa: BLE001
         return False
+
+
+def _promote_approved_sample_interior(img_dir: str) -> str:
+    """Reuse approved Stage B sample with zero paid calls.
+
+    Prefer margin-corrected artwork when present; always leave coloring_p10.png
+    as the reusable sample slot so full-stage generation skips page 10.
+    """
+    import shutil
+
+    sample_slot = os.path.join(img_dir, "coloring_p10.png")
+    corrected = os.path.join(img_dir, "sample_interior_margin_corrected.png")
+    original = os.path.join(img_dir, "coloring_p10_original_fullres.png")
+    if os.path.isfile(corrected) and os.path.getsize(corrected) > 0:
+        if os.path.isfile(sample_slot) and not os.path.isfile(original):
+            shutil.copy2(sample_slot, original)
+        shutil.copy2(corrected, sample_slot)
+        return sample_slot
+    if os.path.isfile(sample_slot) and os.path.getsize(sample_slot) > 0:
+        if not os.path.isfile(original):
+            shutil.copy2(sample_slot, original)
+        return sample_slot
+    return ""
+
+
+def _prepare_interior_print_assets(img_dir: str, pages: list) -> list[str]:
+    """Local 300-DPI print prep for interiors that already have source PNGs."""
+    from services.coloring_book.line_art_layout import prepare_print_interior_300dpi
+
+    prepared: list[str] = []
+    originals_dir = os.path.join(img_dir, "originals")
+    os.makedirs(originals_dir, exist_ok=True)
+    for page in pages:
+        src = str(getattr(page, "image_path", "") or "")
+        if not src or not os.path.isfile(src):
+            continue
+        page_no = int(getattr(page, "page_number", 0) or 0)
+        original = os.path.join(originals_dir, f"coloring_p{page_no:02d}_original.png")
+        print_path = os.path.join(img_dir, f"coloring_p{page_no:02d}_print_300dpi.png")
+        prepare_print_interior_300dpi(src, print_path, original_path=original)
+        page.image_path = print_path
+        prepared.append(print_path)
+    return prepared
 
 
 def _generate_cover_image(prompt: str, out_path: str, *, force: bool = False) -> bool:
@@ -824,6 +882,10 @@ def _generate_cover_image(prompt: str, out_path: str, *, force: bool = False) ->
             size="1024x1536",
             negative_prompt=COVER_NEGATIVE_PROMPT,
             max_prompt_chars=4000,
+            user_authorized=True,
+            quality="medium",
+            allow_edit=False,
+            allow_retries=False,
         )
     except Exception:  # noqa: BLE001
         return False
@@ -1186,7 +1248,7 @@ def build_coloring_book(
             cover_prompt=cover_prompt_final or build_cover_image_prompt(bible=bible, cover=cover_copy),
             warnings=warnings,
             errors=[
-                "Approval required before generating all 12 interiors. "
+                "Approval required before generating all interior pages. "
                 "Approve the cover character, then approve one sample interior page."
             ],
             generation_stage=stage,
@@ -1212,6 +1274,13 @@ def build_coloring_book(
             if os.path.isfile(candidate):
                 ref_path = candidate
 
+    from services.ebook_package import (
+        PaidImageBudgetExceeded,
+        authorize_package_image_budget,
+        authorize_paid_image_generation,
+        get_package_image_budget,
+    )
+
     if quality_mode == "basic_test":
         # Basic test mode: skip AI image generation entirely; renderer uses local fallback
         for page in pages:
@@ -1230,45 +1299,132 @@ def build_coloring_book(
             "Interior pages are not generated until you approve the character and a sample page."
         )
     elif stage == "sample_interior":
-        # Generate only page 1 for approval.
-        for page in pages:
-            out_path = os.path.join(img_dir, f"coloring_p{page.page_number:02d}.png")
-            if page.page_number == 1:
-                page.image_path = out_path
-                ok = _generate_line_art_image(
-                    page.line_art_prompt,
-                    out_path,
-                    reference_image_path=ref_path,
-                    force=force_image_regen,
-                )
-                if not ok:
-                    image_failures.append(page.page_number)
-            else:
-                page.image_path = ""
+        # One interior for approval. Bank-rescue samples must show the hero stopping
+        # both robbers (not the no-robber establishing page).
+        sample_page = pages[0] if pages else None
+        if narrative_bank and pages:
+            preferred_topics = (
+                "blocks the getaway",
+                "lands on the street",
+                "arrives on the scene",
+                "two robbers leave the bank",
+            )
+            sample_page = None
+            for needle in preferred_topics:
+                for page in pages:
+                    if needle in (page.topic or "").lower():
+                        sample_page = page
+                        break
+                if sample_page is not None:
+                    break
+            if sample_page is None:
+                for page in pages:
+                    if "exactly two adult robbers" in (page.line_art_prompt or "").lower():
+                        sample_page = page
+                        break
+            if sample_page is None:
+                sample_page = pages[0]
+        with authorize_paid_image_generation(f"coloring_book:sample_interior:{pkg}"):
+            with authorize_package_image_budget(pkg, max_attempts=1, quality="medium"):
+                for page in pages:
+                    out_path = os.path.join(img_dir, f"coloring_p{page.page_number:02d}.png")
+                    if sample_page is not None and page.page_number == sample_page.page_number:
+                        page.image_path = out_path
+                        ok = _generate_line_art_image(
+                            page.line_art_prompt,
+                            out_path,
+                            reference_image_path=ref_path,
+                            force=bool(force_image_regen),
+                            package_id=pkg,
+                            quality="medium",
+                        )
+                        if not ok:
+                            image_failures.append(page.page_number)
+                    else:
+                        page.image_path = ""
         warnings.append(
             "PAID API WARNING: Sample stage generates one interior coloring page only. "
             "Remaining pages generate only after you approve the sample."
         )
     else:
-        # Full book: attempt AI image generation for every page
+        # Full book: remaining interiors only. Reuse approved cover + page-10 sample.
         warnings.append(
-            "PAID API WARNING: Full-book stage generates remaining interior images via the image API."
+            "PAID API WARNING: Full-book stage generates remaining interior images via the image API "
+            "(max 24 images.generate attempts, quality=medium, no retries/edits)."
         )
-        for page in pages:
-            out_path = os.path.join(img_dir, f"coloring_p{page.page_number:02d}.png")
-            page.image_path = out_path
-            ok = _generate_line_art_image(
-                page.line_art_prompt,
-                out_path,
-                reference_image_path=ref_path,
-                # Farm/generic: force all pages when requested. Bank-rescue keeps
-                # approved sample page 1 unless explicitly forced elsewhere.
-                force=bool(force_image_regen) if narrative_farm or not narrative_bank else (
-                    force_image_regen and page.page_number != 1
-                ),
-            )
-            if not ok:
-                image_failures.append(page.page_number)
+        if narrative_bank:
+            promoted = _promote_approved_sample_interior(img_dir)
+            if promoted:
+                warnings.append(
+                    "Reused approved Stage B sample at coloring_p10.png (0 paid calls)."
+                )
+            cover_path = os.path.join(img_dir, "img_cover.png")
+            if os.path.isfile(cover_path):
+                warnings.append("Reused approved cover img_cover.png (0 paid calls).")
+
+        budget_max = 24 if narrative_bank else max(1, len(pages))
+        try:
+            with authorize_paid_image_generation(f"coloring_book:full:{pkg}"):
+                with authorize_package_image_budget(
+                    pkg, max_attempts=budget_max, quality="medium"
+                ):
+                    for page in pages:
+                        out_path = os.path.join(
+                            img_dir, f"coloring_p{page.page_number:02d}.png"
+                        )
+                        page.image_path = out_path
+                        # Existing sample / prior pages short-circuit with zero API calls.
+                        force = bool(force_image_regen) if (
+                            narrative_farm or not narrative_bank
+                        ) else False
+                        if narrative_bank and os.path.isfile(out_path) and os.path.getsize(out_path) > 0:
+                            force = False
+                        try:
+                            ok = _generate_line_art_image(
+                                page.line_art_prompt,
+                                out_path,
+                                reference_image_path=ref_path,
+                                force=force,
+                                package_id=pkg,
+                                quality="medium",
+                            )
+                        except PaidImageBudgetExceeded as exc:
+                            image_failures.append(page.page_number)
+                            warnings.append(str(exc))
+                            # Stop immediately — do not attempt remaining pages.
+                            for rest in pages:
+                                if rest.page_number > page.page_number:
+                                    rest.image_path = os.path.join(
+                                        img_dir, f"coloring_p{rest.page_number:02d}.png"
+                                    )
+                            break
+                        if not ok:
+                            image_failures.append(page.page_number)
+                            # Stop on first failed generation — no automatic retry.
+                            warnings.append(
+                                f"Image generation stopped at page {page.page_number} "
+                                f"(no automatic retries). Budget: {get_package_image_budget(pkg)}"
+                            )
+                            break
+        finally:
+            snap = get_package_image_budget(pkg)
+            if snap:
+                warnings.append(
+                    f"Package image budget usage: {snap.get('attempts', 0)}/"
+                    f"{snap.get('max_attempts', 0)} attempts "
+                    f"(quality={snap.get('quality', '')})."
+                )
+
+        # Local 300-DPI print prep (0 paid calls) once source PNGs exist.
+        if any(p.image_path and os.path.isfile(p.image_path) for p in pages):
+            try:
+                prepared = _prepare_interior_print_assets(img_dir, pages)
+                if prepared:
+                    warnings.append(
+                        f"Prepared {len(prepared)} interior(s) at 2250×3000 / 300 DPI locally."
+                    )
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"300-DPI print prep warning: {type(exc).__name__}: {exc}")
 
     # ── Quality gate ────────────────────────────────────────────────
     # Validate only; never auto-regenerate paid images (Save/Export/preview safe).

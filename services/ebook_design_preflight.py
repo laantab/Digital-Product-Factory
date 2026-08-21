@@ -22,7 +22,11 @@ PREFLIGHT_NEEDS_CORRECTION = "NEEDS_CORRECTION"
 PREFLIGHT_FAIL = "FAIL"
 
 _PLACEHOLDER_FAIL = re.compile(
-    r"\[(?:insert|image|photo|visual|todo|placeholder)[^\]]*\]|\blorem ipsum\b|add image here",
+    r"\[(?:insert|image|photo|visual|todo|placeholder)(?![a-z0-9])[^\]]*\]|\blorem ipsum\b|add image here",
+    re.I,
+)
+_URL_PLACEHOLDER_FAIL = re.compile(
+    r"\[(?:https?://)?(?:www\.)?[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:/[^\]]*)?\]",
     re.I,
 )
 _CHAPTER_NUM_RE = re.compile(r"\bchapter\s+(\d+)\b", re.I)
@@ -168,6 +172,36 @@ def _fitz_layout_issues(pdf_bytes: bytes) -> list[PreflightFinding]:
     return findings
 
 
+def _pdf_local_uri_issues(pdf_bytes: bytes) -> list[PreflightFinding]:
+    findings: list[PreflightFinding] = []
+    if not pdf_bytes:
+        return findings
+    try:
+        import fitz
+    except Exception:
+        return findings
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    except Exception:
+        return findings
+    try:
+        for i, page in enumerate(doc):
+            for link in page.get_links() or []:
+                uri = str(link.get("uri") or "")
+                if re.search(r"127\.0\.0\.1|localhost|ebook-workspace/|full-preview", uri, re.I):
+                    findings.append(
+                        PreflightFinding(
+                            "local_preview_url",
+                            "fail",
+                            f"PDF link exposes a local or preview-route URI: {uri[:120]}",
+                            page=i + 1,
+                        )
+                    )
+    finally:
+        doc.close()
+    return findings
+
+
 def run_design_preflight(
     data: dict,
     *,
@@ -226,7 +260,11 @@ def run_design_preflight(
         ):
             _add(report, code, "fail", message)
 
-    placeholders = unresolved_placeholders(md) + ([m.group(0) for m in _PLACEHOLDER_FAIL.finditer(html or "")])
+    placeholders = unresolved_placeholders(md) + [
+        m.group(0) for m in _PLACEHOLDER_FAIL.finditer(html or "")
+    ] + [
+        m.group(0) for m in _URL_PLACEHOLDER_FAIL.finditer(html or "")
+    ]
     if placeholders:
         _add(
             report,
@@ -247,8 +285,28 @@ def run_design_preflight(
     if html:
         if "letter-spacing" in html.lower():
             _add(report, "letter_spacing", "fail", "letter-spacing is forbidden in ebook CSS.")
-        if "<table" not in html.lower() and any("|" in (ch[1] or "") for ch in chapters):
+        if "<table" not in html.lower() and "ebook-comparison" not in html.lower() and any("|" in (ch[1] or "") for ch in chapters):
             _add(report, "table_not_rendered", "fail", "Manuscript tables were not rendered as designed tables.")
+        from services.ebook_visual_pipeline import required_aids
+
+        plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else None
+        for aid in required_aids(plan):
+            vid = str(aid.get("visual_id") or "")
+            sha = str(aid.get("sha256") or "")
+            if vid and f'data-visual-id="{vid}"' not in html and f"data-visual-id='{vid}'" not in html:
+                _add(
+                    report,
+                    "missing_visual_figure",
+                    "fail",
+                    f"Approved visual {vid} is missing from designed HTML.",
+                )
+            elif sha and sha not in html:
+                _add(
+                    report,
+                    "missing_visual_figure",
+                    "fail",
+                    f"Approved visual {vid} SHA is missing from designed HTML.",
+                )
         if "checklist" not in html.lower():
             _add(report, "checklist_not_rendered", "needs_correction", "Checklists were not styled as checklist components.")
         if "workflow" not in html.lower() and re.search(r"^\d+\.\s+", md, re.M):
@@ -264,6 +322,15 @@ def run_design_preflight(
 
     texts, dims, page_count = _pdf_pages(pdf_bytes)
     report.page_count = page_count
+    from services.ebook_customer_facing import inspect_customer_facing_output
+
+    for item in inspect_customer_facing_output(
+        manuscript_md=md,
+        html=html or "",
+        pdf_text="\n".join(texts) if texts else "",
+        pdf_bytes=pdf_bytes or b"",
+    ):
+        _add(report, item["code"], "fail", item["message"])
     if pdf_bytes:
         n_ch = len(chapters)
         min_pages = max(8, n_ch + 5) if n_ch >= 8 else 8
@@ -354,6 +421,7 @@ def run_design_preflight(
             _add(report, "clipped_or_overlapped_text", "fail", "Clipped or overlapping text pathology in the text layer.")
 
         report.findings.extend(_fitz_layout_issues(pdf_bytes))
+        report.findings.extend(_pdf_local_uri_issues(pdf_bytes))
 
         # Split table heuristic: header row repeated without enough body, or "table" broken mid-row
         for i, text in enumerate(texts):

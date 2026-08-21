@@ -73,8 +73,13 @@ from services.ebook_project_workspace import (  # noqa: E402
     set_stage_status,
     workspace_public_view,
 )
+from tests._test_paths import resolve_test_exports_root  # noqa: E402
 
-FIXTURE_DIR = ROOT / "exports" / "ebook_design_fixture_pass_c"
+# render_strong_fixture_bundle() is a pure generator (build_design_ready_fixture_data()
+# is fully synthetic; nothing here reads pre-existing files from FIXTURE_DIR), so
+# pointing it at the isolated temp exports root is sufficient — no historical
+# content needs to be sourced or copied.
+FIXTURE_DIR = resolve_test_exports_root() / "ebook_design_fixture_pass_c"
 
 
 def _pages_pdf(pages: list[str]) -> bytes:
@@ -322,7 +327,11 @@ class EbookDesignExportTests(unittest.TestCase):
         ledger = ws.get("paid_call_ledger") or {}
         self.assertAlmostEqual(float(ledger.get("spent_usd") or 0), FROZEN_2472_SPENT_USD, places=3)
         self.assertAlmostEqual(float(ledger.get("remaining_usd") or 0), FROZEN_2472_REMAINING_USD, places=3)
-        uri = f"file:{ROOT / 'projects.db'}?mode=ro"
+        # Independent re-read through the active (isolated during tests) DB
+        # file, proving the data really round-tripped to disk rather than
+        # just being held in an in-memory connection. Never reads the real
+        # projects.db — database.DB_PATH is set by tests/conftest.py.
+        uri = f"file:{database.DB_PATH}?mode=ro"
         con = sqlite3.connect(uri, uri=True)
         try:
             row = con.execute("SELECT data FROM projects WHERE id = 2472").fetchone()

@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -25,7 +26,10 @@ from services.ebook_workflow import STAGE_LABELS as FINE_STAGE_LABELS
 from services.ebook_workflow import set_workflow_stage
 
 ROOT = Path(__file__).resolve().parents[1]
-ACCEPTANCE_EXPORT_DIR = ROOT / "exports" / "ebook_live_acceptance_lonnie_event_photo"
+ACCEPTANCE_EXPORT_DIR = (
+    Path(os.environ.get("FACTORY_EXPORTS_DIR") or (ROOT / "exports"))
+    / "ebook_live_acceptance_lonnie_event_photo"
+)
 ACCEPTANCE_PROJECT_NAME = "LIVE ACCEPTANCE — EVENT PHOTOGRAPHY EBOOK"
 ACCEPTANCE_MARKER = "live_acceptance_event_photography_ebook_v1"
 # Frozen live manuscript project — never a seed target.
@@ -379,6 +383,63 @@ def manuscript_digest(data: dict | None) -> str:
     data = data or {}
     text = str(data.get("content") or data.get("ebook") or "")
     return _sha({"manuscript": text})
+
+
+def current_preview_digest(data: dict | None) -> str:
+    ident = (data or {}).get("ebook_export_identity")
+    if not isinstance(ident, dict):
+        ident = {}
+    return str(ident.get("preview_digest") or ident.get("pdf_sha256") or "").strip()
+
+
+def preview_opened_matches_current(data: dict | None) -> bool:
+    """True only when the stored opened record matches the current preview digest."""
+    data = data or {}
+    ws = get_workspace(data) or {}
+    rec = ws.get("preview_opened") if isinstance(ws.get("preview_opened"), dict) else {}
+    current = current_preview_digest(data)
+    return bool(current) and str(rec.get("digest") or "").strip() == current
+
+
+def record_preview_opened(data: dict) -> dict:
+    """Record that the current stored preview was actually opened."""
+    data = ensure_workspace(data)
+    ws = data["ebook_workspace"]
+    html = str(data.get("ebook_preview_html") or data.get("preview_html") or "")
+    digest = current_preview_digest(data)
+    if not html.strip():
+        raise ValueError("Build preview before opening it.")
+    if not digest:
+        raise ValueError("Preview identity is missing. Rebuild preview before opening it.")
+    ws["preview_opened"] = {"digest": digest, "opened_at": _now()}
+    _append_history(ws, "preview_opened", digest=digest)
+    _recompute_next_action(ws)
+    return sync_document_from_workspace(data)
+
+
+def revoke_unviewed_preview_approval(data: dict) -> dict:
+    """If preview is approved without a matching opened record, return it to review."""
+    data = ensure_workspace(data)
+    ws = data["ebook_workspace"]
+    if not is_approved(ws, "preview"):
+        return data
+    if preview_opened_matches_current(data):
+        return data
+    set_stage_status(
+        ws,
+        "preview",
+        STATUS_AWAITING,
+        note="Preview approval revoked: full preview was not opened",
+    )
+    cleared = invalidate_after(
+        ws, "preview", reason="Preview approval revoked: no matching opened record"
+    )
+    if "preflight" in cleared or "export" in cleared:
+        data["export_ready"] = False
+        data["release_status"] = ""
+    _append_history(ws, "revoke_preview_approval", reason="no_preview_opened")
+    _recompute_next_action(ws)
+    return sync_document_from_workspace(data)
 
 
 def structural_findings_digest(data: dict | None) -> str:
@@ -1030,6 +1091,31 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
         stage_status(ws, "manuscript") == STATUS_AWAITING
         and quality_status == QUALITY_PASS
     )
+    design_view = _design_view(data)
+    if not isinstance(design_view, dict):
+        design_view = {}
+    cover_obj = design_view.get("cover")
+    if not isinstance(cover_obj, dict):
+        cover_obj = {}
+        design_view["cover"] = cover_obj
+    photo = cover_obj.get("photo") if isinstance(cover_obj.get("photo"), dict) else {}
+    from services.ebook_photo_cover import (
+        GUIDED_STEP_CHOOSE_PHOTO,
+        GUIDED_STEP_LABELS,
+        resolve_cover_guided_step,
+    )
+
+    cover_guided_step = str(photo.get("workflow_step") or "") or resolve_cover_guided_step(
+        has_valid_photo=False,
+        passing_count=0,
+    )
+    cover_obj["guided_step"] = photo.get("guided_step") if photo.get("guided_step") is not None else 1
+    cover_obj["guided_step_id"] = cover_guided_step
+    cover_obj["guided_step_label"] = (
+        photo.get("guided_step_label")
+        or GUIDED_STEP_LABELS.get(cover_guided_step)
+        or GUIDED_STEP_LABELS[GUIDED_STEP_CHOOSE_PHOTO]
+    )
     return {
         "project_id": project.get("id"),
         "name": project.get("name"),
@@ -1083,14 +1169,23 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
             and bool(data.get("content") or data.get("ebook")),
             "approve_manuscript_enabled": can_approve,
             "visuals_enabled": is_approved(ws, "manuscript"),
-            "cover_enabled": is_approved(ws, "visuals"),
+            "cover_enabled": is_approved(ws, "visuals") and _visuals_ready(data),
             "design_enabled": is_approved(ws, "cover") and quality_status == QUALITY_PASS,
-            "preview_enabled": is_approved(ws, "design"),
-            "preflight_enabled": is_approved(ws, "preview"),
+            "preview_enabled": is_approved(ws, "design")
+            and is_approved(ws, "visuals")
+            and _visuals_ready(data),
+            "approve_preview_enabled": is_approved(ws, "design")
+            and is_approved(ws, "visuals")
+            and _visuals_ready(data)
+            and not is_approved(ws, "preview")
+            and bool(data.get("ebook_preview_html") or data.get("preview_html"))
+            and preview_opened_matches_current(data),
+            "preflight_enabled": is_approved(ws, "preview") and _visuals_ready(data),
             "export_enabled": str(data.get("release_status") or "").upper() == "PASS"
             and data.get("export_ready") is True
             and str((data.get("ebook_design_preflight") or {}).get("status") or "").upper() == "PASS"
-            and is_approved(ws, "preflight"),
+            and is_approved(ws, "preflight")
+            and _visuals_ready(data),
         },
         "manuscript": {
             "status": stage_status(ws, "manuscript"),
@@ -1112,8 +1207,19 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
             "remaining_usd": ledger.get("remaining_usd"),
         },
         "outline_digest": outline_digest(data),
-        "design": _design_view(data),
+        "design": design_view,
+        "cover_guided_step": cover_guided_step,
+        "cover_guided_step_label": cover_obj.get("guided_step_label") or "",
     }
+
+
+def _visuals_ready(data: dict) -> bool:
+    try:
+        from services.ebook_visual_pipeline import visuals_are_ready
+
+        return visuals_are_ready(data)
+    except Exception:
+        return False
 
 
 def _design_view(data: dict) -> dict:
@@ -1236,7 +1342,13 @@ def save_research(data: dict, research: dict, *, mark_awaiting: bool = True) -> 
     return sync_document_from_workspace(data)
 
 
-def approve_stage(data: dict, stage: str, *, choice_id: str | None = None) -> dict:
+def approve_stage(
+    data: dict,
+    stage: str,
+    *,
+    choice_id: str | None = None,
+    preview_digest: str | None = None,
+) -> dict:
     data = ensure_workspace(data)
     ws = data["ebook_workspace"]
     if stage not in RAIL_STAGES:
@@ -1358,22 +1470,21 @@ def approve_stage(data: dict, stage: str, *, choice_id: str | None = None) -> di
         if not is_approved(ws, "manuscript"):
             raise ValueError("Approve the manuscript before visuals.")
         from services.ebook_manuscript_engine import QUALITY_PASS, validate_manuscript_quality
+        from services.ebook_visual_pipeline import approve_visual_plan
 
         md = str(data.get("content") or data.get("ebook") or "")
         quality = validate_manuscript_quality(data, manuscript_md=md)
         if quality.status != QUALITY_PASS:
             raise ValueError("Only a manuscript-quality PASS may enter visuals or design.")
-        from services.ebook_design_export import visual_manifest_from_manuscript
-
-        manifest = visual_manifest_from_manuscript(md)
-        data["ebook_visual_manifest"] = manifest
-        data["ebook_visual_manifest_digest"] = manifest["digest"]
-        set_stage_status(ws, "visuals", STATUS_APPROVED, note="Manuscript-derived visuals; no paid images")
-        _append_history(ws, "approve", stage="visuals", paid_images=False)
+        return approve_visual_plan(data)
 
     elif stage == "cover":
         if not is_approved(ws, "visuals"):
             raise ValueError("Approve visuals before the cover.")
+        from services.ebook_visual_pipeline import visuals_are_ready
+
+        if not visuals_are_ready(data):
+            raise ValueError("Visuals must have valid local assets before the cover.")
         cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else None
         if not cover:
             raise ValueError("Upload or select a cover photograph before approving.")
@@ -1416,10 +1527,36 @@ def approve_stage(data: dict, stage: str, *, choice_id: str | None = None) -> di
         _append_history(ws, "approve", stage="design", theme_id=design.get("theme_id"))
 
     elif stage == "preview":
+        from services.ebook_preview_review import STALE_PREVIEW_MESSAGE
+        from services.quality.artifact_state import ArtifactState, ArtifactStateError, resolve_artifact_state
+
+        state = resolve_artifact_state(data)
+        if state is ArtifactState.LOCKED:
+            raise ArtifactStateError(
+                "LOCKED artifact cannot approve preview. Locked products cannot be changed."
+            )
+        if is_approved(ws, "preview"):
+            raise ValueError("Preview is already approved.")
         if not is_approved(ws, "design"):
             raise ValueError("Approve design before preview.")
-        if not (data.get("ebook_preview_html") or data.get("preview_html")):
+        from services.ebook_visual_pipeline import validate_visual_readiness, visuals_are_ready
+
+        if not is_approved(ws, "visuals") or not visuals_are_ready(data):
+            raise ValueError("Approve visuals with valid local assets before preview approval.")
+        html = str(data.get("ebook_preview_html") or data.get("preview_html") or "")
+        if not html:
             raise ValueError("Build preview before approving.")
+        html_report = validate_visual_readiness(data, html=html)
+        if not html_report.ok:
+            raise ValueError(
+                "Preview HTML does not contain the approved visual assets. Rebuild preview after visuals."
+            )
+        supplied = str(preview_digest or "").strip()
+        current = current_preview_digest(data)
+        if supplied and current and supplied != current:
+            raise ValueError(STALE_PREVIEW_MESSAGE)
+        if not preview_opened_matches_current(data):
+            raise ValueError("Open the full preview before approving.")
         set_stage_status(ws, "preview", STATUS_APPROVED)
         _append_history(ws, "approve", stage="preview")
 

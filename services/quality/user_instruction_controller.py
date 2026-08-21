@@ -93,6 +93,7 @@ class ColoringBookContract:
     # --- Contract metadata ---
     is_single_sheet: bool = False    # True if contract is for Single Sheet
     is_digital_book: bool = False    # True if contract is for Digital Book
+    strict_page_count: bool = False  # True → QA requires exact expected_pdf_pages
 
     def to_dict(self) -> dict:
         return {
@@ -121,6 +122,7 @@ class ColoringBookContract:
             "zip_pdf_must_match_standalone": self.zip_pdf_must_match_standalone,
             "is_single_sheet": self.is_single_sheet,
             "is_digital_book": self.is_digital_book,
+            "strict_page_count": self.strict_page_count,
         }
 
     @classmethod
@@ -134,6 +136,7 @@ class ColoringBookContract:
             "page_numbers_allowed", "scene_labels_allowed", "captions_allowed",
             "book_assembly_allowed", "digital_book_behavior_allowed",
             "stale_export_allowed", "zip_pdf_must_match_standalone",
+            "strict_page_count",
             "is_single_sheet", "is_digital_book",
         }
         return cls(**{k: v for k, v in d.items() if k in known})
@@ -238,8 +241,16 @@ def build_coloring_book_contract(fields: dict) -> ColoringBookContract:
     num_pages = str(fields.get("num_pages") or fields.get("pages") or "").strip()
     art_style = str(fields.get("art_style") or "").strip()
     captions = str(fields.get("captions") or fields.get("include_captions") or "").strip()
-    title = str(fields.get("title") or fields.get("theme") or fields.get("product_title") or "").strip()
-    theme = str(fields.get("theme") or title or "").strip()
+    # Prefer the short book title field — never use the full theme sentence as the title.
+    title = str(
+        fields.get("coloring_title")
+        or fields.get("product_title")
+        or fields.get("title")
+        or ""
+    ).strip()
+    theme = str(fields.get("theme") or "").strip()
+    if not title:
+        title = theme[:48] if theme else ""
 
     # Normalize output_format to lower
     of_lower = output_format.lower()
@@ -295,12 +306,20 @@ def build_coloring_book_contract(fields: dict) -> ColoringBookContract:
             is_digital_book=False,
         )
     elif is_digital_book:
-        # Digital Book: allow cover, multi-page, page numbers
-        # Page count comes from num_pages or default 12
+        # Digital Book: cover + interiors. Page count from num_pages or default 12.
         try:
-            book_pages = int(num_pages) if num_pages else 12
+            interior_pages = int(num_pages) if num_pages else 12
         except (ValueError, TypeError):
-            book_pages = 12
+            interior_pages = 12
+        # PDF page count = cover + interior coloring pages.
+        expected_pdf = interior_pages + 1
+        qm_low = quality_mode.lower()
+        # Strict exact-page QA only for full AI story books (e.g. Thunder Volt 25+1).
+        # Do not enable for stale fields.pages on older saved projects.
+        strict = (
+            ("ai image" in qm_low or "ai_image" in qm_low)
+            and interior_pages >= 25
+        )
 
         contract = ColoringBookContract(
             product_type="coloring_book",
@@ -313,7 +332,7 @@ def build_coloring_book_contract(fields: dict) -> ColoringBookContract:
             num_pages=num_pages,
             art_style=art_style,
             captions=captions,
-            expected_pdf_pages=book_pages,
+            expected_pdf_pages=expected_pdf,
             cover_allowed=True,
             title_page_allowed=True,
             front_matter_allowed=True,
@@ -328,6 +347,7 @@ def build_coloring_book_contract(fields: dict) -> ColoringBookContract:
             zip_pdf_must_match_standalone=True,
             is_single_sheet=False,
             is_digital_book=True,
+            strict_page_count=strict,
         )
     else:
         # Unknown output format — conservative contract (block by default)

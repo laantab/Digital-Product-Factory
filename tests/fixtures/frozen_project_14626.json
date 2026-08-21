@@ -1,0 +1,28 @@
+{
+  "_comment": "Deterministic, fully synthetic regression fixture for the app's permanently protected real customer product id 14626 (see database._PROTECTED_PROJECT_IDS / CUSTOMER_KEEP_PROJECT_IDS). Seeded into the isolated test database by tests/conftest.py — never into the real projects.db. Unlike #2472/#4249, no test asserts an exact content hash for #14626 (only that it exists, has a package_id, and ebook_ready/pdf_available are not both True), so this fixture contains zero real historical content — every field is synthetic.",
+  "row": {
+    "id": 14626,
+    "name": "How to keep your teen safe online",
+    "type": "product",
+    "user_saved": 1,
+    "system_test": 0,
+    "temporary": 0,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00"
+  },
+  "data": {
+    "_project_id": 14626,
+    "product_type": "ebook",
+    "title": "How to keep your teen safe online",
+    "customer_keep": true,
+    "user_confirmed_save": true,
+    "user_saved": true,
+    "hidden_from_customer": false,
+    "internal_record": false,
+    "system_test": false,
+    "temporary": false,
+    "package_id": "frozen-14626-fixture-pkg",
+    "ebook_ready": false,
+    "pdf_available": false
+  }
+}

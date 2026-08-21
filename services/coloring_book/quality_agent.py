@@ -388,6 +388,74 @@ def _run_deterministic_image_checks(image_b64: str) -> list[str]:
                 "are non-white). Do not draw any border, frame, or margin outline."
             )
 
+    # Check 4: Subject bounding box must fill a usable portion of the page
+    # (too-small floating figures fail commercial coloring-page quality).
+    min_x, min_y, max_x, max_y = w, h, 0, 0
+    ink_samples = 0
+    white_samples = 0
+    sampled = 0
+    for y in range(0, h, step):
+        for x in range(0, w, step):
+            r, g, b = img.getpixel((x, y))[:3]
+            sampled += 1
+            is_white = r > 240 and g > 240 and b > 240
+            if is_white:
+                white_samples += 1
+            else:
+                ink_samples += 1
+                if x < min_x:
+                    min_x = x
+                if y < min_y:
+                    min_y = y
+                if x > max_x:
+                    max_x = x
+                if y > max_y:
+                    max_y = y
+    if ink_samples == 0:
+        issues.append("No line-art ink detected — page appears blank or pure white.")
+    else:
+        bbox_w = max(0, max_x - min_x)
+        bbox_h = max(0, max_y - min_y)
+        bbox_ratio = (bbox_w * bbox_h) / float(max(w * h, 1))
+        if bbox_ratio < 0.40:
+            issues.append(
+                f"Main subject too small ({bbox_ratio*100:.0f}% of page by bounding box). "
+                "Subject should occupy roughly 45–75% of the usable page."
+            )
+        if bbox_ratio > 0.92:
+            issues.append(
+                f"Artwork fills nearly the entire frame ({bbox_ratio*100:.0f}%) — "
+                "likely cropped or missing safe margins."
+            )
+        # Safe margin: ink should not hug the outer 3% edge strip densely
+        margin = max(int(min(w, h) * 0.03), 8)
+        if min_x < margin or min_y < margin or max_x > w - margin or max_y > h - margin:
+            # Only fail when the bbox itself is pressed into the margin on 3+ sides
+            pressed = sum(
+                [
+                    min_x < margin,
+                    min_y < margin,
+                    max_x > w - margin,
+                    max_y > h - margin,
+                ]
+            )
+            if pressed >= 3 and bbox_ratio > 0.85:
+                issues.append(
+                    "Likely cropped major subject — ink touches too many page edges."
+                )
+    if sampled > 0:
+        white_ratio = white_samples / float(sampled)
+        if white_ratio < 0.35:
+            issues.append(
+                f"Insufficient open coloring space (white area {white_ratio*100:.0f}%). "
+                "Pages need large open regions for ages 8–12."
+            )
+        ink_ratio = ink_samples / float(sampled)
+        if ink_ratio > 0.55:
+            issues.append(
+                f"Excessive ink density ({ink_ratio*100:.0f}%) — too much detail for easy coloring."
+            )
+
     return issues
 
 

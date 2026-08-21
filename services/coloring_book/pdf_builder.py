@@ -12,11 +12,9 @@ from services.coloring_book.builder import (
     validate_theme_adherence,
     _generate_cover_image,
 )
-from services.coloring_book.prompt_engine import derive_cover_copy
+from services.coloring_book.prompt_engine import derive_cover_copy, normalize_coloring_cover_design, resolve_coloring_book_author
 from services.coloring_book.renderer import (
-    ColoringBookLayoutInfo,
     build_coloring_book_pdf_bytes,
-    save_coloring_book_pdf,
     draw_coloring_book_cover,
 )
 from services.ebook_package import get_last_image_error
@@ -65,6 +63,7 @@ class ColoringBookPdfRequest:
     sample_approved: bool = False
     reference_image_path: str = ""
     force_image_regen: bool = False
+    author: str = ""
 
 
 @dataclass
@@ -189,7 +188,16 @@ def build_coloring_book_pdf(request: ColoringBookPdfRequest) -> ColoringBookPdfR
                 character_bible=book.character_bible,
             )
     elif request.quality_mode == "ai_image_coloring_page" and stage == "sample_interior":
-        sample = next((p for p in book.pages if p.page_number == 1), None)
+        sample = next(
+            (
+                p
+                for p in book.pages
+                if getattr(p, "image_path", "") and os.path.isfile(p.image_path)
+            ),
+            None,
+        )
+        if sample is None:
+            sample = next((p for p in book.pages if p.page_number == 1), None)
         if not sample or not sample.image_path or not os.path.isfile(sample.image_path):
             real_error = get_last_image_error()
             return ColoringBookPdfResult(
@@ -265,17 +273,20 @@ def build_coloring_book_pdf(request: ColoringBookPdfRequest) -> ColoringBookPdfR
         elif request.quality_mode == "ai_image_coloring_page" and book.cover_prompt:
             # Paid image path — cover preview / AI mode only (never on Save/Export alone)
             if stage in {"cover_preview", "sample_interior", "full"}:
-                if _generate_cover_image(
-                    book.cover_prompt,
-                    img_cover_path,
-                    force=force_cover,
-                ):
-                    cover_img = img_cover_path
-                    try:
-                        import shutil
-                        shutil.copyfile(img_cover_path, cover_candidate)
-                    except Exception:  # noqa: BLE001
-                        pass
+                from services.ebook_package import authorize_paid_image_generation
+
+                with authorize_paid_image_generation(f"coloring_book:cover:{stage}:{pkg}"):
+                    if _generate_cover_image(
+                        book.cover_prompt,
+                        img_cover_path,
+                        force=force_cover,
+                    ):
+                        cover_img = img_cover_path
+                        try:
+                            import shutil
+                            shutil.copyfile(img_cover_path, cover_candidate)
+                        except Exception:  # noqa: BLE001
+                            pass
 
         if not cover_img:
             local_cover = draw_coloring_book_cover(
@@ -293,22 +304,34 @@ def build_coloring_book_pdf(request: ColoringBookPdfRequest) -> ColoringBookPdfR
 
         cover_design.update(
             {
-                "title": cover_copy.title,
-                "subtitle": cover_copy.subtitle,
-                "badge": cover_copy.badge,
-                "overlay_style": cover_copy.overlay_style or "retail_jumbo_banner",
-                "author": "",  # coloring covers: no author name overlay
                 "package_id": pkg,
                 "product_type": "coloring_book",
+                "theme": request.theme,
                 "image_prompt": book.cover_prompt,
                 "cover_prompt": book.cover_prompt,
                 "local_image_path": cover_img,
-                "text_overlay": True,
-                "text_y": 78,
-                "text_position": {"x": 50.0, "y": 12.0, "align": "left"},
                 "use_ai_image": bool(cover_img and os.path.isfile(cover_img)),
-                "layout": "full_bleed_retail_jumbo",
             }
+        )
+        # Re-derive through the shared normalizer so preview/Save/Apply/PDF/ZIP
+        # cannot keep a stale jumbo overlay_style from request.cover_design.
+        cover_design = normalize_coloring_cover_design(
+            cover_design,
+            theme=request.theme,
+            product_title=cover_copy.title,
+            subtitle=cover_copy.subtitle,
+            author=resolve_coloring_book_author(
+                request.author,
+                cover_design.get("author"),
+                cover_design.get("author_brand"),
+            ),
+        )
+        clean = str(cover_design.get("overlay_style") or "") == "clean_title"
+        cover_design["text_y"] = 22 if clean else 78
+        cover_design["text_position"] = (
+            {"x": 50.0, "y": 18.0, "align": "center"}
+            if clean
+            else {"x": 50.0, "y": 12.0, "align": "left"}
         )
 
     _single_sheet_flag = (request.output_type == "single_page")
@@ -318,7 +341,11 @@ def build_coloring_book_pdf(request: ColoringBookPdfRequest) -> ColoringBookPdfR
     if stage == "cover_preview":
         pages_for_pdf = []
     elif stage == "sample_interior":
-        pages_for_pdf = [p for p in book.pages if p.page_number == 1]
+        pages_for_pdf = [
+            p for p in book.pages if getattr(p, "image_path", "") and os.path.isfile(p.image_path)
+        ]
+        if not pages_for_pdf:
+            pages_for_pdf = [p for p in book.pages if p.page_number == 1]
 
     from types import SimpleNamespace
 
@@ -331,7 +358,14 @@ def build_coloring_book_pdf(request: ColoringBookPdfRequest) -> ColoringBookPdfR
 
     from services.coloring_book.prompt_engine import pdf_metadata_for_theme
 
-    meta = pdf_metadata_for_theme(request.theme, product_title=request.product_title or book.product_title)
+    meta = pdf_metadata_for_theme(
+        request.theme,
+        product_title=request.product_title or book.product_title,
+        author=resolve_coloring_book_author(
+            request.author,
+            (cover_design or {}).get("author") if cover_design else "",
+        ),
+    )
 
     pdf_bytes, layout = build_coloring_book_pdf_bytes(
         book_for_pdf,
@@ -348,9 +382,13 @@ def build_coloring_book_pdf(request: ColoringBookPdfRequest) -> ColoringBookPdfR
             qa_result=qa_result,
         )
 
-    # Step 3: Save to disk
+    # Step 3: Save the same accepted bytes (cover overlay included). Do not
+    # re-render from the book object, which would drop cover_design/author.
     try:
-        save_coloring_book_pdf(book, output_dir, filename)
+        os.makedirs(output_dir, exist_ok=True)
+        path = os.path.join(output_dir, filename)
+        with open(path, "wb") as fh:
+            fh.write(pdf_bytes)
     except Exception:  # noqa: BLE001
         pass  # non-fatal; bytes are already returned
 

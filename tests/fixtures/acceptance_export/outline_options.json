@@ -1,0 +1,12 @@
+{
+  "_comment": "Fully synthetic regression fixture — see research_brief.json in this folder. The 'chapters' list here is discarded and rebuilt by build_acceptance_project_data() from the application's own REVISED_ACCEPTANCE_OUTLINE_TITLES constant, so only the 'O1' id needs to be present.",
+  "options": [
+    {
+      "id": "O1",
+      "name": "Journey outline (recommended)",
+      "estimated_chapters": 10,
+      "chapters": []
+    }
+  ],
+  "editorial_rules_locked": []
+}

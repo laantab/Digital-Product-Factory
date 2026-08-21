@@ -445,7 +445,9 @@ class ArtifactLifecycleMutationPathsTests(unittest.TestCase):
             def to_dict(self):
                 return {"ok": True, "steps": []}
 
-        with patch("app.build_ebook_package", return_value=copy.deepcopy(fake_pkg)), patch(
+        with patch("services.ebook_customer_path.build_ebook_package", return_value=copy.deepcopy(fake_pkg)), patch(
+            "app.build_ebook_package", return_value=copy.deepcopy(fake_pkg)
+        ), patch(
             "services.ebook_pipeline_agents.run_ebook_quality_pipeline",
             return_value=_Pipe(),
         ), patch(

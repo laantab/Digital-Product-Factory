@@ -1,0 +1,8 @@
+{
+  "_comment": "Fully synthetic regression fixture — see research_brief.json in this folder.",
+  "printing_research": {
+    "evidence_quality": "",
+    "manufacturer_facts": [],
+    "keepsakes_during_event_vs_post_event": null
+  }
+}

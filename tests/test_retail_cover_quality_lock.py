@@ -33,8 +33,9 @@ class TestRetailCoverPromptLock(unittest.TestCase):
         self.assertIn(RETAIL_COVER_QUALITY_LOCK, prompt)
         self.assertIn(PRODUCT_STYLE_COVER, prompt)
         self.assertIn(THUNDER_VOLT_CHARACTER_LOCK, prompt)
-        self.assertIn("Jumbo Coloring & Activity Book", copy.badge)
-        self.assertEqual(copy.overlay_style, "retail_jumbo_banner")
+        # Thunder Volt uses Factory typography overlay — not cluttered JUMBO chrome.
+        self.assertEqual(copy.overlay_style, "clean_title")
+        self.assertNotIn("JUMBO", copy.badge.upper())
         self.assertEqual(validate_cover_prompt_lock(prompt, THEME), [])
 
         low = prompt.lower()
@@ -86,21 +87,88 @@ class TestRetailCoverOverlay(unittest.TestCase):
         self.assertFalse(result.errors, result.errors)
         self.assertEqual(
             (result.cover_design or {}).get("overlay_style"),
-            "retail_jumbo_banner",
+            "clean_title",
         )
-        self.assertEqual(
-            (result.cover_design or {}).get("layout"),
-            "full_bleed_retail_jumbo",
-        )
-        self.assertIn("Jumbo", (result.cover_design or {}).get("badge", ""))
+        self.assertNotIn("JUMBO", ((result.cover_design or {}).get("badge") or "").upper())
 
         doc = fitz.open(stream=result.pdf_bytes, filetype="pdf")
         text = (doc[0].get_text("text") or "").upper()
         doc.close()
         self.assertIn("THUNDER VOLT", text)
-        self.assertIn("JUMBO", text)
-        self.assertIn("COLORING", text)
-        self.assertIn("COLORING PAGES", text)
+        self.assertIn("A SUPERHERO COLORING ADVENTURE", text)
+        self.assertNotIn("NEW YORK BANK RESCUE", text)
+        self.assertNotIn("JUMBO", text)
+        self.assertNotIn("COLORING PAGES", text)
+        self.assertNotIn("PRINT & SHARE", text)
+
+    def test_stale_jumbo_cover_design_cannot_reach_final_renderer(self):
+        """Regression: Cover Editor / old Stage A payloads carried jumbo chrome.
+
+        derive_cover_copy already returns clean_title, but the final renderer used to
+        honor a stale cover_design.overlay_style=retail_jumbo_banner. Prove the
+        normalizer + draw path force clean_title onto the composed page.
+        """
+        import io
+
+        import fitz
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+
+        from services.coloring_book.pdf_cover import render_cover_page_pdf_bytes
+        from services.coloring_book.prompt_engine import (
+            derive_cover_copy,
+            normalize_coloring_cover_design,
+        )
+        from services.coloring_book.renderer import draw_cover_page_on_canvas
+
+        copy = derive_cover_copy(THEME, product_title="Thunder Volt")
+        self.assertEqual(copy.overlay_style, "clean_title")
+
+        stale = {
+            "title": "THUNDER VOLT",
+            "subtitle": "New York Bank Rescue",
+            "badge": "Jumbo Coloring & Activity Book",
+            "overlay_style": "retail_jumbo_banner",
+            "layout": "full_bleed_retail_jumbo",
+            "theme": THEME,
+        }
+        fixed = normalize_coloring_cover_design(stale, theme=THEME)
+        self.assertEqual(fixed["overlay_style"], "clean_title")
+        self.assertEqual(fixed["subtitle"], "A Superhero Coloring Adventure")
+        self.assertNotIn("JUMBO", (fixed.get("badge") or "").upper())
+
+        buf = io.BytesIO()
+        pdf = canvas.Canvas(buf, pagesize=letter)
+        draw_cover_page_on_canvas(pdf, cover_design=stale)
+        pdf.showPage()
+        pdf.save()
+        doc = fitz.open(stream=buf.getvalue(), filetype="pdf")
+        text = (doc[0].get_text("text") or "").upper()
+        doc.close()
+        self.assertIn("THUNDER VOLT", text)
+        self.assertIn("A SUPERHERO COLORING ADVENTURE", text)
+        self.assertNotIn("JUMBO", text)
+        self.assertNotIn("COLORING PAGES", text)
+        self.assertNotIn("PRINT & SHARE", text)
+        self.assertNotIn("NEW YORK BANK RESCUE", text)
+
+        # Apply/Cover Editor path uses pdf_cover.merge helper — same guarantee.
+        cover_bytes = render_cover_page_pdf_bytes(stale)
+        doc = fitz.open(stream=cover_bytes, filetype="pdf")
+        text2 = (doc[0].get_text("text") or "").upper()
+        # Subtitle must be ~2× the old 13pt size (≥20pt) so it reads at thumbnail.
+        sub_sizes = []
+        for block in doc[0].get_text("dict").get("blocks", []):
+            for line in block.get("lines", []):
+                for span in line.get("spans", []):
+                    if "SUPERHERO COLORING ADVENTURE" in (span.get("text") or "").upper():
+                        sub_sizes.append(float(span.get("size") or 0))
+        doc.close()
+        self.assertIn("A SUPERHERO COLORING ADVENTURE", text2)
+        self.assertNotIn("JUMBO", text2)
+        self.assertNotIn("COLORING PAGES", text2)
+        self.assertTrue(sub_sizes, "subtitle span missing from clean_title overlay")
+        self.assertGreaterEqual(max(sub_sizes), 20.0)
 
 
 class TestCoverBriefAdapter(unittest.TestCase):
@@ -112,9 +180,8 @@ class TestCoverBriefAdapter(unittest.TestCase):
             title="Thunder Volt",
             theme=THEME,
         )
-        self.assertEqual(brief["overlay_style"], "retail_jumbo_banner")
-        self.assertEqual(brief["style_preference"], "retail_jumbo")
-        self.assertIn("Jumbo", brief["badge"])
+        self.assertEqual(brief["overlay_style"], "clean_title")
+        self.assertNotIn("JUMBO", (brief.get("badge") or "").upper())
         from services.coloring_book.prompt_engine import validate_cover_prompt_lock
 
         self.assertEqual(validate_cover_prompt_lock(brief["cover_prompt"], THEME), [])

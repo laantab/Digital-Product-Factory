@@ -27,9 +27,10 @@ os.environ.setdefault("AI_INTEGRATIONS_OPENAI_API_KEY", "")
 from services.math_worksheet.builder import build_math_worksheet
 from services.math_worksheet.pdf_builder import MathWorksheetPdfRequest, build_math_worksheet_pdf
 from services.math_worksheet.pdf_fonts import MATH_FONT, MATH_FONT_BOLD, ensure_math_fonts
+from tests._test_paths import resolve_test_exports_root
 
 ROOT = Path(__file__).resolve().parents[1]
-_EXPORT_DIR = ROOT / "exports" / "math_worksheet_visual_qa_fixture"
+_EXPORT_DIR = resolve_test_exports_root() / "math_worksheet_visual_qa_fixture"
 _MARGIN = 0.5 * 72.0
 _PAGE_W, _PAGE_H = 612.0, 792.0
 

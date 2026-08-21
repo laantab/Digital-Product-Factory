@@ -574,7 +574,21 @@ def visual_plan_to_slots(visual_plan: dict | None, chapters: list[ChapterDoc]) -
                     rendered_html=rendered,
                     data={
                         k: aid[k]
-                        for k in ("chart_data", "table", "rows", "columns")
+                        for k in (
+                            "chart_data",
+                            "table",
+                            "rows",
+                            "columns",
+                            "items",
+                            "sha256",
+                            "width",
+                            "height",
+                            "source",
+                            "chapter",
+                            "chapter_index",
+                            "placement",
+                            "required",
+                        )
                         if k in aid
                     },
                 )

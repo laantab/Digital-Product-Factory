@@ -49,6 +49,7 @@ _ALLOWED_TAGS = {
     "p", "br", "hr", "strong", "em", "b", "i", "u", "s", "code", "pre",
     "blockquote", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "a",
     "span", "table", "thead", "tbody", "tr", "th", "td",
+    "div", "colgroup", "col",
 }
 _ALLOWED_ATTRS = {"a": {"href", "title"}}
 _BAD_URL_PREFIXES = ("javascript:", "data:", "vbscript:")
@@ -87,6 +88,12 @@ def fix_inline_hyphen_lists_html(html: str) -> str:
         return html
     soup = BeautifulSoup(html, "html.parser")
     _fix_hyphen_list_paragraphs(soup)
+    for heading in soup.find_all(["h2", "h3", "h4"]):
+        if heading.find_parent(class_="h3-block"):
+            continue
+        wrap = soup.new_tag("div")
+        wrap["class"] = "h3-block"
+        heading.wrap(wrap)
     return str(soup)
 
 
@@ -550,10 +557,101 @@ def _aid_has_content(a: dict) -> bool:
     return has_other_content or (title_ok and (body_ok or items_ok))
 
 
+def _markdown_table_aid(chapter_md: str, *, title: str) -> dict | None:
+    text = str(chapter_md or "")
+    match = re.search(
+        r"(?m)^(\|.+\|)\s*\n(\|[-:\s|]+\|)\s*\n((?:\|.+\|\s*\n?){1,6})",
+        text,
+    )
+    if not match:
+        return None
+    headers = [c.strip() for c in match.group(1).strip("|").split("|")]
+    rows = []
+    for line in match.group(3).strip().splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if any(cells):
+            rows.append(cells)
+    if not headers or not rows:
+        return None
+    return {
+        "type": "table",
+        "title": title,
+        "caption": title,
+        "table": {"headers": headers, "rows": rows},
+    }
+
+
+def _photo_led_local_plan(title: str, content_md: str, fields: dict, chapter_titles: list[str]) -> dict:
+    """One relevant photograph per real chapter, plus at most one high-value table."""
+    from services.ebook_pexels import chapter_pexels_queries
+
+    preamble, split_chapters = _split_chapters(content_md)
+    body_by_title = {_norm_title(name): body for name, body in split_chapters}
+    real_titles: list[str] = []
+    for name in chapter_titles:
+        kind = _chapter_kind(name)
+        if kind in {"toc", "description", "summary"}:
+            continue
+        real_titles.append(name)
+    if not real_titles:
+        real_titles = [t for t in chapter_titles if _chapter_kind(t) == "chapter"] or chapter_titles[:6]
+    topic = str((fields or {}).get("topic") or title)
+    chapters = []
+    for name in real_titles:
+        queries = chapter_pexels_queries(chapter=name, title=title, topic=topic)
+        photo = {
+            "type": "stock photo",
+            "title": (queries[0][:1].upper() + queries[0][1:]) if queries else name,
+            "caption": (queries[0][:1].upper() + queries[0][1:]) if queries else name,
+            "keywords": queries,
+            "image_prompt": f"photorealistic {queries[0] if queries else name}, no text",
+        }
+        aids: list[dict] = [photo]
+        table = _markdown_table_aid(body_by_title.get(_norm_title(name), ""), title=f"{name} quick reference")
+        if table:
+            aids.append(table)
+        chapters.append({"chapter": name, "aids": aids})
+    subtitle = str((fields or {}).get("subtitle") or "").strip()
+    summary = str((fields or {}).get("product_summary") or "").strip()
+    if not summary:
+        first = re.sub(r"^#.*\n+", "", str(content_md or ""), count=1).strip()
+        para = first.split("\n\n")[0].strip()
+        summary = para[:400]
+    return {
+        "title": title,
+        "subtitle": subtitle,
+        "cover_prompt": f"Photograph of {queries[0] if chapters else title}, no lettering.",
+        "product_summary": summary,
+        "chapters": chapters,
+    }
+
+
 def generate_visual_plan(title: str, content_md: str, fields: dict) -> dict:
     """Ask the AI for a per-chapter visual plan with real renderable content."""
     _, chapters = _split_chapters(content_md)
     chapter_titles = [c[0] for c in chapters] or [title or "Chapter 1"]
+    if str(os.environ.get("EBOOK_CUSTOMER_PATH_FIXTURE") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        from services.ebook_customer_path import fixture_visual_plan
+
+        return _coerce_plan(fixture_visual_plan(title, content_md), chapter_titles, title)
+
+    from services.ebook_visual_match import is_photo_led_subject
+
+    if is_photo_led_subject(
+        title=title,
+        topic=str((fields or {}).get("topic") or ""),
+        content=content_md,
+    ):
+        return _coerce_plan(
+            _photo_led_local_plan(title, content_md, fields or {}, chapter_titles),
+            [t for t in chapter_titles if _chapter_kind(t) == "chapter"] or chapter_titles,
+            title,
+        )
+
     listing = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(chapter_titles))
 
     raw = chat_json(
@@ -823,12 +921,16 @@ def _mermaid_html(aid: dict) -> str:
 
 
 def _image_html(aid: dict, package_id: str) -> str:
+    from services.ebook_visual_pipeline import is_photo_aid
     from services.visual_fallback import image_asset_path, preview_image_fallback_html
 
     vid = aid.get("visual_id") or ""
     url = _download_url(package_id, f"img_{vid}.png") if package_id and vid else ""
+    has_file = image_asset_path(package_id, vid) is not None or bool(aid.get("has_file"))
+    if is_photo_aid(aid) and not has_file:
+        # Application state holds the error. Never insert it into the book.
+        return ""
     fallback = preview_image_fallback_html(aid)
-    has_file = image_asset_path(package_id, vid) is not None
     img_display = "block" if has_file else "none"
     fb_display = "none" if has_file else "flex"
     if not url:
@@ -881,21 +983,33 @@ def _aid_inner_html(aid: dict, package_id: str) -> str:
     return _tip_html(aid)
 
 
-def render_aid_html(aid: dict, package_id: str = "") -> str:
+def render_aid_html(aid: dict, package_id: str = "", *, chapter_title: str = "") -> str:
     """Render a single visual aid as a real, finished HTML component."""
     atype = aid["type"]
     label = _TYPE_LABELS.get(atype, "Visual")
     slug = atype.replace(" ", "-")
     inner = _aid_inner_html(aid, package_id)
-    if not inner and not aid.get("title"):
+    aid_title = str(aid.get("title") or "").strip()
+    if chapter_title and aid_title and _norm_title(aid_title) == _norm_title(chapter_title):
+        aid_title = ""
+    if re.search(r"\bphotograph$", aid_title, re.I):
+        aid_title = ""
+    caption = str(aid.get("caption") or "").strip()
+    if re.match(r"(?i)^a relevant photograph for\b", caption):
+        caption = ""
+    if not inner and not aid_title:
         return ""
-    parts = [f'<div class="va-label">{_e(label)}</div>']
-    if aid.get("title"):
-        parts.append(f'<div class="va-title">{_e(aid["title"])}</div>')
+    parts: list[str] = []
+    if atype not in {"stock photo", "photo"}:
+        parts.append(f'<div class="va-label">{_e(label)}</div>')
+    if aid_title:
+        parts.append(f'<div class="va-title">{_e(aid_title)}</div>')
     if inner:
         parts.append(f'<div class="va-content">{inner}</div>')
-    if aid.get("caption"):
-        parts.append(f'<p class="va-caption">{_e(aid["caption"])}</p>')
+    if caption:
+        from services.ebook_visual_match import strip_customer_source_urls
+
+        parts.append(f'<p class="va-caption">{_e(strip_customer_source_urls(caption))}</p>')
     return f'<div class="visual-aid va-{slug}">{"".join(parts)}</div>'
 
 
@@ -946,6 +1060,9 @@ body { margin: 0; background: #eef1f6; color: #0f172a;
   box-shadow: 0 12px 34px rgba(15,23,42,.10); padding: 48px 52px; margin: 0 0 24px; }
 .cover { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff;
   text-align: center; padding: 72px 52px; position: relative; overflow: hidden; }
+.cover.photo-cover { background: #0f172a; padding: 0; }
+.cover.photo-cover::before, .cover.photo-cover::after { display: none; }
+.cover-photo { width: 100%; height: auto; display: block; position: relative; z-index: 3; }
 .cover::before { content: ""; position: absolute; width: 360px; height: 360px; border-radius: 50%;
   background: rgba(255,255,255,.10); top: -130px; right: -120px; }
 .cover::after { content: ""; position: absolute; width: 280px; height: 280px; border-radius: 50%;
@@ -962,10 +1079,12 @@ body { margin: 0; background: #eef1f6; color: #0f172a;
 .cover .sub { font-size: 19px; opacity: .94; max-width: 80%; margin: 0 auto; }
 .cover-img-wrap { margin: 26px auto 0; max-width: 420px; position: relative; z-index: 2; }
 .cover-img-wrap img { width: 100%; border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.35); display:none; }
+h1, h2, h3, h4, p, ul, ol, li, div { display: block; }
 h1, h2, h3, h4 { color: #1e1b4b; line-height: 1.25; }
 h2 { font-size: 28px; margin: 0 0 18px; border-bottom: 2px solid #ede9fe; padding-bottom: 10px; }
-h3 { font-size: 19px; margin: 26px 0 8px; }
-p { line-height: 1.75; font-size: 16px; margin: 0 0 14px; }
+h3 { font-size: 19px; margin: 18px 0 10px; padding-top: 4px; }
+.h3-block { display: block; margin: 16px 0 8px; page-break-inside: avoid; }
+p { display: block; line-height: 1.75; font-size: 16px; margin: 0 0 14px; }
 ul, ol { line-height: 1.7; }
 .visual-aid { border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;
   padding: 18px 20px; margin: 24px 0; box-shadow: 0 2px 10px rgba(15,23,42,.05); }
@@ -1194,8 +1313,21 @@ def _doc(
     design_theme: str = "studio_clean",
 ) -> str:
     cover_sub = f'<p class="sub">{_e(subtitle)}</p>' if subtitle else ""
-    badge_char = (re.sub(r"\s", "", title)[:1] or "E").upper()
-    if cover_design and cover_design.get("preview_html"):
+    author = ""
+    if isinstance(cover_design, dict):
+        author = str(cover_design.get("author") or "").strip()
+    cover_png = ""
+    if isinstance(cover_design, dict):
+        cover_png = str(cover_design.get("image_path") or "").strip()
+    if cover_png and os.path.isfile(cover_png):
+        pkg = str((cover_design or {}).get("package_id") or "")
+        src = _download_url(pkg, "img_cover.png") if pkg else cover_png
+        cover_section = (
+            '<section class="sheet cover photo-cover">'
+            f'<img class="cover-photo" alt="{_e(title)}" src="{_e(src)}" />'
+            "</section>"
+        )
+    elif cover_design and cover_design.get("preview_html"):
         cover_section = re.sub(
             r"letter-spacing\s*:\s*[^;\"'}]+;?",
             "",
@@ -1207,11 +1339,10 @@ def _doc(
             '<section class="sheet cover">'
             '<div class="cover-frame"></div>'
             '<div class="cover-inner">'
-            f'<div class="cover-badge">{_e(badge_char)}</div>'
-            '<div class="kicker">Digital Product Factory</div>'
             f'<h1>{_e(title)}</h1>'
             '<div class="cover-rule"></div>'
             f"{cover_sub}{cover_img}"
+            f'<p class="cover-author" data-ebook-author>{_e(author)}</p>'
             "</div>"
             "</section>"
         )
@@ -1258,9 +1389,15 @@ def _aids_lookup(plan_chapters: list[dict]):
 
 
 def _chapter_kind(title: str) -> str:
+    from services.ebook_contamination import is_description_heading
+
     norm = _norm_title(title)
     if norm in {"table of contents", "contents", "toc"}:
         return "toc"
+    if is_description_heading(title):
+        return "description"
+    if norm in {"summary", "product summary", "conclusion", "key takeaways", "final thoughts"}:
+        return "summary"
     if norm in {"summary", "product summary", "conclusion", "key takeaways", "final thoughts"}:
         return "summary"
     if "action step" in norm or norm in {"action steps", "next steps", "your action plan", "action plan"}:
@@ -1324,13 +1461,13 @@ def _page_footer(page_num: int, title: str) -> str:
     )
 
 
-def _title_page_html(title: str, subtitle: str, page_num: int) -> str:
+def _title_page_html(title: str, subtitle: str, page_num: int, author: str = "") -> str:
     sub = f'<p class="title-sub">{_e(subtitle)}</p>' if subtitle else ""
+    byline = f'<p class="title-author" data-ebook-author>{_e(author)}</p>'
     return (
         '<section class="sheet title-page">'
-        '<div class="title-kicker">Digital Guide</div>'
         f'<h1 class="title-main">{_e(title)}</h1>'
-        f"{sub}"
+        f"{sub}{byline}"
         '<div class="title-rule"></div>'
         f"{_page_footer(page_num, title)}"
         "</section>"
@@ -1360,9 +1497,10 @@ def _extract_health_disclaimer(preamble: str) -> str:
     return f'<p class="health-disclaimer">{_e(raw)}</p>'
 
 
-def _legal_page_html(title: str, page_num: int, health_disclaimer: str = "") -> str:
+def _legal_page_html(title: str, page_num: int, health_disclaimer: str = "", author: str = "") -> str:
+    holder = author or title
     body = (
-        f"<p>Copyright © 2026 {_e(title)}. All rights reserved.</p>"
+        f"<p>Copyright © 2026 {_e(holder)}. All rights reserved.</p>"
         "<p>No part of this publication may be reproduced, distributed, or transmitted "
         "in any form without prior written permission.</p>"
         "<p>This ebook is for educational and informational purposes only. The author and "
@@ -1451,7 +1589,7 @@ def render_preview_html(
     for i, (ctitle, cmd) in enumerate(chapters):
         aids = by_title.get(_norm_title(ctitle)) or by_index.get(i) or []
         kind = _chapter_kind(ctitle)
-        if kind == "toc":
+        if kind in {"toc", "description"}:
             continue
         if kind == "summary":
             summary_block = (cmd, aids)
@@ -1462,13 +1600,16 @@ def render_preview_html(
         else:
             content_chapters.append((ctitle, cmd, aids))
 
-    body.append(_title_page_html(title, subtitle, page_num))
+    author = ""
+    if isinstance(cover_design, dict):
+        author = str(cover_design.get("author") or "").strip()
+    body.append(_title_page_html(title, subtitle, page_num, author=author))
     page_num += 1
     # Pass the full preamble (subtitle + health disclaimer) to the legal page.
     # Rendering as a separate intro-page section causes xhtml2pdf to drop it
     # silently (empty page), so we fold the preamble into the legal page instead.
     health_disclaimer = _extract_health_disclaimer(preamble)
-    body.append(_legal_page_html(title, page_num, health_disclaimer))
+    body.append(_legal_page_html(title, page_num, health_disclaimer, author=author))
     page_num += 1
     if content_chapters:
         body.append(_toc_page_html(content_chapters, title, page_num))
@@ -1888,7 +2029,9 @@ def render_visual_image(
 # Export package on disk
 # ---------------------------------------------------------------------------
 
-EXPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "exports")
+EXPORTS_DIR = os.environ.get("FACTORY_EXPORTS_DIR") or os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "exports"
+)
 PACKAGE_FILES = (
     "ebook.html",
     "ebook.txt",
@@ -1902,7 +2045,15 @@ PACKAGE_FILES = (
 # uuid hex OR generation slugs used by coloring books / scripts
 _PACKAGE_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,127}$")
 _VISUAL_ID_RE = re.compile(r"^(cover|v\d+_\d+)$")
-_IMAGE_FILE_RE = re.compile(r"^img_(cover|v\d+_\d+)\.png$")
+# Preview images are served as img_<visual_id>.png. The visual_id is chosen by
+# whichever planner built the plan, so pinning this to one planner's numbering
+# (v0_0, v1_2, ...) silently 404s every image belonging to a plan that names its
+# visuals any other way -- the file exists on disk and the PDF embeds it, but
+# the browser preview shows empty frames. Validate the *shape* instead: a
+# conservative filename charset that still cannot express "..", a path
+# separator, or a second extension. The route additionally confines the
+# resolved path to exports/ as defense in depth.
+_IMAGE_FILE_RE = re.compile(r"^img_[A-Za-z0-9][A-Za-z0-9_-]{0,63}\.png$")
 _PRODUCT_PDF_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_\-]*\.pdf$")
 
 
@@ -1929,21 +2080,14 @@ _IMAGE_JOB_CAP = 6
 
 
 def _collect_image_jobs(chapters: list[dict], cover_prompt: str) -> list[dict]:
-    """Pick the image-type aids (and the cover) to render, capped for time/cost."""
-    jobs: list[dict] = []
-    if cover_prompt:
-        jobs.append({"visual_id": "cover", "prompt": cover_prompt,
-                     "chapter": "Cover", "title": "Cover"})
-    for ch in chapters:
-        for aid in ch.get("aids") or []:
-            if aid.get("needs_image") and (aid.get("image_prompt") or aid.get("description")):
-                jobs.append({
-                    "visual_id": aid["visual_id"],
-                    "prompt": aid.get("image_prompt") or aid.get("description"),
-                    "chapter": ch.get("chapter", ""),
-                    "title": aid.get("title", ""),
-                })
-    return jobs[:_IMAGE_JOB_CAP]
+    """Paid GPT image jobs are not used for factory stock photos or covers.
+
+    Stock photographs are retrieved from Pexels. Covers use the photo-cover engine.
+    Infographics may remain locally rendered. This list stays empty so the
+    factory route cannot queue gpt-image-1.
+    """
+    del chapters, cover_prompt
+    return []
 
 
 def _visual_assets(chapters: list[dict], package_id: str) -> list[dict]:
@@ -1953,17 +2097,30 @@ def _visual_assets(chapters: list[dict], package_id: str) -> list[dict]:
         for aid in ch.get("aids") or []:
             atype = aid["type"]
             is_img = atype in _IMAGE_GEN_TYPES
+            from services.visual_fallback import image_asset_path
+
+            has_file = bool(aid.get("has_file")) or bool(
+                is_img and image_asset_path(package_id, str(aid.get("visual_id") or ""))
+            )
             assets.append({
                 "visual_id": aid["visual_id"],
                 "chapter": ch.get("chapter", ""),
                 "type": atype,
                 "title": aid.get("title", ""),
                 "caption": aid.get("caption", ""),
-                "asset_url": _download_url(package_id, f"img_{aid['visual_id']}.png") if is_img else "",
+                "has_file": has_file,
+                "rendered": bool(aid.get("rendered")) if is_img else True,
+                "status": aid.get("status") or ("resolved" if (has_file or not is_img) else "missing"),
+                "attribution": aid.get("attribution") or "",
+                "photographer": aid.get("photographer") or "",
+                "page_url": aid.get("page_url") or aid.get("source_url") or "",
+                "photo_id": aid.get("photo_id") or "",
+                "pexels_query": aid.get("pexels_query") or "",
+                "asset_url": _download_url(package_id, f"img_{aid['visual_id']}.png") if is_img and has_file else "",
                 "rendered_html": "" if is_img else render_aid_html(aid, package_id),
                 "source_data": {
                     k: aid[k] for k in ("chart_data", "table", "items", "body", "mermaid",
-                                        "image_prompt", "keywords")
+                                        "keywords")
                     if aid.get(k)
                 },
             })
@@ -1997,12 +2154,35 @@ def _download_url(package_id: str, name: str) -> str:
 
 
 def build_ebook_package(title: str, content_md: str, fields: dict) -> dict:
-    """Generate the visual plan, render the preview, write exports, list image jobs."""
-    from services.cover_agent import apply_cover_to_preview, cover_image_job, create_cover_design
+    """Generate the visual plan, retrieve Pexels photographs, stage a photo cover."""
     from services.ebook_contract import build_contract
+    from services.ebook_factory_pipeline import (
+        apply_ebook_readiness,
+        factory_ebook_completion_state,
+        fill_plan_photos_automatic,
+        images_requested,
+        set_visual_progress,
+        PROGRESS_PLANNING,
+        PROGRESS_REVIEW,
+        stage_factory_photo_cover,
+        stamp_plan_render_flags,
+        strip_photo_aids,
+        visual_ai_authorized,
+    )
     from services.ebook_quality_agent import validate_ebook_content
 
     package_id = uuid.uuid4().hex
+    fields = fields if isinstance(fields, dict) else {}
+    want_images = images_requested(fields)
+    data_budget = {
+        "fields": fields,
+        "visuals_authorized": fields.get("visuals_authorized"),
+        "visual_budget_cap_usd": fields.get("visual_budget_cap_usd"),
+        "visual_ai_spend_usd": 0.0,
+    }
+    ws = fields.get("ebook_workspace")
+    if isinstance(ws, dict):
+        data_budget["ebook_workspace"] = ws
     contract = build_contract(
         topic=fields.get("topic", ""),
         audience=fields.get("audience", ""),
@@ -2012,41 +2192,67 @@ def build_ebook_package(title: str, content_md: str, fields: dict) -> dict:
         ebook_length=fields.get("product_type", "standard"),
     )
 
+    set_visual_progress(data_budget, PROGRESS_PLANNING)
     plan = generate_visual_plan(title, content_md, fields)
     subtitle = plan["subtitle"]
-    cover_prompt = plan["cover_prompt"]
     product_summary = plan["product_summary"]
     chapters = plan["chapters"]
-    visual_plan = {"chapters": chapters}
+    visual_plan = {"chapters": chapters, "title": title}
+    if want_images:
+        visual_plan = fill_plan_photos_automatic(
+            visual_plan,
+            package_id=package_id,
+            title=title,
+            topic=str(fields.get("topic") or title),
+            audience=str(fields.get("audience") or ""),
+            data=data_budget,
+            fields=fields,
+            allow_ai=(
+                visual_ai_authorized(data_budget, fields)
+                and str(os.environ.get("FACTORY_TEST_MODE") or "") != "1"
+                and str(os.environ.get("EBOOK_CUSTOMER_PATH_FIXTURE") or "").strip().lower()
+                not in {"1", "true", "yes"}
+            ),
+        )
+    else:
+        visual_plan = strip_photo_aids(visual_plan)
+    visual_plan = stamp_plan_render_flags(visual_plan, package_id=package_id)
+    # Guarantee every acquired photograph also occupies the canonical
+    # img_<visual_id>.png slot the browser preview resolves by convention.
+    from services.ebook_factory_pipeline import publish_plan_photos
 
-    cover_design = create_cover_design(
+    publish_plan_photos(visual_plan, package_id=package_id)
+    chapters = list(visual_plan.get("chapters") or [])
+    set_visual_progress(data_budget, PROGRESS_REVIEW)
+
+    cover_design = stage_factory_photo_cover(
         title=title,
         subtitle=subtitle,
         author=(fields.get("author_brand") or fields.get("author") or "").strip(),
-        content_md=content_md,
         fields=fields,
-        product_type=(fields.get("product_type") or "ebook"),
-        product_summary=product_summary,
-        cover_prompt=cover_prompt,
         package_id=package_id,
+        search_photos=want_images,
     )
+    cover_search = str(cover_design.get("cover_search_query") or "")
 
     preview_html = render_preview_html(
         title, subtitle, content_md, chapters, package_id, product_summary, cover_design,
         topic=(fields.get("topic") or ""),
     )
-    preview_html = apply_cover_to_preview(preview_html, cover_design)
     preview_html = re.sub(
         r"letter-spacing\s*:\s*[^;\"'}]+;?", "", preview_html, flags=re.I
     )
     txt_doc = render_txt(title, subtitle, content_md, chapters)
+    from services.ebook_visual_match import customer_safe_visual_plan
+
+    safe_chapters = customer_safe_visual_plan({"chapters": chapters}).get("chapters") or []
     visual_json = json.dumps(
         {
             "title": title,
             "subtitle": subtitle,
-            "cover_prompt": cover_prompt,
+            "cover_search_query": cover_search,
             "product_summary": product_summary,
-            "chapters": chapters,
+            "chapters": safe_chapters,
         },
         indent=2,
     )
@@ -2057,50 +2263,78 @@ def build_ebook_package(title: str, content_md: str, fields: dict) -> dict:
             "ebook.html": preview_html,
             "ebook.txt": txt_doc,
             "visual_plan.json": visual_json,
-            "cover_prompt.txt": cover_prompt or "No cover prompt was generated.",
+            "cover_prompt.txt": (
+                f"Cover photograph search (Pexels): {cover_search}. "
+                "Choose cover photo — this is not a finished cover."
+                if cover_search
+                else "Choose cover photo. No finished cover has been approved."
+            ),
             "product_summary.txt": product_summary or "No summary was generated.",
         },
     )
 
-    # Run content quality check after visual plan is ready
     quality_result = validate_ebook_content(
         md_text=content_md,
         contract=contract,
         title=title,
     )
 
-    image_jobs = _collect_image_jobs(chapters, cover_prompt)
-    cover_job = cover_image_job(cover_design)
-    if cover_job:
-        image_jobs = [cover_job] + [j for j in image_jobs if j.get("visual_id") != "cover"]
-    image_jobs = image_jobs[:_IMAGE_JOB_CAP]
+    image_jobs = _collect_image_jobs(chapters, "")
     visual_assets = _visual_assets(chapters, package_id)
+    completion = factory_ebook_completion_state(
+        visual_plan=visual_plan,
+        cover_design=cover_design,
+        package_id=package_id,
+        pdf_path=os.path.join(pdir, "ebook.pdf"),
+        export_files=paths,
+        content=content_md,
+        quality_result=quality_result,
+    )
 
+    export_links = {
+        "html": {"name": "ebook.html", "url": _download_url(package_id, "ebook.html")},
+        "txt": {"name": "ebook.txt", "url": _download_url(package_id, "ebook.txt")},
+    }
+    if completion.get("zip_available"):
+        export_links["zip"] = {"name": "package.zip", "url": _download_url(package_id, "package.zip")}
+    if completion.get("pdf_available"):
+        export_links["pdf"] = {"name": "ebook.pdf", "url": _download_url(package_id, "ebook.pdf")}
     exports = {
         "package_id": package_id,
-        "pdf_available": False,
-        "pdf_message": "PDF export coming next -- HTML and ZIP are available now.",
-        "files": {
-            "html": {"name": "ebook.html", "url": _download_url(package_id, "ebook.html")},
-            "txt": {"name": "ebook.txt", "url": _download_url(package_id, "ebook.txt")},
-            "zip": {"name": "package.zip", "url": _download_url(package_id, "package.zip")},
-        },
+        "pdf_available": bool(completion.get("pdf_available")),
+        "pdf_message": (
+            f"PDF is not available. {completion.get('next_action') or 'Finish the cover and photographs first.'}"
+            if not completion.get("pdf_available")
+            else ""
+        ),
+        "files": export_links,
     }
 
-    return {
+    result = {
+        "product_type": "ebook",
         "subtitle": subtitle,
         "visual_plan": visual_plan,
         "visual_assets": visual_assets,
         "image_jobs": image_jobs,
-        "cover_prompt": cover_design.get("image_prompt") or cover_prompt,
+        "cover_prompt": "",
+        "cover_search_query": cover_search,
         "cover_design": cover_design,
         "product_summary": product_summary,
         "preview_html": preview_html,
         "package_id": package_id,
         "exports": exports,
         "export_files": {"dir": pdir, **paths},
-        # Quality gate results
         "quality_result": quality_result,
         "quality_score": quality_result.score,
         "quality_blocking": not quality_result.passed,
+        **completion,
+        "content": content_md,
+        "visual_progress": data_budget.get("visual_progress"),
+        "visual_progress_message": data_budget.get("visual_progress_message"),
+        "visual_ai_spend_usd": data_budget.get("visual_ai_spend_usd") or 0,
+        "visuals_authorized": bool(fields.get("visuals_authorized")),
+        "visual_budget_cap_usd": fields.get("visual_budget_cap_usd"),
     }
+    apply_ebook_readiness(result)
+    result.pop("content", None)
+    return result

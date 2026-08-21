@@ -86,8 +86,8 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
         self.assertIn("Research summary", ws["research"]["summary"])
         self.assertEqual(ws["research"]["key_findings"][0], "Finding A")
         # Reopen via Saved Projects GET
-        listed = self.client.get("/projects").get_json()
-        match = next(p for p in listed if p["id"] == pid)
+        listed = self.client.get(f"/projects/{pid}").get_json()
+        match = listed
         self.assertTrue((match["data"] or {}).get("ebook_project_workspace"))
         self.assertIn("Research summary", ((match["data"] or {}).get("ebook_workspace") or {}).get("research_payload", {}).get("summary", ""))
 
@@ -463,6 +463,8 @@ class EbookWorkspaceJsHtmlTests(unittest.TestCase):
         js = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
         self.assertIn("data-ws-cover-preview", js)
         self.assertIn("Cover preview unavailable — approval blocked", js)
+        self.assertIn('coverGuidedStep === "review" ? `<p data-ws-cover-preview-error', js)
+        self.assertNotIn("awaiting && step !== \"review\"", js)
         self.assertIn("preview_url", js)
         self.assertIn("preview_verified", js)
         self.assertIn("data-ws-cover-download", js)
@@ -471,6 +473,10 @@ class EbookWorkspaceJsHtmlTests(unittest.TestCase):
         self.assertIn("enableCoverApprove", js)
         self.assertIn("blockCoverApprove", js)
         self.assertIn("if (approveCover.disabled) return", js)
+        self.assertIn('if (coverGuidedStep === "review")', js)
+        self.assertNotIn('if (step === "review")', js)
+        self.assertIn("data-ws-cover-choices", js)
+        self.assertIn(": ws.next_action === \"generate_manuscript\"", js)
 
 
 class EbookCoverPreviewTests(unittest.TestCase):

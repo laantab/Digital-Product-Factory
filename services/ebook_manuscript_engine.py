@@ -758,6 +758,11 @@ def chapter_contract_prompt(book: BookContract, chapter: ChapterContract) -> str
                     f"- MANDATORY DELIVERABLE [{cid}]: {e}. "
                     "Label it as a hypothetical/planning example."
                 )
+        lines.append(
+            "Write professional reader-facing headings. Never copy production labels "
+            "into the manuscript, including MANDATORY DELIVERABLE, bracketed example IDs, "
+            "ASSIGNED FACTS, ASSIGNED CITATIONS, Factory spend caps, or validator codes."
+        )
     if chapter.unresolved_findings:
         lines.append(
             "UNRESOLVED DEFECTS FROM THE PRIOR ATTEMPT "

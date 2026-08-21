@@ -7,7 +7,9 @@ import os
 import re
 from typing import Any
 
-EXPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "exports")
+EXPORTS_DIR = os.environ.get("FACTORY_EXPORTS_DIR") or os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "exports"
+)
 
 _PROMPT_PREFIXES = (
     "create a", "design a", "generate a", "make a", "illustrate", "show a realistic",
@@ -224,7 +226,7 @@ def _stock_photo_body(title: str, *, pdf: bool) -> str:
             'style="background:#f8fafc;border:1pt solid #e2e8f0;border-radius:8pt;">'
             "<tr><td style=\"padding:10pt;text-align:center;\">"
             '<div style="background:#ddd6fe;height:48pt;border-radius:6pt;margin-bottom:8pt;"></div>'
-            '<div style="font-size:8pt;color:#64748b;">Product listing preview</div>'
+            '<div style="font-size:8pt;color:#64748b;">Storefront mockup</div>'
             "</td></tr></table>"
         )
     if any(k in t for k in ("etsy", "listing", "marketplace", "ecommerce", "trust")):

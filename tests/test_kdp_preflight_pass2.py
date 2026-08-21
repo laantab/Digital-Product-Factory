@@ -472,6 +472,7 @@ class KdpPreflightPass2Tests(unittest.TestCase):
         self.assertIn("Run KDP Preflight", js)
         self.assertIn("Prepare KDP Package", js)
         self.assertIn("kdpPreflightPanel", js)
+        self.assertIn("data-kdp-coloring-interiors", js)
         _ = client  # keep import side-effect free
 
     def test_20_no_external_paid_calls(self):

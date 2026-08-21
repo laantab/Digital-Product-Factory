@@ -442,7 +442,7 @@
           <label>Author / Brand</label>
           <input type="text" id="inAuthor" placeholder="Author name" />
           <p id="authorHint" class="hint" style="display:none;margin-top:0.35rem;font-size:0.72rem;color:#64748b;">
-            Coloring book covers do not show an author name by default.
+            Shown on the coloring book cover and KDP author field.
           </p>
         </div>
       </div>
@@ -646,15 +646,12 @@ function _initialTextY(cover) {
   return 78;
 }
 
-const _rawAuthor = initialCover.author || "";
+const _rawAuthor = initialCover.author || initialCover.author_brand || "";
 const _isColoring = PRODUCT_TYPE === "coloring_book";
 const state = {
   title:       initialCover.title       || "",
   subtitle:    initialCover.subtitle    || "",
-  // Coloring books: no author/brand on the cover by default.
-  author:      _isColoring
-    ? (_rawAuthor === "Lonnie Brown" || _rawAuthor === "Digital Product Factory" ? "" : _rawAuthor)
-    : _rawAuthor,
+  author:      _rawAuthor,
   fontFamily:  initialCover.font_family  || (_isColoring ? "Arial, sans-serif" : "Georgia, serif"),
   fontSize:    initialCover.font_size    || 18,
   fontWeight:  initialCover.font_weight  || "700",
@@ -942,7 +939,7 @@ document.getElementById("btnPreview").onclick = async () => {
     const overrides = {
       title: state.title,
       subtitle: state.subtitle,
-      author: _isColoring ? "" : state.author,
+      author: state.author,
       font_family: state.fontFamily,
       font_size: state.fontSize,
       font_weight: state.fontWeight,
@@ -969,7 +966,7 @@ document.getElementById("btnPreview").onclick = async () => {
     Object.assign(state, {
       title:      result.title      || state.title,
       subtitle:   result.subtitle   || state.subtitle,
-      author:     _isColoring ? "" : (result.author || state.author),
+      author:     result.author || state.author,
       fontFamily: result.font_family || state.fontFamily,
     });
     document.getElementById("inTitle").value    = state.title;
@@ -989,14 +986,12 @@ document.getElementById("btnSave").onclick = async () => {
   setBusy(true);
   try {
     if (_isColoring) {
-      state.author = "";
-      document.getElementById("inAuthor").value = "";
       if (state.textY < 55) state.textY = 78;
     }
     const overrides = {
       title: state.title,
       subtitle: state.subtitle,
-      author: _isColoring ? "" : state.author,
+      author: state.author,
       font_family: state.fontFamily,
       font_size: state.fontSize,
       font_weight: state.fontWeight,
@@ -1033,7 +1028,7 @@ document.getElementById("btnSave").onclick = async () => {
 
 function coverPayloadForApi() {
   // Map editor state → cover_design keys the backend expects.
-  const author = (_isColoring ? "" : state.author);
+  const author = state.author;
   return {
     ...initialCover,
     title: state.title,
@@ -1076,7 +1071,7 @@ document.getElementById("btnRegenerate").onclick = async () => {
     const overrides = {
       title: state.title,
       subtitle: state.subtitle,
-      author: _isColoring ? "" : state.author,
+      author: state.author,
       font_family: state.fontFamily,
       font_size: state.fontSize,
       font_weight: state.fontWeight,
@@ -1097,8 +1092,6 @@ document.getElementById("btnRegenerate").onclick = async () => {
       text_overlay: true,
     };
     if (_isColoring) {
-      state.author = "";
-      document.getElementById("inAuthor").value = "";
       if (state.textY < 55) state.textY = 78;
       overrides.text_y = state.textY;
       overrides.text_position.y = state.textY;
@@ -1117,10 +1110,8 @@ document.getElementById("btnRegenerate").onclick = async () => {
       coverArtImg.src = url + (url.includes("?") ? "&" : "?") + "t=" + Date.now();
       coverArtImg.style.display = "block";
     }
-    // Keep author cleared / title in lower third after regen
+    // Keep coloring-book title in the lower third after regen
     if (_isColoring) {
-      state.author = "";
-      document.getElementById("inAuthor").value = "";
       if (state.textY < 55) state.textY = 78;
       document.getElementById("inTextY").value = state.textY;
       applyPreview();
@@ -1264,13 +1255,10 @@ document.getElementById("inGradient").checked   = state.gradient;
 document.getElementById("inDecoLine").checked   = state.decoLine;
 if (_isColoring) {
   const authorInput = document.getElementById("inAuthor");
-  const authorHint = document.getElementById("authorHint");
-  if (authorInput) {
-    authorInput.value = "";
-    authorInput.placeholder = "Not used on coloring book covers";
+  if (authorInput && !authorInput.value) {
+    authorInput.value = state.author || "Lonnie Brown";
+    state.author = authorInput.value;
   }
-  if (authorHint) authorHint.style.display = "block";
-  state.author = "";
 }
 applyPreview();
 </script>

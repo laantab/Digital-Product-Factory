@@ -1,0 +1,760 @@
+﻿{
+    "ok":  true,
+    "workspace":  {
+                      "approval_history":  [
+                                               {
+                                                   "event":  "seed_acceptance",
+                                                   "outline_id":  "O1",
+                                                   "spent_usd":  0.928,
+                                                   "subtitle":  "A Practical Guide to Equipment, Pricing, Client Workflow, Event-Day Operations, and Dye-Sublimation Printing",
+                                                   "title":  "From First Booking to On-Site Prints",
+                                                   "ts":  "2026-08-12T19:20:13.445345+00:00"
+                                               }
+                                           ],
+                      "approved_outline_id":  "O1",
+                      "approved_title_id":  "T3",
+                      "artifact_id":  "ebook-accept-5d68a041d04d",
+                      "artifact_revision":  1,
+                      "artifact_state":  "DRAFT",
+                      "audience":  "Beginner and intermediate photographers who want to earn money at weddings, parties, school events, church events, reunions, and community celebrations.",
+                      "author":  "Lonnie Brown",
+                      "budget":  {
+                                     "cap_usd":  3.5,
+                                     "paid_calls":  10,
+                                     "remaining_usd":  2.572,
+                                     "spent_usd":  0.928
+                                 },
+                      "current_stage":  "manuscript",
+                      "ebook_workflow_stage":  "manuscript",
+                      "editorial_rules_locked":  [
+                                                     "Use DS-RX1HS, DS620A, and QW410 specifications only where source-supported.",
+                                                     "State that equipment and media prices vary and must be verified with current suppliers.",
+                                                     "Use clearly labeled hypothetical / planning-scenario figures for margin examples — never as current market-price claims.",
+                                                     "Distinguish fast dye-sub photo printing from keepsake production requiring separate equipment, materials, time, staffing, and safety planning.",
+                                                     "Do not dismiss on-site mugs, buttons, shirts, plates, or other keepsakes as impossible; do not invent production specifications for them.",
+                                                     "Do not invent personal stories, earnings, clients, credentials, or quotations attributed to Lonnie Brown.",
+                                                     "Preserve at least $2.50 for writing and refinement stages."
+                                                 ],
+                      "export_ready":  false,
+                      "fine_stage_labels":  {
+                                                "apply_theme":  "Apply Design Theme",
+                                                "approve_cover":  "Select/Approve Cover",
+                                                "approve_outline":  "Approve Outline",
+                                                "approve_title":  "Approve Title/Subtitle",
+                                                "assign_visuals":  "Create or Assign Visuals",
+                                                "content_qa":  "Content-Quality Validation",
+                                                "download":  "Download PDF and ZIP",
+                                                "edit_chapters":  "Edit/Revise Chapters",
+                                                "manuscript":  "Generate Manuscript",
+                                                "outline":  "Generate Outline",
+                                                "preflight":  "Final Preflight",
+                                                "preview":  "Preview Complete Ebook",
+                                                "research":  "Research",
+                                                "review_research":  "Review Research",
+                                                "save_approved":  "Save Approved Artifact",
+                                                "save_research":  "Save Research",
+                                                "title_options":  "Generate Title Options",
+                                                "use_research":  "Use This Research"
+                                            },
+                      "gates":  {
+                                    "export_enabled":  false,
+                                    "manuscript_enabled":  true,
+                                    "visuals_enabled":  false
+                                },
+                      "manuscript":  {
+                                         "chapters":  [
+
+                                                      ],
+                                         "content":  "",
+                                         "last_generation":  null,
+                                         "qa_findings":  [
+
+                                                         ],
+                                         "status":  "not_started",
+                                         "status_label":  "Not started"
+                                     },
+                      "name":  "LIVE ACCEPTANCE — EVENT PHOTOGRAPHY EBOOK",
+                      "next_action":  "generate_manuscript",
+                      "next_action_label":  "Generate Manuscript",
+                      "outcome":  "Give readers a practical step-by-step plan for choosing equipment, creating service packages, setting profitable prices, booking clients, managing an event, printing photographs and keepsakes on-site, avoiding common mistakes, and securing their first paid event.",
+                      "outline":  [
+                                      {
+                                          "approved":  true,
+                                          "order":  1,
+                                          "purpose":  "Event photography niches: weddings, parties, schools, churches, reunions, community events\nHow on-site prints change the offer and guest experience\nOutcomes for this guide; what will and will not be claimed",
+                                          "title":  "What This Business Actually Looks Like"
+                                      },
+                                      {
+                                          "approved":  true,
+                                          "order":  2,
+                                          "purpose":  "Lean vs event-focused startup ranges from research (as planning ranges, not guarantees)\nBusiness registration and insurance as operating requirements\nPortfolio, website, and bookkeeping as launch essentials",
+                                          "title":  "Startup Reality Check: Budget, Legal Basics, and Insurance"
+                                      },
+                                      {
+                                          "approved":  true,
+                                          "order":  3,
+                                          "purpose":  "Bodies, lenses, flash/lighting, computer, editing software\nBackup body, batteries, and memory cards as operational priorities\nUsed gear and rentals as cost-control options",
+                                          "title":  "Core Camera Kit and Backup Gear"
+                                      },
+                                      {
+                                          "approved":  true,
+                                          "order":  4,
+                                          "purpose":  "Define hours, deliverables, planning meetings, and turnaround\nEvent-type package templates as planning examples\nWhere print add-ons fit without overcomplicating the core offer",
+                                          "title":  "Packages Clients Can Understand"
+                                      },
+                                      {
+                                          "approved":  true,
+                                          "order":  5,
+                                          "purpose":  "Cover shooting, planning, editing, travel, taxes, gear recovery, and profit\nClearly labeled hypothetical pricing and margin planning scenarios\nWhy published averages are signals, not your local price list",
+                                          "title":  "Pricing Scenarios That Protect Your Margin"
+                                      },
+                                      {
+                                          "approved":  true,
+                                          "order":  6,
+                                          "purpose":  "Lead questions, expectations, contracts, deposits, and timelines\nPre-event shot lists and venue constraints\nSetting print expectations before event day",
+                                          "title":  "From Inquiry to Signed Booking"
+                                      },
+                                      {
+                                          "approved":  true,
+                                          "order":  7,
+                                          "purpose":  "Before / during / after workflow\nCoverage roles: wide, medium, telephoto; flash discipline; file hygiene\nStaffing, timing, and guest flow basics",
+                                          "title":  "Event-Day Operations Without Chaos"
+                                      },
+                                      {
+                                          "approved":  true,
+                                          "order":  8,
+                                          "purpose":  "Why dye-sub is used for fast take-home photo prints\nSource-supported overview of DS-RX1HS, DS620A, and QW410 (sizes, speeds, media capacities where documented)\nHot Folder Print, multi-printer distribution, status monitoring (source-supported)\nEquipment and media prices vary; verify with current suppliers\nHypothetical media-planning and margin scenarios only",
+                                          "title":  "Dye-Sublimation On-Site Printing"
+                                      },
+                                      {
+                                          "approved":  true,
+                                          "order":  9,
+                                          "purpose":  "Photo prints vs mugs, buttons, shirts, plates, and similar items\nSeparate equipment, materials, production time, staffing, and safety planning required\nNot verified by the printer-manufacturer sources used for dye-sub photo printers; no invented production specs",
+                                          "title":  "Keepsakes Beyond Photo Prints"
+                                      },
+                                      {
+                                          "approved":  true,
+                                          "order":  10,
+                                          "purpose":  "Underpricing, no backup gear, vague packages, weak print planning\nFirst-paid-event checklist spanning kit, insurance, packages, booking, and print readiness\nHow to refine after event one without inventing case studies",
+                                          "title":  "Common Mistakes and Your First Paid Event Checklist"
+                                      }
+                                  ],
+                      "outline_digest":  "9afe60dd1b014d02a65ef9071438abceeb5b85c99b95aec8a1f1e6a14369da67",
+                      "outline_options":  [
+                                              {
+                                                  "approach":  "Follow the reader from decision to first paid event, with dye-sub printing as a dedicated mid-to-late chapter cluster.",
+                                                  "chapters":  [
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Event photography niches: weddings, parties, schools, churches, reunions, community events",
+                                                                                       "How on-site prints change the offer and guest experience",
+                                                                                       "Outcomes for this guide; what will and will not be claimed"
+                                                                                   ],
+                                                                       "n":  1,
+                                                                       "title":  "What This Business Actually Looks Like"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Lean vs event-focused startup ranges from research (as planning ranges, not guarantees)",
+                                                                                       "Business registration and insurance as operating requirements",
+                                                                                       "Portfolio, website, and bookkeeping as launch essentials"
+                                                                                   ],
+                                                                       "n":  2,
+                                                                       "title":  "Startup Reality Check: Budget, Legal Basics, and Insurance"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Bodies, lenses, flash/lighting, computer, editing software",
+                                                                                       "Backup body, batteries, and memory cards as operational priorities",
+                                                                                       "Used gear and rentals as cost-control options"
+                                                                                   ],
+                                                                       "n":  3,
+                                                                       "title":  "Core Camera Kit and Backup Gear"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Define hours, deliverables, planning meetings, and turnaround",
+                                                                                       "Event-type package templates as planning examples",
+                                                                                       "Where print add-ons fit without overcomplicating the core offer"
+                                                                                   ],
+                                                                       "n":  4,
+                                                                       "title":  "Packages Clients Can Understand"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Cover shooting, planning, editing, travel, taxes, gear recovery, and profit",
+                                                                                       "Clearly labeled hypothetical pricing and margin planning scenarios",
+                                                                                       "Why published averages are signals, not your local price list"
+                                                                                   ],
+                                                                       "n":  5,
+                                                                       "title":  "Pricing Scenarios That Protect Your Margin"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Lead questions, expectations, contracts, deposits, and timelines",
+                                                                                       "Pre-event shot lists and venue constraints",
+                                                                                       "Setting print expectations before event day"
+                                                                                   ],
+                                                                       "n":  6,
+                                                                       "title":  "From Inquiry to Signed Booking"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Before / during / after workflow",
+                                                                                       "Coverage roles: wide, medium, telephoto; flash discipline; file hygiene",
+                                                                                       "Staffing, timing, and guest flow basics"
+                                                                                   ],
+                                                                       "n":  7,
+                                                                       "title":  "Event-Day Operations Without Chaos"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Why dye-sub is used for fast take-home photo prints",
+                                                                                       "Source-supported overview of DS-RX1HS, DS620A, and QW410 (sizes, speeds, media capacities where documented)",
+                                                                                       "Hot Folder Print, multi-printer distribution, status monitoring (source-supported)",
+                                                                                       "Equipment and media prices vary; verify with current suppliers",
+                                                                                       "Hypothetical media-planning and margin scenarios only"
+                                                                                   ],
+                                                                       "n":  8,
+                                                                       "title":  "Dye-Sublimation On-Site Printing"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Photo prints vs mugs, buttons, shirts, plates, and similar items",
+                                                                                       "Separate equipment, materials, production time, staffing, and safety planning required",
+                                                                                       "Not verified by the printer-manufacturer sources used for dye-sub photo printers; no invented production specs"
+                                                                                   ],
+                                                                       "n":  9,
+                                                                       "title":  "Keepsakes Beyond Photo Prints"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Underpricing, no backup gear, vague packages, weak print planning",
+                                                                                       "First-paid-event checklist spanning kit, insurance, packages, booking, and print readiness",
+                                                                                       "How to refine after event one without inventing case studies"
+                                                                                   ],
+                                                                       "n":  10,
+                                                                       "title":  "Common Mistakes and Your First Paid Event Checklist"
+                                                                   }
+                                                               ],
+                                                  "estimated_chapters":  10,
+                                                  "id":  "O1",
+                                                  "name":  "Journey outline (recommended)"
+                                              },
+                                              {
+                                                  "approach":  "Front-load gear and print systems, then packages/pricing, then booking and first event. Best if readers already want the technical path.",
+                                                  "chapters":  [
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Offer definition",
+                                                                                       "Audience niches",
+                                                                                       "Guide scope and sourcing rules"
+                                                                                   ],
+                                                                       "n":  1,
+                                                                       "title":  "The On-Site Print Event Model"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Core kit",
+                                                                                       "Backup essentials",
+                                                                                       "Cost-control options"
+                                                                                   ],
+                                                                       "n":  2,
+                                                                       "title":  "Camera and Lighting Kit"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Source-supported specs only",
+                                                                                       "Throughput and media planning",
+                                                                                       "Hot Folder Print workflow"
+                                                                                   ],
+                                                                       "n":  3,
+                                                                       "title":  "Dye-Sub Printer Choices (DS-RX1HS, DS620A, QW410)"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "What sources support",
+                                                                                       "What remains unverified planning judgment"
+                                                                                   ],
+                                                                       "n":  4,
+                                                                       "title":  "Station Setup: Power, Space, Transport, Monitoring"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Clear deliverables",
+                                                                                       "Print add-on framing",
+                                                                                       "Keepsake production as separate workflow"
+                                                                                   ],
+                                                                       "n":  5,
+                                                                       "title":  "Packages and Print Add-Ons"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Cost-of-business logic",
+                                                                                       "Labeled hypotheticals",
+                                                                                       "Supplier price verification required"
+                                                                                   ],
+                                                                       "n":  6,
+                                                                       "title":  "Pricing and Margin Planning Scenarios"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Discovery",
+                                                                                       "Contracts",
+                                                                                       "Pre-event print expectations"
+                                                                                   ],
+                                                                       "n":  7,
+                                                                       "title":  "Client Workflow: Inquiry to Deposit"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Shoot + print coordination",
+                                                                                       "Guest delivery flow",
+                                                                                       "After-event wrap"
+                                                                                   ],
+                                                                       "n":  8,
+                                                                       "title":  "Event-Day Run of Show"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Failure modes",
+                                                                                       "Launch checklist",
+                                                                                       "Improvement loop"
+                                                                                   ],
+                                                                       "n":  9,
+                                                                       "title":  "Mistakes, Risks, and First Paid Event Checklist"
+                                                                   }
+                                                               ],
+                                                  "estimated_chapters":  9,
+                                                  "id":  "O2",
+                                                  "name":  "Ops-first outline"
+                                              },
+                                              {
+                                                  "approach":  "Fewer, denser chapters for a shorter ebook; same coverage with less narrative scaffolding.",
+                                                  "chapters":  [
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Niches",
+                                                                                       "Startup ranges",
+                                                                                       "Legal/insurance/portfolio"
+                                                                                   ],
+                                                                       "n":  1,
+                                                                       "title":  "Start Here: Offer, Audience, and Business Basics"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Bodies/lenses/flash/computer",
+                                                                                       "Backup discipline"
+                                                                                   ],
+                                                                       "n":  2,
+                                                                       "title":  "Equipment: Capture Kit Plus Backup"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Defined packages",
+                                                                                       "Hypothetical margin planning",
+                                                                                       "Local verification"
+                                                                                   ],
+                                                                       "n":  3,
+                                                                       "title":  "Packages and Pricing Scenarios"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Inquiry to contract",
+                                                                                       "Shot plan",
+                                                                                       "Print expectations"
+                                                                                   ],
+                                                                       "n":  4,
+                                                                       "title":  "Booking and Pre-Event Client Workflow"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Before/during/after",
+                                                                                       "Coverage roles",
+                                                                                       "Guest flow"
+                                                                                   ],
+                                                                       "n":  5,
+                                                                       "title":  "Event-Day Operations"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "DS-RX1HS/DS620A/QW410 source-supported facts",
+                                                                                       "Hot Folder Print",
+                                                                                       "Keepsakes require separate equipment/workflow; not manufacturer-verified here"
+                                                                                   ],
+                                                                       "n":  6,
+                                                                       "title":  "On-Site Dye-Sub Printing and Other Keepsakes"
+                                                                   },
+                                                                   {
+                                                                       "bullets":  [
+                                                                                       "Common risks",
+                                                                                       "First-paid-event checklist"
+                                                                                   ],
+                                                                       "n":  7,
+                                                                       "title":  "Avoid These Mistakes; Land Event One"
+                                                                   }
+                                                               ],
+                                                  "estimated_chapters":  7,
+                                                  "id":  "O3",
+                                                  "name":  "Compact starter outline"
+                                              }
+                                          ],
+                      "pending_estimate":  null,
+                      "project_id":  2472,
+                      "rail":  [
+                                   {
+                                       "approved_at":  "2026-08-12T19:20:13.445253+00:00",
+                                       "id":  "research",
+                                       "label":  "Research",
+                                       "openable":  true,
+                                       "status":  "approved",
+                                       "status_label":  "Approved",
+                                       "updated_at":  "2026-08-12T19:20:13.445253+00:00"
+                                   },
+                                   {
+                                       "approved_at":  "2026-08-12T19:20:13.445265+00:00",
+                                       "id":  "title",
+                                       "label":  "Title",
+                                       "openable":  true,
+                                       "status":  "approved",
+                                       "status_label":  "Approved",
+                                       "updated_at":  "2026-08-12T19:20:13.445265+00:00"
+                                   },
+                                   {
+                                       "approved_at":  "2026-08-12T19:20:13.445275+00:00",
+                                       "id":  "outline",
+                                       "label":  "Outline",
+                                       "openable":  true,
+                                       "status":  "approved",
+                                       "status_label":  "Approved",
+                                       "updated_at":  "2026-08-12T19:20:13.445275+00:00"
+                                   },
+                                   {
+                                       "approved_at":  null,
+                                       "id":  "manuscript",
+                                       "label":  "Manuscript",
+                                       "openable":  true,
+                                       "status":  "not_started",
+                                       "status_label":  "Not started",
+                                       "updated_at":  "2026-08-12T19:20:13.445284+00:00"
+                                   },
+                                   {
+                                       "approved_at":  null,
+                                       "id":  "visuals",
+                                       "label":  "Visuals",
+                                       "openable":  false,
+                                       "status":  "not_started",
+                                       "status_label":  "Not started",
+                                       "updated_at":  "2026-08-12T19:20:13.445294+00:00"
+                                   },
+                                   {
+                                       "approved_at":  null,
+                                       "id":  "cover",
+                                       "label":  "Cover",
+                                       "openable":  false,
+                                       "status":  "not_started",
+                                       "status_label":  "Not started",
+                                       "updated_at":  "2026-08-12T19:20:13.445303+00:00"
+                                   },
+                                   {
+                                       "approved_at":  null,
+                                       "id":  "design",
+                                       "label":  "Design",
+                                       "openable":  false,
+                                       "status":  "not_started",
+                                       "status_label":  "Not started",
+                                       "updated_at":  "2026-08-12T19:20:13.445312+00:00"
+                                   },
+                                   {
+                                       "approved_at":  null,
+                                       "id":  "preview",
+                                       "label":  "Preview",
+                                       "openable":  false,
+                                       "status":  "not_started",
+                                       "status_label":  "Not started",
+                                       "updated_at":  "2026-08-12T19:20:13.445320+00:00"
+                                   },
+                                   {
+                                       "approved_at":  null,
+                                       "id":  "preflight",
+                                       "label":  "Preflight",
+                                       "openable":  false,
+                                       "status":  "not_started",
+                                       "status_label":  "Not started",
+                                       "updated_at":  "2026-08-12T19:20:13.445329+00:00"
+                                   },
+                                   {
+                                       "approved_at":  null,
+                                       "id":  "export",
+                                       "label":  "Export",
+                                       "openable":  false,
+                                       "status":  "not_started",
+                                       "status_label":  "Not started",
+                                       "updated_at":  "2026-08-12T19:20:13.445338+00:00"
+                                   }
+                               ],
+                      "release_status":  "",
+                      "research":  {
+                                       "approved":  true,
+                                       "key_findings":  [
+                                                            "Event and wedding photography startup ranges are commonly cited at about $10,000 to $25,000.",
+                                                            "Lean photography startups may launch for about $2,000 to $5,000, depending on niche and gear choices.",
+                                                            "Buying used gear or renting can reduce startup costs by roughly 40% to 60%, according to one source.",
+                                                            "Core gear includes a camera body, lenses, lighting, computer, and editing software.",
+                                                            "Business costs also include registration, insurance, website/portfolio, and marketing.",
+                                                            "Beginner photographers often start around $50 to $150 per hour.",
+                                                            "Beginner event or small wedding pricing often starts around $500 to $1,500.",
+                                                            "Many professional event photographers reportedly charge around $100 to $250 hourly.",
+                                                            "Packages should clearly define hours of coverage and number of delivered images.",
+                                                            "Pricing should account for planning, editing, travel, taxes, and profit, not just shooting time."
+                                                        ],
+                                       "notes_sections":  {
+                                                              "common_mistakes_and_risks":  [
+                                                                                                "Underpricing by counting only event hours and ignoring planning, editing, travel, taxes, and overhead.",
+                                                                                                "Starting without a clear budget for gear, software, insurance, website, and marketing.",
+                                                                                                "Entering event work without backup memory cards, batteries, or ideally a backup camera body.",
+                                                                                                "Assuming one pricing model fits every event type or market.",
+                                                                                                "Failing to define package deliverables such as hours covered and image count.",
+                                                                                                "Overbuying gear before validating demand in the local market.",
+                                                                                                "Ignoring insurance needs for event and wedding work, where liability requirements may be higher.",
+                                                                                                "Launching without a process for bookkeeping, accounting, or contract review.",
+                                                                                                "Treating on-site printing as simple without source-backed understanding of workflow, costs, and technical reliability.",
+                                                                                                "Building financial projections from generic averages without checking actual local demand and costs."
+                                                                                            ],
+                                                              "equipment_notes":  [
+                                                                                      "Starter kit guidance from one source puts a basic photography setup at roughly $5,000 to $8,000.",
+                                                                                      "A more professional event-oriented kit is cited at roughly $15,000 to $25,000.",
+                                                                                      "Common lens recommendations in the research include a standard zoom such as 24-70mm f/2.8 and a telephoto such as 70-200mm f/2.8.",
+                                                                                      "One event checklist recommends thinking in focal-length roles: wide, medium, and telephoto coverage.",
+                                                                                      "A second camera body is widely recommended for event work as backup.",
+                                                                                      "One source acknowledges some beginners start with one body, but treats adding a backup body as a priority.",
+                                                                                      "Wedding niche startup guidance specifically mentions 2 bodies, 2 to 3 lenses, and flash.",
+                                                                                      "Lighting costs in the research range from a basic speedlight to larger strobe and modifier setups.",
+                                                                                      "Computer and editing software are recurring essentials, with one source noting software subscriptions may be monthly.",
+                                                                                      "Extra batteries and backup memory cards are specifically mentioned as recommended extras for event work.",
+                                                                                      "Insurance and equipment coverage are part of startup planning, especially for event and wedding photographers.",
+                                                                                      "Used gear and rentals may help beginners enter the market with lower upfront capital."
+                                                                                  ],
+                                                              "event_ops_and_onsite_printing_notes":  [
+                                                                                                          "The event workflow in the research is organized into before, during, and after the event.",
+                                                                                                          "Before the event, photographers should prepare equipment and gather client information.",
+                                                                                                          "During the event, the emphasis is on managing coverage and getting the needed shot types.",
+                                                                                                          "After the event, workflow includes file handling, editing, and follow-up.",
+                                                                                                          "Backup gear preparation is a core operational theme in the event checklist source.",
+                                                                                                          "Wide, medium, and telephoto lens planning can simplify event coverage decisions.",
+                                                                                                          "Pre-event communication appears important for clarifying expectations and deliverables.",
+                                                                                                          "The provided sources do not give hard evidence on on-site printer brands, dye-sub vs. inkjet choices, print output speeds, or media cost per print.",
+                                                                                                          "The provided sources also do not document proven workflows for selling prints or keepsakes live at weddings, schools, churches, or reunions.",
+                                                                                                          "Because evidence is thin, on-site printing guidance should be limited to cautious operational planning unless more research is added."
+                                                                                                      ],
+                                                              "first_paid_event_checklist_candidates":  [
+                                                                                                            "Set a startup budget range based on lean, standard, or event-focused gear needs.",
+                                                                                                            "Choose a minimum event kit: camera body, lenses, flash, computer, and editing software.",
+                                                                                                            "Add backup items as soon as possible: second body, extra batteries, and extra memory cards.",
+                                                                                                            "Register the business and check state-specific filing requirements.",
+                                                                                                            "Arrange liability and equipment insurance appropriate for event work.",
+                                                                                                            "Create a basic portfolio website or online gallery.",
+                                                                                                            "Draft simple event packages with defined hours and image delivery terms.",
+                                                                                                            "Set starting prices that cover time, travel, editing, taxes, and profit.",
+                                                                                                            "Create a pre-event client questionnaire or planning checklist.",
+                                                                                                            "Prepare a day-before, day-of, and day-after event workflow.",
+                                                                                                            "Line up bookkeeping support, whether software or an accountant.",
+                                                                                                            "Book a first paid event with a clearly written scope and deliverables."
+                                                                                                        ],
+                                                              "open_questions":  [
+                                                                                     "What on-site photo printing equipment, print media, and workflow are best supported by reliable current sources?",
+                                                                                     "What are realistic on-site print or keepsake profit margins after media, labor, and equipment costs?",
+                                                                                     "Which event types are most suitable for live printing versus post-event delivery?",
+                                                                                     "What venue rules or power/internet constraints commonly affect on-site printing setups?",
+                                                                                     "What contract clauses are most important for event photography with live printing services?",
+                                                                                     "How should sales be structured on-site: prepaid package, per-print sales, sponsor-funded, or host-funded?",
+                                                                                     "What turnaround promises for edited galleries are realistic for beginners versus intermediate photographers?",
+                                                                                     "How much local market variation should readers expect in hourly event pricing?"
+                                                                                 ],
+                                                              "pricing_and_packages_notes":  [
+                                                                                                 "Beginner pricing is presented only as a starting range, not a rule: about $50 to $150 per hour.",
+                                                                                                 "Small event or limited-coverage wedding pricing for beginners is commonly cited around $500 to $1,500.",
+                                                                                                 "A separate source says many professional event photographers charge about $100 to $250 hourly.",
+                                                                                                 "There is uncertainty across sources because rates vary by experience, location, event type, deliverables, and demand.",
+                                                                                                 "Packages should define how many hours are included.",
+                                                                                                 "Packages should define how many images the client will receive.",
+                                                                                                 "Including a pre-event meeting or planning discussion is recommended in package structure.",
+                                                                                                 "Rates should cover planning time, shooting time, editing, travel, taxes, equipment costs, and profit.",
+                                                                                                 "Pricing by event only without calculating cost of doing business is discouraged by the sources.",
+                                                                                                 "The provided research does not supply source-backed package formulas for on-site printing add-ons, so that section would need careful qualification."
+                                                                                             ]
+                                                          },
+                                       "printing_research":  {
+                                                                 "evidence_quality":  "moderate: the provided sources include multiple manufacturer pages with concrete DNP printer specs and software features, but they do not provide pricing, event business financials, or detailed operational best practices.",
+                                                                 "keepsake_notes":  "Keepsakes such as mugs, buttons, shirts, or plates require separate equipment, materials, production time, staffing, and safety planning. They were not verified by the printer-manufacturer sources used for dye-sub photo printers in this research.",
+                                                                 "manufacturer_facts":  [
+                                                                                            {
+                                                                                                "claim":  "The DNP DS-RX1HS produces 4×6 inch prints in 12.4 seconds and up to 290 4×6 prints per hour.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/rx1hs"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP DS-RX1HS supports 700 4×6 prints per media set and 350 6×8 prints per media set.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/rx1hs"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP DS-RX1HS supports 2×6 photo strips, 4×6, 5×7, 6×6, and 6×8 print options depending on media/workflow.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/rx1hs"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP DS-RX1HS offers high-speed mode at 300×300 dpi and high-resolution mode at 300×600 dpi, with glossy and matte finish options available.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/rx1hs"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP DS-RX1HS includes USB iSerial for printing to multiple DS-RX1HS printers and a Windows Status App that shows media type, prints remaining, printer status, total print count, firmware version, serial number, and color control data.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/rx1hs"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "DNP provides a Hot Folder Print Utility for Windows for fast, automated photo printing.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/rx1hs"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "DNP Hot Folder Print supports DS620A, QW410, DS820A, DS40, DS80, DS-RX1HS/DS-RX1HS, and DS80DX printers and can distribute jobs across two or more compatible connected printers in one-to-many mode.",
+                                                                                                "manufacturer_or_doc":  "DNP Hot Folder Print page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/hot-folder-print"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "DNP Hot Folder Print supports adding borders to images before printing using a built-in border utility.",
+                                                                                                "manufacturer_or_doc":  "DNP Hot Folder Print page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/hot-folder-print"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP QW410 is DNP’s smallest and lightest dye sublimation photo printer, weighs under 13 lbs, and measures 8” W × 7.75” H × 9.5” D.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/qw410"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP QW410 is designed for mobility and events, and its lower energy usage allows battery-powered operations to run longer.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/qw410"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP QW410 produces print sizes from 4×3 inches to 4.5×8 inches, including 4×4.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/qw410"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP IDW520 system includes a DNP QW410 printer, compact ID processor console with 7-inch touchscreen, DNP IDW image processing software, PIXPRO AZ255 ID camera, and WiFi EZ Share SD card.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/idw520"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP IDW520 media listing states size 4.5×6 inches, 2 rolls, and 150 images per roll.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/idw520"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP DS620A produces 4×6 prints in under 9 seconds and 5×7 prints in approximately 15 seconds.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/ds620a"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP DS620A measures 10.8” W × 14.4” D × 6.7” H.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/ds620a"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP DS620A low-power standby mode consumes less than 0.5 watts while idle.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/ds620a"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "The DNP DS620A is available with a three-year Advanced Exchange Warranty.",
+                                                                                                "manufacturer_or_doc":  "DNP product page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products/printers/ds620a"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "DNP’s DS620A media page lists 4×6 media at 400 prints per roll, 2 rolls per case, total 800 prints.",
+                                                                                                "manufacturer_or_doc":  "DNP products/media page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "DNP’s DS620A media page lists 5×7 media at 230 prints per roll, 2 rolls per case, total 460 prints.",
+                                                                                                "manufacturer_or_doc":  "DNP products/media page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "DNP’s DS620A media page lists 6×8 media at 200 prints per roll, 2 rolls per case, total 400 prints.",
+                                                                                                "manufacturer_or_doc":  "DNP products/media page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "DNP’s DS620A media options include perforated, triple-strip, sticker, metallic, and silver pearl variants on certain sizes.",
+                                                                                                "manufacturer_or_doc":  "DNP products/media page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/products"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "Dye-sublimation prints are sealed into the paper and protected against UV light, fingerprints, and water according to DNP.",
+                                                                                                "manufacturer_or_doc":  "DNP About page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/about"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "DNP states dye-sublimation can produce 16.77 million true colors using cyan, magenta, and yellow with 256 levels of each color.",
+                                                                                                "manufacturer_or_doc":  "DNP About page",
+                                                                                                "source_url":  "https://www.dnpphoto.com/about"
+                                                                                            },
+                                                                                            {
+                                                                                                "claim":  "Mitsubishi Electric provides drivers and firmware downloads for its dye sublimation photo printers, including model families such as CP-D80DW and CP-D90DW, with Windows support listings shown on the manufacturer site.",
+                                                                                                "manufacturer_or_doc":  "Mitsubishi Electric downloads page",
+                                                                                                "source_url":  "https://www.mitsubishielectric.com/printer/dowmload-01"
+                                                                                            }
+                                                                                        ]
+                                                             },
+                                       "source_urls":  [
+                                                           "https://startcosts.com/photography",
+                                                           "https://aftershoot.com/blog/photography-pricing-guide",
+                                                           "https://www.photographylaunchpad.com/photography-business-startup-costs",
+                                                           "https://www.format.com/online-portfolio-website/event-photography/guide",
+                                                           "https://zenfolio.com/blog/startup-costs-photography-business",
+                                                           "https://www.youtube.com/watch?v=H8v5GagYT9I",
+                                                           "https://brittanyography.com/pixelandpitch/esessential-photography-gear-computer-setup-guide"
+                                                       ],
+                                       "summary":  "The research suggests that starting an event photography business usually requires meaningful upfront investment, with event and wedding setups commonly cited in the roughly $10,000 to $25,000 range, though leaner launches are possible if you buy used gear or start with a simpler kit. Core startup costs consistently include camera bodies, lenses, lighting, a computer, editing software, business registration, insurance, website/portfolio, and marketing. Several sources emphasize that event photographers should plan for backup gear, especially a second camera body, extra batteries, and extra memory cards, although one event checklist source notes some beginners start with one body until they can afford a backup. Pricing guidance is broad rather than fixed: beginner photographers often start around $50 to $150 per hour, while event photography packages are commonly framed by hours of coverage and number of delivered images. For small weddings or limited-coverage events, beginner pricing commonly appears in the $500 to $1,500 range, while general event photography sources cite many professionals charging about $100 to $250 hourly. The sources repeatedly warn that rates should not be based on guesswork; they should cover shooting time, planning, editing, travel, taxes, equipment, and profit. Package design should give clients clear options, typically defining coverage length, deliverables, and any planning meetings or consultations. Startup cost sources also note that wedding and event work often needs more gear and higher liability insurance than simpler photography niches. Practical event operations research highlights a simple workflow: prepare gear and client information before the event, work from a shot plan during the event, and handle file management and follow-up after the event. Evidence in the provided research on on-site photo printing is thin; there are no source-backed printer models, media costs, print speeds, or proven add-on pricing structures for live printing. Because of that gap, any ebook section on on-site printing should stay at the planning and workflow level unless more specific source material is gathered."
+                                   },
+                      "subtitle":  "A Practical Guide to Equipment, Pricing, Client Workflow, Event-Day Operations, and Dye-Sublimation Printing",
+                      "title":  "From First Booking to On-Site Prints",
+                      "title_options":  [
+                                            {
+                                                "id":  "T1",
+                                                "notes":  "Closest to the locked topic; strongest SEO/clarity match.",
+                                                "subtitle":  "A practical guide to gear, packages, pricing scenarios, event workflow, and dye-sub print delivery",
+                                                "title":  "How to Start a Profitable Event Photography Business with On-Site Photo Printing"
+                                            },
+                                            {
+                                                "id":  "T2",
+                                                "notes":  "Shorter retail title; still centers the distinguishing feature.",
+                                                "subtitle":  "Build packages, run the event, and deliver dye-sub photos on site—without inventing unverified keepsake specs",
+                                                "title":  "Event Photography with Live Prints: A Starter Business Plan"
+                                            },
+                                            {
+                                                "id":  "T3",
+                                                "notes":  "Outcome-led; good for beginner/intermediate promise.",
+                                                "subtitle":  "Equipment choices, pricing scenarios, client workflow, and dye-sublimation printing for weddings, parties, schools, and community events",
+                                                "title":  "From First Booking to On-Site Prints"
+                                            },
+                                            {
+                                                "id":  "T4",
+                                                "notes":  "More technical/operator tone; highlights manufacturer-backed printer trio.",
+                                                "subtitle":  "Source-supported dye-sub printer planning with DS-RX1HS, DS620A, and QW410—plus separate keepsake-production considerations",
+                                                "title":  "The Event Photographer’s On-Site Printing Playbook"
+                                            },
+                                            {
+                                                "id":  "T5",
+                                                "notes":  "Broader business framing; printing still explicit in subtitle.",
+                                                "subtitle":  "Budget, backup gear, clear packages, and live photo printing that guests can take home the same day",
+                                                "title":  "Launch Your Event Photography Business the Smart Way"
+                                            }
+                                        ],
+                      "topic":  "How to Start a Profitable Event Photography Business with On-Site Photo Printing"
+                  }
+}

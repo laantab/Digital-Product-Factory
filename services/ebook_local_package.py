@@ -313,7 +313,52 @@ def ensure_ebook_visual_package(project: dict) -> dict:
         fields["subtitle"] = data["subtitle"]
 
     pkg = str(data.get("package_id") or data.get("export_package_id") or "").strip()
-    built = build_local_ebook_package(title, content, fields, package_id=pkg)
+
+    # Route through the established Pexels-aware planner/cover pipeline (the
+    # same one services.ebook_customer_path.complete_factory_ebook() uses)
+    # whenever Pexels is actually configured and this isn't a test/fixture
+    # run. Without this, any ebook whose visual package gets assembled here
+    # (e.g. content saved via the legacy manuscript-only route) was silently
+    # routed to the zero-paid-API local fallback below — which has no photo
+    # acquisition branch at all — regardless of subject matter or whether
+    # Pexels was available. That produced checklist-only "visuals" for
+    # photo-dependent topics (fitness demonstrations, etc.) with no way to
+    # ever surface a real photograph. The zero-API fallback remains the
+    # correct, intentional behavior when Pexels isn't configured or during
+    # tests (no paid/external calls).
+    test_mode = str(os.environ.get("FACTORY_TEST_MODE") or "") == "1" or str(
+        os.environ.get("EBOOK_CUSTOMER_PATH_FIXTURE") or ""
+    ).strip().lower() in {"1", "true", "yes"}
+    use_established_pipeline = False
+    if not test_mode:
+        from services.ebook_pexels import pexels_configured
+
+        use_established_pipeline = pexels_configured()
+
+    local_visual_package = True
+    if use_established_pipeline:
+        from services.ebook_customer_path import normalize_ebook_fields
+        from services.ebook_package import build_ebook_package
+
+        norm_fields = normalize_ebook_fields(fields, title=title, content=content)
+        norm_fields.pop("_normalized_content", None)
+        established = build_ebook_package(title, content, norm_fields)
+        built = {
+            "title": title,
+            "subtitle": established.get("subtitle") or "",
+            "content": content,
+            "preview_html": established.get("preview_html") or "",
+            "visual_plan": established.get("visual_plan") or {"chapters": []},
+            "cover_design": established.get("cover_design") or {},
+            "cover_prompt": established.get("cover_prompt") or "",
+            "product_summary": established.get("product_summary") or "",
+            "package_id": established.get("package_id") or pkg or uuid.uuid4().hex,
+            "fields": norm_fields,
+        }
+        local_visual_package = False
+    else:
+        built = build_local_ebook_package(title, content, fields, package_id=pkg)
+
     data.update(
         {
             "title": built["title"],
@@ -328,7 +373,7 @@ def ensure_ebook_visual_package(project: dict) -> dict:
             "package_id": built["package_id"],
             "fields": built["fields"],
             "product_type": "ebook",
-            "local_visual_package": True,
+            "local_visual_package": local_visual_package,
             "ebook_document": built.get("ebook_document"),
             "ebook_manuscript_digest": built.get("ebook_manuscript_digest"),
             "ebook_asset_manifest_digest": built.get("ebook_asset_manifest_digest"),

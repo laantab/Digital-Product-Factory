@@ -40,6 +40,22 @@
     .prose-out tr:nth-child(even) td { background: #f8fafc; }
     .prose-out strong { color: #1e1b4b; }
     .prose-out code { background: #eef2ff; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.85em; }
+    .fma-competitor-cards { display: none; }
+    @media (max-width: 640px) {
+      .fma-competitor-table-wrap { display: none; }
+      .fma-competitor-cards { display: block; }
+    }
+    .fma-step { font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; color: #94a3b8; }
+    .fma-step.active { color: #4338ca; }
+    .fma-step.done { color: #059669; }
+    .fma-mode-card { text-align: left; border-radius: 1rem; border: 1px solid #e2e8f0; background: #fff; padding: 1rem 1.1rem; cursor: pointer; width: 100%; }
+    .fma-mode-card:hover { border-color: #c7d2fe; }
+    .fma-mode-card-active { border-color: #6366f1; box-shadow: 0 0 0 2px #e0e7ff; background: #eef2ff; }
+    .fma-signal-dot { width: 0.55rem; height: 0.55rem; border-radius: 999px; flex-shrink: 0; background: #94a3b8; }
+    .fma-signal-good { background: #6366f1; }
+    .fma-signal-mixed { background: #64748b; }
+    .fma-signal-weak { background: #e2e8f0; box-shadow: inset 0 0 0 1px #94a3b8; }
+    .fma-explainer-placeholder { background: #0f172a; color: #e2e8f0; min-height: 11rem; }
   </style>
 </head>
 <body class="h-full bg-slate-50 text-slate-800 font-sans antialiased">
@@ -97,8 +113,8 @@
               <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                 <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               </div>
-              <div class="text-sm font-bold text-slate-900 mb-1">Research Ideas</div>
-              <div class="text-xs text-slate-500 leading-relaxed">Find profitable niches before you build.</div>
+              <div class="text-sm font-bold text-slate-900 mb-1">Factory Market Advantage</div>
+              <div class="text-xs text-slate-500 leading-relaxed">Find it. Prove it—before you build it.</div>
             </button>
             <button onclick="go('saved')" class="group text-left rounded-2xl border border-slate-200 bg-white p-5 hover:border-violet-400 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <div class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-600 group-hover:bg-violet-600 group-hover:text-white transition-colors">
@@ -173,7 +189,7 @@
             <div class="flex items-center justify-between mb-5">
               <div>
                 <h2 class="text-base font-bold text-slate-900">Recent Projects</h2>
-                <p class="text-xs text-slate-400 mt-0.5">Your last 5 saved products</p>
+                <p class="text-xs text-slate-400 mt-0.5">Your last 3 saved products</p>
               </div>
               <button onclick="go('saved')" class="text-sm font-medium text-brand-600 hover:text-brand-800">View All</button>
             </div>
@@ -189,15 +205,20 @@
               <h2 class="text-base font-bold text-slate-900">Saved Projects</h2>
               <button data-go="dashboard" class="text-sm font-medium text-brand-600 hover:text-brand-800">Back to Dashboard</button>
             </div>
-            <p class="text-sm text-slate-500 mb-4">Your saved products are listed below. Download the files you want to keep. You can delete projects after downloading them.</p>
+            <p class="text-sm text-slate-500 mb-1">Your latest saved products are listed below. Download the files you want to keep.</p>
+            <p class="text-xs text-slate-400 mb-4">Showing up to 10 of your saved products.</p>
 
-            <!-- Admin controls — hidden by default, shown when admin mode is on -->
+            <!-- Admin controls — hidden unless Admin/Developer mode is on -->
             <div class="admin-controls hidden flex items-center justify-between gap-3 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
               <div class="flex items-center gap-3">
                 <span class="text-xs font-semibold text-amber-700 bg-amber-200 rounded-full px-2 py-0.5">ADMIN</span>
                 <label class="inline-flex items-center gap-2 text-sm text-amber-700 cursor-pointer">
                   <input type="checkbox" id="showTestProjects" class="rounded border-amber-400 text-brand-600 focus:ring-brand-500" />
-                  <span>Show test / debug / auto-generated projects</span>
+                  <span>Show test/debug/internal records</span>
+                </label>
+                <label class="inline-flex items-center gap-2 text-sm text-amber-700 cursor-pointer">
+                  <input type="checkbox" id="showHiddenInternal" class="rounded border-amber-400 text-brand-600 focus:ring-brand-500" />
+                  <span>Show hidden/internal projects</span>
                 </label>
               </div>
               <div class="flex items-center gap-2">
@@ -205,59 +226,199 @@
                   Exit Admin Mode
                 </button>
                 <button id="deleteTestDebugBtn" class="rounded-xl border border-amber-400 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 transition">
-                  Delete Test/Debug Projects Only
+                  Delete test/debug/internal records
                 </button>
                 <button id="deleteAllBtn" class="rounded-xl border border-rose-400 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 transition disabled:opacity-40 disabled:cursor-not-allowed">
-                  Admin: Delete All Saved Projects
+                  Delete all saved projects
                 </button>
               </div>
             </div>
 
             <div id="savedList" class="space-y-2"></div>
+            <p id="savedOlderWrap" class="hidden pt-3">
+              <button type="button" id="viewOlderBtn" class="text-sm font-medium text-brand-600 hover:text-brand-800">View older projects</button>
+            </p>
           </div>
-          <!-- Admin mode hint — shown when NOT in admin mode (small, unobtrusive) -->
-          <div id="adminModeHint" class="hidden rounded-xl border border-slate-200 bg-white p-4 flex items-center justify-between">
-            <p class="text-sm text-slate-500">Looking for test/debug controls?</p>
-            <button id="enableAdminBtn" class="text-xs font-medium text-amber-600 hover:text-amber-800 underline">Enable Admin Mode</button>
-          </div>
+          <div id="adminModeHint" class="hidden" hidden></div>
         </section>
 
-        <!-- Research -->
+        <!-- Research (legacy Niche Research view — kept for backward-compatible links; go("research") opens Factory Market Advantage) -->
         <section data-view="research" class="view hidden space-y-6">
           <div class="rounded-2xl border border-slate-200 bg-white p-6">
-            <h2 class="text-base font-bold text-slate-900 mb-1">Niche Research</h2>
-            <p class="text-sm text-slate-500 mb-4">Find trending, profitable digital-product niches with live web research.</p>
+            <h2 class="text-base font-bold text-slate-900 mb-1">Factory Market Advantage</h2>
+            <p class="text-sm text-slate-500 mb-4">Find it. Prove it—before you build it. This keyword box still works; the full workspace is the same research tool.</p>
             <div class="flex flex-col sm:flex-row gap-3">
               <input id="researchInput" type="text" placeholder="e.g. productivity for freelancers"
                 class="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
-              <button id="researchBtn" class="btn-primary">Research</button>
+              <button id="researchBtn" class="btn-primary">Discover Opportunities</button>
             </div>
+            <button type="button" onclick="go('market')" class="mt-3 text-sm font-medium text-brand-600 hover:text-brand-800">Open full Factory Market Advantage →</button>
           </div>
           <div id="researchOutput"></div>
         </section>
 
-        <!-- Market Research -->
+        <!-- Factory Market Advantage (legacy view id: market) -->
         <section data-view="market" class="view hidden space-y-6">
-          <!-- Step 1: how do you want to start? -->
           <div id="marketChooser" class="rounded-2xl border border-slate-200 bg-white p-6">
-            <h2 class="text-base font-bold text-slate-900 mb-1">How do you want to start?</h2>
-            <p class="text-sm text-slate-500 mb-5">Bring your own niche, or let the app research the market and recommend the best niche and product for you.</p>
+            <div class="mb-1 text-xs font-semibold uppercase tracking-widest text-brand-600">Factory Market Advantage</div>
+            <h2 class="text-xl font-bold text-slate-900 mb-1">Find it. Prove it—before you build it.</h2>
+            <p class="text-sm text-slate-500 mb-2">Tell us an idea or let Factory find one. We research it, then recommend the strongest option before you build a draft.</p>
+            <p class="text-xs text-slate-500 mb-4">Choose → Research → Recommendation → Build Draft → Review → Download</p>
+            <div id="fmaProgress" class="flex flex-wrap gap-3 mb-5">
+              <span class="fma-step active" data-fma-step="idea">Idea</span>
+              <span class="text-slate-300">→</span>
+              <span class="fma-step" data-fma-step="evidence">Evidence</span>
+              <span class="text-slate-300">→</span>
+              <span class="fma-step" data-fma-step="advantage">Advantage</span>
+              <span class="text-slate-300">→</span>
+              <span class="fma-step" data-fma-step="decision">Decision</span>
+              <span class="text-slate-300">→</span>
+              <span class="fma-step" data-fma-step="build">Build</span>
+            </div>
+            <div class="mb-5">
+              <p class="text-sm font-medium text-slate-700 mb-3">What would you like to do?</p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button type="button" id="fmaModeIdea" data-fma-mode="idea" class="fma-mode-card fma-mode-card-active" aria-pressed="true">
+                  <div class="font-bold text-slate-900">I Have an Idea</div>
+                  <div class="text-sm text-slate-500 mt-1">Research and validate a product idea you already have.</div>
+                </button>
+                <button type="button" id="fmaModeDiscover" data-fma-mode="discover" class="fma-mode-card" aria-pressed="false">
+                  <div class="font-bold text-slate-900">Find Ideas for Me</div>
+                  <div class="text-sm text-slate-500 mt-1">Research current digital-product opportunities and help me choose what to build.</div>
+                </button>
+              </div>
+            </div>
+            <div id="fmaIdeaFields">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <button data-start="own" class="text-left rounded-2xl border border-slate-200 hover:border-brand-400 hover:bg-brand-50/40 p-5 transition">
-                <div class="text-sm font-bold text-slate-900 mb-1">I already have a niche</div>
-                <div class="text-sm text-slate-500">Enter your niche and we'll research it and recommend the best product opportunities inside it.</div>
-              </button>
-              <button data-start="find" class="text-left rounded-2xl border border-slate-200 hover:border-brand-400 hover:bg-brand-50/40 p-5 transition">
-                <div class="text-sm font-bold text-slate-900 mb-1">Find the best niche for me</div>
-                <div class="text-sm text-slate-500">Share a broad interest (or leave it open) and get a ranked list of opportunities with a clear recommendation.</div>
-              </button>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-600 mb-1">Topic / idea <span class="text-rose-500">*</span></label>
+                <input id="fmaTopic" type="text" placeholder="e.g. superhero coloring adventures for kids"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Audience <span class="text-rose-500">*</span></label>
+                <input id="fmaAudience" type="text" required placeholder="e.g. parents of kids 8–12"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+                <p id="fmaAudienceError" class="hidden mt-1 text-xs text-rose-600" role="alert"></p>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Customer problem</label>
+                <input id="fmaProblem" type="text" placeholder="e.g. kids need engaging printable stories"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Product type <span class="text-rose-500">*</span></label>
+                <select id="fmaProductType" required class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                  <option value="">Choose a product type</option>
+                </select>
+                <p id="fmaProductTypeError" class="hidden mt-1 text-xs text-rose-600" role="alert"></p>
+              </div>
+            </div>
+            <div class="mt-4">
+              <button type="button" id="fmaMoreOptionsBtn" class="text-sm font-medium text-brand-700 hover:text-brand-900" aria-expanded="false">More Options</button>
+              <div id="fmaMoreOptions" class="hidden mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Sales platform</label>
+                <select id="fmaPlatform" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                  <option>Amazon KDP</option>
+                  <option>Etsy</option>
+                  <option>Gumroad</option>
+                  <option>Shopify</option>
+                  <option>Own website</option>
+                  <option selected>Not sure</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Your experience</label>
+                <select id="fmaExpertise" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                  <option>Beginner</option>
+                  <option selected>Some experience</option>
+                  <option>Experienced</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Target price <span class="text-slate-400">(optional)</span></label>
+                <input id="fmaPrice" type="text" placeholder="e.g. $9.99"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Keywords <span class="text-slate-400">(optional)</span></label>
+                <input id="fmaKeywords" type="text" placeholder="comma-separated"
+                  class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Depth</label>
+                <select id="fmaDepth" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                  <option selected>Quick Check</option>
+                  <option>Full Validation</option>
+                </select>
+              </div>
+              </div>
+            </div>
+            <p class="mt-4 text-xs text-slate-500">Scores and revenue estimates are research indicators, not guaranteed sales or earnings.</p>
+            <div class="mt-5 flex flex-wrap justify-end gap-3">
+              <button id="fmaRunBtn" class="btn-primary">Research This Opportunity</button>
+            </div>
+            </div>
+            <div id="fmaDiscoverFields" class="hidden">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Audience <span class="text-slate-400">(optional)</span></label>
+                  <select id="fmaDiscoverAudience" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                    <option selected>General / Any audience</option>
+                    <option>Parents</option>
+                    <option>Teachers</option>
+                    <option>Small-business owners</option>
+                    <option>Seniors</option>
+                    <option>Photographers</option>
+                    <option>Fitness beginners</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Product type <span class="text-slate-400">(optional)</span></label>
+                  <select id="fmaDiscoverProductType" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                    <option value="" selected>Any product type</option>
+                  </select>
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Interest / niche <span class="text-slate-400">(optional)</span></label>
+                  <input id="fmaDiscoverInterest" type="text" placeholder="e.g. education, photography, budgeting, pets"
+                    class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none" />
+                </div>
+              </div>
+              <div class="mt-4">
+                <button type="button" id="fmaDiscoverMoreBtn" class="text-sm font-medium text-brand-700 hover:text-brand-900" aria-expanded="false">More Options</button>
+                <div id="fmaDiscoverMore" class="hidden mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Sales platform <span class="text-slate-400">(optional)</span></label>
+                  <select id="fmaDiscoverPlatform" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                    <option>Amazon</option>
+                    <option>Etsy</option>
+                    <option>Gumroad</option>
+                    <option>Lemon Squeezy</option>
+                    <option>Shopify</option>
+                    <option selected>Not sure / Any</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">Research depth</label>
+                  <select id="fmaDiscoverDepth" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
+                    <option selected>Quick Check</option>
+                    <option>Full Validation</option>
+                  </select>
+                </div>
+                </div>
+              </div>
+              <div class="mt-5 flex flex-wrap justify-end gap-3">
+                <button id="fmaFindBtn" class="btn-primary">Find Top Opportunities</button>
+              </div>
             </div>
           </div>
 
-          <!-- Step 2a: I already have an idea -->
+          <!-- Legacy two-path forms kept in DOM for backward-compatible wiring -->
           <div id="marketOwn" class="hidden rounded-2xl border border-slate-200 bg-white p-6">
             <div class="flex items-center justify-between mb-4">
-              <h2 class="text-base font-bold text-slate-900">Research your niche</h2>
+              <h2 class="text-base font-bold text-slate-900">Validate the Market</h2>
               <button data-market-back class="text-sm font-medium text-slate-500 hover:text-slate-700">Back</button>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -283,14 +444,13 @@
               </div>
             </div>
             <div class="mt-5 flex justify-end">
-              <button id="ownContinueBtn" class="btn-primary">Research This Niche</button>
+              <button id="ownContinueBtn" class="btn-primary">Validate the Market</button>
             </div>
           </div>
 
-          <!-- Step 2b: find the best niche -->
           <div id="marketFind" class="hidden rounded-2xl border border-slate-200 bg-white p-6">
             <div class="flex items-center justify-between mb-4">
-              <h2 class="text-base font-bold text-slate-900">Find the best niche for me</h2>
+              <h2 class="text-base font-bold text-slate-900">Discover Opportunities</h2>
               <button data-market-back class="text-sm font-medium text-slate-500 hover:text-slate-700">Back</button>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -323,7 +483,7 @@
               </div>
             </div>
             <div class="mt-5 flex justify-end">
-              <button id="findBtn" class="btn-primary">Find Best Niche</button>
+              <button id="findBtn" class="btn-primary">Discover Opportunities</button>
             </div>
           </div>
 
@@ -336,7 +496,7 @@
             <h2 class="text-base font-bold text-slate-900 mb-1">Product Planning</h2>
             <p class="text-sm text-slate-500 mb-4">Turn a research result or idea into a clear product blueprint before you build it.</p>
             <div class="mb-5">
-              <label class="block text-xs font-medium text-slate-600 mb-1">Start from a saved Market Research result</label>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Start from saved Factory Market Advantage research</label>
               <div class="flex flex-col sm:flex-row gap-3">
                 <select id="planSource"
                   class="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none">
@@ -452,7 +612,7 @@
 
         <!-- Ebook Project workspace (stage rail) -->
         <section data-view="ebook-workspace" class="view hidden space-y-6">
-          <div id="ebookWorkspaceRoot" class="space-y-4"></div>
+          <div id="ebookWorkspaceRoot" class="space-y-4" data-ws-cover-guided-host></div>
         </section>
 
         <!-- Visual Review -->
@@ -772,6 +932,7 @@
     .yt-tab { color:#64748b; }
     .yt-tab.active { background:#fff; color:#4338ca; box-shadow:0 1px 2px rgba(0,0,0,.08); }
   </style>
+  <script>window.FACTORY_ADMIN_MODE = {{ 'true' if factory_admin_mode|default(false) else 'false' }};</script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

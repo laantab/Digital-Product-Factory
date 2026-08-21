@@ -1,0 +1,18 @@
+{
+  "_comment": "Fully synthetic regression fixture. build_acceptance_project_data() in services/ebook_project_workspace.py overwrites the outline/chapter content from the application's own public REVISED_ACCEPTANCE_OUTLINE_TITLES/event_photo_catalog_by_title() constants regardless of this file's content, so no real historical research data is required here.",
+  "topic": "Event photography business with on-site printing (frozen QA fixture)",
+  "audience": "",
+  "outcome": "",
+  "research_brief": {
+    "research_summary": "",
+    "key_findings": [],
+    "equipment_notes": [],
+    "pricing_and_packages_notes": [],
+    "event_ops_and_onsite_printing_notes": [],
+    "common_mistakes_and_risks": [],
+    "first_paid_event_checklist_candidates": [],
+    "open_questions": [],
+    "source_urls_used": []
+  },
+  "editorial_rules_locked": []
+}

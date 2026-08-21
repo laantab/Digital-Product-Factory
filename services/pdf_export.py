@@ -1,6 +1,7 @@
 """Convert saved product / publishing preview HTML into a polished PDF."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import html
 import io
@@ -297,9 +298,13 @@ body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-ser
 .chapter-title, .chapter-page > h2:first-of-type { font-size: 24pt; color: #134e4a; margin: 0 0 14pt;
   padding-bottom: 8pt; border-bottom: 2pt solid #99f6e4; }
 h3 { font-size: 15pt; color: #115e59; margin: 16pt 0 8pt; }
-p { margin: 0 0 9pt; }
+p { margin: 0 0 9pt; display: block; }
+table.pdf-h3-keep, table.pdf-p-keep, table.pdf-list-keep, table.pdf-li-keep { width: 100%; margin: 8pt 0; border: none; }
+td.pdf-h3-cell, td.pdf-p-cell, td.pdf-list-cell, td.pdf-li-cell { border: none; background: transparent; padding: 3pt 0; }
+td.pdf-h3-cell { font-size: 15pt; color: #115e59; font-weight: bold; padding: 10pt 0 4pt; }
+td.pdf-li-cell { padding: 2pt 0 2pt 12pt; }
 ul, ol { margin: 0 0 10pt 16pt; padding-left: 14pt; }
-li { margin: 4pt 0; }
+li { margin: 4pt 0; display: block; }
 ul { list-style-type: disc; }
 ol { list-style-type: decimal; }
 
@@ -689,6 +694,26 @@ def _cover_page_html(
     )
 
 
+def _full_page_cover_from_file(path: str) -> str:
+    """Embed a local cover photograph as a full-page PDF image."""
+    try:
+        with open(path, "rb") as fh:
+            raw = fh.read()
+    except OSError:
+        return _cover_page_html("", "", "")
+    if len(raw) < 32:
+        return _cover_page_html("", "", "")
+    suffix = os.path.splitext(path)[1].lower()
+    mime = "image/jpeg" if suffix in {".jpg", ".jpeg"} else "image/png"
+    uri = f"data:{mime};base64," + base64.b64encode(raw).decode("ascii")
+    return (
+        '<section class="pdf-page cover-page cda-cover-full-page">'
+        f'<img src="{uri}" alt="Cover" '
+        'style="width:100%;max-height:8.5in;display:block;margin:0;padding:0;" />'
+        "</section>"
+    )
+
+
 def _full_page_cover_pdf_html(package_id: str, pending: bool = False) -> str:
     """Render a full-page image cover from the on-disk PNG.
     
@@ -923,6 +948,46 @@ def _compact_visual_aids(soup: BeautifulSoup) -> None:
     _wrap_loose_visual_blocks(soup)
 
 
+def _wrap_as_pdf_table(tag: Tag, *, table_class: str, cell_class: str) -> None:
+    """Force a block onto its own line in xhtml2pdf via a 1-cell table."""
+    if not isinstance(tag, Tag) or tag.find_parent("table", class_=table_class):
+        return
+    table_html = (
+        f'<table class="{table_class}" width="100%" cellpadding="0" cellspacing="0">'
+        f'<tr><td class="{cell_class}"></td></tr></table>'
+    )
+    table = BeautifulSoup(table_html, "html.parser").table
+    td = table.find("td")
+    tag.replace_with(table)
+    td.append(tag)
+
+
+def _blockify_pdf_flow(soup: BeautifulSoup) -> None:
+    skip_parents = {"pdf-visual-keep", "pdf-h3-keep", "pdf-p-keep", "pdf-list-keep", "pdf-li-keep"}
+    for tag in list(soup.find_all(["h2", "h3", "h4"])):
+        if tag.find_parent("table", class_=lambda c: c and any(x in (c if isinstance(c, list) else str(c).split()) for x in skip_parents)):
+            continue
+        _wrap_as_pdf_table(tag, table_class="pdf-h3-keep", cell_class="pdf-h3-cell")
+    for tag in list(soup.find_all("p")):
+        parent_table = tag.find_parent("table")
+        parent_class = " ".join(parent_table.get("class") or []) if parent_table else ""
+        if any(item in parent_class for item in skip_parents):
+            continue
+        _wrap_as_pdf_table(tag, table_class="pdf-p-keep", cell_class="pdf-p-cell")
+    for tag in list(soup.find_all("li")):
+        parent_table = tag.find_parent("table")
+        parent_class = " ".join(parent_table.get("class") or []) if parent_table else ""
+        if "pdf-li-keep" in parent_class:
+            continue
+        _wrap_as_pdf_table(tag, table_class="pdf-li-keep", cell_class="pdf-li-cell")
+    for tag in list(soup.find_all(["ul", "ol"])):
+        parent_table = tag.find_parent("table")
+        parent_class = " ".join(parent_table.get("class") or []) if parent_table else ""
+        if any(item in parent_class for item in skip_parents):
+            continue
+        _wrap_as_pdf_table(tag, table_class="pdf-list-keep", cell_class="pdf-list-cell")
+
+
 def _prepare_pdf_content(node: Tag | BeautifulSoup | str) -> str:
     """Sanitize preview HTML for PDF: no prompts, SVG charts, styled cards."""
     if isinstance(node, str):
@@ -1044,6 +1109,7 @@ def _prepare_pdf_content(node: Tag | BeautifulSoup | str) -> str:
                 body.decompose()
     _compact_visual_aids(clone2)
     _wrap_loose_visual_blocks(clone2)
+    _blockify_pdf_flow(clone2)
 
     return clone2.decode_contents() if hasattr(clone2, "decode_contents") else html_out
 
@@ -1123,6 +1189,9 @@ def _cover_page_from_design(cover_design: dict | None, title: str, subtitle: str
     pkg = ""
     if isinstance(cover_design, dict):
         pkg = str(cover_design.get("package_id") or "")
+        image_path = str(cover_design.get("image_path") or "").strip()
+        if image_path and os.path.isfile(image_path) and os.path.getsize(image_path) > 32:
+            return _full_page_cover_from_file(image_path)
         # If the cover design has a proper full-page image HTML already, use it.
         # resolve_cover_pdf_html will detect the on-disk PNG and build the right HTML.
         from services.cover_agent import resolve_cover_pdf_html
@@ -1468,6 +1537,69 @@ def _strip_letter_spacing_css(html_doc: str) -> str:
     )
 
 
+_LOCAL_PDF_URI_RE = re.compile(
+    r"https?://(?:127\.0\.0\.1|localhost)(?::\d+)?|ebook-workspace/|full-preview|file://",
+    re.I,
+)
+_CHAPTER_FRAG_RE = re.compile(r"(?:^#|[#/])(chapter-\d+)\b", re.I)
+
+
+def _sanitize_pdf_local_link_uris(pdf_bytes: bytes) -> bytes:
+    """Convert localhost/file/Flask preview URIs into document-internal chapter jumps.
+
+    Leaves the PDF bytes unchanged when no leaking URIs are present so preview
+    identity stays deterministic.
+    """
+    if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
+        return pdf_bytes
+    try:
+        import fitz
+    except Exception:
+        return pdf_bytes
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    except Exception:
+        return pdf_bytes
+    changed = False
+    chapter_pages: dict[str, int] = {}
+    try:
+        for i, page in enumerate(doc):
+            text = page.get_text("text") or ""
+            for match in re.finditer(r"Chapter\s+(\d+)", text):
+                chapter_pages.setdefault(f"chapter-{match.group(1)}", i)
+        for page in doc:
+            for link in list(page.get_links() or []):
+                uri = str(link.get("uri") or "")
+                if not uri:
+                    continue
+                frag_match = _CHAPTER_FRAG_RE.search(uri)
+                leaking = bool(_LOCAL_PDF_URI_RE.search(uri))
+                if not leaking and not frag_match:
+                    continue
+                dest_name = (frag_match.group(1).lower() if frag_match else "")
+                dest = chapter_pages.get(dest_name)
+                if not leaking and dest is None:
+                    continue
+                try:
+                    page.delete_link(link)
+                    if dest is not None:
+                        page.insert_link(
+                            {
+                                "kind": fitz.LINK_GOTO,
+                                "from": link.get("from"),
+                                "page": dest,
+                            }
+                        )
+                    changed = True
+                except Exception:
+                    continue
+        if not changed:
+            return pdf_bytes
+        return doc.tobytes()
+    finally:
+        doc.close()
+
+
 def _html_to_pdf_xhtml2pdf(html_doc: str) -> bytes:
     from xhtml2pdf import pisa
 
@@ -1518,12 +1650,11 @@ def _apply_pdf_metadata(
         writer.add_metadata(
             {
                 "/Title": title or "Ebook",
-                "/Author": author or "Digital Product Factory",
-                "/Subject": subject
-                or "A practical guide from Digital Product Factory",
-                "/Keywords": keywords or "ebook, digital product factory",
-                "/Creator": "Digital Product Factory Ebook Generator",
-                "/Producer": "Digital Product Factory Ebook Generator",
+                "/Author": author or "Anonymous Author",
+                "/Subject": subject or subtitle or title or "Ebook",
+                "/Keywords": keywords or "ebook",
+                "/Creator": "Ebook Generator",
+                "/Producer": "Ebook Generator",
             }
         )
         out = io.BytesIO()
@@ -1805,7 +1936,7 @@ def generate_product_pdf(
             if os.path.isfile(cand):
                 img_path = cand
     has_real_png_cover = bool(img_path and os.path.isfile(img_path) and os.path.getsize(img_path) > 20_000)
-    use_local_cover = (not has_real_png_cover) or any(m in pdf_html for m in shell_markers)
+    use_local_cover = not has_real_png_cover
 
     # Prefer on-disk local cover PDF when package already generated one
     local_cover_path = ""
@@ -1837,11 +1968,13 @@ def generate_product_pdf(
         if local_cover_path and os.path.isfile(local_cover_path):
             with open(local_cover_path, "rb") as fh:
                 rl_cover = fh.read()
+        elif isinstance(cover_design, dict) and cover_design.get("workflow") == "photo_backed":
+            raise ValueError("Photo-backed cover PDF is missing. Export cannot reconstruct the cover.")
         else:
             rl_cover = generate_local_cover_pdf_bytes(
                 title,
                 subtitle,
-                author=author or "Digital Product Factory",
+                author=author or "Anonymous Author",
                 topic=topic or title,
                 audience=audience,
             )
@@ -1866,17 +1999,14 @@ def generate_product_pdf(
         pdf_bytes = _rebuild_toc_with_page_numbers(pdf_bytes, chapter_titles)
     pdf_bytes = _remove_accidental_blank_pages(pdf_bytes)
 
-    meta_subject = subject or (
-        subtitle
-        or "A practical guide from Digital Product Factory"
-    )
+    meta_subject = subject or subtitle or title or "Ebook"
     meta_keywords = keywords or ", ".join(
-        p for p in [topic, audience, "ebook", "digital product factory"] if p
+        p for p in [topic, audience, "ebook"] if p
     )
     pdf_bytes = _apply_pdf_metadata(
         pdf_bytes,
         title=title or "Ebook",
-        author=author or "Digital Product Factory",
+        author=author or "Anonymous Author",
         subject=meta_subject,
         keywords=meta_keywords,
     )

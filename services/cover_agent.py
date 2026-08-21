@@ -10,7 +10,9 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
-EXPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "exports")
+EXPORTS_DIR = os.environ.get("FACTORY_EXPORTS_DIR") or os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "exports"
+)
 
 
 def _e(value: Any) -> str:
@@ -304,12 +306,12 @@ COVER_IMAGE_COLOR_RULES = (
 
 AI_BACKGROUND_RULES_COMPACT = (
     "BACKGROUND ONLY — no text, letters, signs, posters, banners, logos, or readable words. "
-    "Never render BLACK HISTORY, title, subtitle, author, or topic as visible lettering. "
+    "Never render the book title, subtitle, author, or topic as visible lettering. "
     "App adds all typography as editable overlay. Lower third clear; no faces in lower third."
 )
 
 COVER_NO_LETTERING_RULES = (
-    "Never spell BLACK HISTORY or topic as visible lettering."
+    "Never spell the book topic or title as visible lettering."
 )
 
 WORD_SEARCH_COVER_FINAL_DIRECTION = (
@@ -823,6 +825,8 @@ def build_image_prompt(
         )
     if is_word_search:
         prompt = _enforce_word_search_prompt_language(prompt)
+    if not is_bh:
+        prompt = re.sub(r"(?i)black history", "the book topic", prompt)
     return prompt[:1000]
 
 

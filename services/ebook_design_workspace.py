@@ -15,12 +15,12 @@ from services.ebook_design_export import (
     render_designed_bundle,
     select_theme,
     theme_catalog_payload,
-    visual_manifest_from_manuscript,
 )
 from services.ebook_design_preflight import PREFLIGHT_PASS, run_design_preflight, verify_export_bytes
-from services.ebook_design_spec import design_is_stale
+from services.ebook_design_spec import EbookDesign, design_is_stale
 from services.ebook_manuscript_engine import QUALITY_PASS, validate_manuscript_quality
 from services.ebook_manuscript_fixtures import build_event_photo_strong_manuscript
+from services.ebook_book_layout import rewrite_bracketed_website_placeholders
 from services.ebook_project_workspace import (
     RAIL_LABELS,
     STATUS_APPROVED,
@@ -35,6 +35,9 @@ from services.ebook_project_workspace import (
     invalidate_after,
     is_approved,
     manuscript_digest,
+    preview_opened_matches_current,
+    record_preview_opened,
+    revoke_unviewed_preview_approval,
     set_stage_status,
     stage_status,
     sync_document_from_workspace,
@@ -56,20 +59,17 @@ def _require_quality(data: dict) -> None:
 
 
 def approve_visuals_local(data: dict) -> dict:
-    """Approve manuscript-derived visual slots. No paid image generation."""
-    ws = _ws(data)
-    assert_can_run_stage(ws, "visuals")
-    _require_quality(data)
-    if not is_approved(ws, "manuscript"):
-        raise ValueError("Approve the manuscript before visuals.")
-    md = str(data.get("content") or data.get("ebook") or "")
-    manifest = visual_manifest_from_manuscript(md)
-    data["ebook_visual_manifest"] = manifest
-    data["ebook_visual_manifest_digest"] = manifest["digest"]
-    set_stage_status(ws, "visuals", STATUS_APPROVED, note="Manuscript-derived visuals; no paid images")
-    _append_history(ws, "approve", stage="visuals", paid_images=False)
-    _recompute_next_action(ws)
-    return sync_document_from_workspace(data)
+    """Approve a content-aware visual plan only when local assets are valid."""
+    from services.ebook_visual_pipeline import approve_visual_plan
+
+    return approve_visual_plan(data)
+
+
+def prepare_visuals_local(data: dict, *, preserve_downstream: bool = False) -> dict:
+    """Generate or recover local visual assets and leave Visuals awaiting approval."""
+    from services.ebook_visual_pipeline import prepare_visuals_for_review
+
+    return prepare_visuals_for_review(data, preserve_downstream=preserve_downstream)
 
 
 def generate_and_stage_cover(data: dict) -> dict:
@@ -245,9 +245,180 @@ def _clear_export_fields(data: dict, cleared: list[str]) -> dict:
         data["ebook_design_preflight"] = None
         data["export_ready"] = False
         data["release_status"] = ""
+        ws = data.get("ebook_workspace")
+        if isinstance(ws, dict):
+            ws.pop("preview_opened", None)
     if "design" in cleared:
         data["ebook_design"] = None
         data["ebook_design_digest"] = ""
+    return data
+
+
+def rebind_design_to_current_manuscript(data: dict) -> dict:
+    """Keep the selected theme and cover binding; update only the manuscript digest."""
+    raw = data.get("ebook_design") if isinstance(data.get("ebook_design"), dict) else None
+    if not raw:
+        raise ValueError("Select a theme before rebinding design to the manuscript.")
+    theme_before = str(raw.get("theme_id") or "")
+    visual_before = str(raw.get("visual_manifest_digest") or data.get("ebook_visual_manifest_digest") or "")
+    cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
+    cover_digest = str(cover.get("cover_digest") or raw.get("cover_digest") or "")
+    design = EbookDesign.from_dict(raw)
+    if str(design.theme_id or "") != theme_before:
+        raise RuntimeError("Design rebind must not change the selected theme.")
+    design.manuscript_digest = manuscript_digest(data)
+    design.cover_digest = cover_digest
+    design.visual_manifest_digest = visual_before or design.visual_manifest_digest
+    design.recompute_digest()
+    if str(design.theme_id or "") != theme_before:
+        raise RuntimeError("Design rebind changed the theme.")
+    data["ebook_design"] = design.to_dict()
+    data["ebook_design_digest"] = design.digest
+    data["design_theme"] = design.theme_id
+    return data
+
+
+def apply_url_placeholder_manuscript_repair(data: dict) -> dict:
+    """Rewrite bracketed website placeholders and invalidate preview/preflight/export only."""
+    from services.quality.artifact_state import assert_content_mutation_allowed
+
+    assert_content_mutation_allowed(data, action="repair unresolved URL placeholders")
+    ws = _ws(data)
+    cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
+    cover_digest_before = str(cover.get("cover_digest") or "")
+    photo_sha_before = str((cover.get("source") or {}).get("sha256") or cover.get("image_digest") or "")
+    theme_before = str((data.get("ebook_design") or {}).get("theme_id") or data.get("design_theme") or "")
+    visual_before = str(data.get("ebook_visual_manifest_digest") or "")
+    title_before = (
+        str(data.get("title") or ""),
+        str(data.get("subtitle") or ""),
+        str(data.get("author_brand") or ws.get("author") or ""),
+    )
+    spent_before = (ws.get("paid_call_ledger") or {}).get("spent_usd")
+    layout_before = str(cover.get("selected_layout") or "")
+
+    md = str(data.get("content") or data.get("ebook") or "")
+    new_md, replacements = rewrite_bracketed_website_placeholders(md)
+    if not replacements:
+        raise ValueError("No bracketed website placeholder sentences were found to rewrite.")
+    data["content"] = new_md
+    data["ebook"] = new_md
+    if isinstance(data.get("ebook_document"), dict):
+        data["ebook_document"]["manuscript_md"] = new_md
+    data["_placeholder_sentence_rewrites"] = replacements
+
+    data = revoke_unviewed_preview_approval(data)
+    ws = _ws(data)
+    ws.pop("preview_opened", None)
+    cleared = invalidate_after(
+        ws, "design", reason="Manuscript URL-placeholder and blank-page correction"
+    )
+    data = _clear_export_fields(data, cleared or ["preview", "preflight", "export"])
+    data["export_ready"] = False
+    data["release_status"] = ""
+    data = sync_document_from_workspace(data)
+    data = rebind_design_to_current_manuscript(data)
+
+    cover_after = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
+    if str(cover_after.get("cover_digest") or "") != cover_digest_before:
+        raise RuntimeError("Placeholder repair mutated the approved cover digest.")
+    if str((cover_after.get("source") or {}).get("sha256") or cover_after.get("image_digest") or "") != photo_sha_before:
+        raise RuntimeError("Placeholder repair mutated the selected photograph.")
+    if str((data.get("ebook_design") or {}).get("theme_id") or "") != theme_before:
+        raise RuntimeError("Placeholder repair mutated the selected design theme.")
+    if str(data.get("ebook_visual_manifest_digest") or "") != visual_before:
+        raise RuntimeError("Placeholder repair mutated the visual manifest.")
+    if (
+        str(data.get("title") or ""),
+        str(data.get("subtitle") or ""),
+        str(data.get("author_brand") or (_ws(data).get("author") or "")),
+    ) != title_before:
+        raise RuntimeError("Placeholder repair mutated title, subtitle, or author.")
+    if str(cover_after.get("selected_layout") or "") != layout_before:
+        raise RuntimeError("Placeholder repair mutated the selected cover layout.")
+    if (_ws(data).get("paid_call_ledger") or {}).get("spent_usd") != spent_before:
+        raise RuntimeError("Placeholder repair mutated spend.")
+    return data
+
+
+def apply_customer_facing_manuscript_repair(data: dict) -> dict:
+    """Sanitize leaked production language and invalidate preview/preflight/export only."""
+    from services.ebook_customer_facing import sanitize_customer_manuscript
+    from services.quality.artifact_state import assert_content_mutation_allowed
+
+    assert_content_mutation_allowed(data, action="repair customer-facing manuscript defects")
+    ws = _ws(data)
+    cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
+    cover_digest_before = str(cover.get("cover_digest") or "")
+    photo_sha_before = str((cover.get("source") or {}).get("sha256") or cover.get("image_digest") or "")
+    theme_before = str((data.get("ebook_design") or {}).get("theme_id") or data.get("design_theme") or "")
+    visual_before = str(data.get("ebook_visual_manifest_digest") or "")
+    title_before = (
+        str(data.get("title") or ""),
+        str(data.get("subtitle") or ""),
+        str(data.get("author_brand") or ws.get("author") or ""),
+    )
+    spent_before = (ws.get("paid_call_ledger") or {}).get("spent_usd")
+    layout_before = str(cover.get("selected_layout") or "")
+
+    md = str(data.get("content") or data.get("ebook") or "")
+    new_md, ph_replacements = rewrite_bracketed_website_placeholders(md)
+    new_md, report = sanitize_customer_manuscript(new_md)
+    data["content"] = new_md
+    data["ebook"] = new_md
+    if isinstance(data.get("ebook_document"), dict):
+        data["ebook_document"]["manuscript_md"] = new_md
+    data["_customer_facing_repair"] = report
+    if ph_replacements:
+        data["_placeholder_sentence_rewrites"] = ph_replacements
+
+    data = revoke_unviewed_preview_approval(data)
+    ws = _ws(data)
+    ws.pop("preview_opened", None)
+    cleared = invalidate_after(
+        ws, "design", reason="Customer-facing manuscript and renderer correction"
+    )
+    data = _clear_export_fields(data, cleared or ["preview", "preflight", "export"])
+    data["export_ready"] = False
+    data["release_status"] = ""
+    data = sync_document_from_workspace(data)
+    data = rebind_design_to_current_manuscript(data)
+
+    cover_after = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
+    if str(cover_after.get("cover_digest") or "") != cover_digest_before:
+        raise RuntimeError("Customer-facing repair mutated the approved cover digest.")
+    if str((cover_after.get("source") or {}).get("sha256") or cover_after.get("image_digest") or "") != photo_sha_before:
+        raise RuntimeError("Customer-facing repair mutated the selected photograph.")
+    if str((data.get("ebook_design") or {}).get("theme_id") or "") != theme_before:
+        raise RuntimeError("Customer-facing repair mutated the selected design theme.")
+    if str(data.get("ebook_visual_manifest_digest") or "") != visual_before:
+        raise RuntimeError("Customer-facing repair mutated the visual manifest.")
+    if (
+        str(data.get("title") or ""),
+        str(data.get("subtitle") or ""),
+        str(data.get("author_brand") or (_ws(data).get("author") or "")),
+    ) != title_before:
+        raise RuntimeError("Customer-facing repair mutated title, subtitle, or author.")
+    if str(cover_after.get("selected_layout") or "") != layout_before:
+        raise RuntimeError("Customer-facing repair mutated the selected cover layout.")
+    if (_ws(data).get("paid_call_ledger") or {}).get("spent_usd") != spent_before:
+        raise RuntimeError("Customer-facing repair mutated spend.")
+    return data
+
+
+def repair_and_rebuild_preview_for_customer_facing(data: dict) -> dict:
+    """Sanitize customer-facing defects, then rebuild preview without approving it."""
+    data = apply_customer_facing_manuscript_repair(data)
+    data = build_preview(data)
+    data["export_ready"] = False
+    return data
+
+
+def repair_and_rebuild_preview_for_url_placeholders(data: dict) -> dict:
+    """Apply the placeholder rewrite, then rebuild preview without approving it."""
+    data = apply_url_placeholder_manuscript_repair(data)
+    data = build_preview(data)
+    data["export_ready"] = False
     return data
 
 
@@ -257,12 +428,29 @@ def build_preview(data: dict) -> dict:
     _require_quality(data)
     if not is_approved(ws, "design"):
         raise ValueError("Approve the design before building preview.")
+    from services.ebook_visual_pipeline import visuals_are_ready
+
+    if not is_approved(ws, "visuals") or not visuals_are_ready(data):
+        raise ValueError("Approve visuals with valid local assets before building preview.")
+    ws.pop("preview_opened", None)
+    plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else None
+    manifest = data.get("ebook_visual_manifest") if isinstance(data.get("ebook_visual_manifest"), dict) else None
+    contact = data.get("ebook_visual_contact_sheet")
     bundle = render_designed_bundle(data)
     set_stage_status(ws, "preview", STATUS_AWAITING, note="Preview rendered from approved manuscript")
     _append_history(ws, "preview", pdf_sha256=(bundle.get("identity") or {}).get("pdf_sha256"))
     _recompute_next_action(ws)
     data["_preview_page_count"] = bundle.get("preflight", {}).get("page_count")
-    return sync_document_from_workspace(data)
+    data["export_ready"] = False
+    data = sync_document_from_workspace(data)
+    if isinstance(plan, dict):
+        data["visual_plan"] = plan
+    if isinstance(manifest, dict):
+        data["ebook_visual_manifest"] = manifest
+        data["ebook_visual_manifest_digest"] = manifest.get("digest") or data.get("ebook_visual_manifest_digest")
+    if contact:
+        data["ebook_visual_contact_sheet"] = contact
+    return data
 
 
 def run_preflight_stage(data: dict) -> dict:
@@ -338,11 +526,21 @@ def build_design_ready_fixture_data() -> dict[str, Any]:
     data = select_and_stage_theme(data, "studio_clean")
     data = approve_stage(data, "design")
     data = build_preview(data)
+    data = record_preview_opened(data)
     data = approve_stage(data, "preview")
     data = run_preflight_stage(data)
     if stage_status(data["ebook_workspace"], "preflight") == STATUS_AWAITING:
         data = approve_stage(data, "preflight")
     return data
+
+
+def _visual_review_view(data: dict) -> dict[str, Any]:
+    from services.ebook_visual_pipeline import visual_review_payload
+
+    try:
+        return visual_review_payload(data)
+    except Exception:
+        return {"assets": [], "findings": [], "approvable": False, "paid_images": False}
 
 
 def design_public_view(data: dict, *, project_id: int | None = None) -> dict[str, Any]:
@@ -355,6 +553,11 @@ def design_public_view(data: dict, *, project_id: int | None = None) -> dict[str
     from services.ebook_photo_cover import photo_cover_public_fields
 
     photo = photo_cover_public_fields(data, project_id=project_id)
+    digest = str(identity.get("preview_digest") or identity.get("pdf_sha256") or "")
+    opened = preview_opened_matches_current(data)
+    preview_open_url = ""
+    if project_id and digest:
+        preview_open_url = f"/ebook-workspace/{int(project_id)}/full-preview?digest={digest}"
     return {
         "themes": catalog["themes"],
         "theme_samples": catalog["samples"],
@@ -376,10 +579,14 @@ def design_public_view(data: dict, *, project_id: int | None = None) -> dict[str
             "workflow": photo.get("workflow") or "",
         },
         "visual_manifest": data.get("ebook_visual_manifest") or {},
+        "visual_review": _visual_review_view(data),
         "preflight": pre,
         "identity": identity,
         "export_ready": data.get("export_ready") is True and str(pre.get("status") or "").upper() == PREFLIGHT_PASS,
         "preview_available": bool(data.get("ebook_preview_html") or data.get("preview_html")),
+        "preview_digest": digest,
+        "preview_opened": opened,
+        "preview_open_url": preview_open_url,
         "stale_design": design_is_stale(design, manuscript_digest=manuscript_digest(data)),
         "paid_calls": False,
     }

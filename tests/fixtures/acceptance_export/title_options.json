@@ -1,0 +1,16 @@
+{
+  "_comment": "Fully synthetic regression fixture — see research_brief.json in this folder.",
+  "options": [
+    {
+      "id": "T3",
+      "title": "From First Booking to On-Site Prints",
+      "subtitle": "A Practical Guide to Equipment, Pricing, Client Workflow, Event-Day Operations, and Dye-Sublimation Printing"
+    }
+  ],
+  "approved": {
+    "id": "T3",
+    "title": "From First Booking to On-Site Prints",
+    "subtitle": "A Practical Guide to Equipment, Pricing, Client Workflow, Event-Day Operations, and Dye-Sublimation Printing"
+  },
+  "editorial_rules_locked": []
+}

@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
+from tests._test_paths import resolve_test_exports_root  # noqa: E402
+
 
 def _screens_manuscript() -> str:
     fixture = ROOT / "tests" / "fixtures" / "screens_with_purpose.md"
@@ -128,7 +130,7 @@ class EbookQualityRepairTests(unittest.TestCase):
         pdf_url = result["exports"]["files"]["pdf"]["url"]
         self.assertIn("/download/", pdf_url)
         pkg = result["package_id"]
-        pdf_path = ROOT / "exports" / pkg / "ebook.pdf"
+        pdf_path = resolve_test_exports_root() / pkg / "ebook.pdf"
         self.assertTrue(pdf_path.is_file())
         pdf = pdf_path.read_bytes()
         self.assertTrue(pdf.startswith(b"%PDF"))
@@ -185,7 +187,7 @@ class EbookQualityRepairTests(unittest.TestCase):
         import hashlib
         import zipfile
 
-        zpath = ROOT / "exports" / pkg / "package.zip"
+        zpath = resolve_test_exports_root() / pkg / "package.zip"
         with zipfile.ZipFile(zpath) as zf:
             zpdf = zf.read("ebook.pdf")
         self.assertEqual(hashlib.md5(pdf).hexdigest(), hashlib.md5(zpdf).hexdigest())
@@ -194,6 +196,23 @@ class EbookQualityRepairTests(unittest.TestCase):
         _gc.assert_not_called()
         _cj.assert_not_called()
         _chat.assert_not_called()
+
+    def test_forbidden_marketing_allows_honest_negation(self):
+        """'not guaranteed' is disclaimer language, not a hype claim."""
+        from services.ebook_quality_agent import _find_forbidden_marketing
+
+        honest = (
+            "Compounding is not instant, and it is not guaranteed. "
+            "Nothing is guaranteed in markets. Results are never guaranteed."
+        )
+        self.assertEqual(_find_forbidden_marketing(honest), [])
+
+        hype = (
+            "This method is guaranteed to work. "
+            "You get guaranteed results with zero effort."
+        )
+        found = _find_forbidden_marketing(hype)
+        self.assertIn("guaranteed", found)
 
 
 if __name__ == "__main__":

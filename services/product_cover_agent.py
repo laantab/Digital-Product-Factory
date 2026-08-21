@@ -70,8 +70,11 @@ class ProductCoverPayload:
         if self.color_palette:
             overrides["color_palette"] = self.color_palette
         if self.engine_product_type == ENGINE_COLORING_BOOK:
-            # Always clear author overlay for coloring books (even if brand was set).
-            overrides["author"] = ""
+            clean = self.layout == "full_bleed_clean_title" or self.cover_style == "clean_title"
+            if clean:
+                overrides["author"] = ""
+            elif self.author_brand:
+                overrides["author"] = self.author_brand
             overrides["text_overlay"] = True
             overrides["text_position"] = {"x": 50.0, "y": 81.0, "align": "center"}
             overrides["product_type"] = ENGINE_COLORING_BOOK
@@ -428,6 +431,7 @@ def build_coloring_book_cover_brief(
     )
     bible = build_character_bible(theme_text)
     prompt = build_cover_image_prompt(bible=bible, cover=copy)
+    clean = str(copy.overlay_style or "") == "clean_title"
     return {
         "title": copy.title,
         "subtitle": copy.subtitle,
@@ -435,7 +439,7 @@ def build_coloring_book_cover_brief(
         "overlay_style": copy.overlay_style,
         "topic": theme_text,
         "cover_prompt": prompt,
-        "style_preference": "retail_jumbo",
+        "style_preference": "clean_title" if clean else "retail_jumbo",
     }
 
 
@@ -449,17 +453,27 @@ def _adapt_coloring_book(data: dict, project: dict) -> ProductCoverPayload:
         title=str(data.get("title") or existing.get("title") or ""),
         theme=theme,
     )
-    # Coloring-book covers: title/subtitle via layout only — never invent an author brand.
+    # Coloring-book covers: title/subtitle via layout; author on retail overlays only.
+    from services.coloring_book.prompt_engine import resolve_coloring_book_author
+
+    clean = str(brief.get("overlay_style") or "") == "clean_title"
+    author = "" if clean else resolve_coloring_book_author(
+        _field(fields, "author_brand"),
+        _field(fields, "author"),
+        data.get("author_brand"),
+        data.get("author"),
+        existing.get("author"),
+    )
     return ProductCoverPayload(
         product_type="coloring_book",
         engine_product_type=ENGINE_COLORING_BOOK,
         title=brief["title"],
         subtitle=brief["subtitle"],
-        author_brand="",  # do not overlay Lonnie Brown / factory author on coloring covers
+        author_brand=author,
         topic=brief["topic"],
         audience=_field(fields, "age_group"),
-        cover_style="retail_jumbo",
-        layout="full_bleed_retail_jumbo",
+        cover_style="clean_title" if clean else "retail_jumbo",
+        layout="full_bleed_clean_title" if clean else "full_bleed_retail_jumbo",
         image_prompt=brief["cover_prompt"] or str(data.get("cover_prompt") or existing.get("image_prompt") or ""),
         use_ai_cover_image=True,
         product_summary=str(data.get("product_summary") or ""),

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from services.ebook_book_layout import (
+    find_designed_chapter_pages,
     manuscript_text_fingerprint,
     numbered_chapters,
     render_designed_ebook_html,
@@ -68,7 +69,14 @@ def select_theme(data: dict, theme_id: str) -> dict:
     require_quality_pass(data)
     md = str(data.get("content") or data.get("ebook") or "")
     before = manuscript_text_fingerprint(md)
-    visual = visual_manifest_from_manuscript(md)
+    existing_plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else None
+    from services.ebook_visual_pipeline import manifest_from_plan, plan_is_valid, required_aids
+
+    if plan_is_valid(existing_plan) and required_aids(existing_plan):
+        visual = data.get("ebook_visual_manifest") if isinstance(data.get("ebook_visual_manifest"), dict) else None
+        visual = visual if visual and visual.get("assets") else manifest_from_plan(existing_plan)
+    else:
+        visual = visual_manifest_from_manuscript(md)
     cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
     prev = data.get("ebook_design") if isinstance(data.get("ebook_design"), dict) else {}
     revision = int(prev.get("revision") or 0) + 1
@@ -181,6 +189,10 @@ def render_designed_bundle(data: dict, *, output_dir: str | Path | None = None) 
         manuscript_md=md,
         design=design,
         audience=audience,
+        visual_plan=data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else None,
+        # A separate designed cover PDF is always prepended below — an
+        # interior title page here would duplicate it.
+        include_title_page=False,
     )
     cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
     cover_pdf_path = str(cover.get("local_cover_pdf") or "")
@@ -189,16 +201,44 @@ def render_designed_bundle(data: dict, *, output_dir: str | Path | None = None) 
         with open(cover_pdf_path, "rb") as fh:
             cover_pdf = fh.read()
     if not cover_pdf:
+        if cover.get("workflow") == "photo_backed":
+            raise ValueError("Photo-backed cover PDF is missing. Export cannot reconstruct the cover.")
         from services.ebook_cover_local import generate_local_cover_pdf_bytes
 
         cover_pdf = generate_local_cover_pdf_bytes(
             title, subtitle, author=author, topic=str(data.get("source") or title), audience=audience
         )
 
-    from services.pdf_export import _prepend_pdf_bytes, _remove_accidental_blank_pages
+    from services.pdf_export import (
+        _prepend_pdf_bytes,
+        _remove_accidental_blank_pages,
+        _sanitize_pdf_local_link_uris,
+    )
 
-    interior = _html_to_pdf(html_doc, title=title, author=author, subtitle=subtitle)
-    pdf_bytes = _remove_accidental_blank_pages(_prepend_pdf_bytes(cover_pdf, interior))
+    def _merge(html: str) -> bytes:
+        interior = _html_to_pdf(html, title=title, author=author, subtitle=subtitle)
+        return _sanitize_pdf_local_link_uris(
+            _remove_accidental_blank_pages(_prepend_pdf_bytes(cover_pdf, interior))
+        )
+
+    pdf_bytes = _merge(html_doc)
+    chapter_titles = [ctitle for ctitle, _body in numbered_chapters(md)]
+    toc_pages = find_designed_chapter_pages(pdf_bytes, chapter_titles)
+    if toc_pages:
+        numbered_html = render_designed_ebook_html(
+            title=title,
+            subtitle=subtitle,
+            author=author,
+            manuscript_md=md,
+            design=design,
+            audience=audience,
+            visual_plan=data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else None,
+            toc_page_numbers=toc_pages,
+            include_title_page=False,
+        )
+        numbered_pdf = _merge(numbered_html)
+        html_doc = numbered_html
+        pdf_bytes = numbered_pdf
     preview_digest = _sha_bytes(pdf_bytes)
 
     manifest = {
@@ -219,6 +259,9 @@ def render_designed_bundle(data: dict, *, output_dir: str | Path | None = None) 
         "ebook.html": html_doc.encode("utf-8"),
         "manifest.json": json.dumps(manifest, indent=2).encode("utf-8"),
     }
+    from services.ebook_visual_pipeline import collect_zip_visual_files
+
+    zip_buf_files.update(collect_zip_visual_files(data))
     import io
 
     zbuf = io.BytesIO()

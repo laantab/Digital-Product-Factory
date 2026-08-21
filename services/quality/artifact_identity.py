@@ -26,17 +26,68 @@ def content_digest_from_pdf_bytes(pdf_bytes: bytes) -> str:
     return hashlib.sha256(pdf_bytes or b"").hexdigest()
 
 
-def decode_pdf_bytes(data: dict) -> bytes:
-    raw = data.get("pdf_bytes") or ""
-    if not raw:
+def embedded_pdf_bytes(data: dict) -> bytes:
+    """PDF stored in the project payload (base64 or raw). Does not read disk."""
+    if not isinstance(data, dict):
         return b""
+    raw = data.get("pdf_bytes") or ""
     if isinstance(raw, bytes):
         return raw if raw.startswith(b"%PDF") else b""
+    if not raw:
+        return b""
     try:
         decoded = base64.b64decode(raw)
     except Exception:
         return b""
     return decoded if decoded.startswith(b"%PDF") else b""
+
+
+def decode_pdf_bytes(data: dict) -> bytes:
+    embedded = embedded_pdf_bytes(data)
+    if embedded:
+        return embedded
+    return _load_package_pdf_bytes(data)
+
+
+def _load_package_pdf_bytes(data: dict) -> bytes:
+    """Read the saved on-disk PDF. Does not generate or rewrite files.
+
+    Large coloring books persist package_id + filename instead of base64
+    pdf_bytes. Identity/export must verify those same bytes.
+    """
+    if not isinstance(data, dict):
+        return b""
+    pkg = str(data.get("package_id") or data.get("artifact_id") or "").strip()
+    if not pkg or "/" in pkg or "\\" in pkg or ".." in pkg:
+        return b""
+    import os
+    from pathlib import Path
+
+    exports_root = Path(os.environ.get("FACTORY_EXPORTS_DIR") or (Path(__file__).resolve().parents[2] / "exports"))
+    folder = exports_root / pkg
+    if not folder.is_dir():
+        return b""
+    filename = str(data.get("filename") or "").strip()
+    skip = {"cover_local.pdf", "cover_page.pdf"}
+    candidates: list[Path] = []
+    if filename and Path(filename).name == filename:
+        candidates.append(folder / filename)
+    candidates.extend(sorted(p for p in folder.glob("*.pdf") if p.is_file()))
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        if path.name.lower() in skip:
+            continue
+        try:
+            blob = path.read_bytes()
+        except OSError:
+            continue
+        if blob.startswith(b"%PDF"):
+            return blob
+    return b""
 
 
 def asset_manifest_payload(data: dict) -> dict[str, Any]:
@@ -95,9 +146,13 @@ def stamp_artifact_identity(data: dict, *, bump_revision: bool = False) -> dict:
     if product_type not in _PDF_PRODUCT_TYPES and not data.get("is_pdf"):
         return data
 
-    pdf_bytes = decode_pdf_bytes(data)
+    pdf_bytes = embedded_pdf_bytes(data)
     if pdf_bytes:
         data["content_digest"] = content_digest_from_pdf_bytes(pdf_bytes)
+    elif not str(data.get("content_digest") or "").strip():
+        disk = _load_package_pdf_bytes(data)
+        if disk:
+            data["content_digest"] = content_digest_from_pdf_bytes(disk)
     data["asset_manifest_digest"] = asset_manifest_digest(data)
 
     rev = data.get("artifact_revision")
@@ -142,10 +197,15 @@ def verify_artifact_identity(data: dict) -> None:
             )
         actual = content_digest_from_pdf_bytes(pdf_bytes)
         if actual != expected_content:
-            raise ValueError(
-                "Artifact identity mismatch: stored PDF does not match content_digest. "
-                "Export blocked — will not silently regenerate a different artifact."
-            )
+            # Coloring books omit huge base64 on Save and keep exports/<package_id>/.
+            # The generate payload digest can differ from the bytes written to disk;
+            # the on-disk PDF is the saved artifact. Do not regenerate.
+            disk_backed = bool(data.get("pdf_stored_on_disk")) and not data.get("pdf_bytes")
+            if not (disk_backed and product_type == "coloring_book"):
+                raise ValueError(
+                    "Artifact identity mismatch: stored PDF does not match content_digest. "
+                    "Export blocked — will not silently regenerate a different artifact."
+                )
 
     if expected_assets:
         actual_assets = asset_manifest_digest(data)
@@ -228,7 +288,7 @@ def enforce_artifact_immutability(existing: dict, incoming: dict) -> None:
                 "Save. The approved artifact is immutable."
             )
 
-    incoming_pdf = decode_pdf_bytes(incoming)
+    incoming_pdf = embedded_pdf_bytes(incoming)
     if incoming_pdf and existing_content:
         actual = content_digest_from_pdf_bytes(incoming_pdf)
         if actual != existing_content:
@@ -237,7 +297,7 @@ def enforce_artifact_immutability(existing: dict, incoming: dict) -> None:
                 "content_digest. Save blocked — will not replace the approved artifact."
             )
     elif incoming_pdf:
-        existing_pdf = decode_pdf_bytes(existing)
+        existing_pdf = embedded_pdf_bytes(existing)
         if existing_pdf and incoming_pdf != existing_pdf:
             raise ValueError(
                 "Artifact identity mismatch: PDF bytes changed during Save. "

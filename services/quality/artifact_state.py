@@ -348,6 +348,49 @@ def assert_content_mutation_allowed(
     return state
 
 
+LOCKED_DELETION_MESSAGE = "This project is locked and cannot be deleted."
+
+
+def project_is_locked(
+    record: Mapping[str, Any] | None,
+    *,
+    repo_root: Path | None = None,
+    committed_lock_ids: frozenset[str] | None = None,
+) -> bool:
+    """True when resolve_artifact_state is LOCKED. Labels/flags are ignored."""
+    try:
+        return (
+            resolve_artifact_state(
+                record, repo_root=repo_root, committed_lock_ids=committed_lock_ids
+            )
+            is ArtifactState.LOCKED
+        )
+    except ArtifactStateError:
+        # Conflicting or unverifiable evidence: fail closed for deletion/cleanup.
+        return True
+
+
+def assert_project_deletion_allowed(
+    record: Mapping[str, Any] | None,
+    *,
+    action: str = "delete",
+    repo_root: Path | None = None,
+    committed_lock_ids: frozenset[str] | None = None,
+) -> ArtifactState:
+    """Reject deletion, cleanup, prune, orphan/export/revision/asset removal for LOCKED.
+
+    Hidden, test, debug, and auto-generated labels never override LOCKED.
+    Does not unlock, downgrade, or mutate the record.
+    """
+    del action  # kept for call-site clarity; LOCKED always uses the exact message
+    state = resolve_artifact_state(
+        record, repo_root=repo_root, committed_lock_ids=committed_lock_ids
+    )
+    if state is ArtifactState.LOCKED:
+        raise ArtifactStateError(LOCKED_DELETION_MESSAGE)
+    return state
+
+
 def invalidate_draft_export_references(
     record: dict[str, Any],
     *,

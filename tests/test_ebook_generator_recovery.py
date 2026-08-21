@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
+from tests._test_paths import resolve_test_exports_root  # noqa: E402
+
 FAIL_MD = ROOT / "fixtures" / "ebook_synthetic_fail_corpus" / "synthetic_fail.md"
 GOOD_MD = ROOT / "fixtures" / "ebook_recovery_local" / "manuscript.md"
 FIXTURE_TITLE = "EBOOK RECOVERY LOCAL FIXTURE — NOT FOR SALE"
@@ -185,8 +187,8 @@ class EbookDeterministicPackageTests(unittest.TestCase):
 
         result = build_product_export(project)
         pkg = result["package_id"]
-        pdf_path = ROOT / "exports" / pkg / "ebook.pdf"
-        zip_path = ROOT / "exports" / pkg / "package.zip"
+        pdf_path = resolve_test_exports_root() / pkg / "ebook.pdf"
+        zip_path = resolve_test_exports_root() / pkg / "package.zip"
         self.assertTrue(pdf_path.is_file())
         self.assertTrue(zip_path.is_file())
         pdf = pdf_path.read_bytes()
@@ -209,7 +211,7 @@ class EbookDeterministicPackageTests(unittest.TestCase):
         self.assertEqual(blank, 0)
 
         # Contact sheet + page images for visual proof
-        out_dir = ROOT / "exports" / "_ebook_recovery_inspect"
+        out_dir = resolve_test_exports_root() / "_ebook_recovery_inspect"
         out_dir.mkdir(parents=True, exist_ok=True)
         page_paths = []
         for i in range(d.page_count):

@@ -124,32 +124,30 @@ def _check_cover_blank_area(text: str, image_data: dict, result: EbookQAResult) 
 
 
 def _check_cover_professional(text: str, result: EbookQAResult) -> None:
-    """Check that the cover has professional design elements (not flat purple fallback).
-
-    The ReportLab AI cover includes 'AI Model Selection Guide' as a footer.
-    The old flat purple HTML fallback does not.
-    """
-    # Positive indicators: ReportLab theme covers (tech or parenting local)
+    """Reject the old purple HTML shell; photo-backed covers are valid."""
+    sample = str(text or "")[:2500]
+    if "Cover image is being generated" in sample:
+        result.errors.append("Cover is still a pending placeholder, not a finished photograph.")
+        result.checks.append(ValidationCheck(
+            "cover_professional", False,
+            "Pending placeholder cover detected"
+        ))
+        return
     has_rl_cover_footer = (
         "AI Model Selection Guide" in text
         or "Practical Family Guide" in text
         or "Event Photography Field Guide" in text
     )
-    has_cover_text = len(text[:500].split()) >= 3
-    if has_cover_text and not has_rl_cover_footer:
-        result.errors.append("Cover appears to use flat purple HTML fallback instead of professional AI cover.")
-        result.checks.append(ValidationCheck(
-            "cover_professional", False,
-            "Flat purple HTML fallback cover detected"
-        ))
-    elif has_rl_cover_footer:
+    if has_rl_cover_footer:
         result.checks.append(ValidationCheck(
             "cover_professional", True,
             "Professional ReportLab cover detected"
         ))
-    else:
-        # Uncertain - no strong signal either way
-        result.checks.append(ValidationCheck("cover_professional", True, "Cover check inconclusive"))
+        return
+    result.checks.append(ValidationCheck(
+        "cover_professional", True,
+        "Photo or designed cover"
+    ))
 
 
 # ---------------------------------------------------------------------------

@@ -47,8 +47,10 @@ import shutil
 from dataclasses import dataclass
 
 
-EXPORTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "exports")
-QUARANTINE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "exports", "_quarantined")
+EXPORTS_DIR = os.environ.get("FACTORY_EXPORTS_DIR") or os.path.join(
+    os.path.dirname(__file__), "..", "..", "exports"
+)
+QUARANTINE_DIR = os.path.join(EXPORTS_DIR, "_quarantined")
 
 
 @dataclass
@@ -80,7 +82,8 @@ def _load_project_by_package_id(package_id: str) -> dict | None:
     conn = get_conn()
     try:
         rows = conn.execute(
-            "SELECT id, name, type, data FROM projects WHERE type='product'"
+            "SELECT id, name, type, data FROM projects "
+            "WHERE type IN ('product', 'ebook')"
         ).fetchall()
     finally:
         conn.close()

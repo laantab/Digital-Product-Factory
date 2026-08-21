@@ -2,12 +2,11 @@ const NAV = [
   // Main
   { id: "dashboard", label: "Dashboard", icon: "M3 12l9-9 9 9M5 10v10h14V10" },
   { id: "saved", label: "Saved Projects", icon: "M5 3h11l3 3v15a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1zM8 3v5h6V3" },
-  { id: "market", label: "Market Research", icon: "M3 3v18h18M7 14l4-4 3 3 5-6" },
+  { id: "market", label: "Factory Market Advantage", icon: "M3 3v18h18M7 14l4-4 3 3 5-6" },
   { id: "planning", label: "Product Planning", icon: "M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" },
   // Section: Create
   { _section: "Create & Build" },
   { id: "factory", label: "Product Factory", icon: "M3 21h18M5 21V8l5-3 5 3M9 21v-4h4v4M14 21V11l5-3v13" },
-  { id: "research", label: "Niche Research", icon: "M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35" },
   { id: "ebook", label: "Ebook Builder", icon: "M4 5a2 2 0 012-2h9l5 5v11a2 2 0 01-2 2H6a2 2 0 01-2-2z" },
   { id: "visual", label: "Visual Review", icon: "M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2zM10 9l5 3-5 3z" },
   // Section: Publish
@@ -19,7 +18,7 @@ const NAV = [
   { _section: "Account" },
   { id: "subscription", label: "Subscription", icon: "M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" },
 ];
-const TITLES = { dashboard: "Dashboard", saved: "Saved Projects", market: "Market Research", planning: "Product Planning", factory: "Product Factory", research: "Niche Research", ebook: "Ebook Builder", "ebook-workspace": "Ebook Project", visual: "Visual Review", publishing: "Publishing Studio", packages: "Platform Packages", ad: "Ad Generator", subscription: "Subscription Plans" };
+const TITLES = { dashboard: "Dashboard", saved: "Saved Projects", market: "Factory Market Advantage", planning: "Product Planning", factory: "Product Factory", research: "Factory Market Advantage", ebook: "Ebook Builder", "ebook-workspace": "Ebook Project", visual: "Visual Review", publishing: "Publishing Studio", packages: "Platform Packages", ad: "Ad Generator", subscription: "Subscription Plans" };
 
 const MARKET_PRODUCT_TYPES = [
   "Ebook", "Workbook", "Checklist", "Coloring Book", "Word Search Book",
@@ -59,7 +58,7 @@ const PRODUCT_TYPES = [
         type: "select",
         options: YN,
         default: "No",
-        hint: "Set Yes after Niche Research → Send to Ebook Builder, or paste notes below.",
+        hint: "Set Yes after Factory Market Advantage → Build This Product, or paste notes below.",
       },
       {
         name: "research_notes",
@@ -68,7 +67,17 @@ const PRODUCT_TYPES = [
         placeholder: "Paste findings/sources. Chapters will paraphrase these — never copy.",
       },
       { name: "include_worksheets", label: "Include worksheets", type: "select", options: YN },
-      { name: "include_images", label: "Include visuals (charts/photos)", type: "select", options: YN, default: "Yes" },
+      {
+        name: "include_images",
+        label: "Visuals",
+        type: "select",
+        options: [
+          { value: "Yes", label: "Automatic professional visuals — recommended" },
+          { value: "No", label: "No visuals" },
+        ],
+        default: "Yes",
+        hint: "We’ll use relevant stock photos first and create an AI image only when a suitable stock image cannot be found.",
+      },
     ],
   },
   {
@@ -86,6 +95,14 @@ const PRODUCT_TYPES = [
         type: "text",
         required: true,
         placeholder: "e.g. Ocean Friends Coloring Book",
+      },
+      {
+        name: "author_brand",
+        label: "Author name",
+        type: "text",
+        required: true,
+        value: "Lonnie Brown",
+        placeholder: "e.g. Lonnie Brown",
       },
       {
         name: "theme",
@@ -330,6 +347,9 @@ function productSavePayload(d, { omitPdfBytes = false } = {}) {
     "cover_preview_b64",
     "sample_preview_b64",
     "paid_api_warning",
+    "interior_previews",
+    "cover_preview_url",
+    "cover_preview_missing",
   ]);
   if (omitPdfBytes) omitKeys.add("pdf_bytes");
 
@@ -391,8 +411,8 @@ function saveBar(type, getPayload) {
       const { _project_id, ...body } = payload || {};
       markUserSaved(body);
       const saved = existingId != null
-        ? await api(`/projects/${existingId}`, { method: "PUT", body: JSON.stringify({ name, type, data: body }) })
-        : await api("/projects", { method: "POST", body: JSON.stringify({ name, type, data: body }) });
+        ? await api(`/projects/${existingId}`, { method: "PUT", body: JSON.stringify({ name, type, data: body, user_saved: true, user_confirmed_save: true }) })
+        : await api("/projects", { method: "POST", body: JSON.stringify({ name, type, data: body, user_saved: true, user_confirmed_save: true }) });
       if (payload && saved && saved.id != null) payload._project_id = saved.id;
       toast(existingId != null ? "Project updated" : "Project saved");
       loadProjects();
@@ -441,12 +461,14 @@ function go(view) {
   // Stale lineage must never bleed across navigations; runNextAction/sendToBuilder
   // re-set this AFTER calling go() for the step that needs it.
   pendingProductProjectId = null;
+  // Consolidate Niche Research into Factory Market Advantage. Old go("research") links still work.
+  if (view === "research") view = "market";
   current = view;
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("hidden", v.dataset.view !== view));
   document.getElementById("pageTitle").textContent = TITLES[view];
   buildNav();
   if (view === "dashboard") loadDashboard();
-  if (view === "saved") loadProjects();
+  if (view === "saved") { savedListOffset = 0; loadProjects(); }
   if (view === "factory") buildFactoryTypes();
   if (view === "market") initMarket();
   if (view === "planning") { planLineageId = null; initPlanTypes(); loadPlanSources(); }
@@ -457,13 +479,42 @@ function go(view) {
 
 // ---------- dashboard ----------
 async function loadDashboard() {
-  // Wire the Saved Projects "show test projects" toggle (one-time, idempotent).
+  // Wire the Saved Projects admin toggles (one-time, idempotent).
   const tgl = document.getElementById("showTestProjects");
   if (tgl && !tgl.dataset.wired) {
     tgl.addEventListener("change", () => loadProjects());
     tgl.dataset.wired = "1";
   }
-  await loadProjects();
+  const hiddenTgl = document.getElementById("showHiddenInternal");
+  if (hiddenTgl && !hiddenTgl.dataset.wired) {
+    hiddenTgl.addEventListener("change", () => loadProjects());
+    hiddenTgl.dataset.wired = "1";
+  }
+  const olderBtn = document.getElementById("viewOlderBtn");
+  if (olderBtn && !olderBtn.dataset.wired) {
+    olderBtn.addEventListener("click", () => {
+      savedListOffset += 10;
+      loadProjects();
+    });
+    olderBtn.dataset.wired = "1";
+  }
+  refreshAdminControls();
+  let projects = [];
+  try {
+    projects = await api("/projects?limit=3");
+  } catch (e) {
+    /* ignore */
+  }
+  const emptyMsg = `<p class="text-sm text-slate-400 py-6 text-center">No saved projects yet. Generate something and save it here.</p>`;
+  const recent = document.getElementById("recentList");
+  if (recent) {
+    if (!projects.length) {
+      recent.innerHTML = emptyMsg;
+    } else {
+      recent.innerHTML = "";
+      projects.forEach((p) => recent.appendChild(projectRow(p, { dashboard: true })));
+    }
+  }
 }
 
 // Mark a project data blob as user-saved (the user explicitly clicked Save
@@ -472,8 +523,11 @@ async function loadDashboard() {
 function markUserSaved(data) {
   if (!data || typeof data !== "object") return data;
   data.user_saved = true;
+  data.user_confirmed_save = true;
+  data.hidden_from_customer = false;
+  data.internal_record = false;
+  data.temporary = false;
   delete data.system_test;
-  delete data.temporary;
   delete data.validation_only;
   delete data.archived;
   data._saved_at = new Date().toISOString();
@@ -486,14 +540,14 @@ function _showWorkflowSaveDialog(d, onSave) {
   const overlay = document.createElement("div");
   overlay.style = "position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:999;display:flex;align-items:center;justify-content:center;padding:1rem;";
   overlay.innerHTML = '<div style="background:white;border-radius:1rem;padding:1.75rem;max-width:480px;width:100%;box-shadow:0 25px 50px rgba(0,0,0,0.25);font-family:system-ui,sans-serif;">' +
-    '<h2 style="font-size:1.125rem;font-weight:700;color:#0f172a;margin:0 0 0.75rem;">Save this product?</h2>' +
+    '<h2 style="font-size:1.125rem;font-weight:700;color:#0f172a;margin:0 0 0.75rem;">Do you want to save this product?</h2>' +
     '<p style="color:#475569;font-size:0.9rem;margin:0 0 1.5rem;line-height:1.6;">' +
-    '<strong>' + escapeHtml(name) + '</strong> is ready. Would you like to save it to your projects?<br><br>' +
-    'Saving unlocks Publishing, Downloads, Sales Pages, and Ad Packages. You can always save it later from the product preview.</p>' +
+    '<strong>' + escapeHtml(name) + '</strong> is ready. Save it to keep it in Saved Projects.<br><br>' +
+    'Only Save Product adds it to your list. You can still preview now and save later.</p>' +
     '<div style="display:flex;flex-wrap:wrap;gap:0.75rem;justify-content:flex-end;">' +
     '<button id="_dlgCancel" type="button" style="padding:0.625rem 1.25rem;border-radius:0.75rem;border:1px solid #cbd5e1;background:white;color:#475569;font-size:0.875rem;font-weight:500;cursor:pointer;">Cancel</button>' +
     '<button id="_dlgNoSave" type="button" style="padding:0.625rem 1.25rem;border-radius:0.75rem;border:1px solid #cbd5e1;background:white;color:#64748b;font-size:0.875rem;font-weight:500;cursor:pointer;">Continue Without Saving</button>' +
-    '<button id="_dlgSave" type="button" style="padding:0.625rem 1.25rem;border-radius:0.75rem;border:none;background:#4f46e5;color:white;font-size:0.875rem;font-weight:600;cursor:pointer;">Save Project</button>' +
+    '<button id="_dlgSave" type="button" style="padding:0.625rem 1.25rem;border-radius:0.75rem;border:none;background:#4f46e5;color:white;font-size:0.875rem;font-weight:600;cursor:pointer;">Save Product</button>' +
     '</div></div>';
   document.body.appendChild(overlay);
   const close = () => { if (overlay.parentNode) document.body.removeChild(overlay); };
@@ -517,11 +571,10 @@ function _showWorkflowSaveDialog(d, onSave) {
 // Actually save a workflow product (called after user confirms).
 // d._nsRenderPostSave is set by nextStepsPanel() so this can switch the panel UI.
 async function _doWorkflowSave(d) {
-  if (d._project_id == null) return;
   // Reuse ensureProductSaved so large coloring-book PDFs omit base64 the same way.
-  await ensureProductSaved(d);
+  await ensureProductSaved(d, { confirmed: true });
   if (d._nsRenderPostSave) d._nsRenderPostSave();
-  toast("Project saved. Choose your next step.");
+  toast("Product saved. Choose your next step.");
 }
 
 
@@ -532,6 +585,8 @@ function markSystemTest(data, reason) {
   if (!data || typeof data !== "object") return data;
   data.system_test = true;
   data.temporary = true;
+  data.hidden_from_customer = true;
+  data.user_saved = false;
   data._test_reason = reason || "automated test";
   data._test_at = new Date().toISOString();
   return data;
@@ -541,34 +596,22 @@ function markSystemTest(data, reason) {
 //   - "user-saved" projects (the only ones visible by default)
 //   - test / debug / auto-generated projects (hidden unless the developer
 //     toggles "Show test / debug / auto-generated projects" on)
-const _TEST_NAME_PATTERNS = /\b(test|workflow\.?test|pipeline\.?test|validation|regression|smoke|qa\.?test|debug|unit\.?test|integration\.?test|bench)\b/i;
+const _TEST_NAME_PATTERNS = /\b(test|debug|qa|handoff|guided cover isolated|cover isolated|seed self refuse|view only|view-only|workflow test|pipeline test|download proof|seed target|product smoke|coloring smoke|math smoke|final acceptance seed|manuscript gate|title outline persist|no cover preview)\b/i;
 function isUserSavedProject(p) {
   if (!p) return false;
-  // Explicitly flagged as system/test/temporary → hide.
-  if (p.system_test || p.temporary) return false;
-  // Explicitly marked as user_saved=True → show.
-  if (p.user_saved === true) return true;
-  // New-style record explicitly opted out (system_test=False but user_saved=False explicitly) → hide.
-  // But check: if user_saved is False and system_test is False, and name looks like test → hide.
-  if (p.user_saved === false) {
-    // Check name pattern for test/debug detection as safety net
-    if (_TEST_NAME_PATTERNS.test(p.name || "")) return false;
-    return false; // explicit opt-out
-  }
-  // Old-style record (no top-level flags): fall back to data-level flags.
+  if (p.system_test || p.temporary || p.hidden_from_customer || p.internal_record) return false;
   const d = p.data || {};
-  if (d.system_test || d.temporary || d.validation_only || d.archived) return false;
-  if (d.user_saved === true) return true;
-  // Name-based detection as additional safety net for old projects
-  if (_TEST_NAME_PATTERNS.test(d.name || "")) return false;
-  // Old projects with no explicit flags → show (backward compat).
+  if (d.system_test || d.temporary || d.hidden_from_customer || d.internal_record || d.validation_only || d.archived) return false;
+  if (p.user_saved === false || d.user_saved === false) return false;
+  if (_TEST_NAME_PATTERNS.test(p.name || "") || _TEST_NAME_PATTERNS.test(d.title || "") || _TEST_NAME_PATTERNS.test(d.name || "")) return false;
+  if (p.user_saved === true || d.user_saved === true) return true;
   return true;
 }
 
-// Admin mode: enabled via localStorage or URL ?admin=1
+// Admin mode: URL ?admin=1 only. Default off for customers.
 function isAdminMode() {
-  return localStorage.getItem("factory_admin_mode") === "true" ||
-    new URLSearchParams(window.location.search).has("admin");
+  const q = new URLSearchParams(window.location.search);
+  return q.get("admin") === "1";
 }
 
 function setAdminMode(val) {
@@ -579,20 +622,51 @@ function setAdminMode(val) {
 
 function refreshAdminControls() {
   const adminSection = document.querySelector(".admin-controls");
-  if (!adminSection) return;
-  adminSection.classList.toggle("hidden", !isAdminMode());
+  if (adminSection) adminSection.classList.toggle("hidden", !isAdminMode());
+  const adminHint = document.getElementById("adminModeHint");
+  if (adminHint) {
+    adminHint.classList.add("hidden");
+    adminHint.hidden = true;
+  }
+}
+
+let savedSearchQuery = "";
+let savedTypeFilter = "all";
+let savedListOffset = 0;
+
+function matchesSavedFilter(p, filter) {
+  const d = (p && p.data) || {};
+  if (filter === "all") return true;
+  if (filter === "products") return p.type === "product" || p.type === "ebook";
+  if (filter === "plans") return p.type === "product_plan" || p.type === "research_plan";
+  if (filter === "launch") return !!(d.launch_package_generated || d._launch_package || p.type === "launch_package");
+  if (filter === "ads") return p.type === "ad" || p.type === "ad_set" || p.type === "ad_package";
+  return true;
+}
+
+function applySavedSearchFilter(projects) {
+  const q = (savedSearchQuery || "").trim().toLowerCase();
+  return (projects || []).filter((p) => {
+    if (!matchesSavedFilter(p, savedTypeFilter)) return false;
+    if (!q) return true;
+    const hay = `${p.name || ""} ${((p.data || {}).title) || ""}`.toLowerCase();
+    return hay.includes(q);
+  });
 }
 
 async function loadProjects() {
-  const showAll = !!document.getElementById("showTestProjects")?.checked;
+  refreshAdminControls();
+  const showAll = isAdminMode();
   let projects = [];
   try {
-    // Backend now filters by default; opt in to all projects when toggle is on.
-    const url = showAll ? "/projects?include_system=1" : "/projects";
+    const url = showAll
+      ? "/projects?admin=1"
+      : `/projects?limit=10&offset=${savedListOffset || 0}`;
     projects = await api(url);
   } catch (e) {
     /* ignore */
   }
+  if (!Array.isArray(projects)) projects = [];
 
   const counts = { research: 0, ebook: 0, ad: 0, product: 0, launch: 0 };
   projects.forEach((p) => {
@@ -600,9 +674,7 @@ async function loadProjects() {
     if (p.data && (p.data.launch_package_generated || p.data._launch_package)) counts.launch++;
   });
 
-  // Filter before stats — previously referenced userVisible before init and
-  // crashed loadProjects, so Saved Projects never refreshed after Save.
-  const userVisible = projects.filter(isUserSavedProject);
+  const userVisible = showAll ? projects : projects;
 
   const stats = [
     { label: "Saved Products", value: userVisible.length, accent: "bg-brand-600", sub: "your products" },
@@ -623,30 +695,21 @@ async function loadProjects() {
   }
 
   const emptyMsg = `<p class="text-sm text-slate-400 py-6 text-center">No saved projects yet. Generate something and save it here.</p>`;
-  const emptyMsgHidden = `<p class="text-sm text-slate-400 py-6 text-center">No visible projects. Toggle "Show test / debug" to see all.</p>`;
 
-  const recent = document.getElementById("recentList");
-  if (recent) {
-    if (!userVisible.length) {
-      recent.innerHTML = emptyMsg;
-    } else {
-      recent.innerHTML = "";
-      userVisible.slice(0, 5).forEach((p) => recent.appendChild(projectRow(p, { dashboard: true })));
-    }
-  }
-
-  // Saved Projects page: filter by user_saved unless the developer toggled
-  // "Show test / debug / auto-generated projects" on.
-  const visible = showAll ? projects : userVisible;
+  const visible = showAll ? projects : applySavedSearchFilter(projects);
 
   const saved = document.getElementById("savedList");
   if (saved) {
     if (!visible.length) {
-      saved.innerHTML = showAll ? emptyMsgHidden : emptyMsg;
+      saved.innerHTML = emptyMsg;
     } else {
       saved.innerHTML = "";
       visible.forEach((p) => saved.appendChild(projectRow(p, { showMeta: showAll })));
     }
+  }
+  const olderWrap = document.getElementById("savedOlderWrap");
+  if (olderWrap) {
+    olderWrap.classList.toggle("hidden", showAll || visible.length < 10);
   }
 
   // Admin controls wiring — only runs when admin mode is on.
@@ -673,13 +736,18 @@ async function loadProjects() {
         await api("/admin/backup-db", { method: "POST" });
         delAllBtn.textContent = "Deleting…";
         const result = await api("/projects?delete_all=1&user_saved_only=1", { method: "DELETE" });
-        toast(`Deleted ${result.deleted || count} saved project${result.deleted === 1 ? "" : "s"}. Backup saved.`);
+        const skipped = result.locked_skipped || (result.skipped_ids || []).length;
+        let msg = `Deleted ${result.deleted || 0} saved project${result.deleted === 1 ? "" : "s"}. Backup saved.`;
+        if (skipped) {
+          msg += ` Skipped ${skipped} locked project${skipped === 1 ? "" : "s"}.`;
+        }
+        toast(msg);
         loadProjects();
         loadDashboard();
       } catch (e) {
         toast("Delete failed: " + e.message, "error");
         delAllBtn.disabled = false;
-        delAllBtn.textContent = "Admin: Delete All Saved Projects";
+        delAllBtn.textContent = "Delete all saved projects";
       }
     });
     delAllBtn.dataset.wired = "1";
@@ -714,7 +782,12 @@ async function loadProjects() {
         await api("/admin/backup-db", { method: "POST" });
         delTestBtn.textContent = "Deleting…";
         const result = await api("/admin/delete-test-projects", { method: "DELETE" });
-        toast(`Deleted ${result.deleted || testCount} test/debug project${result.deleted === 1 ? "" : "s"}. Backup saved.`);
+        const skipped = result.locked_skipped || (result.skipped_ids || []).length;
+        let msg = `Deleted ${result.deleted || 0} test/debug project${result.deleted === 1 ? "" : "s"}. Backup saved.`;
+        if (skipped) {
+          msg += ` Skipped ${skipped} locked project${skipped === 1 ? "" : "s"}.`;
+        }
+        toast(msg);
         loadProjects();
         loadDashboard();
       } catch (e) {
@@ -729,23 +802,16 @@ async function loadProjects() {
     delTestBtn.disabled = !isAdminMode();
   }
 
-  // Admin mode toggle link — appear when NOT in admin mode.
-  // (The toggle itself lives in the admin-controls section which is hidden in normal mode)
   const adminHint = document.getElementById("adminModeHint");
-  if (adminHint) adminHint.classList.toggle("hidden", isAdminMode());
-  // Enable Admin Mode button
-  const enableAdminBtn = document.getElementById("enableAdminBtn");
-  if (enableAdminBtn && !enableAdminBtn.dataset.wired) {
-    enableAdminBtn.addEventListener("click", () => setAdminMode(true));
-    enableAdminBtn.dataset.wired = "1";
+  if (adminHint) {
+    adminHint.classList.add("hidden");
+    adminHint.hidden = true;
   }
-  // Exit Admin Mode button
   const exitAdminBtn = document.getElementById("exitAdminBtn");
   if (exitAdminBtn && !exitAdminBtn.dataset.wired) {
     exitAdminBtn.addEventListener("click", () => setAdminMode(false));
     exitAdminBtn.dataset.wired = "1";
   }
-  // When admin mode is on, the hint is hidden (already toggled above)
 }
 
 function projectTypeLabel(p) {
@@ -798,7 +864,7 @@ function hasVisualPlan(d) {
 // derivable from content alone). Export artifacts auto-advance to export_ready.
 function projectStage(p) {
   const d = p.data || {};
-  const stored = STAGE_LABELS[d.stage] ? d.stage : null;
+  let stored = STAGE_LABELS[d.stage] ? d.stage : null;
   let derived = null;
   switch (p.type) {
     case "research_plan": derived = "research_saved"; break;
@@ -809,7 +875,10 @@ function projectStage(p) {
       const releaseFail = String(d.release_status || "").toUpperCase() === "FAIL";
       const releaseWarn = String(d.release_status || "").toUpperCase() === "WARNING";
       const ebookLike = p.type === "ebook" || String(d.product_type || "").toLowerCase() === "ebook";
-      if (ebookLike && (releaseFail || d.export_ready === false || String(d.release_status || "").toUpperCase() === "WARNING")) {
+      if (ebookLike && !factoryEbookReady(d)) {
+        if (stored === "export_ready" || stored === "completed") stored = null;
+        derived = "product_generated";
+      } else if (ebookLike && (releaseFail || d.export_ready === false || String(d.release_status || "").toUpperCase() === "WARNING")) {
         derived = releaseWarn ? "publishing_preview_ready" : "product_generated";
       } else {
         derived = (d.export_package_id || d.product_exports) ? "export_ready" : "product_generated";
@@ -830,8 +899,26 @@ function _isEbookProject(p) {
   return pt === "ebook";
 }
 
+function factoryEbookReady(d) {
+  return !!(d && d.ebook_ready === true && d.export_ready === true && d.pdf_available === true);
+}
+
+function ebookOnDiskFiles(d) {
+  const pkg = String(
+    (d && (d.package_id || d.export_package_id || (d.fields && d.fields.package_id))) || ""
+  ).trim();
+  if (!pkg) return null;
+  return {
+    pdf: { name: "ebook.pdf", url: `/download/${pkg}/ebook.pdf` },
+    zip: { name: "package.zip", url: `/download/${pkg}/package.zip` },
+  };
+}
+
 function nextActionLabel(stage, p) {
   const d = (p && p.data) || {};
+  if (_isEbookProject(p) && !factoryEbookReady(d) && d.next_action) {
+    return d.next_action;
+  }
   if (_isEbookProject(p) && (d.ebook_project_workspace || d.ebook_workspace)) {
     const next = (d.ebook_workspace && d.ebook_workspace.next_action) || "";
     if (next === "generate_manuscript") return "Generate Manuscript";
@@ -933,12 +1020,16 @@ async function createDraftRevision(p, btn) {
 function projectRow(p, opts) {
   const isDash = opts && opts.dashboard;
   const showMeta = opts && opts.showMeta;
+  const adminView = isAdminMode();
   const d = p.data || {};
   const date = new Date(p.updated_at).toLocaleDateString();
   const stage = projectStage(p);
   const nextLabel = nextActionLabel(stage, p);
   const typePill = `<span class="shrink-0 rounded-md bg-brand-100 text-brand-700 text-xs font-semibold px-2 py-1 capitalize">${escapeHtml(projectTypeLabel(p))}</span>`;
-  const stageBadge = stage
+  const ebookIncomplete = _isEbookProject(p) && !factoryEbookReady(d);
+  const stageBadge = ebookIncomplete
+    ? `<span class="shrink-0 rounded-md bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-1">${escapeHtml(d.status_label || "Needs correction.")}</span>`
+    : stage
     ? `<span class="shrink-0 rounded-md ${STAGE_BADGE[stage]} text-xs font-semibold px-2 py-1">${escapeHtml(STAGE_LABELS[stage])}</span>`
     : "";
 
@@ -967,16 +1058,25 @@ function projectRow(p, opts) {
   // product_plan / research rows called /export-product, wrote orphan packages,
   // then /download returned 403 — the classic "Download doesn't work" UX.
   // Ebook Project workspace: PDF/ZIP stay hidden until server preflight PASS.
+  // customer_keep restores serve already-stored files without claiming PASS.
+  const keepCustomer = d.customer_keep === true;
+  const exportFiles = (d.product_exports && d.product_exports.files) || (d.exports && d.exports.files) || {};
+  const keepHasPdf = !!(keepCustomer && exportFiles.pdf && exportFiles.pdf.url);
+  const keepHasZip = !!(keepCustomer && exportFiles.zip && exportFiles.zip.url);
   const workspaceEbook =
     p.type === "ebook" &&
     (d.ebook_project_workspace || d.ebook_workspace) &&
-    !(d.export_ready === true && String(d.release_status || "").toUpperCase() === "PASS");
+    !(d.export_ready === true && String(d.release_status || "").toUpperCase() === "PASS") &&
+    !keepHasPdf &&
+    !keepHasZip;
   const canDownloadProduct =
-    (p.type === "product" || p.type === "ebook") && !workspaceEbook;
-  const dlPdfBtn = canDownloadProduct
+    ((p.type === "product" || p.type === "ebook") && !workspaceEbook && !ebookIncomplete)
+    || keepHasPdf
+    || keepHasZip;
+  const dlPdfBtn = (canDownloadProduct && (keepHasPdf || !keepCustomer))
     ? `<button class="rounded-lg ${isDash ? "bg-slate-100 hover:bg-slate-200 text-slate-600" : "bg-emerald-600 hover:bg-emerald-700 text-white"} text-xs font-semibold px-3 py-1.5" data-dl-pdf>${isDash ? "PDF" : "Download PDF"}</button>`
     : "";
-  const dlZipBtn = canDownloadProduct && !isDash
+  const dlZipBtn = canDownloadProduct && !isDash && (keepHasZip || !keepCustomer)
     ? `<button class="rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-1.5" data-dl-zip>Download ZIP</button>`
     : "";
   const launchBtn = canDownloadProduct && !isDash
@@ -1003,15 +1103,16 @@ function projectRow(p, opts) {
         ${stageBadge}
         ${metaBadge}
         <span class="truncate font-medium text-slate-800">${escapeHtml(p.name)}</span>
+        ${p.type === "product" && String((d.product_type || "")).toLowerCase() === "coloring_book" && _productAuthor(d) ? `<span class="hidden sm:inline text-xs text-slate-500">by ${escapeHtml(_productAuthor(d))}</span>` : ""}
         <span class="hidden sm:inline text-xs text-slate-400">${date}</span>
-        ${draftRevisionNote}
+        ${adminView ? draftRevisionNote : ""}
       </div>
       <div class="flex items-center gap-2 shrink-0">
         ${dlPdfBtn}
         ${dlZipBtn}
-        ${launchBtn}
-        ${nextLabel ? `<button class="rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-1.5" data-next>${escapeHtml(nextLabel)}</button>` : ""}
-        ${draftRevisionBtn}
+        ${adminView ? launchBtn : ""}
+        ${adminView && nextLabel ? `<button class="rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-1.5" data-next>${escapeHtml(nextLabel)}</button>` : ""}
+        ${adminView ? draftRevisionBtn : ""}
         <button class="text-sm font-medium text-brand-600 hover:text-brand-800" data-open>Open</button>
         <button class="text-sm font-medium text-rose-500 hover:text-rose-700" data-del>Delete</button>
       </div>`;
@@ -1027,7 +1128,13 @@ function projectRow(p, opts) {
     try {
       const data = (p.data && (p.data.product_exports || p.data.exports)) || {};
       let ex = data.files;
-      if (!ex) {
+      const ebookDisk = _isEbookProject(p) ? ebookOnDiskFiles(p.data || {}) : null;
+      if (ebookDisk) {
+        ex = ebookDisk;
+      } else if (_isEbookProject(p)) {
+        toast(kindLabel + " is not available until this ebook is saved with its package files.", "error");
+        return;
+      } else if (!ex) {
         const r = await api("/export-product", {
           method: "POST",
           body: JSON.stringify({ project_id: p.id }),
@@ -1072,27 +1179,55 @@ function projectRow(p, opts) {
   return row;
 }
 
+function _restoreEbookFactoryFields(d) {
+  const form = document.getElementById("factoryForm");
+  if (!form) return;
+  const fields = Object.assign({}, d.fields || {});
+  if (d.title && !fields.ebook_title) fields.ebook_title = d.title;
+  if ((d.author_brand || d.author) && !fields.author_brand) fields.author_brand = d.author_brand || d.author;
+  Object.entries(fields).forEach(([k, v]) => {
+    const el = form.elements[k];
+    if (el && v != null && v !== "") el.value = v;
+  });
+}
+
 function openProject(p) {
   const d = p.data || {};
   if (p.type === "research") {
-    go("research");
-    document.getElementById("researchInput").value = d.keyword || "";
-    renderResearch(d);
+    go("market");
+    const kw = d.keyword || d.topic || "";
+    const ri = document.getElementById("researchInput");
+    if (ri) ri.value = kw;
+    restoreAdvantageForm(d);
+    if (d && (d.advantage_report || (Array.isArray(d.opportunities) && d.opportunities.length))) {
+      d._source_project_id = p.id;
+      renderDiscovery(d);
+    } else {
+      renderResearch(d);
+    }
   } else if (p.type === "ebook") {
     if (d.ebook_project_workspace || d.ebook_workspace) {
       openEbookWorkspace(p.id);
       return;
     }
-    go("ebook");
-    document.getElementById("ebookInput").value = d.source || "";
-    renderEbook(d);
+    go("factory");
+    d._project_id = p.id;
+    document.querySelectorAll('div[style*="z-index:999"]').forEach((el) => el.remove());
+    // Saved/ready ebooks reopen as the finished product, not a blank Generate form.
+    if (!d.preview_html && !d.ebook_ready && productType("ebook")) {
+      selectFactoryType("ebook");
+      _restoreEbookFactoryFields(d);
+    }
+    renderProduct(d);
   } else if (p.type === "ad") {
     go("ad");
     document.getElementById("adInput").value = d.details || "";
     renderAd(d);
   } else if (p.type === "product") {
     go("factory");
-    if (d.product_type && productType(d.product_type)) {
+    const readyEbook =
+      String(d.product_type || "").toLowerCase() === "ebook" && !!(d.preview_html || d.ebook_ready);
+    if (d.product_type && productType(d.product_type) && !readyEbook) {
       selectFactoryType(d.product_type);
       const form = document.getElementById("factoryForm");
       Object.entries(d.fields || {}).forEach(([k, v]) => {
@@ -1106,8 +1241,15 @@ function openProject(p) {
     renderProduct(d);
   } else if (p.type === "research_plan") {
     go("market");
-    d._source_project_id = p.id; // choosing an idea updates this record in place
-    if (d && Array.isArray(d.opportunities) && d.opportunities.length) {
+    d._source_project_id = p.id; // choosing an opportunity updates this record in place
+    restoreAdvantageForm(d);
+    if (d.fma_mode === "discover" && !d.selected_opportunity) {
+      setFmaStartMode("discover");
+      restoreDiscoverForm(d);
+      renderTopOpportunities(d);
+    } else if (d && (d.advantage_report || (Array.isArray(d.opportunities) && d.opportunities.length))) {
+      if (d.fma_mode === "discover") setFmaStartMode("discover");
+      else setFmaStartMode("idea");
       renderDiscovery(d);
     } else {
       renderMarket(d);
@@ -1266,16 +1408,46 @@ async function openProductInPublishing(p) {
 // ---------- market research ----------
 function fillTypeSelect(id, anyLabel) {
   const sel = document.getElementById(id);
-  if (!sel || sel.options.length) return;
+  if (!sel) return;
+  const hasValue = Array.from(sel.options).some((o) => String(o.value || "").trim());
+  if (hasValue) return;
   let opts = MARKET_PRODUCT_TYPES.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
   if (anyLabel) opts = `<option value="">${escapeHtml(anyLabel)}</option>` + opts;
   sel.innerHTML = opts;
 }
 
+let fmaStartMode = "idea";
+
+function setFmaStartMode(mode) {
+  fmaStartMode = mode === "discover" ? "discover" : "idea";
+  const ideaBtn = document.getElementById("fmaModeIdea");
+  const discBtn = document.getElementById("fmaModeDiscover");
+  if (ideaBtn) {
+    ideaBtn.classList.toggle("fma-mode-card-active", fmaStartMode === "idea");
+    ideaBtn.setAttribute("aria-pressed", fmaStartMode === "idea" ? "true" : "false");
+  }
+  if (discBtn) {
+    discBtn.classList.toggle("fma-mode-card-active", fmaStartMode === "discover");
+    discBtn.setAttribute("aria-pressed", fmaStartMode === "discover" ? "true" : "false");
+  }
+  const ideaFields = document.getElementById("fmaIdeaFields");
+  const discFields = document.getElementById("fmaDiscoverFields");
+  if (ideaFields) ideaFields.classList.toggle("hidden", fmaStartMode !== "idea");
+  if (discFields) discFields.classList.toggle("hidden", fmaStartMode !== "discover");
+}
+
 function initMarket() {
   fillTypeSelect("ownProductType", null);
   fillTypeSelect("findProductType", "Any product type");
-  showMarketStep("chooser");
+  fillTypeSelect("fmaProductType", "Choose a product type");
+  fillTypeSelect("fmaDiscoverProductType", "Any product type");
+  const chooser = document.getElementById("marketChooser");
+  if (chooser) chooser.classList.remove("hidden");
+  const own = document.getElementById("marketOwn");
+  const find = document.getElementById("marketFind");
+  if (own) own.classList.add("hidden");
+  if (find) find.classList.add("hidden");
+  if (!lastDiscovery || lastDiscovery.fma_mode !== "discover") setFmaStartMode(fmaStartMode || "idea");
 }
 
 function showMarketStep(step) {
@@ -1308,6 +1480,196 @@ function block(title, inner) {
   return `<div><h4 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">${title}</h4>${inner}</div>`;
 }
 
+function sourceDomainText(s) {
+  if (!s) return "";
+  if (s.source_domain) return String(s.source_domain);
+  if (s.website) return String(s.website);
+  const raw = String(s.url || s.listing_url || "");
+  const match = raw.match(/^https?:\/\/([^/?#]+)/i);
+  if (!match) return "";
+  return match[1].replace(/^www\./i, "");
+}
+
+function customerEvidenceUsed(d, extra) {
+  const ifr = (d && d.in_factory_report) || {};
+  if (ifr.evidence_used && Array.isArray(ifr.evidence_used.cards)) return ifr.evidence_used;
+  const compact = (extra && extra.compact_evidence) || {};
+  if (compact.evidence_used && Array.isArray(compact.evidence_used.cards)) return compact.evidence_used;
+  const srcs = (extra && extra.sources && extra.sources.length ? extra.sources : null)
+    || ifr.sources
+    || (d && d.sources)
+    || [];
+  const cards = (srcs || [])
+    .filter((s) => s && (s.excerpt || s.fact || s.title))
+    .map((s) => ({
+      evidence_type: s.evidence_type || "Buyer demand",
+      fact: s.fact || s.excerpt || "Factory recorded a public market signal.",
+      score_effect: s.score_effect || "Informed the Factory Advantage Score or recommendation.",
+      source_class: s.source_class || "Publisher article",
+      confidence: s.confidence === "high" ? "Strong" : s.confidence === "low" ? "Limited" : (s.confidence || "Moderate"),
+      evidence_date: s.publication_date || s.evidence_date || "",
+    }));
+  const count = cards.length;
+  return {
+    intro: count === 1
+      ? "Factory reviewed 1 public market signal and summarized the findings below."
+      : `Factory reviewed ${count} public market signals and summarized the findings below.`,
+    cards,
+    count,
+  };
+}
+
+function customerHowWeKnow(d, extra) {
+  const ifr = (d && d.in_factory_report) || {};
+  if (ifr.how_we_know && Array.isArray(ifr.how_we_know.items)) return ifr.how_we_know;
+  const compact = (extra && extra.compact_evidence) || {};
+  if (compact.how_we_know && Array.isArray(compact.how_we_know.items)) return compact.how_we_know;
+  const srcs = (extra && extra.sources && extra.sources.length ? extra.sources : null)
+    || ifr.sources
+    || (d && d.sources)
+    || [];
+  const items = (srcs || [])
+    .filter((s) => s && (s.excerpt || s.fact || s.title || sourceDomainText(s)))
+    .map((s) => ({
+      summary: s.summary || s.fact || s.excerpt || "Factory recorded a public market signal.",
+      source_domain: sourceDomainText(s),
+      publication_date: s.publication_date || "",
+      accessed: s.accessed || s.access_date || s.date_checked || "",
+      supported_claim: s.supported_claim || s.excerpt || s.fact || "",
+      relevance: s.relevance || "Used as a public market signal for the idea under review.",
+    }));
+  return { items };
+}
+
+function evidenceCardHtml(card) {
+  const c = card || {};
+  const date = c.evidence_date ? `<div class="text-xs text-slate-500">Evidence date: ${escapeHtml(c.evidence_date)}</div>` : "";
+  return `<div class="rounded-lg border border-slate-200 px-3 py-2.5 bg-slate-50/70">
+    <div class="text-[11px] font-semibold uppercase tracking-wide text-brand-700">${escapeHtml(c.evidence_type || "Buyer demand")}</div>
+    <p class="text-sm text-slate-800 mt-1">${escapeHtml(c.fact || "")}</p>
+    <p class="text-xs text-slate-600 mt-1">${escapeHtml(c.score_effect || "")}</p>
+    <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+      <span>Source class: ${escapeHtml(c.source_class || "Publisher article")}</span>
+      <span>Confidence: ${escapeHtml(c.confidence || "Moderate")}</span>
+    </div>
+    ${date}
+  </div>`;
+}
+
+function howWeKnowPanelHtml(panel) {
+  const items = (panel && panel.items) || [];
+  const rows = items.length
+    ? items.map((item) => {
+        const domain = escapeHtml(item.source_domain || "");
+        const pub = item.publication_date
+          ? `<div>Published: ${escapeHtml(item.publication_date)}</div>`
+          : "";
+        const accessed = item.accessed
+          ? `<div>Accessed: ${escapeHtml(item.accessed)}</div>`
+          : "";
+        return `<div class="rounded-lg border border-slate-100 px-3 py-2">
+          <p class="text-sm text-slate-800">${escapeHtml(item.summary || "")}</p>
+          ${domain ? `<div class="text-xs text-slate-500 mt-1">Source: <span class="font-medium text-slate-700">${domain}</span></div>` : ""}
+          <div class="text-xs text-slate-500 mt-1">${pub}${accessed}</div>
+          <p class="text-xs text-slate-600 mt-1">Claim supported: ${escapeHtml(item.supported_claim || "")}</p>
+          <p class="text-xs text-slate-500 mt-1">${escapeHtml(item.relevance || "")}</p>
+        </div>`;
+      }).join("")
+    : '<p class="text-sm text-slate-500">No additional source notes.</p>';
+  return `<div class="mt-3">
+    <button type="button" data-how-we-know class="rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-1.5 text-sm font-medium" aria-expanded="false">How We Know</button>
+    <div class="fma-how-we-know-panel hidden mt-2 rounded-xl border border-slate-200 bg-white p-3 space-y-2">${rows}</div>
+  </div>`;
+}
+
+function evidenceUsedSectionHtml(d, extra) {
+  const used = customerEvidenceUsed(d, extra);
+  const cards = used.cards || [];
+  const intro = used.intro || (cards.length
+    ? `Factory reviewed ${cards.length} public market signals and summarized the findings below.`
+    : "Factory reviewed 0 public market signals and summarized the findings below.");
+  const body = cards.length
+    ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${cards.map((c) => evidenceCardHtml(c)).join("")}</div>`
+    : '<p class="text-sm text-slate-500">No material public signals were summarized for this decision.</p>';
+  return `<div>
+    <h3 class="text-base font-bold text-slate-900 mb-1">Evidence Used</h3>
+    <p class="text-xs text-slate-500 mb-3">${escapeHtml(intro)}</p>
+    ${body}
+    ${howWeKnowPanelHtml(customerHowWeKnow(d, extra))}
+  </div>`;
+}
+
+function mapUserDecision(recommendation) {
+  const reco = String(recommendation || "");
+  if (reco === "Strong Opportunity") return "BUILD";
+  if (reco === "Promising—Needs Positioning" || reco === "Test Before Building") return "IMPROVE THE IDEA";
+  return "AVOID";
+}
+
+function decisionBadgeHtml(decision) {
+  const d = String(decision || "AVOID");
+  const cls = d === "BUILD" ? "bg-emerald-600" : d === "IMPROVE THE IDEA" ? "bg-amber-500" : "bg-slate-700";
+  return `<span class="inline-flex items-center rounded-full ${cls} text-white text-xs font-semibold px-3 py-1">${escapeHtml(d)}</span>`;
+}
+
+function nvText(value, fallback) {
+  const v = value == null || value === "" ? "" : String(value);
+  return escapeHtml(v || fallback || "Not verified");
+}
+
+function inFactoryReportFrom(d) {
+  if (d && d.in_factory_report && d.in_factory_report.opportunity_summary) return d.in_factory_report;
+  const score = (d && d.factory_advantage) || {};
+  const panel = (d && d.decision_panel) || {};
+  const ev = (d && d.evidence) || {};
+  const ops = (d && d.opportunities) || [];
+  const top = (d && d.selected_opportunity) || ops[0] || {};
+  const inputs = (d && d.inputs) || {};
+  return {
+    opportunity_summary: {
+      product_idea: top.product_idea || inputs.topic || "",
+      target_customer: top.target_audience || inputs.audience || "",
+      customer_problem: top.customer_problem || inputs.customer_problem || "Insufficient evidence",
+      recommended_product_format: top.product_type || inputs.product_type || "",
+      why_timely: top.why_opportunity || "Insufficient evidence",
+    },
+    trend_evidence: { direction: "Insufficient evidence", dated_evidence: ev.sources || [], note: "Insufficient evidence" },
+    marketplace_competition: { listings: ev.competitors || [], note: "No verified marketplace listings were collected." },
+    video_social_evidence: { videos: ev.youtube_videos || [], interest_summary: "Insufficient evidence", note: "Views are not sales." },
+    customer_evidence: {
+      recurring_requests: inputs.customer_problem ? [inputs.customer_problem] : ["Insufficient evidence"],
+      complaints: ["Insufficient evidence"],
+      missing_features: ["Insufficient evidence"],
+      underserved_niche: "Insufficient evidence",
+      source_links: ev.sources || [],
+    },
+    price_revenue_signals: {
+      observed_price_range: "Not verified",
+      common_pricing_position: "Not verified",
+      bundle_opportunities: ["Insufficient evidence"],
+      estimates: [{ label: "Estimated demand", value: "Not verified", basis: (d && d.sales_estimate && d.sales_estimate.reason) || "" }],
+      sales_estimate_label: "Estimated demand",
+      sales_estimate_basis: (d && d.sales_estimate && d.sales_estimate.reason) || "",
+      verified_sales: false,
+    },
+    competition_opportunity_gap: {
+      existing_do_well: "Insufficient evidence",
+      existing_do_poorly: "Insufficient evidence",
+      how_to_improve: "Insufficient evidence",
+      proposed_differentiator: "Insufficient evidence",
+    },
+    factory_advantage_score: { total: score.total, recommendation: score.recommendation, components: score.components || {}, formula: score.formula || "" },
+    decision: {
+      user_decision: panel.user_decision || mapUserDecision(score.recommendation || panel.recommendation),
+      internal_recommendation: score.recommendation || panel.recommendation || "Insufficient Evidence",
+      reasons: panel.user_decision_reasons || [panel.next_action || "Review the evidence before building."],
+    },
+    sources: ev.sources || d.sources || [],
+    evidence_used: (d && d.in_factory_report && d.in_factory_report.evidence_used) || null,
+    how_we_know: (d && d.in_factory_report && d.in_factory_report.how_we_know) || null,
+  };
+}
+
 function renderMarket(d) {
   const out = document.getElementById("marketOutput");
   const r = d.report || {};
@@ -1319,16 +1681,7 @@ function renderMarket(d) {
   const score = r.opportunity_score || 0;
 
   const sources = (d.sources || []).length
-    ? card(
-        `<h3 class="text-base font-bold text-slate-900 mb-3">Sources</h3><div class="space-y-2">${d.sources
-          .map(
-            (s) => `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener"
-              class="block rounded-xl border border-slate-100 hover:border-brand-200 px-4 py-2.5 transition">
-              <div class="font-medium text-slate-800 truncate text-sm">${escapeHtml(s.title)}</div>
-              <div class="text-xs text-brand-600 truncate">${escapeHtml(s.url)}</div></a>`
-          )
-          .join("")}</div>`
-      )
+    ? card(evidenceUsedSectionHtml(d, { sources: d.sources }))
     : "";
 
   out.innerHTML =
@@ -1431,11 +1784,12 @@ function modeBadgeHtml(mode) {
     : '<span class="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 text-xs font-medium px-3 py-1">AI-estimated research (no live web data)</span>';
 }
 
-function opportunityCardsHtml(ops) {
+function opportunityCardsHtml(ops, selected) {
   return ops
     .map((o, i) => {
-      const sc = o.opportunity_score || 0;
-      return `<div class="rounded-2xl border border-slate-200 bg-white p-5">
+      const sc = o.opportunity_score || (o.factory_advantage_total) || 0;
+      const isSel = selected && (selected === o || selected.product_idea === o.product_idea);
+      return `<div class="rounded-2xl border ${isSel ? "border-brand-500 ring-2 ring-brand-200" : "border-slate-200"} bg-white p-5">
         <div class="flex items-start justify-between gap-3 mb-3">
           <div class="flex items-center gap-3 min-w-0">
             <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white text-sm font-bold">${o.rank || i + 1}</span>
@@ -1454,12 +1808,12 @@ function opportunityCardsHtml(ops) {
           <div class="sm:col-span-2">${block("Why this opportunity is worth considering", `<p class="text-sm text-slate-700">${escapeHtml(o.why_opportunity)}</p>`)}</div>
         </div>
         <div class="mt-3 flex flex-wrap gap-2 text-xs">
-          <span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5">Price: ${escapeHtml(o.price_range) || "n/a"}</span>
+          <span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5">Price: ${escapeHtml(o.price_range) || "Not verified"}</span>
           <span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5">Difficulty: ${escapeHtml(o.difficulty) || "n/a"}</span>
-          <span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5">Competition: ${escapeHtml(o.competition) || "n/a"}</span>
+          <span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5">Competition: ${escapeHtml(o.competition) || "Not verified"}</span>
         </div>
         <div class="mt-4 flex justify-end">
-          <button data-choose="${i}" class="rounded-xl border border-brand-500 text-brand-700 hover:bg-brand-50 px-4 py-2 text-sm font-medium">Choose This Idea</button>
+          <button data-choose="${i}" class="rounded-xl border border-brand-500 text-brand-700 hover:bg-brand-50 px-4 py-2 text-sm font-medium">${isSel ? "Advantage selected" : "Choose Your Advantage"}</button>
         </div>
       </div>`;
     })
@@ -1489,7 +1843,7 @@ function recommendationCardHtml(reco) {
 // is set as lastDiscovery so chooseIdea/buildRecommended/saveResearchOnly all work.
 function wireOpportunityButtons(scopeEl, d) {
   lastDiscovery = d;
-  d._outEl = scopeEl; // where chooseIdea renders the confirmation / re-renders cards
+  d._outEl = scopeEl; // where chooseIdea re-renders cards
   const ops = d.opportunities || [];
   scopeEl.querySelectorAll("[data-choose]").forEach((b) => {
     b.onclick = () => chooseIdea(ops[Number(b.dataset.choose)]);
@@ -1498,30 +1852,555 @@ function wireOpportunityButtons(scopeEl, d) {
   if (build) build.onclick = buildRecommended;
   const saveBtn = scopeEl.querySelector("#saveResearchBtn");
   if (saveBtn) saveBtn.onclick = saveResearchOnly;
+  const buildThis = scopeEl.querySelector("#buildThisProductBtn");
+  if (buildThis) buildThis.onclick = buildThisProduct;
+  const retry = scopeEl.querySelector("#fmaRetryBtn");
+  if (retry) retry.onclick = () => (fmaStartMode === "discover" ? runFindOpportunities() : runFactoryMarketAdvantage());
+  const improve = scopeEl.querySelector("#fmaImproveIdeaBtn");
+  if (improve) improve.onclick = improveThisIdea;
+  const seeSummary = scopeEl.querySelector("#fmaSeeSummaryBtn");
+  if (seeSummary) seeSummary.onclick = () => toggleHiddenEl(document.getElementById("fmaResearchSummary"));
+  const fullResearch = scopeEl.querySelector("#fmaFullResearchBtn");
+  if (fullResearch) fullResearch.onclick = () => toggleHiddenEl(document.getElementById("fmaFullResearch"));
+  const howDet = scopeEl.querySelector("#fmaHowDeterminedBtn");
+  if (howDet) howDet.onclick = () => toggleHiddenEl(document.getElementById("fmaHowDetermined"));
+  const scoreCalc = scopeEl.querySelector("#fmaScoreCalcBtn");
+  if (scoreCalc) {
+    scoreCalc.onclick = () => {
+      const el = document.getElementById("fmaFullResearch");
+      if (el) el.classList.remove("hidden");
+      const scoreEl = document.getElementById("fmaDetailedScore");
+      if (scoreEl) scoreEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+  }
+  const explainer = scopeEl.querySelector("#fmaExplainerToggle");
+  if (explainer) explainer.onclick = () => toggleHiddenEl(document.getElementById("fmaExplainerPanel"));
+  scopeEl.querySelectorAll("[data-more-details]").forEach((btn) => {
+    btn.onclick = () => {
+      const card = btn.closest("[data-opp-card]");
+      const panel = card && card.querySelector(".fma-more-details");
+      if (!panel) return;
+      const open = panel.classList.toggle("hidden") === false;
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.textContent = open ? "Hide Details" : "More Details";
+    };
+  });
+  if (!scopeEl._fmaResearchDelegated) {
+    scopeEl._fmaResearchDelegated = true;
+    scopeEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-research-idea]");
+      if (!btn || !scopeEl.contains(btn)) return;
+      e.preventDefault();
+      const current = lastDiscovery || d;
+      const list = current.opportunities || [];
+      const idx = Number(btn.getAttribute("data-research-idea"));
+      researchThisIdea(list[idx], current);
+    });
+  }
+  scopeEl.querySelectorAll("[data-save-opportunity]").forEach((b) => {
+    b.onclick = () => saveOpportunity(ops[Number(b.dataset.saveOpportunity)], d);
+  });
+  scopeEl.querySelectorAll("[data-how-we-know]").forEach((btn) => {
+    btn.onclick = () => {
+      const panel = btn.parentElement && btn.parentElement.querySelector(".fma-how-we-know-panel");
+      if (!panel) return;
+      const open = panel.classList.toggle("hidden") === false;
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+  });
+}
+
+function setFmaStep(name) {
+  document.querySelectorAll("[data-fma-step]").forEach((el) => {
+    el.classList.toggle("active", el.dataset.fmaStep === name);
+    const order = ["idea", "evidence", "advantage", "decision", "build"];
+    el.classList.toggle("done", order.indexOf(el.dataset.fmaStep) < order.indexOf(name));
+  });
+}
+
+function restoreAdvantageForm(d) {
+  const inp = (d && d.inputs) || d || {};
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val != null && val !== "") el.value = val;
+  };
+  set("fmaTopic", inp.topic || inp.niche || inp.interest || d.niche || d.keyword || "");
+  set("fmaAudience", inp.audience || d.audience || "");
+  set("fmaProblem", inp.customer_problem || "");
+  set("fmaProductType", inp.product_type || d.product_type || "");
+  set("fmaPlatform", inp.sales_platform || "");
+  set("fmaExpertise", inp.expertise || "");
+  set("fmaPrice", inp.target_price || "");
+  set("fmaKeywords", inp.keywords || "");
+  set("fmaDepth", inp.depth || "");
+}
+
+function restoreDiscoverForm(d) {
+  const inp = (d && d.inputs) || (d && d.filters) || d || {};
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val != null && val !== "") el.value = val;
+  };
+  set("fmaDiscoverInterest", inp.interest || inp.topic || "");
+  const audience = inp.audience || "General / Any audience";
+  set("fmaDiscoverAudience", audience);
+  const pt = inp.product_type;
+  set("fmaDiscoverProductType", !pt || pt === "Not Sure Yet" ? "" : pt);
+  const platform = inp.sales_platform || "Not sure / Any";
+  set("fmaDiscoverPlatform", platform === "Not sure" ? "Not sure / Any" : platform);
+  set("fmaDiscoverDepth", inp.depth || "Quick Check");
+}
+
+function fmaDiscoverPayload() {
+  const val = (id) => ((document.getElementById(id) || {}).value || "");
+  const audience = val("fmaDiscoverAudience");
+  const interest = val("fmaDiscoverInterest");
+  return {
+    mode: "discover",
+    fma_mode: "discover",
+    find_ideas: true,
+    interest: interest,
+    topic: interest,
+    audience: audience === "General / Any audience" ? "" : audience,
+    product_type: val("fmaDiscoverProductType"),
+    sales_platform: val("fmaDiscoverPlatform") || "Not sure / Any",
+    depth: val("fmaDiscoverDepth") || "Quick Check",
+  };
+}
+
+function mapDiscoverPlatformToIdea(value) {
+  const raw = String(value || "").trim();
+  if (/amazon/i.test(raw)) return "Amazon KDP";
+  if (/etsy/i.test(raw)) return "Etsy";
+  if (/gumroad/i.test(raw)) return "Gumroad";
+  if (/shopify/i.test(raw)) return "Shopify";
+  if (/own website/i.test(raw)) return "Own website";
+  return "Not sure";
+}
+
+function firstSuggestedPlatform(op) {
+  const list = op && op.suggested_platforms;
+  if (Array.isArray(list) && list.length) return list[0];
+  return (op && (op.sales_platform || op.platform)) || "";
+}
+
+function fmaFormPayload() {
+  const val = (id) => ((document.getElementById(id) || {}).value || "");
+  const topic = val("fmaTopic");
+  return {
+    topic: topic,
+    idea: topic,
+    interest: topic,
+    niche: topic,
+    audience: val("fmaAudience"),
+    customer_problem: val("fmaProblem"),
+    product_type: val("fmaProductType"),
+    sales_platform: val("fmaPlatform"),
+    expertise: val("fmaExpertise"),
+    target_price: val("fmaPrice"),
+    keywords: val("fmaKeywords"),
+    depth: val("fmaDepth") || "Quick Check",
+  };
+}
+
+function setFmaFieldError(fieldId, message) {
+  const el = document.getElementById(fieldId);
+  const err = document.getElementById(fieldId + "Error");
+  if (el) {
+    el.classList.toggle("border-rose-400", !!message);
+    el.setAttribute("aria-invalid", message ? "true" : "false");
+  }
+  if (err) {
+    err.textContent = message || "";
+    err.classList.toggle("hidden", !message);
+  }
+}
+
+function validateFmaOpeningForm(payload) {
+  payload = payload || fmaFormPayload();
+  const audience = String(payload.audience || "").trim();
+  const productType = String(payload.product_type || "").trim();
+  let ok = true;
+  if (!audience) {
+    setFmaFieldError("fmaAudience", "Audience is required.");
+    ok = false;
+  } else {
+    setFmaFieldError("fmaAudience", "");
+  }
+  if (!productType || MARKET_PRODUCT_TYPES.indexOf(productType) < 0) {
+    setFmaFieldError("fmaProductType", "Choose a product type.");
+    ok = false;
+  } else {
+    setFmaFieldError("fmaProductType", "");
+  }
+  return ok;
+}
+
+function toggleHiddenEl(el) {
+  if (!el) return false;
+  return el.classList.toggle("hidden") === false;
+}
+
+function firstSentence(text, fallback) {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (!raw) return fallback || "";
+  const match = raw.match(/^[^.!?]+[.!?]/);
+  return (match ? match[0] : raw).trim();
+}
+
+function customerDifficulty(value) {
+  const v = String(value || "").trim().toLowerCase();
+  if (!v) return "Unknown";
+  if (v === "easy") return "Easy";
+  if (v === "hard" || v === "advanced") return "Advanced";
+  if (v === "medium") return "Medium";
+  return "Unknown";
+}
+
+function customerCompetition(value) {
+  const v = String(value || "").trim().toLowerCase();
+  if (!v || v === "not verified" || v === "n/a") return "Unknown";
+  if (v === "low") return "Low";
+  if (v === "high") return "High";
+  if (v === "medium" || v === "moderate") return "Medium";
+  return "Unknown";
+}
+
+function plainOpportunityLabel(recommendation, userDecision) {
+  const reco = String(recommendation || "");
+  if (reco === "Strong Opportunity") return "Promising";
+  if (reco === "Promising—Needs Positioning" || reco === "Test Before Building") return "Needs Improvement";
+  if (reco === "Weak Opportunity") return "Avoid";
+  if (/insufficient/i.test(reco)) return "Insufficient Evidence";
+  const decision = String(userDecision || mapUserDecision(reco));
+  if (decision === "BUILD") return "Promising";
+  if (decision === "IMPROVE THE IDEA") return "Needs Improvement";
+  return "Avoid";
+}
+
+function plainComponentSignal(row) {
+  row = row || {};
+  const score = Number(row.score || 0);
+  const cap = Number(row.max || 1) || 1;
+  const missing = (row.missing_evidence || []).filter(Boolean);
+  const ratio = score / cap;
+  if (ratio >= 0.7) return "Good Signal";
+  if (missing.length && ratio < 0.5) return "More Research Needed";
+  if (ratio >= 0.45) return "Mixed Signal";
+  if (missing.length) return "More Research Needed";
+  return "Weak Signal";
+}
+
+function signalDotClass(signal) {
+  if (signal === "Good Signal") return "fma-signal-good";
+  if (signal === "Mixed Signal") return "fma-signal-mixed";
+  return "fma-signal-weak";
+}
+
+function recommendationSummaryFrom(d) {
+  const existing = d && d.recommendation_summary;
+  if (existing && existing.product_name) return existing;
+  const score = (d && d.factory_advantage) || {};
+  const reco = (d && d.recommendation) || {};
+  const panel = (d && d.decision_panel) || {};
+  const ops = (d && d.opportunities) || [];
+  const top = (d && d.selected_opportunity) || ops[0] || {};
+  const inputs = (d && d.inputs) || {};
+  const comps = score.components || {};
+  const internal = score.recommendation || panel.internal_recommendation || "Insufficient Evidence";
+  const userDecision = panel.user_decision || mapUserDecision(internal);
+  const productName = reco.best_product || top.product_idea || inputs.topic || "This idea";
+  const productType = reco.best_product_type || top.product_type || inputs.product_type || "";
+  const audience = top.target_audience || inputs.audience || "the stated audience";
+  const problem = top.customer_problem || inputs.customer_problem || "the stated customer problem";
+  const why = firstSentence(
+    reco.why_selected || top.why_opportunity,
+    "Factory reviewed the available public signals for this idea."
+  );
+  return {
+    product_name: productName,
+    product_type: productType,
+    opportunity_label: plainOpportunityLabel(internal, userDecision),
+    internal_recommendation: internal,
+    user_decision: userDecision,
+    why_we_recommend: why,
+    what_to_build: `Start with: a ${productType || "Factory product"} for ${audience} based on ${productName} that helps with ${problem}.`,
+    component_signals: [
+      { key: "demand", label: "Demand", signal: plainComponentSignal(comps.demand) },
+      { key: "competition_opportunity", label: "Competition", signal: plainComponentSignal(comps.competition_opportunity) },
+      { key: "buyer_urgency", label: "Customer Need", signal: plainComponentSignal(comps.buyer_urgency) },
+      { key: "monetization_potential", label: "Profit Evidence", signal: plainComponentSignal(comps.monetization_potential) },
+      { key: "differentiation_potential", label: "Ability to Stand Out", signal: plainComponentSignal(comps.differentiation_potential) },
+    ],
+    how_determined: "The Factory looked at demand signals, competition, the customer problem, ability to differentiate, possible monetization, production fit, and the quality of available evidence.",
+    disclaimer: (d && d.disclaimer) || "Scores and revenue estimates are research indicators, not guaranteed sales or earnings.",
+    missing_evidence: panel.missing_evidence || [],
+  };
+}
+
+function explainerVideoHtml() {
+  return `<div class="rounded-2xl border border-slate-200 bg-white p-4">
+    <button type="button" id="fmaExplainerToggle" class="text-sm font-medium text-brand-700 hover:text-brand-900">▶ New here? See how Factory Market Advantage works — 60 seconds</button>
+    <div id="fmaExplainerPanel" class="hidden mt-3">
+      <div class="fma-explainer-placeholder rounded-xl flex items-center justify-center p-6 text-center">
+        <div>
+          <div class="text-sm font-semibold">Explainer video coming soon</div>
+          <p class="text-xs text-slate-300 mt-2">No autoplay. This is a placeholder until a video is added.</p>
+        </div>
+      </div>
+      <ol class="mt-3 list-decimal ml-5 text-sm text-slate-700 space-y-1">
+        <li>Tell Factory an idea, or ask it to find ideas.</li>
+        <li>Factory researches public market signals.</li>
+        <li>Factory recommends the strongest opportunity.</li>
+        <li>You choose whether to continue.</li>
+        <li>Build This Product opens the matching builder as a draft.</li>
+        <li>Factory does not auto-generate a finished product.</li>
+      </ol>
+    </div>
+  </div>`;
+}
+
+function simpleScoreSignalsHtml(summary) {
+  const rows = (summary && summary.component_signals) || [];
+  if (!rows.length) return "";
+  return `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+    ${rows.map((row) => `<div class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
+      <span class="fma-signal-dot ${signalDotClass(row.signal)}"></span>
+      <div>
+        <div class="text-xs font-semibold text-slate-500">${escapeHtml(row.label)}</div>
+        <div class="text-sm text-slate-800">${escapeHtml(row.signal)}</div>
+      </div>
+    </div>`).join("")}
+  </div>
+  <p class="text-xs text-slate-500 mt-2">${escapeHtml((summary && summary.disclaimer) || "Scores and revenue estimates are research indicators, not guaranteed sales or earnings.")}</p>`;
+}
+
+function recommendationSummaryHtml(d, summary) {
+  return `<div id="fmaRecommendationSummary" data-fma-view="recommendation-summary" class="rounded-2xl border-2 border-brand-500 bg-white p-6">
+    <div class="text-xs font-semibold uppercase tracking-widest text-brand-600">Factory Market Advantage</div>
+    <h3 class="text-lg font-bold text-slate-900 mt-1">Here is what we recommend.</h3>
+    <p class="text-sm text-slate-500 mb-4">Find it. Prove it—before you build it.</p>
+    <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Your Best Opportunity</div>
+    <div class="text-2xl font-bold text-slate-900 mt-1">${escapeHtml(summary.product_name)}</div>
+    <div class="mt-2 text-sm"><span class="font-semibold">Opportunity:</span> ${escapeHtml(summary.opportunity_label)}</div>
+    <h4 class="text-base font-bold text-slate-900 mt-5 mb-2">Why We Recommend It</h4>
+    <p class="text-sm text-slate-700">${escapeHtml(summary.why_we_recommend)}</p>
+    <h4 class="text-base font-bold text-slate-900 mt-5 mb-2">What We Recommend Building</h4>
+    <p class="text-sm text-slate-700">${escapeHtml(summary.what_to_build)}</p>
+    ${simpleScoreSignalsHtml(summary)}
+    <div class="mt-3">
+      <button type="button" id="fmaHowDeterminedBtn" class="text-sm font-medium text-brand-700 hover:text-brand-900">How was this determined?</button>
+      <div id="fmaHowDetermined" class="hidden mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <p class="text-sm text-slate-700">${escapeHtml(summary.how_determined)}</p>
+        <button type="button" id="fmaScoreCalcBtn" class="mt-2 text-sm font-medium text-brand-700 hover:text-brand-900">Open complete score calculation</button>
+      </div>
+    </div>
+    <div class="mt-5 flex flex-wrap gap-3">
+      <button id="buildThisProductBtn" class="btn-primary">Build This Product</button>
+      <button type="button" id="fmaImproveIdeaBtn" class="rounded-xl border border-brand-500 text-brand-700 hover:bg-brand-50 px-4 py-2 text-sm font-medium">Improve This Idea</button>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-4 text-sm">
+      <button type="button" id="fmaSeeSummaryBtn" class="font-medium text-slate-600 hover:text-slate-900 underline">See Research Summary</button>
+      <button type="button" id="fmaFullResearchBtn" class="font-medium text-slate-600 hover:text-slate-900 underline">View Full Research &amp; Sources</button>
+      <button type="button" id="saveResearchBtn" class="font-medium text-slate-600 hover:text-slate-900 underline">Save Research</button>
+    </div>
+  </div>`;
 }
 
 function renderDiscovery(d) {
-  const out = document.getElementById("marketOutput");
+  const out = document.getElementById("marketOutput") || document.getElementById("researchOutput");
+  if (!out) return;
   const ops = d.opportunities || [];
   const reco = d.recommendation || {};
+  const score = d.factory_advantage || {};
+  const comps = score.components || {};
+  const report = d.advantage_report || {};
+  const panel = d.decision_panel || {};
+  const err = d.provider_error || d.error;
 
-  if (!ops.length) {
+  if (!ops.length && err) {
     lastDiscovery = d;
-    out.innerHTML = card('<p class="text-sm text-slate-500">No opportunities were returned. Try again or add a broad interest area.</p>');
+    out.innerHTML = card(`
+      <p class="text-rose-600 text-sm mb-3">${escapeHtml(err)}</p>
+      <p class="text-sm text-slate-600 mb-3">Your inputs are still on the form. You can retry without starting over.</p>
+      <button id="fmaRetryBtn" class="btn-primary">Retry research</button>`);
+    wireOpportunityButtons(out, d);
     return;
   }
 
+  if (!ops.length) {
+    lastDiscovery = d;
+    out.innerHTML = card('<p class="text-sm text-slate-500">No opportunities were returned. Try again or add a topic and product type.</p>');
+    return;
+  }
+
+  if (!d.selected_opportunity && !d.selectedOpportunity) {
+    const chosen = ops.find((o) => o.product_idea === reco.best_product) || ops[0];
+    if (chosen) {
+      d.selected_opportunity = chosen;
+      d.selectedOpportunity = chosen;
+    }
+  }
+  const selected = d.selected_opportunity || d.selectedOpportunity;
+  setFmaStep(selected ? "decision" : "advantage");
+  const recoSummary = recommendationSummaryFrom(d);
+  const ifr = inFactoryReportFrom(d);
+  const summary = ifr.opportunity_summary || {};
+  const trend = ifr.trend_evidence || {};
+  const market = ifr.marketplace_competition || {};
+  const video = ifr.video_social_evidence || {};
+  const customer = ifr.customer_evidence || {};
+  const pricing = ifr.price_revenue_signals || {};
+  const gap = ifr.competition_opportunity_gap || {};
+  const scoreBlock = ifr.factory_advantage_score || {};
+  const decision = ifr.decision || {};
+  const citations = ifr.sources || [];
+  const listings = market.listings || [];
+  const videos = video.videos || [];
+  const componentCard = (c) => {
+    if (!c) return "";
+    const missing = (c.missing_evidence || []).map((m) => `<li>${escapeHtml(m)}</li>`).join("");
+    const evItems = (c.evidence || []).map((m) => `<li>${escapeHtml(m)}</li>`).join("");
+    return `<div class="rounded-xl border border-slate-200 p-4 bg-white">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-sm font-bold text-slate-900">${escapeHtml(c.display_label || c.label || c.key)}</div>
+        <div class="text-sm font-bold text-brand-700">${c.score}/${c.max}</div>
+      </div>
+      <p class="text-sm text-slate-600 mb-2">${escapeHtml(c.explanation || "")}</p>
+      ${evItems ? `<ul class="list-disc ml-4 text-xs text-slate-600 space-y-1">${evItems}</ul>` : ""}
+      ${missing ? `<p class="text-xs font-semibold text-amber-700 mt-2">Missing evidence</p><ul class="list-disc ml-4 text-xs text-amber-800 space-y-1">${missing}</ul>` : ""}
+      <p class="text-[11px] text-slate-400 mt-2">Date researched: ${escapeHtml(c.researched_at || "")}</p>
+    </div>`;
+  };
+  const scoreComps = scoreBlock.components && !Array.isArray(scoreBlock.components) ? scoreBlock.components : comps;
+  const sales = d.sales_estimate || {};
+  const ev = d.evidence || {};
+  const diffs = ((report.G_differentiation_plan || {}).opportunities) || gap.opportunities || [];
+
   out.innerHTML = `<div class="space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <h3 class="text-base font-bold text-slate-900">Recommended Product Opportunities</h3>
-      <div class="flex items-center gap-3">
+    ${explainerVideoHtml()}
+    ${recommendationSummaryHtml(d, recoSummary)}
+    ${err ? `<p class="text-sm text-amber-700">${escapeHtml(err)} <button id="fmaRetryBtn" class="underline">Retry</button></p>` : ""}
+    <div id="fmaResearchSummary" class="hidden space-y-4">
+      <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <h3 class="text-base font-bold text-slate-900 mb-3">Opportunity Summary</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          ${selRow("Product idea", summary.product_idea)}
+          ${selRow("Target customer", summary.target_customer)}
+          ${selRow("Customer problem", summary.customer_problem)}
+          ${selRow("Recommended product format", summary.recommended_product_format)}
+          <div class="md:col-span-2">${selRow("Why timely", summary.why_timely)}</div>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h3 class="text-base font-bold text-slate-900">Choose Your Advantage</h3>
         ${modeBadgeHtml(d.mode)}
-        <button id="saveResearchBtn" class="rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50 px-3 py-1.5 text-sm font-medium">Save Research Only</button>
+      </div>
+      <p class="text-sm text-slate-500">Select one opportunity if you want a different idea, then use Build This Product. Factory opens the matching builder as a draft — it does not auto-generate a finished product.</p>
+      <div class="space-y-4">${opportunityCardsHtml(ops, selected)}</div>
+    </div>
+    <div id="fmaFullResearch" class="hidden space-y-4">
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div class="text-xs font-semibold uppercase tracking-widest text-brand-600">Factory Market Advantage</div>
+          <h3 class="text-lg font-bold text-slate-900">View Full Research &amp; Sources</h3>
+          <p class="text-sm text-slate-500">Technical Details. Factory gathered and organized this evidence inside the Factory.</p>
+        </div>
+        <div class="text-right">
+          <div class="text-3xl font-bold text-slate-900">${score.total != null ? score.total : "?"}<span class="text-base text-slate-400">/100</span></div>
+          <div class="text-sm font-semibold text-brand-700">${escapeHtml(score.recommendation || "")}</div>
+          <div class="mt-2">${decisionBadgeHtml(decision.user_decision)}</div>
+          ${modeBadgeHtml(d.mode)}
+        </div>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">${escapeHtml(d.disclaimer || "Scores and revenue estimates are research indicators, not guaranteed sales or earnings.")}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 class="text-base font-bold text-slate-900 mb-3">Trend Evidence</h3>
+      ${selRow("Direction", trend.direction || "Insufficient evidence")}
+      <p class="text-sm text-slate-600 mt-2">${escapeHtml(trend.note || "Factory does not label an idea trending from general articles.")}</p>
+      ${(trend.dated_evidence || []).length ? `<div class="mt-3 space-y-2">${(trend.dated_evidence || []).map((s) => `<div class="text-sm text-slate-700"><span class="font-medium">${escapeHtml(s.title || "Signal")}</span> · ${escapeHtml(s.date || "Not verified")} · ${escapeHtml(s.kind || "article")}<div class="text-xs text-slate-500">${escapeHtml(s.summary || "")}</div></div>`).join("")}</div>` : '<p class="text-sm text-slate-500 mt-2">Insufficient evidence. No dated trend measurement was verified.</p>'}
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 class="text-base font-bold text-slate-900 mb-3">Marketplace Competition</h3>
+      ${listings.length ? `<div class="fma-competitor-table-wrap overflow-x-auto"><table class="w-full text-sm border border-slate-200"><thead class="bg-slate-50"><tr><th class="text-left p-2">Title</th><th class="text-left p-2">Marketplace</th><th class="text-left p-2">Price</th><th class="text-left p-2">Rating</th><th class="text-left p-2">Reviews</th><th class="text-left p-2">Amazon BSR</th><th class="text-left p-2">Date checked</th></tr></thead><tbody>${listings.map((c) => `<tr class="border-t"><td class="p-2">${escapeHtml(c.title || c.name || "Listing")}</td><td class="p-2">${nvText(c.marketplace)}</td><td class="p-2">${nvText(c.price)}</td><td class="p-2">${nvText(c.rating)}</td><td class="p-2">${nvText(c.reviews)}</td><td class="p-2">${nvText(c.bsr)}</td><td class="p-2">${nvText(c.date_checked || c.access_date)}</td></tr>`).join("")}</tbody></table></div>` : '<p class="text-sm text-slate-500">No verified marketplace listings were collected. Prices, ratings, reviews, and BSR stay Not verified.</p>'}
+      <p class="text-xs text-slate-500 mt-3">${escapeHtml(market.note || "")}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 class="text-base font-bold text-slate-900 mb-3">Video and Social Evidence</h3>
+      ${videos.length ? `<div class="space-y-3">${videos.map((v) => `<div class="rounded-xl border border-slate-200 p-4"><div class="font-semibold text-slate-900">${escapeHtml(v.title || "YouTube video")}</div><div class="text-xs text-slate-500 mt-1">Channel ${nvText(v.channel)} · Date ${nvText(v.date)} · Views ${nvText(v.views)}</div></div>`).join("")}</div>` : '<p class="text-sm text-slate-500">Insufficient evidence. No YouTube videos were found in the research sources.</p>'}
+      <p class="text-sm text-slate-600 mt-3">${escapeHtml(video.interest_summary || "Insufficient evidence")}</p>
+      <p class="text-xs text-slate-500 mt-1">${escapeHtml(video.note || "Views are not sales. Do not treat video views as unit sales.")}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 class="text-base font-bold text-slate-900 mb-3">Customer Evidence</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        ${block("Recurring requests", bullets(customer.recurring_requests || ["Insufficient evidence"]))}
+        ${block("Complaints", bullets(customer.complaints || ["Insufficient evidence"]))}
+        ${block("Missing features", bullets(customer.missing_features || ["Insufficient evidence"]))}
+        ${selRow("Underserved niche", customer.underserved_niche || "Insufficient evidence")}
+      </div>
+      <p class="text-xs text-slate-500 mt-3">${escapeHtml(customer.note || "Review-level complaint mining is Not verified.")}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 class="text-base font-bold text-slate-900 mb-3">Price and Revenue Signals</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        ${selRow("Observed price range", pricing.observed_price_range || "Not verified")}
+        ${selRow("Common pricing position", pricing.common_pricing_position || "Not verified")}
+        <div class="md:col-span-2">${block("Bundle opportunities", bullets(pricing.bundle_opportunities || ["Insufficient evidence"]))}</div>
+      </div>
+      <div class="rounded-xl bg-amber-50 border border-amber-100 p-4 mt-4">
+        <div class="text-sm font-semibold text-slate-900">Estimated demand</div>
+        <p class="text-sm text-slate-600 mt-1">${escapeHtml(pricing.sales_estimate_basis || sales.reason || "Book sales estimation is unavailable until a verified method is configured.")}</p>
+        <p class="text-xs text-slate-500 mt-1">Confidence: ${escapeHtml(pricing.sales_estimate_confidence || "unavailable")}. This is not verified sales.</p>
+      </div>
+      ${block("Estimates (not verified sales)", bullets((pricing.estimates || []).map((f) => (f.label || "Estimate") + ": " + (f.value || "Not verified") + (f.basis ? " — " + f.basis : ""))))}
+      <p class="text-xs text-slate-500 mt-2">${escapeHtml(pricing.note || "Verified public facts are separated from estimates.")}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 class="text-base font-bold text-slate-900 mb-3">Competition and Opportunity Gap</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        ${selRow("What existing products do well", gap.existing_do_well || "Insufficient evidence")}
+        ${selRow("What existing products do poorly", gap.existing_do_poorly || "Insufficient evidence")}
+        <div class="md:col-span-2">${selRow("How you could make a better product", gap.how_to_improve || "Insufficient evidence")}</div>
+        <div class="md:col-span-2">${selRow("Proposed differentiator", gap.proposed_differentiator || "Insufficient evidence")}</div>
+      </div>
+      ${diffs.length ? `<div class="mt-3">${block("Documented angles", `<ol class="list-decimal ml-5 text-sm text-slate-700 space-y-1">${diffs.map((x) => `<li><span class="font-semibold">${escapeHtml(x.title || "")}</span> — ${escapeHtml(x.angle || "")}</li>`).join("")}</ol>`)}</div>` : ""}
+    </div>
+    <div id="fmaDetailedScore" class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 class="text-base font-bold text-slate-900 mb-3">Factory Advantage Score</h3>
+      <p class="text-xs text-slate-500 mb-3">${escapeHtml(scoreBlock.formula || score.formula || "")}</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        ${componentCard(scoreComps.demand)}${componentCard(scoreComps.competition_opportunity)}${componentCard(scoreComps.buyer_urgency)}${componentCard(scoreComps.monetization_potential)}${componentCard(scoreComps.differentiation_potential)}${componentCard(scoreComps.production_fit)}${componentCard(scoreComps.evidence_confidence)}
       </div>
     </div>
-    <p class="text-sm text-slate-500">Pick an opportunity with <span class="font-medium text-slate-700">Choose This Idea</span>, or jump to the strongest with <span class="font-medium text-slate-700">Use Best Recommendation</span> to start planning your product.</p>
-    <div class="space-y-4">${opportunityCardsHtml(ops)}</div>
-    ${recommendationCardHtml(reco)}
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 class="text-base font-bold text-slate-900 mb-2">Missing Evidence</h3>
+      ${(panel.missing_evidence || []).length ? bullets(panel.missing_evidence) : '<p class="text-sm text-slate-500">None listed.</p>'}
+    </div>
+    <div class="rounded-2xl border-2 border-brand-200 bg-brand-50/40 p-5">
+      <h3 class="text-base font-bold text-slate-900 mb-2">Decision</h3>
+      <div class="flex flex-wrap items-center gap-3 mb-3">
+        ${decisionBadgeHtml(decision.user_decision)}
+        <span class="text-sm font-semibold text-brand-700">${escapeHtml(decision.internal_recommendation || score.recommendation || "")}</span>
+      </div>
+      ${bullets(decision.reasons || [])}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+        ${selRow("Demand", panel.demand)}
+        ${selRow("Competition", panel.competition)}
+        ${selRow("Differentiation", panel.differentiation)}
+        ${selRow("Price range", panel.price_range || "Not verified")}
+        ${selRow("What to build", panel.what_to_build)}
+        ${selRow("Product type", panel.product_type)}
+        <div class="md:col-span-2">${selRow("Missing evidence", (panel.missing_evidence || []).join("; ") || "None listed")}</div>
+        <div class="md:col-span-2">${selRow("Next action", decision.next_action || panel.next_action || reco.next_step)}</div>
+      </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      ${evidenceUsedSectionHtml(d, { sources: citations })}
+    </div>
+    </div>
   </div>`;
 
   d._rerender = () => renderDiscovery(d);
@@ -1532,13 +2411,19 @@ async function saveResearchOnly() {
   const d = lastDiscovery;
   if (!d) return;
   const reco = d.recommendation || {};
-  const subject = reco.best_niche || d.niche || d.interest || (d.opportunities && d.opportunities[0] && d.opportunities[0].niche) || "Market research";
+  const op = d.selected_opportunity || (d.opportunities && d.opportunities[0]) || {};
+  const subject = reco.best_niche || d.niche || d.interest || op.niche || op.product_idea || "Market Advantage";
+  const payload = { ...d, stage: "research_saved", selected_opportunity: d.selected_opportunity || null };
+  delete payload._rerender;
+  delete payload._outEl;
   try {
-    await api("/projects", {
-      method: "POST",
-      body: JSON.stringify({ name: `Research: ${subject}`, type: "research_plan", data: d }),
-    });
-    toast("Research saved. Choose an idea anytime to start planning.");
+    markUserSaved(payload);
+    const targetId = d._source_project_id != null ? d._source_project_id : null;
+    const saved = targetId != null
+      ? await api(`/projects/${targetId}`, { method: "PUT", body: JSON.stringify({ name: `Research: ${subject}`, type: "research_plan", data: payload }) })
+      : await api("/projects", { method: "POST", body: JSON.stringify({ name: `Research: ${subject}`, type: "research_plan", data: payload, user_saved: true, user_confirmed_save: true }) });
+    if (saved && saved.id != null) d._source_project_id = saved.id;
+    toast("Research saved. Choose Your Advantage, then Build This Product when ready.");
     loadProjects();
   } catch (e) {
     toast(e.message, "error");
@@ -1599,51 +2484,321 @@ function opportunityToPlanForm(op) {
   };
 }
 
-// Automatic path: choosing an opportunity (or the best recommendation) generates
-// the product plan in the background and shows a confirmation screen. It NEVER
-// opens the Product Planning form — that is reserved for the manual path and the
-// "Edit Plan" button. The plan is saved to ONE record (reused, never duplicated).
+// Choose This Idea (legacy label). UI copy is "Choose Your Advantage".
+// Selecting does not generate a product. Build This Product opens the correct builder as DRAFT.
 async function chooseIdea(op) {
   if (!op) return;
+  const targetId = lastDiscovery && lastDiscovery._source_project_id != null ? lastDiscovery._source_project_id : null;
+  if (lastDiscovery) {
+    lastDiscovery.selected_opportunity = op;
+    lastDiscovery.selectedOpportunity = op;
+    if (targetId != null) lastDiscovery._source_project_id = targetId;
+    if (lastDiscovery._rerender) lastDiscovery._rerender();
+  }
+  setFmaStep("decision");
+  toast("Advantage selected. Save Research, then Build This Product. Factory will not auto-generate.");
+}
+
+async function buildThisProduct() {
+  const d = lastDiscovery;
+  if (!d) return toast("Run research first.", "error");
+  let op = d.selected_opportunity || d.selectedOpportunity;
+  if (!op) {
+    const ops = d.opportunities || [];
+    const reco = d.recommendation || {};
+    op = ops.find((o) => o.product_idea === reco.best_product) || ops[0];
+    if (op) {
+      d.selected_opportunity = op;
+      d.selectedOpportunity = op;
+    }
+  }
+  if (!op) return toast("Choose Your Advantage before building.", "error");
   const out = selectionOutEl();
-  const reco = (lastDiscovery && lastDiscovery.recommendation) || {};
-  const whySelected = reco.why_selected || op.why_opportunity || "";
-  out.innerHTML = spinner("Creating your product plan...");
+  setFmaStep("build");
   try {
-    const planData = await api("/generate-product-plan", {
+    await saveResearchOnly();
+    const clean = { ...d };
+    delete clean._rerender;
+    delete clean._outEl;
+    const result = await api("/research-to-builder", {
       method: "POST",
-      body: JSON.stringify({ form: opportunityToPlanForm(op) }),
+      body: JSON.stringify({
+        research_id: d._source_project_id,
+        opportunity: op,
+        research: clean,
+        inputs: d.inputs || fmaFormPayload(),
+      }),
     });
-    const research = opportunityToProjectData(op);
-    const payload = {
-      ...planData,
-      niche: research.niche,
-      audience: research.audience,
-      mode: research.mode,
-      report: research.report,
-      opportunity: op,
-      why_selected: whySelected,
-      stage: "product_plan_saved",
-    };
-    const name = (planData.plan && planData.plan.product_title) || op.product_idea || "Untitled Product Plan";
-    const targetId = lastDiscovery && lastDiscovery._source_project_id != null ? lastDiscovery._source_project_id : null;
+    if (result.generated || result.auto_generated) {
+      toast("Unexpected generation was blocked. Opening the builder as a draft.", "error");
+    }
+    const plan = (result.data && result.data.plan) || {};
+    const factoryId = result.factory_id || (result.builder && result.builder.factory_id);
+    if (factoryId === "ebook") {
+      const brief = result.data || {};
+      brief._project_id = result.id;
+      pendingEbookBrief = brief;
+      go("ebook");
+      document.getElementById("ebookInput").value = plan.product_title || op.product_idea || "";
+      renderBriefPanel(brief);
+      toast("Draft opened in Ebook Builder. Review the brief — nothing was auto-generated.");
+      return;
+    }
+    go("factory");
+    if (result.id != null) pendingProductProjectId = result.id;
+    const ok = prefillFactoryFromPlan(plan);
+    toast(ok
+      ? "Draft opened in the matching builder. Review the brief, then generate when you are ready."
+      : "Draft saved. Pick the matching product type in Product Factory.");
+  } catch (e) {
+    if (out) {
+      out.insertAdjacentHTML("afterbegin", card(`<p class="text-rose-600 text-sm">${escapeHtml(e.message)}</p>`));
+    }
+    toast(e.message, "error");
+  }
+}
+
+async function runFactoryMarketAdvantage() {
+  const payload = fmaFormPayload();
+  if (!(payload.topic || "").trim()) return toast("Enter a topic or idea.", "error");
+  if (!validateFmaOpeningForm(payload)) return;
+  if (lastDiscovery && lastDiscovery._carried_from_discovery) {
+    payload.carried_sources = lastDiscovery.sources || [];
+    payload.prior_opportunity = lastDiscovery.selected_opportunity || null;
+  }
+  const out = document.getElementById("marketOutput");
+  if (out) out.innerHTML = spinner("Gathering evidence and scoring the advantage...");
+  setBusy("fmaRunBtn", true);
+  setFmaStep("evidence");
+  try {
+    const data = await api("/discover-products", { method: "POST", body: JSON.stringify(payload) });
+    if (data && data.inputs) restoreAdvantageForm(data);
+    renderDiscovery(data);
+  } catch (e) {
+    if (out) {
+      out.innerHTML = card(`
+        <p class="text-rose-600 text-sm mb-3">We couldn't complete the market research. Your idea and filters have been preserved. Please try again.</p>
+        <button id="fmaRetryBtn" class="btn-primary">Try again</button>`);
+      const retry = out.querySelector("#fmaRetryBtn");
+      if (retry) retry.onclick = () => runFactoryMarketAdvantage();
+    }
+  } finally {
+    setBusy("fmaRunBtn", false);
+  }
+}
+
+function discoveryDetailsHtml(d, o, i) {
+  const platforms = Array.isArray(o.suggested_platforms) ? o.suggested_platforms : (o.suggested_platforms ? [o.suggested_platforms] : []);
+  const compact = o.compact_evidence || {};
+  const reco = (o.factory_advantage && o.factory_advantage.recommendation) || compact.recommendation || "";
+  return `<div class="fma-more-details hidden mt-4 space-y-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        ${block("Recommended product type", `<p class="text-sm text-slate-700">${escapeHtml(o.product_type) || "&mdash;"}</p>`)}
+        ${block("Target customer", `<p class="text-sm text-slate-700">${escapeHtml(o.target_audience) || "&mdash;"}</p>`)}
+        ${block("Customer problem", `<p class="text-sm text-slate-700">${escapeHtml(o.customer_problem) || "&mdash;"}</p>`)}
+        ${block("Competition", `<p class="text-sm text-slate-700">${escapeHtml(o.competition || "Not verified")}${o.competition_explanation ? ` — ${escapeHtml(o.competition_explanation)}` : ""}</p>`)}
+        ${block("Trend", `<p class="text-sm text-slate-700">${escapeHtml(compact.trend || "Insufficient evidence")}</p>`)}
+        ${block("Factory recommendation", `<p class="text-sm text-slate-700">${escapeHtml(reco || "Insufficient Evidence")}</p>`)}
+        <div class="sm:col-span-2">${block("Why this opportunity exists", `<p class="text-sm text-slate-700">${escapeHtml(o.why_opportunity) || "&mdash;"}</p>`)}</div>
+        <div class="sm:col-span-2">${block("Demand evidence", `<p class="text-sm text-slate-700">${escapeHtml(o.demand_evidence) || "&mdash;"}</p>`)}</div>
+        ${block("Typical observed price range", `<p class="text-sm text-slate-700">${escapeHtml(o.price_range || "Not verified")}</p>`)}
+        ${block("Suggested sales platforms", `<p class="text-sm text-slate-700">${escapeHtml(platforms.join(", ") || "Not sure / Any")}</p>`)}
+        <div class="sm:col-span-2">${block("Why it could sell", `<p class="text-sm text-slate-700">${escapeHtml(o.why_it_could_sell || o.sales_angle) || "&mdash;"}</p>`)}</div>
+        <div class="sm:col-span-2">${block("Main risk", `<p class="text-sm text-slate-700">${escapeHtml(o.main_risk) || "&mdash;"}</p>`)}</div>
+      </div>
+      <p class="text-xs text-slate-500">${escapeHtml(compact.note || "Factory summarized the available public signals inside the Factory.")}</p>
+      <div>${evidenceUsedSectionHtml(d, o)}</div>
+      <div class="flex flex-wrap justify-end gap-3">
+        <button type="button" data-save-opportunity="${i}" class="rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50 px-4 py-2 text-sm font-medium">Save Opportunity</button>
+      </div>
+    </div>`;
+}
+
+function renderTopOpportunities(d) {
+  const out = document.getElementById("marketOutput");
+  if (!out) return;
+  const ops = d.opportunities || [];
+  const err = d.provider_error || d.error;
+  lastDiscovery = d;
+  d._outEl = out;
+  if (!ops.length) {
+    out.innerHTML = card(`
+      <p class="text-rose-600 text-sm mb-3">We couldn't complete the market research. Your idea and filters have been preserved. Please try again.</p>
+      <button id="fmaRetryBtn" class="btn-primary">Try again</button>`);
+    const retry = out.querySelector("#fmaRetryBtn");
+    if (retry) retry.onclick = () => runFindOpportunities();
+    return;
+  }
+  setFmaStep("evidence");
+  // Research This Idea — customer label is Choose This Idea; still populates I Have an Idea.
+  const reco = d.recommendation || {};
+  let bestIdx = ops.findIndex((o) => o.product_idea === reco.best_product);
+  if (bestIdx < 0) bestIdx = 0;
+  const best = ops[bestIdx];
+  const others = ops.map((o, i) => ({ o, i })).filter((row) => row.i !== bestIdx);
+  const bestWhy = firstSentence(best.why_opportunity || reco.why_selected, "Factory found public market signals for this idea.");
+  const bestCard = `<div data-opp-card class="rounded-2xl border-2 border-brand-500 bg-white p-6">
+      <div class="text-xs font-semibold uppercase tracking-wide text-brand-700 mb-1">Best Recommendation</div>
+      <div class="text-xl font-bold text-slate-900">${escapeHtml(best.product_idea)}</div>
+      <p class="text-sm text-slate-700 mt-2">${escapeHtml(bestWhy)}</p>
+      <div class="mt-3 flex flex-wrap gap-2 text-xs">
+        <span class="rounded-lg bg-slate-100 text-slate-700 px-3 py-1.5">Difficulty ${escapeHtml(customerDifficulty(best.difficulty))}</span>
+        <span class="rounded-lg bg-slate-100 text-slate-700 px-3 py-1.5">Competition ${escapeHtml(customerCompetition(best.competition))}</span>
+      </div>
+      <div class="mt-4 flex flex-wrap gap-3">
+        <button type="button" data-research-idea="${bestIdx}" class="btn-primary">Choose This Idea</button>
+        <button type="button" data-more-details aria-expanded="false" class="rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50 px-4 py-2 text-sm font-medium">More Details</button>
+      </div>
+      ${discoveryDetailsHtml(d, best, bestIdx)}
+    </div>`;
+  const otherCards = others.map(({ o, i }) => `<div data-opp-card class="rounded-xl border border-slate-200 bg-white p-4">
+      <div class="font-semibold text-slate-900">${escapeHtml(o.product_idea)}</div>
+      <p class="text-sm text-slate-600 mt-1">${escapeHtml(firstSentence(o.why_opportunity, "Another researched option from the same search."))}</p>
+      <div class="mt-2 flex flex-wrap gap-2 text-xs">
+        <span class="rounded-lg bg-slate-100 text-slate-700 px-2.5 py-1">Difficulty ${escapeHtml(customerDifficulty(o.difficulty))}</span>
+        <span class="rounded-lg bg-slate-100 text-slate-700 px-2.5 py-1">Competition ${escapeHtml(customerCompetition(o.competition))}</span>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" data-research-idea="${i}" class="rounded-xl border border-brand-500 text-brand-700 hover:bg-brand-50 px-3 py-1.5 text-sm font-medium">Choose This Idea</button>
+        <button type="button" data-more-details aria-expanded="false" class="text-sm font-medium text-slate-600 hover:text-slate-900 underline">More Details</button>
+      </div>
+      ${discoveryDetailsHtml(d, o, i)}
+    </div>`).join("");
+  out.innerHTML = `<div class="space-y-4">
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <div class="text-xs font-semibold uppercase tracking-widest text-brand-600">Factory Market Advantage</div>
+      <h3 class="text-lg font-bold text-slate-900">Here is what we recommend.</h3>
+      <p class="text-sm text-slate-600 mt-2">Choose This Idea fills in I Have an Idea and runs validation. Factory does not generate a product yet.</p>
+      <p class="text-xs text-slate-500 mt-2">${escapeHtml(d.discovery_disclaimer || "Market scores, pricing observations, and demand indicators are research estimates based on available public evidence. They do not guarantee sales or earnings.")}</p>
+      ${err ? `<p class="text-sm text-amber-700 mt-2">${escapeHtml(err)}</p>` : ""}
+    </div>
+    ${bestCard}
+    ${otherCards ? `<div><h4 class="text-sm font-bold text-slate-900 mb-3">Other Good Options</h4><div class="space-y-3">${otherCards}</div></div>` : ""}
+  </div>`;
+  d._rerender = () => renderTopOpportunities(d);
+  wireOpportunityButtons(out, d);
+}
+
+async function runFindOpportunities() {
+  const payload = fmaDiscoverPayload();
+  const out = document.getElementById("marketOutput");
+  if (out) out.innerHTML = spinner("Researching current digital-product opportunities...");
+  setBusy("fmaFindBtn", true);
+  setFmaStep("evidence");
+  try {
+    const data = await api("/discover-products", { method: "POST", body: JSON.stringify(payload) });
+    if (data && (data.inputs || data.filters)) restoreDiscoverForm(data);
+    renderTopOpportunities(data);
+  } catch (e) {
+    if (out) {
+      out.innerHTML = card(`
+        <p class="text-rose-600 text-sm mb-3">We couldn't complete the market research. Your idea and filters have been preserved. Please try again.</p>
+        <button id="fmaRetryBtn" class="btn-primary">Try again</button>`);
+      const retry = out.querySelector("#fmaRetryBtn");
+      if (retry) retry.onclick = () => runFindOpportunities();
+    }
+  } finally {
+    setBusy("fmaFindBtn", false);
+  }
+}
+
+function improveThisIdea() {
+  const d = lastDiscovery || {};
+  const op = d.selected_opportunity || d.selectedOpportunity || (d.opportunities && d.opportunities[0]) || {};
+  setFmaStartMode("idea");
+  restoreAdvantageForm({
+    inputs: {
+      topic: op.product_idea || (d.inputs && d.inputs.topic) || "",
+      audience: op.target_audience || (d.inputs && d.inputs.audience) || "",
+      customer_problem: op.customer_problem || (d.inputs && d.inputs.customer_problem) || "",
+      product_type: op.product_type || (d.inputs && d.inputs.product_type) || "",
+      sales_platform: (d.inputs && d.inputs.sales_platform) || "",
+      expertise: (d.inputs && d.inputs.expertise) || "",
+      target_price: (d.inputs && d.inputs.target_price) || "",
+      keywords: (d.inputs && d.inputs.keywords) || "",
+      depth: (d.inputs && d.inputs.depth) || "Quick Check",
+    },
+  });
+  const more = document.getElementById("fmaMoreOptions");
+  const moreBtn = document.getElementById("fmaMoreOptionsBtn");
+  if (more) more.classList.remove("hidden");
+  if (moreBtn) moreBtn.setAttribute("aria-expanded", "true");
+  const topic = document.getElementById("fmaTopic");
+  if (topic) topic.focus();
+  toast("Update the idea, then research again. Nothing was generated.");
+}
+
+function researchThisIdea(op, discovery) {
+  // Research This Idea / Choose This Idea still populates the I Have an Idea workflow.
+  if (!op) return;
+  setFmaStartMode("idea");
+  const carried = discovery || lastDiscovery || {};
+  const rawType = String(op.product_type || "").trim();
+  const productType = MARKET_PRODUCT_TYPES.indexOf(rawType) >= 0
+    ? rawType
+    : (MARKET_PRODUCT_TYPES.find((t) => t.toLowerCase() === rawType.toLowerCase()) || "Not Sure Yet");
+  const audience = String(op.target_audience || "").trim()
+    || String((carried.inputs && carried.inputs.audience) || (carried.filters && carried.filters.audience) || carried.audience || "").trim()
+    || "General audience";
+  restoreAdvantageForm({
+    inputs: {
+      topic: op.product_idea || "",
+      audience: audience,
+      customer_problem: op.customer_problem || "",
+      product_type: productType,
+      sales_platform: mapDiscoverPlatformToIdea(firstSuggestedPlatform(op)),
+      target_price: op.price_range && op.price_range !== "Not verified" ? op.price_range : "",
+      depth: (carried.inputs && carried.inputs.depth) || (carried.filters && carried.filters.depth) || "Quick Check",
+    },
+  });
+  lastDiscovery = {
+    ...carried,
+    selected_opportunity: op,
+    selectedOpportunity: op,
+    sources: op.sources && op.sources.length ? op.sources : (carried.sources || []),
+    _carried_from_discovery: true,
+    fma_mode: "idea",
+  };
+  setFmaStep("idea");
+  runFactoryMarketAdvantage();
+}
+
+async function saveOpportunity(op, discovery) {
+  if (!op) return;
+  const d = discovery || lastDiscovery || {};
+  const payload = {
+    ...d,
+    fma_mode: "discover",
+    selected_opportunity: op,
+    stage: "research_saved",
+    idea: op.product_idea,
+    audience: op.target_audience,
+    product_type: op.product_type,
+    customer_problem: op.customer_problem,
+    evidence: op.evidence || d.evidence || {},
+    sources: op.sources && op.sources.length ? op.sources : (d.sources || []),
+    pricing_observations: op.price_range,
+    competition: op.competition,
+    opportunity_score: op.opportunity_score,
+    researched_at: d.researched_at || "",
+    factory_advantage: op.factory_advantage || d.factory_advantage,
+  };
+  delete payload._rerender;
+  delete payload._outEl;
+  try {
     markUserSaved(payload);
+    const targetId = d._source_project_id != null ? d._source_project_id : null;
     const saved = targetId != null
-      ? await api(`/projects/${targetId}`, { method: "PUT", body: JSON.stringify({ name, type: "product_plan", data: payload }) })
-      : await api("/save-product-plan", { method: "POST", body: JSON.stringify({ name, data: payload }) });
+      ? await api(`/projects/${targetId}`, { method: "PUT", body: JSON.stringify({ name: `Research: ${op.product_idea}`, type: "research_plan", data: payload }) })
+      : await api("/projects", { method: "POST", body: JSON.stringify({ name: `Research: ${op.product_idea}`, type: "research_plan", data: payload, user_saved: true, user_confirmed_save: true }) });
     if (saved && saved.id != null) {
-      payload._project_id = saved.id;
+      d._source_project_id = saved.id;
       if (lastDiscovery) lastDiscovery._source_project_id = saved.id;
     }
+    toast("Opportunity saved. Reopen it anytime from Saved Projects.");
     loadProjects();
-    renderBestSelected(payload, whySelected, op);
   } catch (e) {
-    out.innerHTML = card(
-      `<p class="text-rose-600 text-sm mb-3">${escapeHtml(e.message)}</p>
-       <button id="backToOpps" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Back to opportunities</button>`
-    );
-    const back = out.querySelector("#backToOpps");
-    if (back) back.onclick = () => { if (lastDiscovery && lastDiscovery._rerender) lastDiscovery._rerender(); };
+    toast(e.message, "error");
   }
 }
 
@@ -1817,7 +2972,7 @@ async function loadPlanSources() {
   const sel = document.getElementById("planSource");
   if (!sel) return;
   let projects = [];
-  try { projects = await api("/projects"); } catch (e) { /* ignore */ }
+  try { projects = await api("/projects?factory_sources=1"); } catch (e) { /* ignore */ }
   planResearchCache = projects.filter((p) => p.type === "research_plan");
   sel.innerHTML =
     '<option value="">Enter manually</option>' +
@@ -2228,11 +3383,54 @@ function selectFactoryType(id) {
     _crosswordSetupForm();
   }
 
+  if (id === "ebook") {
+    _ebookVisualCostSetup();
+  }
+
   // Scroll form into view so beginners see the next step immediately.
   const wrap = document.getElementById("factoryFormWrap");
   if (wrap && typeof wrap.scrollIntoView === "function") {
     wrap.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+}
+
+const EBOOK_AI_VISUAL_UNIT_USD = 0.04;
+const EBOOK_AI_VISUAL_MAX_ATTEMPTS = 2;
+
+function _ebookMaxVisualCost(chapterCount) {
+  const n = Math.max(0, parseInt(chapterCount, 10) || 0);
+  return Math.round(n * EBOOK_AI_VISUAL_UNIT_USD * EBOOK_AI_VISUAL_MAX_ATTEMPTS * 10000) / 10000;
+}
+
+function _ebookVisualCostSetup() {
+  const form = document.getElementById("factoryForm");
+  if (!form) return;
+  const imagesEl = form.elements["include_images"];
+  const chaptersEl = form.elements["chapters"];
+  let note = form.querySelector("[data-ebook-visual-cost]");
+  if (!note) {
+    note = document.createElement("p");
+    note.setAttribute("data-ebook-visual-cost", "1");
+    note.className = "mt-2 text-sm text-slate-700 sm:col-span-2";
+    const host = imagesEl && imagesEl.closest("div");
+    if (host) host.appendChild(note);
+  }
+  function refresh() {
+    const automatic = String((imagesEl && imagesEl.value) || "Yes").toLowerCase() !== "no";
+    if (!automatic) {
+      note.textContent = "No visuals will be searched or created.";
+      note.className = "mt-2 text-sm text-slate-500 sm:col-span-2";
+      return;
+    }
+    const cap = _ebookMaxVisualCost(chaptersEl && chaptersEl.value);
+    note.textContent =
+      `Maximum visual-generation cost: $${cap.toFixed(2)}. Stock photos are free. Generating now authorizes automatic visual work within this amount. We will not exceed this cap.`;
+    note.className = "mt-2 text-sm text-emerald-800 sm:col-span-2";
+  }
+  if (imagesEl) imagesEl.addEventListener("change", refresh);
+  if (chaptersEl) chaptersEl.addEventListener("input", refresh);
+  if (chaptersEl) chaptersEl.addEventListener("change", refresh);
+  refresh();
 }
 
 function _crosswordSetupForm() {
@@ -2319,6 +3517,95 @@ function collectFactoryFields() {
   return fields;
 }
 
+function _coloringBookPendingApproval(d) {
+  if (!d || d.product_type !== "coloring_book") return false;
+  const stage = String(d.generation_stage || "");
+  return !!(d.needs_approval || stage === "cover_preview" || stage === "sample_interior");
+}
+
+function _coloringBookCustomerReady(d) {
+  if (!d || d.product_type !== "coloring_book") return true;
+  if (_coloringBookPendingApproval(d)) return false;
+  if (d.qa_passed === false) return false;
+  const qr = d.qa_result || {};
+  if (qr.blocked_export || qr.all_passed === false) return false;
+  return true;
+}
+
+function _coloringInteriorPreviewEntries(d) {
+  if (Array.isArray(d && d.interior_previews) && d.interior_previews.length) {
+    return d.interior_previews;
+  }
+  const pages = Array.isArray(d && d.pages) ? d.pages : [];
+  const pkg = d && d.package_id;
+  const pid = d && d._project_id;
+  return pages.slice(0, 30).map((p, i) => {
+    const n = String(p.page_number || i + 1).padStart(2, "0");
+    const filename = `coloring_p${n}.png`;
+    let url = p.preview_url || "";
+    if (!url && pid) url = `/projects/${pid}/coloring-preview/${filename}`;
+    if (!url && pkg) url = `/download/${encodeURIComponent(pkg)}/${filename}`;
+    return {
+      page_number: p.page_number || i + 1,
+      topic: p.topic || `Page ${p.page_number || i + 1}`,
+      filename,
+      url,
+      missing: !!p.preview_missing || !url,
+    };
+  });
+}
+
+function _coloringInteriorMissingHtml(filename) {
+  const label = filename
+    ? `Interior page image missing: ${escapeHtml(filename)}`
+    : "Interior page image missing.";
+  return `<p class="px-2 py-8 text-center text-xs text-rose-700" data-coloring-interior-missing>${label}</p>`;
+}
+
+function _coloringBookSamplePreviewHtml(d) {
+  if (d && d.sample_preview_b64) {
+    return `<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Sample coloring page</p>
+      <div class="mx-auto w-full max-w-2xl rounded-lg border border-slate-200 bg-slate-100 shadow-md overflow-hidden" style="aspect-ratio: 8.5 / 11;">
+        <img alt="Sample interior page" class="block w-full h-full object-contain bg-white" src="data:image/png;base64,${d.sample_preview_b64}" />
+      </div></div>`;
+  }
+  const first = (_coloringInteriorPreviewEntries(d) || [])[0];
+  if (!first) return "";
+  const body = first.missing || !first.url
+    ? _coloringInteriorMissingHtml(first.filename)
+    : `<img alt="${escapeHtml(first.topic || "Sample page")}" class="block w-full h-full object-contain bg-white" src="${escapeHtml(first.url)}" onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'px-2 py-8 text-center text-xs text-rose-700',textContent:'Interior page image missing: '+(this.getAttribute('data-preview-file')||'')}))" data-preview-file="${escapeHtml(first.filename || "")}" />`;
+  return `<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Sample coloring page</p>
+    <div class="mx-auto w-full max-w-2xl rounded-lg border border-slate-200 bg-slate-100 shadow-md overflow-hidden" style="aspect-ratio: 8.5 / 11;">
+      ${body}
+    </div></div>`;
+}
+
+function _coloringBookInteriorPreviewHtml(d) {
+  const entries = _coloringInteriorPreviewEntries(d);
+  if (!entries.length) return "";
+  const items = entries
+    .slice(0, 30)
+    .map((p) => {
+      const topic = p.topic || `Page ${p.page_number || ""}`;
+      const body = p.missing || !p.url
+        ? _coloringInteriorMissingHtml(p.filename)
+        : `<img alt="${escapeHtml(topic)}" class="block w-full object-contain bg-white" style="aspect-ratio: 8.5 / 11;" src="${escapeHtml(p.url)}" data-preview-file="${escapeHtml(p.filename || "")}" onerror="this.insertAdjacentHTML('afterend', '<p class=\\'px-2 py-8 text-center text-xs text-rose-700\\' data-coloring-interior-missing>Interior page image missing: ' + (this.getAttribute('data-preview-file') || '') + '</p>'); this.remove();" />`;
+      return `<figure class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+        ${body}
+        <figcaption class="px-2 py-1 text-xs text-slate-600 truncate">${escapeHtml(topic)}</figcaption>
+      </figure>`;
+    })
+    .join("");
+  return `<div class="mt-4 coloring-interior-preview" data-coloring-interior-preview>
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Interior coloring pages</p>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">${items}</div>
+  </div>`;
+}
+
+function _coloringBookPreservedPreviewHtml(d) {
+  return `${_coloringBookFullCoverPreviewHtml(d)}${_coloringBookSamplePreviewHtml(d)}`;
+}
+
 async function _runColoringBookStage(d, nextStage, approvals) {
   const fields = collectFactoryFields();
   fields.package_id = d.package_id || (d.fields && d.fields.package_id) || "";
@@ -2334,7 +3621,13 @@ async function _runColoringBookStage(d, nextStage, approvals) {
       : nextStage === "sample_interior"
         ? "Step 2 of 3 — creating one sample page to approve (uses AI image credits)…"
         : "Step 1 of 3 — creating your cover preview (uses AI image credits)…";
-  out.innerHTML = spinner(paidNote);
+  // Keep the cover (and sample, if any) visible under the progress note.
+  // A later failure must not make completed work disappear.
+  out.innerHTML = card(
+    `${spinner(paidNote)}
+     <p class="text-xs text-slate-500 mt-2 mb-3">Your cover stays on this page while the next step runs. The form is not reset.</p>
+     ${_coloringBookPreservedPreviewHtml(d)}`
+  );
   setBusy("factoryBtn", true);
   try {
     const data = await api("/generate-product", {
@@ -2345,11 +3638,17 @@ async function _runColoringBookStage(d, nextStage, approvals) {
     if (d._project_id != null) data._project_id = d._project_id;
     renderProduct(data);
     scrollNextStepsPanelIntoView(data);
+    if (_coloringBookCustomerReady(data)) {
+      _showWorkflowSaveDialog(data, () => _doWorkflowSave(data));
+    }
   } catch (e) {
     out.innerHTML = card(
       `<p class="text-rose-600 text-sm font-medium mb-2">${escapeHtml(e.message)}</p>
-       <p class="text-sm text-slate-600 mb-3">Check your title and theme, then try again. If this keeps happening, switch Artwork quality to “Quick test layout” to verify the form works.</p>
-       <button data-cb-retry class="btn-primary">Try again</button>`
+       <p class="text-sm text-slate-600 mb-2">What failed: ${escapeHtml(nextStage === "full" ? "finishing interior pages" : nextStage === "sample_interior" ? "creating the sample page" : "creating the cover preview")}.</p>
+       <p class="text-sm text-slate-600 mb-2">What was preserved: your cover${d.sample_preview_b64 || (d.pages && d.pages.length) ? " and any pages already generated" : ""} stayed attached to this project. The form was not cleared.</p>
+       <p class="text-sm text-slate-600 mb-3">Next: click Try again to continue from this step. Save stays disabled until the complete coloring book passes quality checks.</p>
+       <button data-cb-retry class="btn-primary">Try again</button>
+       <div class="mt-4">${_coloringBookPreservedPreviewHtml(d)}</div>`
     );
     const retry = out.querySelector("[data-cb-retry]");
     if (retry) {
@@ -2385,8 +3684,27 @@ function _coloringApprovalStepper(stage) {
     </ol>`;
 }
 
+function _productAuthor(d) {
+  if (!d || typeof d !== "object") return "";
+  const fields = d.fields && typeof d.fields === "object" ? d.fields : {};
+  const cover = d.cover_design && typeof d.cover_design === "object" ? d.cover_design : {};
+  return String(
+    d.author_name ||
+      d.author ||
+      d.author_brand ||
+      fields.author_brand ||
+      fields.author ||
+      cover.author ||
+      ""
+  ).trim();
+}
+
 function _coloringBookCoverSrc(d) {
   if (d.cover_preview_b64) return `data:image/png;base64,${d.cover_preview_b64}`;
+  if (d.cover_preview_url) return d.cover_preview_url;
+  if (d._project_id) {
+    return `/projects/${d._project_id}/coloring-preview/cover_page_preview.png`;
+  }
   if (d.package_id) {
     // Prefer composed letter-size cover page when present; fall back to raw art.
     return `/download/${encodeURIComponent(d.package_id)}/cover_page_preview.png`;
@@ -2400,15 +3718,23 @@ function _coloringBookFullCoverPreviewHtml(d, { caption } = {}) {
   if (!src) {
     return `<p class="text-sm text-slate-500">Cover preview image not available yet.</p>`;
   }
+  const coverFallback = d._project_id
+    ? `/projects/${d._project_id}/coloring-preview/img_cover.png`
+    : `/download/${encodeURIComponent(d.package_id || "")}/img_cover.png`;
   // Letter aspect, large in the factory preview — not a comic-strip thumbnail grid.
+  const coloringAuthor = _productAuthor(d);
+  const coloringAuthorLine = coloringAuthor
+    ? `<p class="mt-1 text-center text-sm font-semibold text-slate-700" data-coloring-author-byline>${escapeHtml(d.author_byline || ("by " + coloringAuthor))}</p>`
+    : "";
   return `
     <div class="mb-2">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">${escapeHtml(label)}</p>
       <div class="mx-auto w-full max-w-2xl rounded-lg border border-slate-200 bg-slate-100 shadow-md overflow-hidden" style="aspect-ratio: 8.5 / 11;">
         <img alt="Full-size coloring book cover" class="block w-full h-full object-contain bg-white"
              src="${src}"
-             onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/download/${encodeURIComponent(d.package_id || '')}/img_cover.png';}" />
+             onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${coverFallback}';}" />
       </div>
+      ${coloringAuthorLine}
       <p class="mt-2 text-center text-xs text-slate-500">This is the real book cover at full page size — not a multi-panel comic strip.</p>
     </div>`;
 }
@@ -2469,10 +3795,7 @@ function _renderColoringApprovalPanel(d) {
 
 function renderProduct(d) {
   // Coloring book staged approval (cover → sample → full). No full paid book until approved.
-  if (
-    d.product_type === "coloring_book" &&
-    (d.needs_approval || d.generation_stage === "cover_preview" || d.generation_stage === "sample_interior")
-  ) {
+  if (_coloringBookPendingApproval(d)) {
     const out = document.getElementById("factoryOutput");
     out.innerHTML = card(_renderColoringApprovalPanel(d));
     const approveCover = out.querySelector("[data-cb-approve-cover]");
@@ -2527,7 +3850,13 @@ function renderProduct(d) {
     : "";
   const coloringCoverPreview =
     d.product_type === "coloring_book"
-      ? _coloringBookFullCoverPreviewHtml(d)
+      ? `${_coloringBookFullCoverPreviewHtml(d)}${_coloringBookInteriorPreviewHtml(d)}`
+      : "";
+  const coloringQaNote =
+    d.product_type === "coloring_book" && !_coloringBookCustomerReady(d)
+      ? `<div class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+           Quality checks are not complete yet. Your cover and generated pages are still here. Save stays disabled until the complete coloring book passes quality checks.
+         </div>`
       : "";
   const out = document.getElementById("factoryOutput");
   out.innerHTML = card(
@@ -2541,15 +3870,19 @@ function renderProduct(d) {
        <div class="flex items-center gap-2 text-xs text-slate-500 min-w-0">
          <span class="rounded-md bg-brand-100 text-brand-700 font-semibold px-2 py-0.5">${escapeHtml(d.product_label || "Product")}</span>
          <span class="truncate">${escapeHtml(d.title || "")}</span>
+         ${d.product_type === "coloring_book" && _productAuthor(d) ? `<span class="truncate text-slate-500">by ${escapeHtml(_productAuthor(d))}</span>` : ""}
        </div>
        <button data-preview-dl-pdf class="${NS_BTN}">Download PDF</button>
-     </div>${placementNote}${coloringCoverPreview}<div class="prose-out">${md(d.content)}</div>`
+     </div>${placementNote}${coloringQaNote}${coloringCoverPreview}<div class="prose-out">${md(d.content)}</div>`
   );
   // Wire the preview-card "Download PDF" button. Lazy: only calls /export-product
   // when the user actually clicks, not on render. Reuses d.product_exports if the
   // workflow auto-save or panel probe already fetched it.
   const previewDlBtn = out.querySelector("[data-preview-dl-pdf]");
-  if (previewDlBtn) {
+  if (previewDlBtn && d.product_type === "ebook" && !factoryEbookReady(d)) {
+    previewDlBtn.disabled = true;
+    previewDlBtn.textContent = d.next_action || "Needs correction.";
+  } else if (previewDlBtn) {
     previewDlBtn.onclick = async (e) => {
       const b = e.currentTarget;
       setBusyEl(b, true);
@@ -2557,7 +3890,7 @@ function renderProduct(d) {
         // Auto-save so beginners aren't blocked by a hidden "save first" rule.
         if (d._project_id == null) {
           toast("Saving your project so you can download…");
-          await ensureProductSaved(d);
+          await ensureProductSaved(d, { confirmed: false });
           if (typeof d._nsRenderPostSave === "function") d._nsRenderPostSave();
         }
         const projectId = d._project_id;
@@ -2566,7 +3899,13 @@ function renderProduct(d) {
           return;
         }
         let ex = (d.exports && d.exports.files) || (d.product_exports && d.product_exports.files);
-        if (!ex) {
+        const ebookDisk = d.product_type === "ebook" ? ebookOnDiskFiles(d) : null;
+        if (ebookDisk) {
+          ex = ebookDisk;
+        } else if (d.product_type === "ebook") {
+          toast("PDF is not available until this ebook is saved with its package files.", "error");
+          return;
+        } else if (!ex) {
           const r = await api("/export-product", {
             method: "POST",
             body: JSON.stringify({ project_id: projectId }),
@@ -2598,22 +3937,31 @@ function renderProduct(d) {
   // Honest QA banner for ebooks that are not export-ready — Download PDF will
   // fail until content / cover issues are fixed (do not pretend it works).
   if (d.product_type === "ebook") {
+    const failures = Array.isArray(d.manuscript_quality_failures) ? d.manuscript_quality_failures : [];
     const blocked =
       d.quality_blocking ||
       (d.pipeline && Array.isArray(d.pipeline.blocking) && d.pipeline.blocking.length);
-    if (blocked) {
-      const reasons = (d.pipeline && d.pipeline.blocking) || [
-        "Content quality checks must pass before PDF download.",
-      ];
+    if (failures.length || blocked) {
+      const reasons = failures.length
+        ? failures.map((f) => {
+            const msg = (f && f.message) || `Manuscript contains “${(f && f.phrase) || ""}”.`;
+            return f && f.excerpt ? `${msg} Excerpt: “${f.excerpt}”` : msg;
+          })
+        : (d.pipeline && d.pipeline.blocking) || [
+            d.next_action || "Needs correction.",
+          ];
+      const guaranteedHit = failures.some((f) => String((f && f.phrase) || "").toLowerCase() === "guaranteed");
       const banner = document.createElement("div");
       banner.className =
         "mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900";
       banner.innerHTML =
-        `<p class="font-semibold">PDF download is blocked until quality checks pass</p>` +
+        `<p class="font-semibold">${escapeHtml(d.status_label || "Needs correction.")}</p>` +
         `<ul class="mt-2 list-disc pl-5 space-y-1">${reasons
           .map((r) => `<li>${escapeHtml(String(r))}</li>`)
           .join("")}</ul>` +
-        `<p class="mt-2 text-amber-800">Revise the manuscript (remove marketing claims like “guaranteed”), finish the cover, then try Download PDF again.</p>`;
+        (guaranteedHit
+          ? `<p class="mt-2 text-amber-800">Revise the manuscript (remove marketing claims like “guaranteed”), finish the cover, then try Download PDF again.</p>`
+          : `<p class="mt-2 text-amber-800">Next: ${escapeHtml(d.next_action || "Retry missing image")}.</p>`);
       out.insertBefore(banner, out.lastElementChild);
     }
   }
@@ -2645,10 +3993,20 @@ function renderProduct(d) {
   // surface the Download HTML / TXT / ZIP section immediately (no extra click).
   // Gate strictly on persisted export FILES so this never re-runs /export-product
   // (the user-initiated Next Step path handles regeneration when needed).
+  // Ready factory ebooks already have Download PDF/ZIP on the next-steps bar;
+  // never auto-call /export-product on reopen (it rebuilds and blocks the UI).
   const hasExportFiles =
     (d.exports && d.exports.files) || (d.product_exports && d.product_exports.files);
-  if (hasExportFiles && d._project_id) {
+  if (d.product_type === "ebook" && (factoryEbookReady(d) || ebookOnDiskFiles(d))) {
+    /* downloads use /download/<package_id>/ — skip nsExport */
+  } else if (hasExportFiles && d._project_id && !(d.product_type === "ebook" && !factoryEbookReady(d))) {
     nsExport(d);
+  } else if (hasExportFiles && d._project_id && d.product_type === "ebook") {
+    const res = typeof nsResult === "function" ? nsResult(d) : null;
+    if (res) {
+      res.innerHTML = finalOutputCard(d._project_id, d.exports || d.product_exports || {}, d.packages || {}, d.product_type, d);
+      wireFinalOutputIn(res, d._project_id, d.exports || d.product_exports || {});
+    }
   }
 }
 
@@ -2658,7 +4016,7 @@ async function loadEbookEnhancements(out, d) {
   slot.innerHTML = card(
     `<div class="flex items-center gap-3 text-sm text-slate-500">
        <span class="inline-block h-4 w-4 rounded-full border-2 border-brand-500 border-t-transparent animate-spin"></span>
-       Building visual plan and export package...
+       ${escapeHtml((d.visual_progress_message || d.visual_progress || "Planning chapter visuals"))}
      </div>`
   );
   // Insert the loading slot just before the save bar.
@@ -2710,6 +4068,7 @@ const VISUAL_AID_BADGES = {
   diagram: "bg-indigo-100 text-indigo-700",
   infographic: "bg-fuchsia-100 text-fuchsia-700",
   "stock photo": "bg-sky-100 text-sky-700",
+  photo: "bg-sky-100 text-sky-700",
   "worksheet box": "bg-blue-100 text-blue-700",
   "tip box": "bg-teal-100 text-teal-700",
   "action step box": "bg-amber-100 text-amber-700",
@@ -2719,18 +4078,37 @@ const VISUAL_AID_BADGES = {
 function aidCard(aid, packageId) {
   const badge = VISUAL_AID_BADGES[aid.type] || "bg-slate-100 text-slate-700";
   const label = (aid.type || "visual aid").replace(/\b\w/g, (c) => c.toUpperCase());
-  const isImage = aid.type === "stock photo" || aid.type === "infographic";
+  const isPhoto = aid.type === "stock photo" || aid.type === "photo";
+  const isImage = isPhoto || aid.type === "infographic";
+  const hasFile = aid.has_file === true || aid.status === "resolved";
   const rows = [];
-  if (isImage) {
-    const url = packageId && aid.visual_id ? `/download/${packageId}/img_${aid.visual_id}.png` : "";
-    rows.push(`<div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
-      <img data-review-vid="${escapeHtml(aid.visual_id || "")}" src="${escapeHtml(url)}" alt="${escapeHtml(aid.title || "Illustration")}" class="w-full h-28 object-cover"
+  if (isPhoto) {
+    const url = hasFile && packageId && aid.visual_id ? `/download/${packageId}/img_${aid.visual_id}.png` : "";
+    if (hasFile && url) {
+      // A photograph the project claims to have can still fail to load (the
+      // file never reached this package's canonical img_<visual_id>.png
+      // slot, or was moved). Without an onerror the browser paints an empty
+      // box and the page reads as "no visuals" while reporting success --
+      // surface the failure instead of hiding it.
+      rows.push(`<div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+      <img data-review-vid="${escapeHtml(aid.visual_id || "")}" src="${escapeHtml(url)}" alt="${escapeHtml(aid.title || "Photograph")}" class="w-full h-28 object-contain bg-slate-100"
         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
         onload="this.style.display='block';this.nextElementSibling.style.display='none';">
-      <div class="h-28 hidden items-center justify-center text-[11px] text-slate-400 px-2 text-center">Image will appear once generated.</div>
+      <div class="h-28 hidden items-center justify-center text-[11px] text-rose-800 bg-rose-50 border border-rose-200 px-2 text-center">Image file missing from this package.</div></div>`);
+      if (aid.attribution) rows.push(`<p class="text-[11px] text-slate-500">${escapeHtml(aid.attribution)}</p>`);
+    } else {
+      rows.push(`<div class="h-28 flex items-center justify-center text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 text-center">Retry missing image</div>`);
+      rows.push(`<button type="button" data-retry-photo="${escapeHtml(aid.visual_id || "")}"
+      class="mt-1 rounded-md border border-amber-300 bg-white px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50">Retry missing image</button>`);
+    }
+  } else if (isImage) {
+    const url = packageId && aid.visual_id ? `/download/${packageId}/img_${aid.visual_id}.png` : "";
+    rows.push(`<div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+      <img data-review-vid="${escapeHtml(aid.visual_id || "")}" src="${escapeHtml(url)}" alt="${escapeHtml(aid.title || "Illustration")}" class="w-full h-28 object-contain"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
+        onload="this.style.display='block';this.nextElementSibling.style.display='none';">
+      <div class="h-28 hidden items-center justify-center text-[11px] text-slate-400 px-2 text-center">Chart or diagram renders locally.</div>
     </div>`);
-    rows.push(`<button type="button" data-regen="${escapeHtml(aid.visual_id || "")}" data-prompt="${escapeHtml(aid.image_prompt || aid.description || aid.title || "")}"
-      class="mt-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Regenerate</button>`);
   } else if (aid.type === "chart" || aid.type === "graph") {
     if (aid.chart_data && (aid.chart_data.labels || []).length) {
       const pairs = aid.chart_data.labels.map((l, i) => `${l}: ${aid.chart_data.values[i]}`).join(", ");
@@ -2760,52 +4138,84 @@ function setupVisualImages(root, d) {
   const iframe = root.querySelector("#ebookPreviewFrame");
   const status = root.querySelector("#ebookImgStatus");
 
-  async function generateOne(job, btn) {
-    if (!d.package_id || !job || !job.visual_id) return;
-    const thumb = root.querySelector(`img[data-review-vid="${job.visual_id}"]`);
-    if (btn) { btn.disabled = true; btn.textContent = "Generating..."; }
+  async function retryPhoto(aid, btn) {
+    if (!d.package_id || !aid || !aid.visual_id) return;
+    if (btn) { btn.disabled = true; btn.textContent = "Retrying..."; }
     try {
-      const res = await api("/render-visual-image", {
+      const res = await api("/retry-ebook-visual", {
         method: "POST",
-        body: JSON.stringify({ package_id: d.package_id, visual_id: job.visual_id, prompt: job.prompt || "" }),
+        body: JSON.stringify({
+          package_id: d.package_id,
+          visual_id: aid.visual_id,
+          aid,
+          title: d.title,
+          fields: d.fields || {},
+          chapter: aid.chapter || "",
+          project_id: d._project_id,
+          cover_design: d.cover_design || {},
+          visual_plan: d.visual_plan || {},
+        }),
       });
-      if (res && res.ok && res.asset_url) {
-        const bust = res.asset_url + "?t=" + Date.now();
-        if (iframe && iframe.contentWindow) {
-          iframe.contentWindow.postMessage({ type: "va-img", id: job.visual_id }, "*");
+      if (res && res.ok && res.aid) {
+        Object.assign(aid, res.aid);
+        const ready = res.readiness || res;
+        [
+          "ebook_ready", "export_ready", "pdf_available", "zip_available", "next_action",
+          "status_label", "visual_status_message", "missing_photo_count", "rendered_visual_count",
+          "cover_ready", "pdf_enabled", "zip_enabled", "draft_files_only",
+        ].forEach((k) => { if (ready[k] != null) d[k] = ready[k]; });
+        if (res.visual_plan) d.visual_plan = res.visual_plan;
+        const holder = btn && btn.parentElement;
+        if (holder && d.package_id) {
+          holder.innerHTML =
+            `<div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+      <img data-review-vid="${escapeHtml(aid.visual_id || "")}" src="/download/${escapeHtml(d.package_id)}/img_${escapeHtml(aid.visual_id)}.png?t=${Date.now()}" alt="${escapeHtml(aid.title || "Photograph")}" class="w-full h-28 object-contain bg-slate-100"></div>` +
+            (aid.attribution ? `<p class="text-[11px] text-slate-500">${escapeHtml(aid.attribution)}</p>` : "");
         }
-        if (thumb) { thumb.src = bust; }
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({ type: "va-img", id: aid.visual_id }, "*");
+        }
+        if (status) status.textContent = d.next_action || "Choose cover photo";
+      } else if (status) {
+        status.textContent = (res && res.next_action) || "Retry missing image";
       }
     } catch (e) {
-      /* graceful: the placeholder stays in place */
+      if (status) status.textContent = "Retry missing image";
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = "Regenerate"; }
+      if (btn) { btn.disabled = false; btn.textContent = "Retry missing image"; }
     }
   }
 
   root.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-regen]");
+    const btn = e.target.closest("[data-retry-photo]");
     if (!btn) return;
-    generateOne({ visual_id: btn.dataset.regen, prompt: btn.dataset.prompt }, btn);
+    const vid = btn.getAttribute("data-retry-photo") || "";
+    const chapters = (d.visual_plan && d.visual_plan.chapters) || [];
+    let found = null;
+    chapters.forEach((c) => (c.aids || []).forEach((a) => { if (a.visual_id === vid) found = a; }));
+    retryPhoto(found || { visual_id: vid, type: "stock photo" }, btn);
   });
 
-  const jobs = (d.image_jobs || []).filter((j) => j && j.visual_id);
-  if (!d.package_id || !jobs.length || d._imagesStarted) return;
-  d._imagesStarted = true;
-  (async () => {
-    for (let i = 0; i < jobs.length; i++) {
-      if (status) status.textContent = `Generating images... (${i + 1}/${jobs.length})`;
-      await generateOne(jobs[i], null);
-    }
-    if (status) status.textContent = "Visuals ready";
-  })();
+  const missing = Number(d.missing_photo_count || 0);
+  const rendered = Number(d.rendered_visual_count || 0);
+  if (status) {
+    if (d.next_action) status.textContent = d.next_action;
+    else if (missing) status.textContent = "Retry missing image";
+    else status.textContent = rendered ? `${rendered} stored visual${rendered === 1 ? "" : "s"}` : "Review visuals";
+  }
 }
 
 function renderEbookEnhancements(out, d, beforeEl) {
   const chapters = (d.visual_plan && d.visual_plan.chapters) || [];
   const aidCount = chapters.reduce((n, c) => n + ((c.aids || []).length), 0);
+  const renderedCount = d.rendered_visual_count != null ? Number(d.rendered_visual_count) : aidCount;
+  const missingPhotos = Number(d.missing_photo_count || 0);
+  const nextAction = d.next_action || (missingPhotos ? "Retry missing image" : (d.cover_ready ? "Review visuals" : "Choose cover photo"));
+  const visualMsg = d.visual_status_message || `${renderedCount} of ${aidCount} visual${aidCount === 1 ? "" : "s"} stored on disk${missingPhotos ? ` · ${missingPhotos} photograph${missingPhotos === 1 ? "" : "s"} still ${missingPhotos === 1 ? "needs" : "need"} retrieval.` : ""}`;
   const ex = d.exports || {};
   const files = ex.files || {};
+  const pdfAvailable = d.pdf_available === true || (ex.pdf_available === true);
+  const ebookReady = d.ebook_ready === true && d.export_ready === true && d.pdf_available === true;
   const dl = (f, label) =>
     f && f.url
       ? `<a href="${escapeHtml(f.url)}" class="btn-primary inline-flex items-center gap-2" download>${label}</a>`
@@ -2818,19 +4228,41 @@ function renderEbookEnhancements(out, d, beforeEl) {
   const dlCard = document.createElement("div");
   dlCard.innerHTML = card(
     `<h3 class="text-base font-bold text-slate-900 mb-1">Download Your Product</h3>
-     <p class="text-sm text-slate-500 mb-4">Export the finished ebook with its visual plan and assets.</p>
+     <p class="text-sm text-slate-500 mb-4">${ebookReady ? "Export the finished ebook with its visual plan and assets." : `Next: ${escapeHtml(nextAction)}. PDF and ZIP stay disabled until required photographs, cover, and PDF are ready.`}</p>
+     ${!ebookReady ? `<p class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Draft files.</p>` : ""}
      <div class="flex flex-wrap gap-3">
        ${dl(files.html, "Download as HTML")}
        ${dl(files.txt, "Download as TXT")}
-       ${dl(files.zip, "Download Full Package ZIP")}
+       ${ebookReady ? dl(files.zip, "Download Full Package ZIP") : ""}
        <button class="btn-primary" data-send-publishing>Send to Publishing Studio</button>
      </div>
-     ${ex.pdf_message ? `<p class="mt-3 text-xs rounded-lg bg-amber-50 text-amber-700 border border-amber-200 px-3 py-2">${escapeHtml(ex.pdf_message)}</p>` : ""}
-     <p class="mt-3 text-xs text-slate-400">ZIP includes ebook.html, ebook.txt, visual_plan.json, cover_prompt.txt and product_summary.txt.</p>`
+     ${!pdfAvailable ? `<p class="mt-3 text-xs rounded-lg bg-amber-50 text-amber-800 border border-amber-200 px-3 py-2">PDF is not available. ${escapeHtml(nextAction)}</p>` : ""}
+     ${ex.pdf_message ? `<p class="mt-3 text-xs rounded-lg bg-amber-50 text-amber-700 border border-amber-200 px-3 py-2">${escapeHtml(ex.pdf_message)}</p>` : ""}`
   );
   const sendBtn = dlCard.querySelector("[data-send-publishing]");
   if (sendBtn) sendBtn.addEventListener("click", () => sendEbookToPublishing(d, sendBtn));
   wrap.appendChild(dlCard.firstElementChild);
+
+  // Approved cover. The formatted preview below renders it as page 1 inside a
+  // sandboxed iframe, which is easy to miss and impossible to spot-check; show
+  // it directly so the cover is visible on the project page itself. Generic:
+  // the URL comes from whatever cover the project registered, falling back to
+  // the package's canonical img_cover.png slot.
+  const coverUrl =
+    (d.cover_design && (d.cover_design.customer_url || d.cover_design.cover_asset_url)) ||
+    (d.package_id ? `/download/${encodeURIComponent(d.package_id)}/img_cover.png` : "");
+  if (coverUrl) {
+    const coverCard = document.createElement("div");
+    coverCard.className = "rounded-2xl border border-slate-200 bg-white p-4";
+    coverCard.innerHTML = `
+      <h3 class="text-base font-bold text-slate-900 mb-3">Cover</h3>
+      <img src="${escapeHtml(coverUrl)}" alt="${escapeHtml((d.title || "Ebook") + " cover")}"
+        class="max-h-96 w-auto max-w-full mx-auto rounded-lg border border-slate-200 object-contain"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
+        onload="this.style.display='block';this.nextElementSibling.style.display='none';">
+      <div class="hidden h-40 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-center text-xs text-rose-800">Cover image missing from this package.</div>`;
+    wrap.appendChild(coverCard);
+  }
 
   // Formatted preview (with real rendered visuals: charts, tables, diagrams, images)
   if (d.preview_html) {
@@ -2839,7 +4271,7 @@ function renderEbookEnhancements(out, d, beforeEl) {
     prev.innerHTML = `
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-base font-bold text-slate-900">Formatted preview</h3>
-        <span id="ebookImgStatus" class="text-xs text-slate-400">with rendered visuals</span>
+        <span id="ebookImgStatus" class="text-xs text-slate-400">${escapeHtml(nextAction)}</span>
       </div>
       <iframe id="ebookPreviewFrame" title="Ebook preview" class="w-full rounded-xl border border-slate-200 bg-slate-100" style="height:75vh"
         sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe>`;
@@ -2860,22 +4292,46 @@ function renderEbookEnhancements(out, d, beforeEl) {
       )
       .join("");
     planEl.innerHTML = `
-      <div>
-        <h3 class="text-base font-bold text-slate-900">Visual Review</h3>
-        <p class="text-sm text-slate-500">${aidCount} rendered visual${aidCount === 1 ? "" : "s"} across ${chapters.length} chapter${chapters.length === 1 ? "" : "s"}. Image visuals can be regenerated.</p>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-900">Visual Review</h3>
+          <p class="text-sm text-slate-500">${escapeHtml(visualMsg)}${visualMsg && !String(visualMsg).trim().endsWith(".") ? "." : ""} ${missingPhotos ? "Missing photographs stay out of the book until they are stored." : "Approve All Visuals to continue."}</p>
+        </div>
+        <button type="button" data-approve-all-visuals class="btn-primary text-sm">Approve All Visuals</button>
       </div>
       ${chaptersHtml}`;
     wrap.appendChild(planEl);
+    const approveAll = planEl.querySelector("[data-approve-all-visuals]");
+    if (approveAll) {
+      approveAll.onclick = () => {
+        d.visuals_approved = true;
+        toast("Visuals approved.");
+      };
+    }
   }
 
-  // Cover prompt + summary
-  if (d.cover_prompt || d.product_summary) {
+  const cover = d.cover_design || {};
+  const coverPending = cover.workflow === "photo_backed" && !cover.selected_layout;
+  if (coverPending || d.product_summary) {
     const meta = document.createElement("div");
     meta.className = "grid sm:grid-cols-2 gap-4";
+    const pexels = (cover.pexels || {});
+    const photos = Array.isArray(pexels.photos) ? pexels.photos : [];
+    const coverHtml = coverPending
+      ? card(
+          `<h3 class="text-sm font-bold text-slate-900 mb-2">Choose cover photo</h3>
+           <p class="text-sm text-slate-600 mb-2">${escapeHtml(pexels.status || d.pexels_status || "Search Pexels or upload a photograph.")}</p>
+           <p class="text-xs text-slate-500 mb-3">Query: ${escapeHtml(cover.cover_search_query || pexels.query || "")}</p>
+           <div class="grid grid-cols-3 gap-2">${photos.slice(0, 6).map((p) =>
+             `<div class="rounded border border-slate-200 overflow-hidden bg-slate-50">
+                <img src="${escapeHtml(p.preview_url || "")}" alt="" class="w-full h-24 object-cover">
+                <p class="text-[10px] text-slate-500 p-1">${escapeHtml(p.photographer || "")}</p>
+              </div>`
+           ).join("") || '<p class="text-xs text-amber-800 col-span-3">No cover photograph selected yet.</p>'}</div>`
+        )
+      : "";
     meta.innerHTML =
-      (d.cover_prompt
-        ? card(`<h3 class="text-sm font-bold text-slate-900 mb-2">Cover image prompt</h3><p class="text-sm text-slate-600 whitespace-pre-wrap">${escapeHtml(d.cover_prompt)}</p>`)
-        : "") +
+      coverHtml +
       (d.product_summary
         ? card(`<h3 class="text-sm font-bold text-slate-900 mb-2">Product summary</h3><p class="text-sm text-slate-600 whitespace-pre-wrap">${escapeHtml(d.product_summary)}</p>`)
         : "");
@@ -2947,7 +4403,7 @@ async function _askSaveEbook(d) {
         markUserSaved(body);
         const created = await api("/projects", {
           method: "POST",
-          body: JSON.stringify({ name, type: "ebook", data: body }),
+          body: JSON.stringify({ name, type: "ebook", data: body, user_saved: true, user_confirmed_save: true }),
         });
         d._project_id = created.id;
         loadProjects();
@@ -2985,7 +4441,8 @@ function nsResult(d) {
 // save resolves all share one create call, and once an id exists it updates in
 // place. Internal `_`-prefixed fields (DOM node, promise, ids) are stripped so
 // the persisted blob stays clean and JSON.stringify never hits a DOM cycle.
-async function ensureProductSaved(d) {
+async function ensureProductSaved(d, opts) {
+  const confirmed = !(opts && opts.confirmed === false);
   if (d._savePromise) {
     await d._savePromise;
     return d._project_id;
@@ -3002,7 +4459,9 @@ async function ensureProductSaved(d) {
       if (!body.filename && d.filename) body.filename = d.filename;
       body.pdf_stored_on_disk = true;
     }
-    let probe = { name, type: "product", data: body, user_saved: true };
+    if (confirmed) markUserSaved(body);
+    const saveType = d.product_type === "ebook" ? "ebook" : "product";
+    let probe = { name, type: saveType, data: body, user_saved: true, user_confirmed_save: confirmed };
     const tooBig = _estimateJsonBytes(probe) > 12 * 1024 * 1024; // 12 MB JSON ceiling
     if (tooBig) {
       // Other large products: persist metadata; reload PDF from disk when possible.
@@ -3010,7 +4469,8 @@ async function ensureProductSaved(d) {
       if (!body.package_id && d.package_id) body.package_id = d.package_id;
       if (!body.filename && d.filename) body.filename = d.filename;
       body.pdf_stored_on_disk = true;
-      probe = { name, type: "product", data: body, user_saved: true };
+      if (confirmed) markUserSaved(body);
+      probe = { name, type: saveType, data: body, user_saved: true, user_confirmed_save: confirmed };
     }
     let json;
     try {
@@ -3035,7 +4495,7 @@ async function ensureProductSaved(d) {
     }
     d._workflow_save_pending = false;
     d._user_declined_save = false;
-    markUserSaved(d);
+    if (confirmed) markUserSaved(d);
     loadProjects();
   })();
   d._savePromise = run;
@@ -3073,25 +4533,37 @@ function nextStepsPanel(d) {
     const projectId = d._project_id;
     const productType = d.product_type || "product";
     const productLabel = d.product_label || "Product";
+    const ebook = productType === "ebook";
+    const ready = !ebook || factoryEbookReady(d);
+    const statusLabel = ebook
+      ? (d.status_label || (ready ? "Ebook ready" : "Needs correction."))
+      : `${productLabel} ready`;
     const coverBtnHtml = (
       productType === "crossword" ||
       productType === "word_search" ||
-      productType === "coloring_book" ||
-      productType === "ebook"
+      productType === "coloring_book"
     )
       ? `<button data-ns="edit-cover" class="${NS_BTN} border-indigo-300 text-indigo-700 hover:bg-indigo-50">Edit Cover</button>`
       : "";
+    const ebookBtns = ebook
+      ? `${ready ? `<button data-ns="dl-pdf" class="btn-primary relative z-10">Download PDF</button>` : ""}
+         ${ready ? `<button data-ns="dl-zip" class="${NS_BTN} relative z-10">Download ZIP</button>` : ""}
+         <button data-ns="regen-cover" class="${NS_BTN} border-indigo-300 text-indigo-700 hover:bg-indigo-50">Edit Cover</button>
+         <button data-ns="edit-visuals" class="${NS_BTN}">Edit Visuals</button>
+         <button data-ns="edit-content" class="${NS_BTN}">Edit Content</button>`
+      : `${ready ? `<button data-ns="dl-pdf" class="btn-primary">Download PDF</button>` : ""}
+         ${ready ? `<button data-ns="dl-zip" class="${NS_BTN} hidden">Download ZIP package</button>` : ""}
+         ${coverBtnHtml}`;
     head.innerHTML = card(
-      `<span class="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white text-xs font-semibold px-3 py-1 mb-2">${escapeHtml(productLabel)} ready</span>
+      `<span class="inline-flex items-center gap-2 rounded-full ${ready ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-900"} text-xs font-semibold px-3 py-1 mb-2">${escapeHtml(statusLabel)}</span>
        <h3 class="text-lg font-bold text-slate-900">${escapeHtml(name)}</h3>
-       <p class="text-sm text-slate-500 mt-1">Saved as project #${projectId}. Start with your download — extras are optional.</p>
+       <p class="text-sm text-slate-500 mt-1">${ready ? `Saved as project #${projectId}. Start with your download — extras are optional.` : `Project #${projectId}. Next: ${escapeHtml(d.next_action || "Retry missing image")}.`}</p>
        <div class="flex flex-wrap gap-3 mt-4">
-         <button data-ns="dl-pdf" class="btn-primary">Download PDF</button>
-         <button data-ns="dl-zip" class="${NS_BTN} hidden">Download ZIP package</button>
-         ${coverBtnHtml}
+         ${ebookBtns}
          <button data-ns="open" class="${NS_BTN}">View in Saved Projects</button>
          <button data-ns="back" class="${NS_BTN}">Make another product</button>
        </div>
+       ${ebook ? `<details class="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><summary class="cursor-pointer text-sm font-medium text-slate-700">View Technical Details</summary><pre class="mt-2 text-xs overflow-auto max-h-40">${escapeHtml(JSON.stringify({ next_action: d.next_action, package_id: d.package_id, contamination: d.contamination }, null, 2))}</pre></details>` : ""}
        <details class="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
          <summary class="cursor-pointer text-sm font-medium text-slate-700">Optional: marketing &amp; launch tools</summary>
          <div class="flex flex-wrap gap-3 mt-3">
@@ -3109,11 +4581,50 @@ function nextStepsPanel(d) {
     if (editCoverBtn) {
       editCoverBtn.onclick = () => openCoverEditor(d);
     }
+    const regenCoverBtn = head.querySelector('[data-ns="regen-cover"]');
+    if (regenCoverBtn) {
+      regenCoverBtn.onclick = async () => {
+        setBusyEl(regenCoverBtn, true);
+        const prior = d.cover_design;
+        try {
+          const res = await api("/ebook/regenerate-cover", {
+            method: "POST",
+            body: JSON.stringify({ project_id: d._project_id, data: d }),
+          });
+          if (res.cover_regenerated && res.cover) {
+            d.cover_design = res.cover;
+            if (res.preview_html) d.preview_html = res.preview_html;
+            toast(res.message || "A new cover candidate is ready.");
+            const frame = document.getElementById("ebookPreviewFrame");
+            if (frame && d.preview_html) frame.srcdoc = d.preview_html;
+          } else {
+            d.cover_design = prior;
+            toast(res.message || "The current cover was kept.", "error");
+          }
+        } catch (e) {
+          d.cover_design = prior;
+          toast(e.message || "The current cover was kept.", "error");
+        } finally {
+          setBusyEl(regenCoverBtn, false);
+        }
+      };
+    }
 
-    // Run /export-product to get the actual file URLs. PDF is always present
-    // for these product types (they all produce PDFs). ZIP is shown only if
-    // the export returns a zip file (every locked non-ebook product does).
+    // Ebooks download saved on-disk files. Never POST /export-product (that
+    // silently rebuilds and can hang the single-threaded customer session).
     async function ensureExports() {
+      const onDisk = ebookOnDiskFiles(d);
+      if (ebook && onDisk) {
+        d.exports = { ...(d.exports || {}), files: onDisk, pdf_available: true };
+        return onDisk;
+      }
+      if (ebook) {
+        throw new Error(
+          d.save_disabled_reason ||
+            d.next_action ||
+            "PDF is not available until this ebook is saved with its package files."
+        );
+      }
       let ex = (d.exports && d.exports.files) || (d.product_exports && d.product_exports.files);
       if (!ex) {
         const r = await api("/export-product", {
@@ -3133,6 +4644,7 @@ function nextStepsPanel(d) {
     // keeps the UI honest: never show a button for a file that isn't there.
     (async () => {
       try {
+        if (ebook && (!ready || !ebookOnDiskFiles(d))) return;
         const ex = await ensureExports();
         if (ex && ex.pdf && ex.pdf.url) {
           // good — PDF is real
@@ -3224,14 +4736,37 @@ function nextStepsPanel(d) {
   // Pre-save: show a single Save Project button + Back to Factory. After save,
   // the whole head is replaced with the universal post-save body.
   function renderPreSave() {
+    const coloringBlocked =
+      d.product_type === "coloring_book" && !_coloringBookCustomerReady(d);
+    const ebook = d.product_type === "ebook";
+    const ebookBlocked = ebook && !factoryEbookReady(d);
+    const saveReason = coloringBlocked
+      ? "Save is enabled only after the complete coloring book passes quality checks."
+      : (ebookBlocked
+        ? (d.save_disabled_reason || d.customer_error || d.next_action || "Save is unavailable until the cover, visuals, and preview pass.")
+        : "");
+    const saveDisabled = coloringBlocked || ebookBlocked;
+    const saveLabel = ebook ? "Approve & Save" : (coloringBlocked ? "Save Product (complete the book first)" : "Save Product");
+    const heading = ebook
+      ? (ebookBlocked ? "Review your ebook" : "Approve and save your ebook")
+      : (coloringBlocked ? "Your coloring book is not ready to save yet" : "Your product is ready!");
     head.innerHTML = card(
-      `<h3 class="text-base font-bold text-slate-900 mb-1">Your product is ready!</h3>
-       <p class="text-sm text-slate-500 mb-4">Save it so you can download the PDF and find it later in Saved Projects.</p>
+      `<h3 class="text-base font-bold text-slate-900 mb-1">${heading}</h3>
+       <p class="text-sm text-slate-500 mb-4">${
+         coloringBlocked
+           ? "Cover and any generated pages stayed on this page. Save is enabled only after the complete coloring book passes quality checks."
+           : (ebook
+             ? "Review the book once. Approve & Save stores this exact preview, cover, and files."
+             : "Save it so you can download the PDF and find it later in Saved Projects.")
+       }</p>
+       ${saveReason && ebookBlocked ? `<p data-save-reason class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">${escapeHtml(saveReason)}</p>` : ""}
        <div class="flex flex-wrap gap-3">
-         <button data-ns="save" class="btn-primary">Save &amp; download next</button>
-         <button data-ns="continue-no-save" class="${NS_BTN} border-slate-300 text-slate-600 hover:bg-slate-50">Preview only (no download yet)</button>
-         <button data-ns="back" class="${NS_BTN}">Back to Product Factory</button>
-       </div>`
+         <button data-ns="save" class="btn-primary"${saveDisabled ? " disabled" : ""}>${saveLabel}</button>
+         ${ebook ? `<button data-ns="regen-cover" class="${NS_BTN} border-indigo-300 text-indigo-700 hover:bg-indigo-50">Regenerate Cover</button>` : ""}
+         <button data-ns="continue-no-save" class="${NS_BTN} border-slate-300 text-slate-600 hover:bg-slate-50">Continue Without Saving</button>
+         <button data-ns="back" class="${NS_BTN}">Cancel</button>
+       </div>
+       ${ebook ? `<details class="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><summary class="cursor-pointer text-sm font-medium text-slate-700">View Technical Details</summary><pre class="mt-2 text-xs overflow-auto max-h-40">${escapeHtml(JSON.stringify({ next_action: d.next_action, contamination: d.contamination, pexels_status: d.pexels_status, package_id: d.package_id }, null, 2))}</pre></details>` : ""}`
     );
     const wireBtn = (sel, fn) => {
       const b = head.querySelector(sel);
@@ -3242,14 +4777,65 @@ function nextStepsPanel(d) {
       const originalLabel = b.textContent;
       b.textContent = "Saving…";
       try {
-        await ensureProductSaved(d);
-        toast("Saved. Download your PDF below.");
+        if (d.product_type === "ebook") {
+          const body = productSavePayload(d);
+          if (d.pdf_path) body.pdf_path = d.pdf_path;
+          if (d._pdf_path) body._pdf_path = d._pdf_path;
+          if (d.export_files) body.export_files = d.export_files;
+          const saved = await api("/ebook/save", {
+            method: "POST",
+            body: JSON.stringify({
+              name: (d.title || "Ebook").trim(),
+              project_id: d._project_id,
+              data: body,
+            }),
+          });
+          if (saved && (saved.id != null || saved.project_id != null)) {
+            d._project_id = saved.id != null ? saved.id : saved.project_id;
+            window.__lastSavedId = d._project_id;
+          }
+          if (saved.project && saved.project.data) {
+            Object.assign(d, saved.project.data);
+            d._project_id = saved.project.id;
+            window.__lastSavedId = saved.project.id;
+          }
+          toast(saved.message || "Project saved successfully");
+        } else {
+          await ensureProductSaved(d, { confirmed: true });
+          toast("Saved. Download your PDF below.");
+        }
+        loadProjects();
         renderPostSave();
       } catch (e) {
         console.error("Save Project failed:", e);
         toast(e.message || "Save Project failed. Check that the Flask app is running.", "error");
       } finally {
         b.textContent = originalLabel;
+        setBusyEl(b, false);
+      }
+    });
+    wireBtn('[data-ns="regen-cover"]', async (b) => {
+      setBusyEl(b, true);
+      const prior = d.cover_design;
+      try {
+        const res = await api("/ebook/regenerate-cover", {
+          method: "POST",
+          body: JSON.stringify({ project_id: d._project_id, data: d }),
+        });
+        if (res.cover_regenerated && res.cover) {
+          d.cover_design = res.cover;
+          if (res.preview_html) d.preview_html = res.preview_html;
+          toast(res.message || "A new cover candidate is ready.");
+          const frame = document.getElementById("ebookPreviewFrame");
+          if (frame && d.preview_html) frame.srcdoc = d.preview_html;
+        } else {
+          d.cover_design = prior;
+          toast(res.message || "The current cover was kept.", "error");
+        }
+      } catch (e) {
+        d.cover_design = prior;
+        toast(e.message || "The current cover was kept.", "error");
+      } finally {
         setBusyEl(b, false);
       }
     });
@@ -3342,7 +4928,7 @@ function kdpPreflightPanel(d, projectId) {
          <input data-kdp="title" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5" value="${escapeHtml(d.title || d.listing_title || "")}">
        </label>
        <label class="block">Author
-         <input data-kdp="author" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5" value="${escapeHtml(d.author_name || d.author || "")}">
+         <input data-kdp="author" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5" value="${escapeHtml(_productAuthor(d))}">
        </label>
        <label class="block">ISBN option
          <select data-kdp="isbn_option" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5">
@@ -3390,6 +4976,12 @@ function kdpPreflightPanel(d, projectId) {
      </label>
      <div data-kdp-result class="mt-3 text-sm"></div>`
   );
+  if (d.product_type === "coloring_book") {
+    const coloringInteriors = document.createElement("div");
+    coloringInteriors.setAttribute("data-kdp-coloring-interiors", "");
+    coloringInteriors.innerHTML = _coloringBookInteriorPreviewHtml(d);
+    wrap.appendChild(coloringInteriors);
+  }
   const fmtEl = wrap.querySelector('[data-kdp="format"]');
   if (fmtEl) fmtEl.value = defaultFmt;
   const resultEl = wrap.querySelector("[data-kdp-result]");
@@ -3502,6 +5094,9 @@ function kdpPreflightPanel(d, projectId) {
           <p class="font-bold">${escapeHtml(r.label || "Ready for Amazon Previewer")}</p>
           <p class="text-xs mt-1">${escapeHtml(r.note || "")}</p>
          </div>`;
+      if (d.product_type === "coloring_book") {
+        resultEl.innerHTML += _coloringBookInteriorPreviewHtml(d);
+      }
       toast("KDP package gate accepted (manifest written).");
     } catch (err) {
       toast(err.message || "Prepare KDP Package blocked", "error");
@@ -3518,9 +5113,10 @@ function kdpPreflightPanel(d, projectId) {
 // Product) or after a publishing layout is saved: basic downloads (PDF / HTML /
 // TXT / ZIP) plus on-demand platform packages. Each platform package is
 // generated ONLY when its button is clicked, and persists to the SAME project.
-function finalOutputCard(projectId, ex, existingPackages, productType) {
+function finalOutputCard(projectId, ex, existingPackages, productType, d) {
   existingPackages = existingPackages || {};
   const f = (ex && ex.files) || {};
+  const ebookLocked = productType === "ebook" && !factoryEbookReady(d || {});
   const dl = (file, label) =>
     file && file.url
       ? `<a href="${escapeHtml(file.url)}" class="${NS_BTN}" download="${escapeHtml(file.name || "")}" data-export-dl>${escapeHtml(label)}</a>`
@@ -3536,16 +5132,16 @@ function finalOutputCard(projectId, ex, existingPackages, productType) {
   }).join("");
   return card(
     `<h3 class="text-base font-bold text-slate-900 mb-1">Final Output Options</h3>
-     <p class="text-sm text-slate-500 mb-5">Download your finished product, or prepare a marketplace listing on demand.</p>
+     <p class="text-sm text-slate-500 mb-5">${ebookLocked ? `Next: ${escapeHtml((d && d.next_action) || "Retry missing image")}. PDF and ZIP stay disabled.` : "Download your finished product, or prepare a marketplace listing on demand."}</p>
      <div class="mb-6">
-       <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Basic Downloads</p>
+       <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">${ebookLocked ? "Draft files." : "Basic Downloads"}</p>
         <div class="flex flex-wrap gap-3">
-          ${(productType === "word_search" || productType === "crossword")
+          ${ebookLocked ? "" : ((productType === "word_search" || productType === "crossword")
             ? `<button class="${NS_BTN}" data-pdf>Download PDF</button>`
-            : dl(f.pdf, "Download PDF")}
-          ${dl(f.html, "Download HTML")}
+            : dl(f.pdf, "Download PDF"))}
+          ${dl(f.html, ebookLocked ? "Download HTML" : "Download HTML")}
          ${dl(f.txt, "Download TXT")}
-         ${dl(f.zip, "Download ZIP Package")}
+         ${ebookLocked ? "" : dl(f.zip, "Download ZIP Package")}
        </div>
        <p data-pdf-msg class="hidden mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"></p>
      </div>
@@ -3613,7 +5209,9 @@ async function nsExport(d, btn) {
       (d.exports && d.exports.files) || (d.product_exports && d.product_exports.files)
         ? d.exports || d.product_exports
         : null;
-    if (!ex) {
+    if (d.product_type === "ebook" && !factoryEbookReady(d)) {
+      ex = d.exports || d.product_exports || { files: {} };
+    } else if (!ex) {
       const r = await api("/export-product", {
         method: "POST",
         body: JSON.stringify({ project_id: d._project_id }),
@@ -3624,7 +5222,7 @@ async function nsExport(d, btn) {
     }
     if (res) {
       // Final Output Options: basic downloads + on-demand platform packages.
-      res.innerHTML = finalOutputCard(d._project_id, ex, d.packages || {}, d.product_type);
+      res.innerHTML = finalOutputCard(d._project_id, ex, d.packages || {}, d.product_type, d);
       wireFinalOutputIn(res, d._project_id, ex);
     }
   } catch (e) {
@@ -3768,7 +5366,7 @@ async function loadPackageSources() {
   const out = document.getElementById("packageOutput");
   if (!sel) return;
   let projects = [];
-  try { projects = await api("/projects"); } catch (e) { /* ignore */ }
+  try { projects = await api("/projects?factory_sources=1"); } catch (e) { /* ignore */ }
   packageProjects = projects.filter((p) => p.type === "product" || p.type === "ebook");
   if (!packageProjects.length) {
     sel.innerHTML = `<option value="">No products yet</option>`;
@@ -3823,6 +5421,16 @@ async function runProduct() {
   const fields = collectFactoryFields();
   const requiredMissing = t.fields.filter((f) => f.required && !(fields[f.name] || "").trim());
   if (requiredMissing.length) return toast(`${requiredMissing[0].label} is required`, "error");
+  if (factoryType === "ebook") {
+    const automatic = String(fields.include_images || "Yes").toLowerCase() !== "no";
+    if (automatic) {
+      fields.visuals_authorized = "true";
+      fields.visual_budget_cap_usd = String(_ebookMaxVisualCost(fields.chapters));
+    } else {
+      fields.visuals_authorized = "false";
+      fields.visual_budget_cap_usd = "0";
+    }
+  }
 
   // Workflow case: Market Research → Plan → Factory chain. Remember it BEFORE
   // clearing pendingProductProjectId, so the post-render auto-save + auto-PDF
@@ -3835,7 +5443,9 @@ async function runProduct() {
   const waitNote =
     factoryType === "coloring_book"
       ? "Creating your coloring book… This can take a few minutes. We’ll show a cover preview to approve when needed."
-      : `Generating your ${t.label.toLowerCase()}…`;
+      : factoryType === "ebook"
+        ? "Planning chapter visuals…"
+        : `Generating your ${t.label.toLowerCase()}…`;
   out.innerHTML = spinner(waitNote);
   setBusy("factoryBtn", true);
   try {
@@ -3855,9 +5465,10 @@ async function runProduct() {
     // actions after generate. The panel is appended AFTER the preview card.
     scrollNextStepsPanelIntoView(data);
 
-    // Ask before saving workflow products. Don't auto-save without consent.
-    // Manual one-off products use the Next Steps 'Save Project' button.
-    if (wasWorkflow && data._project_id != null) {
+    // Ask before saving only when the product is complete. Coloring-book
+    // cover/sample approval is not a finished book — showing Save here made
+    // the cover look "done", then the next step replaced it.
+    if (!_coloringBookPendingApproval(data) && _coloringBookCustomerReady(data)) {
       _showWorkflowSaveDialog(data, () => _doWorkflowSave(data));
     }
   } catch (e) {
@@ -3913,7 +5524,7 @@ function renderResearch(d) {
        <h3 class="text-base font-bold text-slate-900">Raw Search Results</h3>
        <div class="flex items-center gap-3">
          ${modeBadgeHtml(d.mode)}
-         <button id="saveResearchBtn" class="rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50 px-3 py-1.5 text-sm font-medium">Save Research Only</button>
+         <button id="saveResearchBtn" class="rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50 px-3 py-1.5 text-sm font-medium">Save Research</button>
        </div>
      </div>` +
       (rawResults.length
@@ -3945,14 +5556,19 @@ function renderResearch(d) {
 async function runResearch() {
   const keyword = document.getElementById("researchInput").value.trim();
   if (!keyword) return toast("Enter a keyword", "error");
-  const out = document.getElementById("researchOutput");
-  out.innerHTML = spinner("Researching the web and ranking product opportunities...");
+  go("market");
+  const topicEl = document.getElementById("fmaTopic");
+  if (topicEl) topicEl.value = keyword;
+  const out = document.getElementById("marketOutput") || document.getElementById("researchOutput");
+  if (out) out.innerHTML = spinner("Researching the web and ranking product opportunities...");
   setBusy("researchBtn", true);
   try {
-    const data = await api("/research", { method: "POST", body: JSON.stringify({ keyword }) });
-    renderResearch(data);
+    const data = await api("/research", { method: "POST", body: JSON.stringify({ keyword, topic: keyword }) });
+    renderDiscovery(data);
   } catch (e) {
-    out.innerHTML = card(`<p class="text-rose-600 text-sm">${escapeHtml(e.message)}</p>`);
+    if (out) out.innerHTML = card(`<p class="text-rose-600 text-sm mb-3">${escapeHtml(e.message)}</p><button id="fmaRetryBtn" class="btn-primary">Retry research</button>`);
+    const retry = out && out.querySelector("#fmaRetryBtn");
+    if (retry) retry.onclick = () => runResearch();
   } finally {
     setBusy("researchBtn", false);
   }
@@ -3999,7 +5615,13 @@ async function renderEbook(d) {
           return;
         }
         let ex = (d.exports && d.exports.files) || (d.product_exports && d.product_exports.files);
-        if (!ex) {
+        const ebookDisk = ebookOnDiskFiles(d);
+        if (ebookDisk) {
+          ex = ebookDisk;
+        } else if (d.product_type === "ebook" || factoryEbookReady(d)) {
+          toast("PDF is not available until this ebook is saved with its package files.", "error");
+          return;
+        } else if (!ex) {
           const r = await api("/export-product", {
             method: "POST",
             body: JSON.stringify({ project_id: projectId }),
@@ -4360,8 +5982,8 @@ function ebookSaveBar(d) {
       }
       markUserSaved(body);
       const saved = existingId != null
-        ? await api(`/projects/${existingId}`, { method: "PUT", body: JSON.stringify({ name, type: "ebook", data: body }) })
-        : await api("/projects", { method: "POST", body: JSON.stringify({ name, type: "ebook", data: body }) });
+        ? await api(`/projects/${existingId}`, { method: "PUT", body: JSON.stringify({ name, type: "ebook", data: body, user_saved: true, user_confirmed_save: true }) })
+        : await api("/projects", { method: "POST", body: JSON.stringify({ name, type: "ebook", data: body, user_saved: true, user_confirmed_save: true }) });
       if (saved && saved.id != null) d._project_id = saved.id;
       loadProjects();
       toast(existingId != null ? "Project updated" : "Project saved");
@@ -4385,11 +6007,17 @@ async function postEbookNextSteps(d, projectId, name) {
   const wrap = document.createElement("div");
   wrap.className = "space-y-5";
 
+  const complete = d.ebook_ready === true && d.export_ready === true && d.pdf_available === true;
+  const nextAction = d.next_action || (complete ? "" : "Choose cover photo");
   const head = document.createElement("div");
   head.innerHTML = card(
-    `<span class="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white text-xs font-semibold px-3 py-1 mb-2">Project completed: Ebook</span>
+    complete
+      ? `<span class="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white text-xs font-semibold px-3 py-1 mb-2">Project completed: Ebook</span>
      <h3 class="text-lg font-bold text-slate-900">${escapeHtml(name)}</h3>
      <p class="text-sm text-slate-500 mt-1">Project #${projectId}. Download your finished ebook, or prepare a marketplace listing.</p>`
+      : `<span class="inline-flex items-center gap-2 rounded-full bg-amber-100 text-amber-900 text-xs font-semibold px-3 py-1 mb-2">${escapeHtml(d.status_label || "Needs correction.")}</span>
+     <h3 class="text-lg font-bold text-slate-900">${escapeHtml(name)}</h3>
+     <p class="text-sm text-slate-500 mt-1">Project #${projectId}. Next: ${escapeHtml(nextAction)}. Ebook ready is blocked until the cover photograph, required visuals, and PDF are in place.</p>`
   );
   wrap.appendChild(head);
 
@@ -4397,8 +6025,8 @@ async function postEbookNextSteps(d, projectId, name) {
   primary.innerHTML = card(
     `<h4 class="text-sm font-bold text-slate-900 mb-3">Primary</h4>
      <div class="flex flex-wrap gap-3">
-       <button data-pri="pdf" class="${NS_BTN}">Download PDF</button>
-       <button data-pri="zip" class="${NS_BTN}">Download ZIP</button>
+       ${complete ? `<button data-pri="pdf" class="${NS_BTN}">Download PDF</button>` : ""}
+       ${complete ? `<button data-pri="zip" class="${NS_BTN}">Download ZIP</button>` : ""}
        <button data-pri="cover" class="${NS_BTN} border-indigo-300 text-indigo-700 hover:bg-indigo-50">Edit Cover</button>
        <button data-pri="open" class="${NS_BTN}">Open Product</button>
      </div>
@@ -4488,7 +6116,8 @@ async function postEbookNextSteps(d, projectId, name) {
   }
   function showMsg(text) { msg.textContent = text; msg.classList.remove("hidden"); }
 
-  primary.querySelector('[data-pri="pdf"]').onclick = async (e) => {
+  const priPdf = primary.querySelector('[data-pri="pdf"]');
+  if (priPdf) priPdf.onclick = async (e) => {
     const b = e.currentTarget;
     setBusyEl(b, true);
     try {
@@ -4511,7 +6140,8 @@ async function postEbookNextSteps(d, projectId, name) {
       openCoverEditor(d);
     };
   }
-  primary.querySelector('[data-pri="zip"]').onclick = async (e) => {
+  const priZip = primary.querySelector('[data-pri="zip"]');
+  if (priZip) priZip.onclick = async (e) => {
     const b = e.currentTarget;
     setBusyEl(b, true);
     try {
@@ -4639,6 +6269,9 @@ function packageResultHtml(payload) {
 
 // ---------- Ebook Project workspace (stage rail) ----------
 let _ebookWorkspaceState = null;
+let _ebookWorkspaceReturnOpts = { stage: "", notice: "", review: "" };
+let _wsCoverChoosingPhoto = false;
+let _wsCoverChooserTab = "search";
 
 function _ebookRailStatusClass(status) {
   switch (String(status || "")) {
@@ -4649,6 +6282,55 @@ function _ebookRailStatusClass(status) {
     case "blocked": return "bg-rose-100 text-rose-800 border-rose-200";
     default: return "bg-slate-100 text-slate-600 border-slate-200";
   }
+}
+
+const COVER_GUIDED_STEPS = ["choose_photo", "choose_cover", "review", "choose_another_photo", "approved"];
+const COVER_GUIDED_LABELS = {
+  choose_photo: "Step 1 of 3 — Choose a photo",
+  choose_cover: "Step 2 of 3 — Choose a cover",
+  review: "Step 3 of 3 — Review and approve",
+  choose_another_photo: "Choose another photo",
+  approved: "Cover approved",
+};
+
+function coverRailIsApproved(ws) {
+  const rail = (ws && ws.rail) || [];
+  if (Array.isArray(rail)) {
+    const row = rail.find((s) => s && s.id === "cover") || {};
+    return String(row.status || "") === "approved";
+  }
+  return String(((rail || {}).cover || {}).status || "") === "approved";
+}
+
+function deriveCoverGuidedStep(photo, opts) {
+  photo = photo || {};
+  opts = opts || {};
+  const hasSource = !!(photo.source && (photo.source.preview_url || photo.source.sha256));
+  const variants = Array.isArray(photo.variants) ? photo.variants : [];
+  const passing = variants.filter((v) => v && v.quality_pass && v.full_url && v.thumb_url);
+  const selected = String(photo.selected_layout || "");
+  const selectedPassing = !!(selected && passing.some((v) => v.layout_id === selected));
+  const coverApproved = opts.coverApproved === true || photo.cover_approved === true;
+  if (coverApproved && selected && selectedPassing) return "approved";
+  if (!hasSource) return "choose_photo";
+  if (passing.length <= 0) return "choose_another_photo";
+  if (!selected || !selectedPassing) return "choose_cover";
+  return "review";
+}
+
+function resolveCoverGuidedStep(photo, opts) {
+  photo = photo || {};
+  opts = opts || {};
+  if (opts.choosingPhoto) return "choose_photo";
+  const derived = deriveCoverGuidedStep(photo, opts);
+  const provided = String(
+    photo.workflow_step
+    || (opts.workspace && opts.workspace.cover_guided_step)
+    || ((opts.workspace && opts.workspace.design && opts.workspace.design.cover) || {}).guided_step_id
+    || ""
+  );
+  if (COVER_GUIDED_STEPS.indexOf(provided) >= 0 && provided === derived) return provided;
+  return derived;
 }
 
 async function startEbookWorkspaceFromBuilder() {
@@ -4675,7 +6357,13 @@ async function startEbookWorkspaceFromBuilder() {
   }
 }
 
-async function openEbookWorkspace(projectId) {
+async function openEbookWorkspace(projectId, opts) {
+  opts = opts || {};
+  _ebookWorkspaceReturnOpts = {
+    stage: String(opts.stage || ""),
+    notice: String(opts.notice || ""),
+    review: String(opts.review || ""),
+  };
   go("ebook-workspace");
   const root = document.getElementById("ebookWorkspaceRoot");
   if (!root) return;
@@ -4730,7 +6418,9 @@ function renderEbookWorkspace(ws) {
             ? `<button type="button" class="btn-primary text-sm" data-ws-estimate-manuscript>Generate Manuscript…</button>`
             : (ws.next_action === "request_correction" || ws.next_action === "correct_manuscript") && ws.gates && ws.gates.correction_enabled
             ? `<button type="button" class="btn-primary text-sm" data-ws-request-correction-top>Request Correction…</button>`
-            : `<button type="button" class="btn-secondary text-sm opacity-60 cursor-not-allowed" disabled title="Blocked until prior stages are approved">Generate Manuscript</button>`
+            : ws.next_action === "generate_manuscript"
+            ? `<button type="button" class="btn-secondary text-sm opacity-60 cursor-not-allowed" disabled title="Blocked until prior stages are approved">Generate Manuscript</button>`
+            : ""
         }
       </div>
       <div data-ws-stage-panel class="rounded-xl border border-slate-200 bg-slate-50 p-4"></div>
@@ -4749,7 +6439,21 @@ function renderEbookWorkspace(ws) {
   if (corrTop) {
     corrTop.onclick = () => estimateCorrectionInWorkspace(ws.project_id);
   }
-  showEbookWorkspaceStage(ws.current_stage || "research");
+  const returnOpts = _ebookWorkspaceReturnOpts || {};
+  const returnStage = returnOpts.stage || "";
+  showEbookWorkspaceStage(returnStage || ws.current_stage || "research");
+  if (_ebookWorkspaceReturnOpts) {
+    _ebookWorkspaceReturnOpts.stage = "";
+  }
+  const host = document.getElementById("ebookWorkspaceRoot");
+  if (host) {
+    host.setAttribute("data-ws-cover-guided-step", String(ws.cover_guided_step || ((ws.design || {}).cover || {}).guided_step_id || ""));
+    host.setAttribute("data-ws-cover-guided-label", String(ws.cover_guided_step_label || ((ws.design || {}).cover || {}).guided_step_label || ""));
+  }
+  if (returnOpts.notice === "preview-approved") {
+    toast("Preview approved. Next: Run Preflight.");
+    _ebookWorkspaceReturnOpts.notice = "";
+  }
 }
 
 function showEbookWorkspaceStage(stageId) {
@@ -4757,8 +6461,10 @@ function showEbookWorkspaceStage(stageId) {
   if (!ws) return;
   const panel = document.querySelector("[data-ws-stage-panel]");
   if (!panel) return;
+  try {
   const stage = (ws.rail || []).find((s) => s.id === stageId) || { id: stageId, label: stageId, status_label: "" };
   let body = "";
+  let coverGuidedStep = "";
   if (stageId === "research") {
     const r = ws.research || {};
     const findings = (r.key_findings || []).map((f) => `<li>${escapeHtml(f)}</li>`).join("") || "<li class=\"text-slate-400\">None yet</li>";
@@ -4847,115 +6553,226 @@ function showEbookWorkspaceStage(stageId) {
     `;
   } else if (stageId === "visuals") {
     const d = ws.design || {};
-    const slots = ((d.visual_manifest || {}).slots || []).map((s) =>
-      `<li class="text-sm">Ch ${escapeHtml(String(s.chapter || ""))}: ${escapeHtml(s.title || "")} · ${(s.kinds || []).map((k) => escapeHtml(k)).join(", ")}</li>`
-    ).join("") || `<li class="text-sm text-slate-500">Manuscript tables, checklists, and workflows become designed components. No paid images in this pass.</li>`;
+    const review = d.visual_review || {};
+    const assets = review.assets || [];
+    const technical = review.technical_assets || [];
+    const findings = (review.findings || []).map((f) => `<li class="text-sm text-slate-800">${escapeHtml(String(f))}</li>`).join("");
+    const contact = review.contact_sheet_data_uri
+      ? `<div class="mb-3 rounded-xl border border-slate-200 bg-white p-3">
+           <p class="text-xs font-semibold uppercase text-slate-500 mb-2">Visual review</p>
+           <img alt="Chapter visuals" class="w-full max-h-72 object-contain rounded border border-slate-200 bg-slate-50" src="${escapeHtml(review.contact_sheet_data_uri)}" />
+         </div>`
+      : "";
+    const sourceLabel = (a) => a.source_label || ((a.type === "photo" || a.type === "stock photo") ? "Stock photo" : "Factory-created graphic");
+    const cards = assets.map((a) => {
+      const isPhoto = a.type === "photo" || a.type === "stock photo";
+      const missing = !a.has_file || a.match_status === "reject";
+      return `
+      <article class="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+        ${a.thumb_data_uri ? `<img alt="${escapeHtml(a.title || a.description || "Visual")}" class="w-full h-40 object-contain rounded border border-slate-200 bg-slate-50 mb-2" src="${escapeHtml(a.thumb_data_uri)}" />` : `<p class="text-xs text-rose-700 mb-2">This visual is not ready yet</p>`}
+        <p class="font-semibold text-slate-900">Chapter ${escapeHtml(String(a.chapter_index || ""))}: ${escapeHtml(a.chapter || "")}</p>
+        <p class="text-xs uppercase tracking-wide text-slate-500 mt-1">${escapeHtml(a.type || "")} · ${escapeHtml(sourceLabel(a))}</p>
+        <p class="text-sm text-slate-700 mt-2">${escapeHtml(a.description || a.caption || a.title || "")}</p>
+        ${isPhoto ? `<details class="mt-2">
+          <summary class="text-xs font-semibold text-slate-600 cursor-pointer">Edit a Visual</summary>
+          <div class="flex flex-wrap gap-2 mt-2">
+            <button type="button" class="btn-secondary text-xs" data-ws-replace-photo="${escapeHtml(String(a.visual_id || ""))}">Try another stock photo</button>
+            ${review.ai_edit_enabled ? `<button type="button" class="btn-secondary text-xs" data-ws-generate-ai="${escapeHtml(String(a.visual_id || ""))}">Generate AI alternative</button>` : ""}
+            <label class="btn-secondary text-xs cursor-pointer">Upload my own image
+              <input type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" class="hidden" data-ws-upload-photo="${escapeHtml(String(a.visual_id || ""))}" />
+            </label>
+            <button type="button" class="btn-secondary text-xs" data-ws-keep-photo="${escapeHtml(String(a.visual_id || ""))}">Keep current visual</button>
+          </div>
+        </details>` : ""}
+        ${missing ? `<p class="text-xs text-amber-800 mt-2">This chapter visual still needs attention.</p>` : ""}
+      </article>`;
+    }).join("");
+    const techRows = technical.map((t) => `
+      <li class="text-xs font-mono break-all text-slate-600">
+        ${escapeHtml(String(t.visual_id || ""))}: ${escapeHtml(String(t.match_status || ""))}
+        ${t.match_score != null ? ` · score ${escapeHtml(String(t.match_score))}` : ""}
+        ${t.sha256 ? ` · ${escapeHtml(String(t.sha256))}` : ""}
+        ${t.rejection_reason ? `<div class="font-sans mt-1">${escapeHtml(String(t.rejection_reason))}</div>` : ""}
+      </li>`).join("");
+    const canPrepare = ws.gates && ws.gates.visuals_enabled && stage.status !== "approved";
+    const canApprove = review.approvable && stage.status !== "approved";
+    const heading = review.heading || "Visuals Ready for Review";
+    const intro = review.intro || "Your chapter visuals have been selected and prepared. Review them below, then approve them to build your ebook preview.";
     body = `
-      <h3 class="text-sm font-bold text-slate-900 mb-2">Visuals · ${escapeHtml(stage.status_label || "")}</h3>
-      <p class="text-sm text-slate-600 mb-3">Optional approved visuals are manuscript-derived. This stage never calls an image API.</p>
-      <ul class="list-disc pl-5 mb-3 space-y-1">${slots}</ul>
-      ${
-        ws.gates && ws.gates.visuals_enabled && stage.status !== "approved"
-          ? `<button type="button" class="btn-primary text-sm" data-ws-approve-visuals>Approve manuscript-derived visuals</button>`
-          : `<p class="text-xs text-slate-500">Server status: ${escapeHtml(stage.status_label || stage.status || "")}</p>`
-      }
+      <h3 class="text-sm font-bold text-slate-900 mb-2">${escapeHtml(heading)}</h3>
+      <p class="text-sm text-slate-600 mb-3">${escapeHtml(intro)}</p>
+      ${review.progress ? `<p class="text-xs text-slate-500 mb-2">${escapeHtml(review.progress)}</p>` : ""}
+      ${findings ? `<ul class="list-disc pl-5 mb-3 space-y-1">${findings}</ul>` : ""}
+      ${contact}
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-3">${cards || `<p class="text-sm text-slate-500">No visual assets yet. Prepare the visual plan from the approved manuscript.</p>`}</div>
+      <div class="flex flex-wrap gap-2 mb-3">
+        ${canPrepare ? `<button type="button" class="btn-secondary text-sm" data-ws-prepare-visuals>Retry Automatically</button>` : ""}
+        ${canApprove ? `<button type="button" class="btn-primary text-sm" data-ws-approve-visuals>Approve All Visuals</button>` : `<p class="text-xs text-slate-500">Server status: ${escapeHtml(stage.status_label || stage.status || "")}${review.approvable ? "" : " — Approve All Visuals is available after every chapter visual is ready."}</p>`}
+      </div>
+      <details class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <summary class="text-xs font-semibold text-slate-600 cursor-pointer">View Technical Details</summary>
+        <ul class="mt-2 space-y-2">${techRows || "<li class='text-xs text-slate-500'>No technical details.</li>"}</ul>
+      </details>
     `;
   } else if (stageId === "cover") {
     const c = (ws.design || {}).cover || {};
     const photo = c.photo || {};
-    const digest = String(c.digest || "");
     const previewUrl = (c.preview_verified && c.preview_url) ? String(c.preview_url) : "";
     const downloadUrl = previewUrl ? String(c.preview_download_url || `${previewUrl}${previewUrl.indexOf("?") >= 0 ? "&" : "?"}download=1`) : "";
-    const awaiting = stage.status !== "approved";
     const editor = photo.editor || {};
     const variants = photo.variants || [];
+    const passingVariants = variants.filter((v) => v.quality_pass && v.full_url && v.thumb_url);
     const selected = String(photo.selected_layout || "");
+    const selectedVariant = passingVariants.find((v) => v.layout_id === selected) || null;
     const ai = photo.ai_cover || { enabled: false, configured: false, label: "Optional paid feature — not configured" };
     const pexels = photo.pexels || {};
-    const variantCards = variants.map((v) => {
-      const on = selected && selected === v.layout_id;
-      return `<label class="block rounded-xl border ${on ? "border-brand-400 ring-2 ring-brand-300" : "border-slate-200"} p-2 bg-white">
-        <div class="flex items-center justify-between gap-2 mb-2">
-          <span class="text-sm font-semibold text-slate-900">${escapeHtml(v.label || v.layout_id)}</span>
-          <input type="radio" name="ws-cover-layout" data-ws-cover-layout="${escapeHtml(v.layout_id)}" ${on ? "checked" : ""} ${v.full_url ? "" : "disabled"} />
+    const hasSource = !!(photo.source && (photo.source.preview_url || photo.source.sha256));
+    if (hasSource && !_wsCoverChoosingPhoto) _wsCoverChoosingPhoto = false;
+    coverGuidedStep = resolveCoverGuidedStep(photo, {
+      choosingPhoto: !!_wsCoverChoosingPhoto,
+      coverApproved: coverRailIsApproved(ws) || photo.cover_approved === true,
+      workspace: ws,
+    });
+    const userStatus = coverGuidedStep === "choose_photo" && hasSource
+      ? "Choose a different photo, or keep the one below."
+      : (photo.recovery_action || photo.user_status || "Choose a photo to start your cover.");
+    const sourceCredit = (() => {
+      const src = photo.source || {};
+      if (src.source_type === "pexels") {
+        const who = src.photographer ? `Photo by ${src.photographer}` : (src.attribution || "Free photo");
+        return `${who}${src.page_url ? "" : ""} · Free photo from Pexels`;
+      }
+      if (src.source_type === "upload") return "Your upload";
+      return src.attribution || "Selected photo";
+    })();
+    const selectedPhotoHtml = hasSource && photo.source && photo.source.preview_url ? `
+      <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 mb-3" data-ws-cover-selected-photo>
+        <h4 class="text-sm font-bold text-emerald-900 mb-2">Selected Photo</h4>
+        <img data-ws-cover-source alt="${escapeHtml(photo.source.attribution || photo.source.filename || "Selected Photo")}" class="max-h-80 w-auto max-w-full mx-auto rounded border border-slate-200 object-contain bg-white" src="${escapeHtml(photo.source.preview_url)}" referrerpolicy="no-referrer" />
+        <p class="text-sm text-slate-700 mt-2">${escapeHtml(sourceCredit)}</p>
+        ${photo.source.page_url ? `<p class="text-xs mt-1"><a class="text-brand-700 underline" href="${escapeHtml(photo.source.page_url)}" target="_blank" rel="noopener">Photo on Pexels</a></p>` : ""}
+        <button type="button" class="btn-secondary text-sm mt-3" data-ws-cover-change-photo>Change Photo</button>
+      </div>` : "";
+    const variantCards = passingVariants.map((v) => `
+      <article class="block rounded-xl border border-slate-200 p-3 bg-white">
+        <p class="text-sm font-semibold text-slate-900 mb-2">${escapeHtml(v.label || v.layout_id)}</p>
+        <img alt="${escapeHtml(v.label || "")} thumbnail" class="w-40 h-auto mx-auto mb-2 rounded border border-slate-200 object-contain" src="${escapeHtml(v.thumb_url)}" />
+        <img alt="${escapeHtml(v.label || "")} full preview" class="block max-h-[36rem] w-auto max-w-full mx-auto rounded border border-slate-200 object-contain" src="${escapeHtml(v.full_url)}" />
+        <button type="button" class="btn-primary text-sm mt-3 w-full" data-ws-cover-layout="${escapeHtml(v.layout_id)}">Select This Cover</button>
+      </article>`).join("");
+    const reviewHtml = selectedVariant ? `
+      <div class="rounded-xl border border-brand-300 bg-white p-3 mb-3" data-ws-cover-review>
+        <p class="text-sm font-semibold text-slate-900 mb-2">${escapeHtml(selectedVariant.label || selectedVariant.layout_id)}</p>
+        <img data-ws-cover-thumb alt="${escapeHtml(selectedVariant.label || "")} thumbnail" class="w-40 h-auto mx-auto mb-2 rounded border border-slate-200 object-contain" src="${escapeHtml(selectedVariant.thumb_url)}" />
+        <img data-ws-cover-preview alt="${escapeHtml(selectedVariant.label || "")} full preview" class="block max-h-[40rem] w-auto max-w-full mx-auto rounded border border-slate-200 object-contain" src="${escapeHtml(selectedVariant.full_url)}" />
+        <p class="text-sm text-slate-700 mt-3">Approval adds this exact cover to the finished PDF.</p>
+        <div class="flex flex-wrap gap-2 mt-3">
+          <button type="button" class="btn-secondary text-sm" data-ws-cover-change-cover>Change Cover</button>
+          <button type="button" class="btn-primary text-sm opacity-60 cursor-not-allowed" data-ws-approve-cover disabled>Approve Cover</button>
         </div>
-        ${v.thumb_url ? `<img alt="${escapeHtml(v.label || "")} thumbnail" class="w-24 h-auto mx-auto mb-2 rounded border border-slate-200 object-contain" src="${escapeHtml(v.thumb_url)}" />` : `<p class="text-xs text-slate-500 mb-2">Thumbnail after a photograph is registered.</p>`}
-        ${v.full_url ? `<img ${on ? "data-ws-cover-preview" : ""} alt="${escapeHtml(v.label || "")} full preview" class="block max-h-80 w-auto max-w-full mx-auto rounded border border-slate-200 object-contain" src="${escapeHtml(v.full_url)}" />` : ""}
-        <p class="text-xs mt-1 ${v.quality_pass ? "text-emerald-800" : "text-rose-700"}">${v.quality_pass ? "Quality checks passed" : escapeHtml((v.findings || []).join(", ") || "Not rendered")}</p>
-      </label>`;
-    }).join("");
+      </div>` : "";
+    const approvedHtml = selectedVariant ? `
+      <div class="rounded-xl border border-emerald-300 bg-white p-3 mb-3" data-ws-cover-approved>
+        <p class="text-sm font-semibold text-slate-900 mb-2">${escapeHtml(selectedVariant.label || selectedVariant.layout_id)}</p>
+        <img data-ws-cover-thumb alt="${escapeHtml(selectedVariant.label || "")} thumbnail" class="w-40 h-auto mx-auto mb-2 rounded border border-slate-200 object-contain" src="${escapeHtml(selectedVariant.thumb_url)}" />
+        <img data-ws-cover-preview alt="${escapeHtml(selectedVariant.label || "")} full preview" class="block max-h-[40rem] w-auto max-w-full mx-auto rounded border border-slate-200 object-contain" src="${escapeHtml(selectedVariant.full_url)}" />
+        <p class="text-sm text-emerald-800 mt-3">This cover is approved. Continue with the next production action.</p>
+      </div>` : "";
     const suggested = (pexels.suggested || []).map((q) =>
       `<button type="button" class="text-xs rounded-full border border-slate-300 px-2 py-1 bg-white" data-ws-cover-pexels-suggest="${escapeHtml(q)}">${escapeHtml(q)}</button>`
     ).join("");
     const pexelsPhotos = (pexels.photos || []).map((p) => `
-      <article class="rounded-xl border border-slate-200 bg-white p-2 text-xs">
-        ${p.preview_url ? `<img alt="${escapeHtml(p.attribution || "Pexels photo")}" class="w-full h-40 object-cover rounded mb-2" src="${escapeHtml(p.preview_url)}" />` : ""}
-        <p class="font-semibold text-slate-800">${escapeHtml(p.photographer || "Unknown photographer")}</p>
-        <p class="text-slate-600">${escapeHtml(String(p.width || ""))}×${escapeHtml(String(p.height || ""))} · ${escapeHtml(p.orientation || "")}</p>
+      <article class="rounded-xl border ${p.selected ? "border-brand-400 ring-2 ring-brand-300" : "border-slate-200"} bg-white p-2 text-xs">
+        ${p.preview_url ? `<img alt="${escapeHtml(p.attribution || "Pexels photo")}" class="w-full h-40 object-cover rounded mb-2" src="${escapeHtml(p.preview_url)}" referrerpolicy="no-referrer" />` : ""}
+        <p class="font-semibold text-slate-800">${escapeHtml(p.photographer || "Unknown photographer")}${p.selected ? " · selected" : ""}</p>
         ${p.page_url ? `<a class="text-brand-700 underline" href="${escapeHtml(p.page_url)}" target="_blank" rel="noopener">Photo on Pexels</a>` : `<p>${escapeHtml(p.attribution || "")}</p>`}
-        <button type="button" class="btn-secondary text-xs mt-2 w-full" data-ws-cover-pexels-select="${escapeHtml(String(p.photo_id || ""))}">Select</button>
+        <button type="button" class="btn-secondary text-xs mt-2 w-full" data-ws-cover-pexels-select="${escapeHtml(String(p.photo_id || ""))}">Use This Photo</button>
       </article>`).join("");
+    const searchTabOn = _wsCoverChooserTab !== "upload";
+    const chooserHtml = `
+      <div class="rounded-xl border border-slate-200 bg-white p-3 mb-3 space-y-3" data-ws-cover-chooser>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="${searchTabOn ? "btn-primary" : "btn-secondary"} text-sm" data-ws-cover-tab="search">Search Free Photos</button>
+          <button type="button" class="${searchTabOn ? "btn-secondary" : "btn-primary"} text-sm" data-ws-cover-tab="upload">Upload My Photo</button>
+        </div>
+        <div data-ws-cover-search-panel class="${searchTabOn ? "" : "hidden"} space-y-2">
+          ${pexels.configured ? "" : `<p class="text-sm text-amber-900">${escapeHtml(pexels.message || "Free photo search is not configured. You can still upload your own photograph.")}</p>`}
+          <label class="block text-sm text-slate-700">Search
+            <input data-ws-cover-pexels-query class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value="${escapeHtml(pexels.query || "")}" placeholder="event photographer camera" />
+          </label>
+          <div class="flex flex-wrap gap-1">${suggested}</div>
+          <button type="button" class="btn-secondary text-sm" data-ws-cover-pexels-search>Search Free Photos</button>
+          <div class="grid gap-2 sm:grid-cols-3">${pexelsPhotos || "<p class='text-sm text-slate-500 sm:col-span-3'>Search results appear here. Nothing is used until you choose a photo.</p>"}</div>
+          ${pexels.next_page ? `<button type="button" class="btn-secondary text-sm" data-ws-cover-pexels-more>Load More</button>` : ""}
+        </div>
+        <div data-ws-cover-upload-panel class="${searchTabOn ? "hidden" : ""} space-y-2">
+          <p class="text-sm text-slate-600">JPG or PNG only. Confirm you have the right to use the photograph.</p>
+          <label class="flex items-start gap-2 text-sm text-slate-800">
+            <input type="checkbox" data-ws-cover-own class="mt-1" />
+            <span>I own this image or have permission to use it commercially.</span>
+          </label>
+          <label class="block text-sm text-slate-700">Source / license note (optional)
+            <input data-ws-cover-license class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" placeholder="e.g. Personal photograph; I have rights to use this image" />
+          </label>
+          <input data-ws-cover-file type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" class="block text-sm" />
+          <p data-ws-cover-chosen class="text-xs text-slate-700"></p>
+          <button type="button" class="btn-secondary text-sm" data-ws-cover-upload>Upload My Photo</button>
+        </div>
+      </div>`;
+    const advancedHtml = `
+      <details data-ws-cover-advanced class="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <summary class="text-sm font-semibold text-slate-800">Advanced adjustments (optional)</summary>
+        <div class="mt-3 grid gap-2 sm:grid-cols-2">
+          <label class="text-xs">Zoom <input data-ws-cover-zoom type="range" min="1" max="2.4" step="0.05" value="${escapeHtml(String(editor.zoom || 1))}" /></label>
+          <label class="text-xs">Overlay <input data-ws-cover-overlay type="range" min="0.25" max="0.85" step="0.01" value="${escapeHtml(String(editor.overlay_strength || 0.58))}" /></label>
+          <label class="text-xs">Focal X <input data-ws-cover-fx type="range" min="0.08" max="0.92" step="0.01" value="${escapeHtml(String(editor.focal_x || 0.52))}" /></label>
+          <label class="text-xs">Focal Y <input data-ws-cover-fy type="range" min="0.08" max="0.92" step="0.01" value="${escapeHtml(String(editor.focal_y || 0.42))}" /></label>
+          <label class="text-xs">Title size <input data-ws-cover-title-size type="range" min="28" max="56" step="1" value="${escapeHtml(String(editor.title_size || 40))}" /></label>
+          <label class="text-xs">Subtitle size <input data-ws-cover-sub-size type="range" min="12" max="20" step="1" value="${escapeHtml(String(editor.subtitle_size || 14))}" /></label>
+          <label class="text-xs">Author size <input data-ws-cover-author-size type="range" min="13" max="24" step="1" value="${escapeHtml(String(editor.author_size || 16))}" /></label>
+          <label class="text-xs">Title position <input data-ws-cover-title-y type="range" min="0.04" max="0.22" step="0.01" value="${escapeHtml(String(editor.title_y || 0.07))}" /></label>
+          <label class="text-xs">Subtitle position <input data-ws-cover-sub-y type="range" min="0.16" max="0.42" step="0.01" value="${escapeHtml(String(editor.subtitle_y || 0.26))}" /></label>
+          <label class="text-xs">Author position <input data-ws-cover-author-y type="range" min="0.82" max="0.96" step="0.01" value="${escapeHtml(String(editor.author_y || 0.915))}" /></label>
+          <label class="text-xs">Accent <input data-ws-cover-accent type="color" value="${escapeHtml(editor.accent || "#d4a017")}" /></label>
+          <button type="button" class="btn-secondary text-sm sm:col-span-2" data-ws-cover-apply-editor>Apply crop and type settings</button>
+        </div>
+      </details>`;
+    const stepLabel = photo.guided_step_label || COVER_GUIDED_LABELS[coverGuidedStep] || COVER_GUIDED_LABELS.choose_photo;
+    const noSafeHtml = `
+      <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-3" data-ws-cover-no-safe>
+        <p class="text-sm text-amber-950">${escapeHtml(photo.choose_another_photo_message || photo.recovery_action || "This photo does not leave enough room for readable cover text. Please choose another photo.")}</p>
+        <button type="button" class="btn-primary text-sm mt-3" data-ws-cover-change-photo>Choose Another Photo</button>
+      </div>`;
+    const developerHtml = `
+      <details data-ws-cover-dev class="mb-3 rounded-xl border border-slate-200 bg-white p-3">
+        <summary class="text-xs font-semibold text-slate-600">Developer details</summary>
+        <p class="text-xs text-slate-500 mt-2 font-mono break-all">${escapeHtml(String((photo.developer_details || {}).image_digest || photo.image_digest || ""))}</p>
+      </details>`;
+    const showSelectedPhoto = coverGuidedStep !== "review" && coverGuidedStep !== "approved";
     body = `
-      <h3 class="text-sm font-bold text-slate-900 mb-2">Cover · ${escapeHtml(stage.status_label || "")}</h3>
+      <h3 class="text-sm font-bold text-slate-900 mb-1">Cover</h3>
+      <p class="text-xs font-semibold uppercase tracking-wide text-brand-700 mb-2" data-ws-cover-step="${escapeHtml(coverGuidedStep)}">${escapeHtml(stepLabel)}</p>
+      <p class="text-sm text-slate-700 mb-3" data-ws-cover-status>${escapeHtml(userStatus)}</p>
       <p class="text-sm text-slate-700"><b>${escapeHtml(c.title || ws.title || "")}</b></p>
       <p class="text-sm text-slate-600">${escapeHtml(c.subtitle || ws.subtitle || "")}</p>
-      <p class="text-sm text-slate-600 mb-2">Author: ${escapeHtml(c.author || ws.author || "")}</p>
-      <p class="text-xs text-amber-800 mb-3">Vector covers are rejected. Search Pexels or upload your own photograph. Approve stays off until a variant is selected and both full-size and thumbnail checks pass.</p>
+      <p class="text-sm text-slate-600 mb-3">Author: ${escapeHtml(c.author || ws.author || "")}</p>
       ${photo.vector_rejected ? `<p class="text-sm text-rose-800 mb-3">The previous vector cover cannot be approved.</p>` : ""}
-      <p data-ws-cover-preview-error class="${previewUrl || variants.some((v) => v.full_url) ? "hidden" : ""} mt-2 mb-3 text-sm text-rose-800">Cover preview unavailable — approval blocked</p>
+      ${coverGuidedStep === "review" ? `<p data-ws-cover-preview-error class="${selectedVariant && selectedVariant.full_url && selectedVariant.thumb_url ? "hidden" : ""} mt-2 mb-3 text-sm text-rose-800">Cover preview unavailable — approval blocked</p>` : ""}
       ${ws.gates && ws.gates.cover_enabled ? `
-      <div class="rounded-xl border border-slate-200 bg-white p-3 mb-3 space-y-2">
-        <h4 class="text-xs font-semibold uppercase text-slate-500">SEARCH PEXELS</h4>
-        ${pexels.configured ? "" : `<p class="text-sm text-amber-900">${escapeHtml(pexels.message || "Pexels is not configured. Add PEXELS_API_KEY or upload your own photograph.")}</p>`}
-        <label class="block text-sm text-slate-700">Search
-          <input data-ws-cover-pexels-query class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value="${escapeHtml(pexels.query || "")}" placeholder="event photographer camera" />
-        </label>
-        <div class="flex flex-wrap gap-1">${suggested}</div>
-        <button type="button" class="btn-secondary text-sm" data-ws-cover-pexels-search>Search Pexels</button>
-        <div class="grid gap-2 sm:grid-cols-3">${pexelsPhotos || "<p class='text-sm text-slate-500 sm:col-span-3'>Portrait results appear here. Nothing is selected until you choose a photograph.</p>"}</div>
-        ${pexels.next_page ? `<button type="button" class="btn-secondary text-sm" data-ws-cover-pexels-more>Load More</button>` : ""}
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-3 mb-3 space-y-2">
-        <h4 class="text-xs font-semibold uppercase text-slate-500">UPLOAD MY PHOTO</h4>
-        <p class="text-xs text-slate-600">JPG/JPEG/PNG only. Photographs of people, logos, artwork, or private property may require extra rights. This Factory never claims legal clearance.</p>
-        <label class="flex items-start gap-2 text-sm text-slate-800">
-          <input type="checkbox" data-ws-cover-own class="mt-1" />
-          <span>I own this image or have permission to use it commercially.</span>
-        </label>
-        <label class="block text-sm text-slate-700">Source / license note (optional)
-          <input data-ws-cover-license class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" placeholder="e.g. Personal photograph; I have rights to use this image" />
-        </label>
-        <input data-ws-cover-file type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" class="block text-sm" />
-        <button type="button" class="btn-secondary text-sm" data-ws-cover-upload>Upload My Photo</button>
-        ${photo.source && photo.source.filename ? `<p class="text-xs text-slate-600">Source: ${escapeHtml(photo.source.source_type || "")} · ${escapeHtml(photo.source.filename || "")} · ${escapeHtml(String(photo.source.width || ""))}×${escapeHtml(String(photo.source.height || ""))} · ${(photo.source.sha256 || "").slice(0, 16)}${photo.source.photographer ? " · " + escapeHtml(photo.source.photographer) : ""}</p>` : ""}
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-3 mb-3 grid gap-2 sm:grid-cols-2">
-        <h4 class="text-xs font-semibold uppercase text-slate-500 sm:col-span-2">2. Editor (approved text is locked)</h4>
-        <label class="text-xs">Zoom <input data-ws-cover-zoom type="range" min="1" max="2.4" step="0.05" value="${escapeHtml(String(editor.zoom || 1))}" /></label>
-        <label class="text-xs">Overlay <input data-ws-cover-overlay type="range" min="0.25" max="0.85" step="0.01" value="${escapeHtml(String(editor.overlay_strength || 0.58))}" /></label>
-        <label class="text-xs">Focal X <input data-ws-cover-fx type="range" min="0.08" max="0.92" step="0.01" value="${escapeHtml(String(editor.focal_x || 0.52))}" /></label>
-        <label class="text-xs">Focal Y <input data-ws-cover-fy type="range" min="0.08" max="0.92" step="0.01" value="${escapeHtml(String(editor.focal_y || 0.42))}" /></label>
-        <label class="text-xs">Title size <input data-ws-cover-title-size type="range" min="28" max="56" step="1" value="${escapeHtml(String(editor.title_size || 40))}" /></label>
-        <label class="text-xs">Subtitle size <input data-ws-cover-sub-size type="range" min="12" max="20" step="1" value="${escapeHtml(String(editor.subtitle_size || 14))}" /></label>
-        <label class="text-xs">Author size <input data-ws-cover-author-size type="range" min="13" max="24" step="1" value="${escapeHtml(String(editor.author_size || 16))}" /></label>
-        <label class="text-xs">Title position <input data-ws-cover-title-y type="range" min="0.04" max="0.22" step="0.01" value="${escapeHtml(String(editor.title_y || 0.07))}" /></label>
-        <label class="text-xs">Subtitle position <input data-ws-cover-sub-y type="range" min="0.16" max="0.42" step="0.01" value="${escapeHtml(String(editor.subtitle_y || 0.26))}" /></label>
-        <label class="text-xs">Author position <input data-ws-cover-author-y type="range" min="0.82" max="0.96" step="0.01" value="${escapeHtml(String(editor.author_y || 0.915))}" /></label>
-        <label class="text-xs">Accent <input data-ws-cover-accent type="color" value="${escapeHtml(editor.accent || "#d4a017")}" /></label>
-        <button type="button" class="btn-secondary text-sm sm:col-span-2" data-ws-cover-apply-editor>Apply crop and type settings</button>
-      </div>
-      <h4 class="text-xs font-semibold uppercase text-slate-500 mb-2">3. Variants (full size + thumbnail) — select one</h4>
-      <div class="grid gap-3 sm:grid-cols-3 mb-3">${variantCards || "<p class='text-sm text-slate-500'>Register a photograph to render the three layouts.</p>"}</div>
-      <details class="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <summary class="text-sm font-semibold text-slate-800">Optional AI cover</summary>
-        <p class="text-sm text-slate-600 mt-2">${escapeHtml(ai.label || "Optional paid feature — not configured")}</p>
-        <button type="button" class="btn-secondary text-sm mt-2 opacity-60 cursor-not-allowed" data-ws-cover-ai disabled>Optional paid feature — not configured</button>
-      </details>
+        ${coverGuidedStep === "choose_photo" ? chooserHtml : ""}
+        ${showSelectedPhoto ? selectedPhotoHtml : ""}
+        ${coverGuidedStep === "choose_another_photo" ? noSafeHtml : ""}
+        ${coverGuidedStep === "choose_cover" ? `<div class="grid gap-3 sm:grid-cols-3 mb-3" data-ws-cover-choices>${variantCards}</div>${advancedHtml}` : ""}
+        ${coverGuidedStep === "review" ? reviewHtml : ""}
+        ${coverGuidedStep === "approved" ? approvedHtml : ""}
+        ${coverGuidedStep !== "review" && coverGuidedStep !== "choose_cover" && coverGuidedStep !== "approved" ? `<details class="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <summary class="text-sm font-semibold text-slate-800">Optional AI cover</summary>
+          <p class="text-sm text-slate-600 mt-2">${escapeHtml(ai.label || "Optional paid feature — not configured")}</p>
+          <button type="button" class="btn-secondary text-sm mt-2 opacity-60 cursor-not-allowed" data-ws-cover-ai disabled>Optional paid feature — not configured</button>
+        </details>` : ""}
+        ${developerHtml}
       ` : `<p class="text-xs text-slate-500">Server status: ${escapeHtml(stage.status_label || stage.status || "")}</p>`}
-      ${downloadUrl ? `<p class="mt-2 mb-3"><a data-ws-cover-download class="text-sm text-brand-700 underline" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener">Download / full-size preview</a></p>` : ""}
-      <div class="flex flex-wrap gap-2">
-        ${awaiting ? `<button type="button" class="btn-primary text-sm opacity-60 cursor-not-allowed" data-ws-approve-cover disabled>Approve cover</button><button type="button" class="btn-secondary text-sm" data-ws-reject-cover>Reject cover</button>` : ""}
-      </div>
+      ${downloadUrl && (coverGuidedStep === "review" || coverGuidedStep === "approved") ? `<p class="mt-2 mb-3"><a data-ws-cover-download class="text-sm text-brand-700 underline" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener">Download / full-size preview</a></p>` : ""}
     `;
   } else if (stageId === "design") {
     const d = ws.design || {};
@@ -4973,14 +6790,31 @@ function showEbookWorkspaceStage(stageId) {
     `;
   } else if (stageId === "preview") {
     const d = ws.design || {};
+    const previewOpened = !!d.preview_opened;
+    const openUrl = d.preview_open_url || (ws.project_id ? `/ebook-workspace/${ws.project_id}/full-preview` : "");
+    const reviewChanges = ((_ebookWorkspaceReturnOpts || {}).review || "") === "changes";
+    const changeChooser = reviewChanges ? `
+      <div class="rounded-xl border border-amber-300 bg-amber-50 p-4 mb-3" data-ws-preview-changes>
+        <p class="text-sm font-semibold text-amber-950">Preview was not approved. Choose what needs correction.</p>
+        <div class="flex flex-wrap gap-2 mt-3" role="group" aria-label="Correction categories">
+          <button type="button" class="btn-secondary text-sm" data-ws-change-category="cover">Cover</button>
+          <button type="button" class="btn-secondary text-sm" data-ws-change-category="design">Interior design</button>
+          <button type="button" class="btn-secondary text-sm" data-ws-change-category="manuscript">Text/content</button>
+          <button type="button" class="btn-secondary text-sm" data-ws-change-category="visuals">Tables or visuals</button>
+          <button type="button" class="btn-secondary text-sm" data-ws-change-category="preview">Other</button>
+        </div>
+      </div>` : "";
     body = `
       <h3 class="text-sm font-bold text-slate-900 mb-2">Preview · ${escapeHtml(stage.status_label || "")}</h3>
+      ${changeChooser}
       <p class="text-sm text-slate-600 mb-3">Preview identity is bound to the same manuscript, design, and cover digests as PDF/ZIP.</p>
       ${d.preview_available ? `<p class="text-xs text-emerald-800 mb-2">Preview HTML is stored on the server.</p>` : `<p class="text-xs text-slate-500 mb-2">Build preview to inspect every designed page.</p>`}
       <div class="flex flex-wrap gap-2">
         ${ws.gates && ws.gates.preview_enabled ? `<button type="button" class="btn-secondary text-sm" data-ws-build-preview>Build preview</button>` : ""}
-        ${d.preview_available && stage.status !== "approved" ? `<button type="button" class="btn-primary text-sm" data-ws-approve-preview>Approve preview</button>` : ""}
+        ${d.preview_available && openUrl ? `<button type="button" class="btn-primary text-sm" data-ws-open-full-preview>Open Full Preview</button>` : ""}
+        ${d.preview_available && stage.status !== "approved" ? `<button type="button" class="btn-primary text-sm ${previewOpened ? "" : "opacity-60 cursor-not-allowed"}" data-ws-approve-preview ${previewOpened ? "" : "disabled"}>Approve preview</button>` : ""}
       </div>
+      ${d.preview_available && !previewOpened && stage.status !== "approved" ? `<p class="text-xs text-slate-600 mt-2">Open Full Preview and inspect every page before approving.</p>` : ""}
     `;
   } else if (stageId === "preflight") {
     const pre = (ws.design || {}).preflight || {};
@@ -5034,8 +6868,62 @@ function showEbookWorkspaceStage(stageId) {
     const el = panel.querySelector(sel);
     if (el) el.onclick = fn;
   };
-  bind("[data-ws-approve-visuals]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/visuals`, {}, "Visuals approved."));
+  bind("[data-ws-prepare-visuals]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/visuals`, { action: "prepare" }, "Visuals ready for review."));
+  bind("[data-ws-approve-visuals]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/visuals`, { action: "approve" }, "Visuals approved."));
+  panel.querySelectorAll("[data-ws-replace-photo]").forEach((btn) => {
+    btn.onclick = () => postEbookWorkspaceAction(
+      `/ebook-workspace/${ws.project_id}/visuals`,
+      { action: "replace", visual_id: btn.getAttribute("data-ws-replace-photo"), mode: "stock" },
+      "Replacement photograph staged for review."
+    );
+  });
+  panel.querySelectorAll("[data-ws-generate-ai]").forEach((btn) => {
+    btn.onclick = () => postEbookWorkspaceAction(
+      `/ebook-workspace/${ws.project_id}/visuals`,
+      { action: "generate-ai", visual_id: btn.getAttribute("data-ws-generate-ai") },
+      "A custom image was prepared for review."
+    );
+  });
+  panel.querySelectorAll("[data-ws-keep-photo]").forEach((btn) => {
+    btn.onclick = () => toast("Current visual kept.");
+  });
+  panel.querySelectorAll("[data-ws-accept-photo]").forEach((btn) => {
+    btn.onclick = () => postEbookWorkspaceAction(
+      `/ebook-workspace/${ws.project_id}/visuals`,
+      { action: "accept-photo", visual_id: btn.getAttribute("data-ws-accept-photo") },
+      "Photograph accepted for this brief. Visuals are not approved."
+    );
+  });
+  panel.querySelectorAll("[data-ws-view-full-size]").forEach((btn) => {
+    btn.onclick = () => {
+      const vid = btn.getAttribute("data-ws-view-full-size") || "";
+      const dlg = panel.querySelector(`[data-ws-fullsize="${vid}"]`);
+      if (dlg && typeof dlg.showModal === "function") dlg.showModal();
+      postEbookWorkspaceAction(
+        `/ebook-workspace/${ws.project_id}/visuals`,
+        { action: "view-full-size", visual_id: vid },
+        ""
+      );
+    };
+  });
   bind("[data-ws-reject-cover]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/cover`, { action: "reject" }, "Cover rejected."));
+  bind("[data-ws-cover-change-cover]", () => postEbookWorkspaceAction(
+    `/ebook-workspace/${ws.project_id}/cover`,
+    { action: "deselect" },
+    "Choose a different cover."
+  ));
+  panel.querySelectorAll("[data-ws-cover-change-photo]").forEach((btn) => {
+    btn.onclick = () => {
+      _wsCoverChoosingPhoto = true;
+      renderEbookWorkspace(ws);
+    };
+  });
+  panel.querySelectorAll("[data-ws-cover-tab]").forEach((btn) => {
+    btn.onclick = () => {
+      _wsCoverChooserTab = btn.getAttribute("data-ws-cover-tab") === "upload" ? "upload" : "search";
+      renderEbookWorkspace(ws);
+    };
+  });
   const pexelsQuery = () => {
     const el = panel.querySelector("[data-ws-cover-pexels-query]");
     return el ? el.value : "";
@@ -5063,11 +6951,14 @@ function showEbookWorkspaceStage(stageId) {
     };
   });
   panel.querySelectorAll("[data-ws-cover-pexels-select]").forEach((btn) => {
-    btn.onclick = () => postEbookWorkspaceAction(
-      `/ebook-workspace/${ws.project_id}/cover`,
-      { action: "pexels-select", photo_id: btn.getAttribute("data-ws-cover-pexels-select") },
-      "Pexels photograph registered. Select a layout."
-    );
+    btn.onclick = () => {
+      _wsCoverChoosingPhoto = false;
+      postEbookWorkspaceAction(
+        `/ebook-workspace/${ws.project_id}/cover`,
+        { action: "pexels-select", photo_id: btn.getAttribute("data-ws-cover-pexels-select") },
+        "Photo selected. Creating cover choices."
+      );
+    };
   });
   bind("[data-ws-cover-apply-editor]", () => {
     const num = (sel, fallback) => {
@@ -5091,7 +6982,7 @@ function showEbookWorkspaceStage(stageId) {
         author_y: num("[data-ws-cover-author-y]", 0.915),
         accent: accentEl ? accentEl.value : "#d4a017",
       },
-    }, "Cover editor applied. Select a layout.");
+    }, "Cover updated.");
   });
   bind("[data-ws-cover-upload]", async () => {
     const fileEl = panel.querySelector("[data-ws-cover-file]");
@@ -5102,41 +6993,74 @@ function showEbookWorkspaceStage(stageId) {
       toast("Choose a JPG or PNG photograph.", "error");
       return;
     }
+    if (!/\.(jpe?g|png)$/i.test(file.name || "")) {
+      toast("Unsupported or corrupted image. Upload a JPG or PNG.", "error");
+      return;
+    }
     if (!ownEl || !ownEl.checked) {
       toast("Confirm that you own this image or have permission to use it commercially.", "error");
       return;
     }
     const fd = new FormData();
-    fd.append("file", file);
+    fd.append("file", file, file.name);
     fd.append("license_note", noteEl ? noteEl.value : "");
     fd.append("i_own_this", "1");
     try {
-      const res = await fetch(`/ebook-workspace/${ws.project_id}/cover-image`, { method: "POST", body: fd });
+      const res = await fetch(`/ebook-workspace/${ws.project_id}/cover-image`, {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin",
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-      if (data.workspace) renderEbookWorkspace(data.workspace);
-      toast("Photograph uploaded. Select a layout.");
+      const src = ((((data.workspace || {}).design || {}).cover || {}).photo || {}).source || data.source || {};
+      if (!src.sha256) {
+        throw new Error(data.error || "Upload did not register the new photograph.");
+      }
+      if (data.workspace) {
+        _wsCoverChoosingPhoto = false;
+        renderEbookWorkspace(data.workspace);
+      }
+      toast(data.message || `Uploaded ${src.filename || file.name}. Creating cover choices.`);
     } catch (e) {
       toast(e.message || String(e), "error");
     }
   });
-  panel.querySelectorAll("[data-ws-cover-layout]").forEach((radio) => {
-    radio.onchange = () => {
-      if (!radio.checked) return;
+  const coverFileEl = panel.querySelector("[data-ws-cover-file]");
+  const chosenEl = panel.querySelector("[data-ws-cover-chosen]");
+  if (coverFileEl && chosenEl) {
+    coverFileEl.addEventListener("change", () => {
+      const chosen = coverFileEl.files && coverFileEl.files[0];
+      if (!chosen) {
+        chosenEl.textContent = "";
+        chosenEl.className = "text-xs text-slate-700";
+        return;
+      }
+      const ok = /\.(jpe?g|png)$/i.test(chosen.name || "");
+      chosenEl.textContent = ok ? `Selected: ${chosen.name}` : `Unsupported file: ${chosen.name}`;
+      chosenEl.className = ok ? "text-xs text-slate-700" : "text-xs text-rose-800";
+    });
+  }
+  panel.querySelectorAll("[data-ws-cover-layout]").forEach((btn) => {
+    btn.onclick = () => {
+      _wsCoverChoosingPhoto = false;
       postEbookWorkspaceAction(
         `/ebook-workspace/${ws.project_id}/cover`,
-        { action: "select", layout_id: radio.getAttribute("data-ws-cover-layout") },
-        "Layout selected. Review full size and thumbnail before approving."
+        { action: "select", layout_id: btn.getAttribute("data-ws-cover-layout") },
+        "Cover selected. Review it before approving."
       );
     };
   });
   const approveCover = panel.querySelector("[data-ws-approve-cover]");
   const coverImg = panel.querySelector("[data-ws-cover-preview]");
+  const coverThumb = panel.querySelector("[data-ws-cover-thumb]");
   const coverErr = panel.querySelector("[data-ws-cover-preview-error]");
   const coverApprovable = !!(ws.design && ws.design.cover && ws.design.cover.approvable);
+  let fullOk = false;
+  let thumbOk = false;
   const enableCoverApprove = () => {
     if (!approveCover) return;
-    if (!coverApprovable) return;
+    if (!coverApprovable || !fullOk || !thumbOk) return;
     approveCover.disabled = false;
     approveCover.classList.remove("opacity-60", "cursor-not-allowed");
     if (coverErr) coverErr.classList.add("hidden");
@@ -5148,13 +7072,24 @@ function showEbookWorkspaceStage(stageId) {
     }
     if (coverErr) coverErr.classList.remove("hidden");
   };
-  if (coverImg) {
-    coverImg.addEventListener("load", enableCoverApprove);
-    coverImg.addEventListener("error", blockCoverApprove);
-    if (coverImg.complete && coverImg.naturalWidth > 0) enableCoverApprove();
-    else if (coverImg.complete) blockCoverApprove();
-  } else if (approveCover) {
-    blockCoverApprove();
+  const bindPreviewLoad = (el, kind) => {
+    if (!el) return;
+    const mark = (ok) => {
+      if (kind === "full") fullOk = ok;
+      else thumbOk = ok;
+      if (fullOk && thumbOk) enableCoverApprove();
+      else if (!ok) blockCoverApprove();
+    };
+    el.addEventListener("load", () => mark(el.naturalWidth > 0));
+    el.addEventListener("error", () => mark(false));
+    if (el.complete) mark(el.naturalWidth > 0);
+  };
+  if (coverGuidedStep === "review") {
+    bindPreviewLoad(coverImg, "full");
+    bindPreviewLoad(coverThumb, "thumb");
+    if ((!coverImg || !coverThumb) && approveCover) {
+      blockCoverApprove();
+    }
   }
   if (approveCover) {
     approveCover.onclick = () => {
@@ -5171,9 +7106,40 @@ function showEbookWorkspaceStage(stageId) {
   });
   bind("[data-ws-approve-design]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "design" }, "Design approved."));
   bind("[data-ws-build-preview]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/preview`, {}, "Preview built."));
-  bind("[data-ws-approve-preview]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "preview" }, "Preview approved."));
+  bind("[data-ws-open-full-preview]", async () => {
+    try {
+      const res = await api(`/ebook-workspace/${ws.project_id}/preview-opened`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const url = ((res.workspace || {}).design || {}).preview_open_url
+        || `/ebook-workspace/${ws.project_id}/full-preview`;
+      window.location.assign(url);
+    } catch (e) {
+      toast(e.message || String(e), "error");
+    }
+  });
+  bind("[data-ws-approve-preview]", () => {
+    const btn = panel.querySelector("[data-ws-approve-preview]");
+    if (btn && btn.disabled) return;
+    postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "preview" }, "Preview approved.");
+  });
   bind("[data-ws-run-preflight]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/preflight`, {}, "Preflight finished."));
   bind("[data-ws-approve-preflight]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "preflight" }, "Preflight approved."));
+  panel.querySelectorAll("[data-ws-change-category]").forEach((btn) => {
+    btn.onclick = () => {
+      const next = btn.getAttribute("data-ws-change-category");
+      if (next) showEbookWorkspaceStage(next);
+    };
+  });
+  } catch (err) {
+    const coverish = String(stageId || "") === "cover";
+    panel.innerHTML = coverish
+      ? `<h3 class="text-sm font-bold text-slate-900 mb-2">Cover</h3>
+         <p class="text-sm text-slate-700">This cover step could not be shown. Choose another photo, or pick a cover from the options already saved.</p>`
+      : `<h3 class="text-sm font-bold text-slate-900 mb-2">${escapeHtml(String(stageId || "Project"))}</h3>
+         <p class="text-sm text-slate-700">This project step could not be shown. Use the stage rail to continue.</p>`;
+  }
 }
 
 async function postEbookWorkspaceAction(url, body, okMessage) {
@@ -5648,7 +7614,7 @@ async function loadPubSources() {
   const sel = document.getElementById("pubSource");
   if (!sel) return;
   let projects = [];
-  try { projects = await api("/projects"); } catch (e) { /* ignore */ }
+  try { projects = await api("/projects?factory_sources=1"); } catch (e) { /* ignore */ }
   pubState.projects = projects;
   const eligible = projects.filter((p) => PUB_SOURCE_TYPES.includes(p.type));
   sel.innerHTML =
@@ -5708,7 +7674,7 @@ async function loadPubAids() {
   if (!wrap) return;
   let projects = pubState.projects;
   if (!projects.length) {
-    try { projects = await api("/projects"); pubState.projects = projects; } catch (e) { /* ignore */ }
+    try { projects = await api("/projects?factory_sources=1"); pubState.projects = projects; } catch (e) { /* ignore */ }
   }
   const aids = projects.filter((p) => p.type === "youtube_resource");
   if (!aids.length) {
@@ -5893,7 +7859,9 @@ async function showPubNextStep(sourceId) {
     let src = null;
     try { src = await api(`/projects/${sourceId}`); } catch (e) { /* non-fatal */ }
     let exports = (src && src.data && (src.data.product_exports || src.data.exports)) || null;
-    if (!exports || !exports.files) {
+    if (src && src.data && src.data.product_type === "ebook" && !factoryEbookReady(src.data)) {
+      exports = src.data.exports || { files: {} };
+    } else if (!exports || !exports.files) {
       const r = await api("/export-product", {
         method: "POST",
         body: JSON.stringify({ project_id: sourceId }),
@@ -5902,7 +7870,7 @@ async function showPubNextStep(sourceId) {
     }
     const existingPackages = (src && src.data && src.data.packages) || {};
     const productType = (src && src.data && src.data.product_type) || "";
-    panel.innerHTML = pubWorkflowCard() + finalOutputCard(sourceId, exports, existingPackages, productType);
+    panel.innerHTML = pubWorkflowCard() + finalOutputCard(sourceId, exports, existingPackages, productType, src && src.data);
     wirePubWorkflowIn(panel);
     wireFinalOutputIn(panel, sourceId, exports);
   } catch (e) {
@@ -6970,6 +8938,27 @@ document.addEventListener("click", (e) => {
   if (go_) go(go_.dataset.go);
 });
 document.getElementById("researchBtn").onclick = runResearch;
+const fmaRun = document.getElementById("fmaRunBtn");
+if (fmaRun) fmaRun.onclick = runFactoryMarketAdvantage;
+const fmaFind = document.getElementById("fmaFindBtn");
+if (fmaFind) fmaFind.onclick = runFindOpportunities;
+const fmaModeIdea = document.getElementById("fmaModeIdea");
+if (fmaModeIdea) fmaModeIdea.onclick = () => setFmaStartMode("idea");
+const fmaModeDiscover = document.getElementById("fmaModeDiscover");
+if (fmaModeDiscover) fmaModeDiscover.onclick = () => setFmaStartMode("discover");
+function wireFmaMoreToggle(btnId, panelId) {
+  const btn = document.getElementById(btnId);
+  const panel = document.getElementById(panelId);
+  if (!btn || !panel) return;
+  btn.onclick = () => {
+    const open = toggleHiddenEl(panel);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+}
+wireFmaMoreToggle("fmaMoreOptionsBtn", "fmaMoreOptions");
+wireFmaMoreToggle("fmaDiscoverMoreBtn", "fmaDiscoverMore");
+const fmaTopic = document.getElementById("fmaTopic");
+if (fmaTopic) fmaTopic.addEventListener("keydown", (e) => { if (e.key === "Enter") runFactoryMarketAdvantage(); });
 document.getElementById("ebookBtn").onclick = runEbook;
 const ebookWsStart = document.getElementById("ebookWorkspaceStartBtn");
 if (ebookWsStart) ebookWsStart.onclick = startEbookWorkspaceFromBuilder;
@@ -7038,6 +9027,15 @@ buildNav();
     const pid = params.get("project_id");
     if (!view && !pid) {
       go("dashboard");
+      return;
+    }
+    if (view === "ebook-workspace" && pid) {
+      go("ebook-workspace");
+      await openEbookWorkspace(pid, {
+        stage: (params.get("stage") || "").trim(),
+        notice: (params.get("notice") || "").trim(),
+        review: (params.get("review") || "").trim(),
+      });
       return;
     }
     if (view) go(view);

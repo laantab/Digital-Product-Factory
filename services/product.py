@@ -65,7 +65,8 @@ def _ebook(fields: dict) -> tuple[str, str, str]:
     reading_level = _f(fields, "reading_level", "General adult")
     chapter_count_str = _f(fields, "chapters", "6")
     worksheet_requested = _yes(fields, "include_worksheets")
-    images_requested = _yes(fields, "include_images")
+    from services.ebook_factory_pipeline import images_requested as _ebook_images_requested
+    images_requested = _ebook_images_requested(fields)
     author = _f(fields, "author_brand") or _f(fields, "author")
     research_notes = _f(fields, "research_notes")
     use_research = _yes(fields, "use_research") or bool(research_notes)
@@ -1231,10 +1232,20 @@ def _coloring_book_pdf_payload(fields: dict, *, package_id: str = "") -> dict:
     )
     if not product_title or product_title.lower() == theme.lower() or len(product_title) > 48:
         product_title = cover_copy.title
-    subtitle = _f(fields, "subtitle") or cover_copy.subtitle
+    # Use derived copy so bank-rescue locks "A Superhero Coloring Adventure"
+    # even when a stale subtitle is present in fields.
+    subtitle = cover_copy.subtitle
 
     quality_mode = _normalize_quality_mode(fields)
-    from services.coloring_book.prompt_engine import is_bank_rescue_theme
+    from services.coloring_book.prompt_engine import is_bank_rescue_theme, resolve_coloring_book_author
+
+    resolve_author = resolve_coloring_book_author(
+        _f(fields, "author_brand"),
+        _f(fields, "author"),
+        _f(fields, "author_name"),
+    )
+    fields["author_brand"] = resolve_author
+    fields["author"] = resolve_author
 
     # Staged approval for bank-rescue AI books — never silently spend on 12 interiors.
     stage = (
@@ -1290,12 +1301,16 @@ def _coloring_book_pdf_payload(fields: dict, *, package_id: str = "") -> dict:
         force_image_regen=str(fields.get("force_image_regen") or "").lower() in {
             "1", "true", "yes", "on",
         },
+        author=resolve_author,
     )
     result = build_coloring_book_pdf(pdf_request)
     if result.errors:
         # Preview stages may return structured approval errors without PDF bytes.
         if stage in {"cover_preview", "sample_interior"} or "Approval required" in " ".join(result.errors):
-            return {
+            from services.coloring_book.preview_assets import attach_coloring_preview_urls
+            from services.coloring_book.prompt_engine import stamp_coloring_author_fields
+
+            preview = {
                 "product_type": "coloring_book",
                 "product_label": "Coloring Book",
                 "title": product_title,
@@ -1313,7 +1328,14 @@ def _coloring_book_pdf_payload(fields: dict, *, package_id: str = "") -> dict:
                 "pages": list(result.pages or []),
                 "needs_approval": True,
                 "is_pdf": False,
+                "cover_design": result.cover_design if isinstance(result.cover_design, dict) else None,
             }
+            stamp_coloring_author_fields(
+                preview,
+                resolve_author,
+                overlay_style=str((preview.get("cover_design") or {}).get("overlay_style") or ""),
+            )
+            return attach_coloring_preview_urls(preview)
         raise RuntimeError(f"Failed to generate Coloring Book PDF: {result.errors}")
     if not result.pdf_bytes:
         raise RuntimeError(f"Failed to generate Coloring Book PDF: {result.errors}")
@@ -1365,56 +1387,66 @@ def _coloring_book_pdf_payload(fields: dict, *, package_id: str = "") -> dict:
     sample_preview_b64 = ""
     if stage == "sample_interior":
         for p in result.pages or []:
-            if int(p.get("page_number") or 0) == 1 and p.get("image_path") and os.path.isfile(p["image_path"]):
+            img = str(p.get("image_path") or "")
+            if img and os.path.isfile(img):
                 try:
-                    with open(p["image_path"], "rb") as fh:
+                    with open(img, "rb") as fh:
                         sample_preview_b64 = base64.b64encode(fh.read()).decode("ascii")
                 except Exception:  # noqa: BLE001
                     sample_preview_b64 = ""
                 break
 
-    return {
-        "product_type": "coloring_book",
-        "product_label": "Coloring Book",
-        "title": product_title,
-        "warnings": list(page_warnings) + list(result.warnings or []),
-        "subtitle": subtitle,
-        "fields": {**fields, "package_id": pkg, "generation_stage": stage},
-        "content": "",
-        "pdf_bytes": base64.b64encode(result.pdf_bytes).decode("utf-8"),
-        "filename": result.filename,
-        "is_pdf": True,
-        "is_book": plan.get("output_type", "book") == "book",
-        "package_id": pkg,
-        "layout_info": result.layout_info,
-        "qa_result": result.qa_result,
-        "pages": list(result.pages or []),
-        "cover_design": cover,
-        "cover_prompt": result.cover_prompt or (cover or {}).get("image_prompt") or "",
-        "cover_image_path": result.cover_image_path or "",
-        "pdf_has_cover_page": bool(cover) and plan.get("output_type", "book") == "book",
-        "image_jobs": image_jobs,
-        "creation_mode": creation_mode,
-        "character_name": _f(fields, "character_name") or _f(fields, "main_character"),
-        "benchmark_info": benchmark_info,
-        "generation_stage": stage,
-        "character_bible": result.character_bible,
-        "sample_prompt": result.sample_prompt or "",
-        "consistency_notes": list(result.consistency_notes or []),
-        "cover_preview_b64": cover_preview_b64,
-        "sample_preview_b64": sample_preview_b64,
-        "needs_approval": stage in {"cover_preview", "sample_interior"},
-        "character_approved": character_approved,
-        "sample_approved": sample_approved,
-        "supports_reference_image": False,
-        "paid_api_warning": (
-            "This step uses AI image credits. Approve the cover and one sample page "
-            "before we generate the rest of the book — this keeps quality high and "
-            "avoids wasting credits."
-            if quality_mode == "ai_image_coloring_page"
-            else ""
-        ),
+    from services.coloring_book.preview_assets import attach_coloring_preview_urls
+    from services.coloring_book.prompt_engine import stamp_coloring_author_fields
+
+    payload = {
+            "product_type": "coloring_book",
+            "product_label": "Coloring Book",
+            "title": product_title,
+            "warnings": list(page_warnings) + list(result.warnings or []),
+            "subtitle": subtitle,
+            "fields": {**fields, "package_id": pkg, "generation_stage": stage},
+            "content": "",
+            "pdf_bytes": base64.b64encode(result.pdf_bytes).decode("utf-8"),
+            "filename": result.filename,
+            "is_pdf": True,
+            "is_book": plan.get("output_type", "book") == "book",
+            "package_id": pkg,
+            "layout_info": result.layout_info,
+            "qa_result": result.qa_result,
+            "pages": list(result.pages or []),
+            "cover_design": cover,
+            "cover_prompt": result.cover_prompt or (cover or {}).get("image_prompt") or "",
+            "cover_image_path": result.cover_image_path or "",
+            "pdf_has_cover_page": bool(cover) and plan.get("output_type", "book") == "book",
+            "image_jobs": image_jobs,
+            "creation_mode": creation_mode,
+            "character_name": _f(fields, "character_name") or _f(fields, "main_character"),
+            "benchmark_info": benchmark_info,
+            "generation_stage": stage,
+            "character_bible": result.character_bible,
+            "sample_prompt": result.sample_prompt or "",
+            "consistency_notes": list(result.consistency_notes or []),
+            "cover_preview_b64": cover_preview_b64,
+            "sample_preview_b64": sample_preview_b64,
+            "needs_approval": stage in {"cover_preview", "sample_interior"},
+            "character_approved": character_approved,
+            "sample_approved": sample_approved,
+            "supports_reference_image": False,
+            "paid_api_warning": (
+                "This step uses AI image credits. Approve the cover and one sample page "
+                "before we generate the rest of the book — this keeps quality high and "
+                "avoids wasting credits."
+                if quality_mode == "ai_image_coloring_page"
+                else ""
+            ),
     }
+    stamp_coloring_author_fields(
+        payload,
+        resolve_author,
+        overlay_style=str((cover or {}).get("overlay_style") or ""),
+    )
+    return attach_coloring_preview_urls(payload)
 
 
 def apply_ebook_cover_to_saved_data(data: dict, cover_design: dict) -> dict:
@@ -1514,10 +1546,13 @@ def apply_coloring_book_cover_to_saved_data(data: dict, cover_design: dict) -> d
         data["pdf_has_cover_page"] = False
         return data
 
+    from services.coloring_book.prompt_engine import normalize_coloring_cover_design, stamp_coloring_author_fields
+
     cover_design = dict(cover_design or {})
     package_id = str(cover_design.get("package_id") or data.get("package_id") or "")
     cover_design["package_id"] = package_id
     had_cover_page = bool(data.get("pdf_has_cover_page"))
+    theme = str(fields.get("theme") or data.get("theme") or cover_design.get("theme") or "").strip()
 
     existing_pdf = data.get("pdf_bytes")
     if not existing_pdf:
@@ -1528,6 +1563,26 @@ def apply_coloring_book_cover_to_saved_data(data: dict, cover_design: dict) -> d
         candidate = os.path.join(EXPORTS_DIR, package_id, "img_cover.png")
         if os.path.isfile(candidate):
             cover_design["local_image_path"] = candidate
+
+    cover_design = normalize_coloring_cover_design(
+        cover_design,
+        theme=theme,
+        product_title=str(cover_design.get("title") or data.get("title") or ""),
+        subtitle=str(cover_design.get("subtitle") or data.get("subtitle") or ""),
+        author=str(
+            cover_design.get("author")
+            or data.get("author")
+            or data.get("author_brand")
+            or fields.get("author_brand")
+            or fields.get("author")
+            or ""
+        ),
+    )
+    stamp_coloring_author_fields(
+        data,
+        cover_design.get("author") or "",
+        overlay_style=str(cover_design.get("overlay_style") or ""),
+    )
 
     merged = merge_cover_into_coloring_book_pdf(
         base64.b64decode(existing_pdf),
@@ -2104,6 +2159,24 @@ def generate_product(product_type: str, fields: dict) -> dict:
     # Special handling for spelling_worksheet - use dedicated PDF generator
     if product_type == "spelling_worksheet":
         return _generate_spelling_worksheet_pdf(fields)
+
+    # Special handling for ebook — one canonical customer pipeline.
+    if product_type == "ebook":
+        from services.ebook_customer_path import (
+            complete_factory_ebook,
+            container_gardening_manuscript,
+            fixture_mode,
+            normalize_ebook_fields,
+        )
+
+        fields = normalize_ebook_fields(fields)
+        title = fields["ebook_title"]
+        if fixture_mode():
+            content = container_gardening_manuscript()
+        else:
+            system, user, title = _ebook(fields)
+            content = chat(system=system, user=user, max_completion_tokens=12000)
+        return complete_factory_ebook(title, content, fields)
 
     system, user, title = _BUILDERS[product_type](fields)
     content = chat(system=system, user=user, max_completion_tokens=12000)

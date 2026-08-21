@@ -1,0 +1,9 @@
+{
+  "_comment": "Fully synthetic regression fixture — see research_brief.json in this folder.",
+  "budget_cap_usd": 3.5,
+  "totals": {
+    "estimated_usd": 0.928,
+    "paid_calls": 10
+  },
+  "calls": []
+}

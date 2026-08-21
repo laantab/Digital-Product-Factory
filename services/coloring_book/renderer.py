@@ -751,19 +751,98 @@ def _draw_comic_title(
     pdf.drawString(draw_x, y, text)
 
 
+def _draw_clean_cover_title_overlay(
+    pdf: canvas.Canvas,
+    *,
+    title: str,
+    subtitle: str = "",
+    page_w: float,
+    page_h: float,
+) -> None:
+    """Clean Factory typography for Thunder Volt — title + subtitle only, no JUMBO chrome."""
+    title = str(title or "THUNDER VOLT").strip().upper()[:48]
+    subtitle = str(subtitle or "").strip()[:72]
+    # Compact bottom band: large title + ~2× subtitle, clear gap, safe margins.
+    # Subtitle was 13pt; target ~26pt so it reads at thumbnail size.
+    sub_size = 26
+    if subtitle:
+        pdf.setFont("Helvetica-Bold", sub_size)
+        while sub_size > 18 and pdf.stringWidth(subtitle, "Helvetica-Bold", sub_size) > page_w - 48:
+            sub_size -= 1
+            pdf.setFont("Helvetica-Bold", sub_size)
+    title_size = 42
+    pdf.setFont("Helvetica-Bold", title_size)
+    while title_size > 22 and pdf.stringWidth(title, "Helvetica-Bold", title_size) > page_w - 56:
+        title_size -= 1
+        pdf.setFont("Helvetica-Bold", title_size)
+    # Margins: ~20pt below subtitle, ~14pt gap title→subtitle, ~12pt above title.
+    sub_y = 22
+    title_y = sub_y + sub_size + 14
+    band_h = title_y + title_size + 12
+    pdf.setFillColor(colors.HexColor("#0B1524"))
+    pdf.rect(0, 0, page_w, band_h, fill=1, stroke=0)
+    _draw_comic_title(
+        pdf,
+        title,
+        x=(page_w - pdf.stringWidth(title, "Helvetica-Bold", title_size)) / 2.0,
+        y=title_y,
+        font_size=title_size,
+        fill_hex="#F7FAFC",
+        outline_hex="#1A202C",
+    )
+    if subtitle:
+        pdf.setFillColor(colors.HexColor("#E2E8F0"))
+        pdf.setFont("Helvetica-Bold", sub_size)
+        pdf.drawCentredString(page_w / 2.0, sub_y, subtitle)
+
+
+def _draw_cover_author_byline(
+    pdf: canvas.Canvas,
+    *,
+    author: str,
+    page_w: float,
+) -> None:
+    """Retail byline in a small bottom-left tab — does not change Thunder Volt clean_title."""
+    author = str(author or "").strip()[:60]
+    if not author:
+        return
+    byline = author if author.lower().startswith("by ") else f"by {author}"
+    pdf.setFont("Helvetica-Bold", 11)
+    text_w = pdf.stringWidth(byline, "Helvetica-Bold", 11)
+    tab_w = min(text_w + 24, page_w - 190)
+    pdf.setFillColor(colors.HexColor("#0A2342"))
+    tab = pdf.beginPath()
+    tab.moveTo(0, 0)
+    tab.lineTo(tab_w, 0)
+    tab.lineTo(tab_w + 18, 28)
+    tab.lineTo(0, 28)
+    tab.close()
+    pdf.drawPath(tab, fill=1, stroke=0)
+    pdf.setFillColor(colors.white)
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(14, 10, byline)
+
+
 def _draw_cover_text_overlay(
     pdf: canvas.Canvas,
     *,
     title: str,
     subtitle: str = "",
     badge: str = "",
+    author: str = "",
     page_w: float,
     page_h: float,
+    overlay_style: str = "retail_jumbo_banner",
 ) -> None:
     """Retail jumbo-book title banner — layout text only, never AI-painted."""
     title = str(title or "THUNDER VOLT").strip().upper()[:48]
     subtitle = str(subtitle or "").strip()[:60]
     badge = str(badge or "Jumbo Coloring & Activity Book").strip()[:48]
+    if str(overlay_style or "").strip().lower() in {"clean_title", "clean", "superhero_clean"}:
+        _draw_clean_cover_title_overlay(
+            pdf, title=title, subtitle=subtitle, page_w=page_w, page_h=page_h
+        )
+        return
 
     # Top navy banner with diagonal/jagged bottom edge (Bendon-style packaging)
     left_bottom = page_h - 118
@@ -860,6 +939,7 @@ def _draw_cover_text_overlay(
     pdf.setFillColor(colors.white)
     pdf.setFont("Helvetica", 7)
     pdf.drawRightString(page_w - 14, 16, "Print & Share")
+    _draw_cover_author_byline(pdf, author=author, page_w=page_w)
 
 
 def draw_cover_page_on_canvas(
@@ -871,9 +951,18 @@ def draw_cover_page_on_canvas(
     badge: str = "Jumbo Coloring & Activity Book",
     cover_design: dict | None = None,
 ) -> None:
-    """Full-bleed cover + retail title banner overlay (US Letter)."""
+    """Full-bleed cover + Factory typography overlay (US Letter)."""
+    from services.coloring_book.prompt_engine import normalize_coloring_cover_design
+
     page_w, page_h = letter
-    design = cover_design if isinstance(cover_design, dict) else {}
+    # Final gate: bank-rescue / Thunder Volt must render clean_title even when a
+    # stale Cover Editor payload still says retail_jumbo_banner + JUMBO.
+    design = normalize_coloring_cover_design(
+        cover_design if isinstance(cover_design, dict) else {},
+        theme=str((cover_design or {}).get("theme") or "") if isinstance(cover_design, dict) else "",
+        product_title=title,
+        subtitle=subtitle,
+    )
     title = str(design.get("title") or title or "THUNDER VOLT")
     subtitle = str(design.get("subtitle") or subtitle or "")
     badge = str(design.get("badge") or badge or "")
@@ -925,8 +1014,10 @@ def draw_cover_page_on_canvas(
             title=title,
             subtitle=subtitle,
             badge=badge,
+            author=str(design.get("author") or ""),
             page_w=page_w,
             page_h=page_h,
+            overlay_style=str(design.get("overlay_style") or "retail_jumbo_banner"),
         )
 
 

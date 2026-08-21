@@ -3,7 +3,8 @@ import os
 import re
 
 from dotenv import load_dotenv
-load_dotenv()
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_APP_DIR, ".env"))
 
 from flask import Flask, jsonify, make_response, render_template, request, send_file, send_from_directory
 import base64
@@ -12,7 +13,8 @@ from io import BytesIO
 import database
 from services.ad import generate_ad, generate_traffic_content, generate_seven_day_plan, generate_promotion_package, generate_launch_package, PLATFORMS, PLATFORMS_LEGACY, TRAFFIC_GOALS_LEGACY, PROMOTION_GOALS, PLATFORM_LABELS, PROMOTION_GOAL_LABELS
 from services.ebook import generate_ebook
-from services.market_research import discover_products, market_research
+from services.market_research import discover_products, discover_top_opportunities, market_research
+from services.factory_advantage import draft_handoff_payload, collect_inputs, resolve_factory_builder
 from services.product import (
     apply_crossword_cover_to_saved_data,
     apply_word_search_cover_to_saved_data,
@@ -26,6 +28,11 @@ from services.ebook_package import (
     build_ebook_package,
     is_allowed_download,
     render_visual_image,
+)
+from services.coloring_book.preview_assets import (
+    attach_coloring_preview_urls,
+    coloring_preview_missing_message,
+    is_coloring_preview_filename,
 )
 from services.product_plan import generate_product_plan
 from services.packaging import (
@@ -61,6 +68,9 @@ app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
 
 with app.app_context():
     database.init_db()
+    from services.ebook_pexels import pexels_status_label
+
+    app.logger.info("%s", pexels_status_label())
 
 app.register_blueprint(word_search_builder_bp)
 app.register_blueprint(crossword_builder_bp)
@@ -79,21 +89,55 @@ def _error(message: str, status: int = 400):
     return jsonify({"error": message}), status
 
 
+@app.get("/pexels-status")
+def pexels_status_route():
+    """Safe Pexels configuration status for the running Flask process. Never returns the key."""
+    from services.ebook_pexels import pexels_health, pexels_public_status
+
+    live = str(request.args.get("live") or "").strip() in {"1", "true", "yes"}
+    payload_data = pexels_health(live_auth=live) if live else pexels_public_status()
+    payload = jsonify(payload_data)
+    text = payload.get_data(as_text=True)
+    if "PEXELS_API_KEY" in text or "sk-" in text:
+        return _error("Pexels status is unavailable.", 500)
+    return payload
+
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+    admin_on = os.environ.get("ADMIN_MODE", "").strip().lower() in {"1", "true", "yes"}
+    return render_template("index.html", factory_admin_mode=admin_on)
 
 
 @app.post("/research")
 def research_route():
     body = request.get_json(silent=True) or {}
     try:
-        return jsonify(research(body.get("keyword", "")))
+        return jsonify(
+            research(
+                body.get("keyword", ""),
+                topic=body.get("topic"),
+                audience=body.get("audience"),
+                customer_problem=body.get("customer_problem") or body.get("problem"),
+                product_type=body.get("product_type"),
+                sales_platform=body.get("sales_platform"),
+                expertise=body.get("expertise"),
+                target_price=body.get("target_price") or body.get("price"),
+                keywords=body.get("keywords"),
+                depth=body.get("depth"),
+            )
+        )
     except ValueError as exc:
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("research failed")
-        return _error(str(exc), 500)
+        return jsonify(
+            {
+                "error": str(exc),
+                "inputs": collect_inputs(body),
+                "retryable": True,
+            }
+        ), 503
 
 
 @app.post("/generate-ebook")
@@ -338,6 +382,7 @@ def approve_ebook_workspace_stage_route(project_id: int):
             dict(project.get("data") or {}),
             stage,
             choice_id=body.get("choice_id"),
+            preview_digest=body.get("preview_digest"),
         )
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -616,17 +661,75 @@ def seed_ebook_acceptance_workspace_route():
 
 @app.post("/ebook-workspace/<int:project_id>/visuals")
 def ebook_workspace_visuals_route(project_id: int):
-    """Approve manuscript-derived visuals. No paid image generation."""
+    """Prepare or approve content-aware visuals. No paid image generation."""
     try:
-        from services.ebook_design_workspace import approve_visuals_local
+        from services.ebook_design_workspace import approve_visuals_local, prepare_visuals_local
         from services.ebook_project_workspace import workspace_public_view
+        from services.quality.artifact_state import ArtifactStateError
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
             return err[0], err[1]
-        data = approve_visuals_local(dict(project.get("data") or {}))
+        body = request.get_json(silent=True) or {}
+        action = str(body.get("action") or "prepare").strip().lower()
+        data = dict(project.get("data") or {})
+        data["_project_id"] = project_id
+        try:
+            _require_content_mutation_allowed(data, action="update visuals")
+        except ArtifactStateError as exc:
+            return _error(str(exc), 409)
+        if action == "approve":
+            data = approve_visuals_local(data)
+            msg = "Visuals approved."
+        elif action in {"replace", "replace-photo"}:
+            from services.ebook_visual_pipeline import replace_photo_aid
+
+            data = replace_photo_aid(
+                data,
+                str(body.get("visual_id") or ""),
+                local_path=str(body.get("local_path") or ""),
+                mode=str(body.get("mode") or ""),
+            )
+            msg = "Replacement photograph staged for review. Visuals are not approved."
+        elif action in {"generate-ai", "ai-alternative"}:
+            from services.ebook_visual_pipeline import replace_photo_aid
+
+            data = replace_photo_aid(
+                data,
+                str(body.get("visual_id") or ""),
+                mode="ai",
+            )
+            msg = "A custom image was prepared for review. Visuals are not approved."
+        elif action in {"retry-automatic"}:
+            ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+            preserve = False
+            try:
+                from services.ebook_project_workspace import is_approved as _is_approved
+
+                preserve = _is_approved(ws, "cover") or _is_approved(ws, "design") or _is_approved(ws, "preview")
+            except Exception:
+                preserve = False
+            data = prepare_visuals_local(data, preserve_downstream=preserve)
+            msg = "Automatic visual retry finished. Visuals are not approved."
+        elif action in {"accept-photo", "accept"}:
+            from services.ebook_visual_pipeline import accept_photo_aid
+
+            data = accept_photo_aid(data, str(body.get("visual_id") or ""))
+            msg = "Photograph accepted for this brief. Visuals are not approved."
+        elif action in {"view-full-size", "seen-full-size"}:
+            from services.ebook_visual_pipeline import mark_photo_full_size_viewed
+
+            data = mark_photo_full_size_viewed(data, str(body.get("visual_id") or ""))
+            msg = "Full-size preview recorded."
+        else:
+            from services.ebook_project_workspace import is_approved as _is_approved
+
+            ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+            preserve = _is_approved(ws, "cover") or _is_approved(ws, "design") or _is_approved(ws, "preview")
+            data = prepare_visuals_local(data, preserve_downstream=preserve)
+            msg = "Visuals ready for review."
         project = database.update_project(project_id, None, data) or project
-        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+        return jsonify({"ok": True, "workspace": workspace_public_view(project), "message": msg})
     except ValueError as exc:
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
@@ -645,9 +748,11 @@ def ebook_workspace_cover_route(project_id: int):
             PhotoCoverError,
             apply_editor,
             attach_pexels,
+            clear_layout_selection,
             select_layout,
         )
         from services.ebook_project_workspace import workspace_public_view
+        from services.quality.artifact_state import ArtifactStateError
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
@@ -655,9 +760,16 @@ def ebook_workspace_cover_route(project_id: int):
         action = str(body.get("action") or "").strip().lower()
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
+        mutating = action in {"reject", "pexels-select", "editor", "select", "deselect"}
+        if mutating:
+            try:
+                _require_content_mutation_allowed(data, action="update cover photograph")
+            except ArtifactStateError as exc:
+                return _error(str(exc), 409)
         if action == "reject":
             data = reject_cover(data)
         elif action == "pexels-search":
+            prior_cover = data.get("cover_design")
             result = search_pexels(str(body.get("query") or ""), page=int(body.get("page") or 1))
             ws = data.setdefault("ebook_workspace", {})
             ws["pexels_cache"] = {
@@ -666,6 +778,8 @@ def ebook_workspace_cover_route(project_id: int):
                 "photos": result.get("photos"),
                 "next_page": result.get("next_page"),
             }
+            if prior_cover is not None:
+                data["cover_design"] = prior_cover
         elif action == "pexels-select":
             data = attach_pexels(data, str(body.get("photo_id") or ""), project_id=project_id)
             data = stage_photo_cover(data, project_id=project_id)
@@ -675,6 +789,8 @@ def ebook_workspace_cover_route(project_id: int):
         elif action == "select":
             data = select_layout(data, str(body.get("layout_id") or ""), project_id=project_id)
             data = stage_photo_cover(data, project_id=project_id)
+        elif action == "deselect":
+            data = clear_layout_selection(data)
         elif action in {"generate", "licensed"}:
             return _error(
                 "Vector covers are disabled. Search Pexels or upload your own photograph.",
@@ -682,8 +798,13 @@ def ebook_workspace_cover_route(project_id: int):
             )
         else:
             return _error("Unknown cover action.", 400)
-        project = database.update_project(project_id, None, data) or project
+        if mutating:
+            project = _persist_draft_content_mutation(project_id, data) or project
+        else:
+            project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
     except (ValueError, PhotoCoverError, PexelsError) as exc:
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
@@ -698,6 +819,7 @@ def ebook_workspace_cover_image_route(project_id: int):
         from services.ebook_design_workspace import stage_photo_cover
         from services.ebook_photo_cover import PhotoCoverError, attach_upload
         from services.ebook_project_workspace import workspace_public_view
+        from services.quality.artifact_state import ArtifactStateError
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
@@ -713,6 +835,10 @@ def ebook_workspace_cover_image_route(project_id: int):
         raw = upload.read()
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
+        try:
+            _require_content_mutation_allowed(data, action="upload cover photograph")
+        except ArtifactStateError as exc:
+            return _error(str(exc), 409)
         data = attach_upload(
             data,
             raw,
@@ -722,12 +848,58 @@ def ebook_workspace_cover_image_route(project_id: int):
             owned=owned,
         )
         data = stage_photo_cover(data, project_id=project_id)
-        project = database.update_project(project_id, None, data) or project
-        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+        project = _persist_draft_content_mutation(project_id, data) or project
+        source = ((data.get("cover_design") or {}).get("source") or {})
+        filename = str(source.get("filename") or upload.filename or "photograph")
+        source_type = str(source.get("source_type") or "upload")
+        message = f"Uploaded {filename}. Creating cover choices."
+        return jsonify(
+            {
+                "ok": True,
+                "workspace": workspace_public_view(project),
+                "message": message,
+                "source": {
+                    "filename": filename,
+                    "source_type": source_type,
+                    "sha256": str(source.get("sha256") or ""),
+                },
+            }
+        )
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
     except (ValueError, PhotoCoverError) as exc:
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("ebook cover upload failed")
+        return _error(str(exc), 500)
+
+
+@app.get("/ebook-workspace/<int:project_id>/cover-photo")
+def ebook_workspace_cover_photo_route(project_id: int):
+    """Read-only registered cover photograph. Never generates or downloads."""
+    from io import BytesIO
+
+    from services.ebook_photo_cover import PhotoCoverError, verified_source_photo_asset
+    from services.ebook_project_workspace import assert_no_paid_side_effects_on_read
+
+    try:
+        assert_no_paid_side_effects_on_read()
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        asset = verified_source_photo_asset(
+            dict(project.get("data") or {}),
+            project_id=project_id,
+            digest=str(request.args.get("digest") or ""),
+        )
+        response = send_file(BytesIO(asset["bytes"]), mimetype=asset["mimetype"])
+        response.headers["X-Ebook-Cover-Digest"] = asset["digest"]
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except PhotoCoverError as exc:
+        return _error(str(exc), 404)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook cover photo failed")
         return _error(str(exc), 500)
 
 
@@ -750,6 +922,7 @@ def ebook_workspace_cover_variant_route(project_id: int):
             layout=str(request.args.get("layout") or ""),
             digest=str(request.args.get("digest") or ""),
             size=str(request.args.get("size") or "full"),
+            source_sha=str(request.args.get("src") or ""),
         )
         response = send_file(BytesIO(asset["bytes"]), mimetype=asset["mimetype"])
         response.headers["X-Ebook-Cover-Digest"] = asset["digest"]
@@ -801,6 +974,80 @@ def ebook_workspace_preview_route(project_id: int):
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("ebook preview failed")
+        return _error(str(exc), 500)
+
+
+@app.get("/ebook-workspace/<int:project_id>/full-preview")
+def ebook_workspace_full_preview_route(project_id: int):
+    """Serve the stored designed preview HTML locally. Records that it was opened."""
+    try:
+        from services.ebook_project_workspace import (
+            assert_no_paid_side_effects_on_read,
+            current_preview_digest,
+            is_approved,
+            record_preview_opened,
+            workspace_public_view,
+        )
+
+        assert_no_paid_side_effects_on_read()
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = dict(project.get("data") or {})
+        html = str(data.get("ebook_preview_html") or data.get("preview_html") or "")
+        if not html.strip():
+            return _error("Build preview before opening it.", 400)
+        current = current_preview_digest(data)
+        requested = str(request.args.get("digest") or "").strip()
+        if requested and current and requested != current:
+            return _error("Preview has changed. Rebuild and open the current preview.", 409)
+        data = record_preview_opened(data)
+        project = database.update_project(project_id, None, data) or project
+        data = dict(project.get("data") or data)
+        from services.ebook_preview_review import wrap_preview_review_document
+
+        view = workspace_public_view(project)
+        ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+        already_approved = is_approved(ws, "preview")
+        can_approve = bool((view.get("gates") or {}).get("approve_preview_enabled")) and not already_approved
+        html = wrap_preview_review_document(
+            html,
+            title=str(data.get("title") or project.get("name") or "Ebook"),
+            project_id=int(project_id),
+            digest=current,
+            can_approve=can_approve,
+            already_approved=already_approved,
+        )
+        response = make_response(html)
+        response.headers["Content-Type"] = "text/html; charset=utf-8"
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        if current:
+            response.headers["X-Ebook-Preview-Digest"] = current
+        return response
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook full preview failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/preview-opened")
+def ebook_workspace_preview_opened_route(project_id: int):
+    """Record that the current stored preview was opened. No paid calls."""
+    try:
+        from services.ebook_project_workspace import record_preview_opened, workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = record_preview_opened(dict(project.get("data") or {}))
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook preview-opened failed")
         return _error(str(exc), 500)
 
 
@@ -1245,13 +1492,26 @@ def market_research_route():
                 body.get("niche", ""),
                 body.get("audience", ""),
                 body.get("product_type", ""),
+                topic=body.get("topic"),
+                customer_problem=body.get("customer_problem") or body.get("problem"),
+                sales_platform=body.get("sales_platform"),
+                expertise=body.get("expertise"),
+                target_price=body.get("target_price") or body.get("price"),
+                keywords=body.get("keywords"),
+                depth=body.get("depth"),
             )
         )
     except ValueError as exc:
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("market research failed")
-        return _error(str(exc), 500)
+        return jsonify(
+            {
+                "error": str(exc),
+                "inputs": collect_inputs(body),
+                "retryable": True,
+            }
+        ), 503
 
 
 @app.post("/generate-product")
@@ -1386,8 +1646,9 @@ def enhance_ebook_route():
             except ArtifactStateError as exc:
                 return _error(str(exc), 409)
     try:
-        result = build_ebook_package(title, content, fields)
-        # Step-by-step quality / originality pipeline (no paid APIs)
+        from services.ebook_customer_path import complete_factory_ebook
+
+        result = complete_factory_ebook(title, content, fields)
         from services.ebook_pipeline_agents import run_ebook_quality_pipeline
 
         pipeline = run_ebook_quality_pipeline(
@@ -1412,12 +1673,19 @@ def enhance_ebook_route():
             if step.step == "originality":
                 result["originality"] = step.details
                 break
+        from services.ebook_factory_pipeline import READINESS_FIELDS, apply_ebook_readiness
+
+        result["product_type"] = result.get("product_type") or "ebook"
+        sanitized = str(content or "").strip() or str(result.get("content") or "")
+        result["content"] = sanitized
+        apply_ebook_readiness(result)
         # Persist enhanced content to project so export can use it
         if project_id:
             project = database.get_project(int(project_id))
             if project:
                 data = dict(project.get("data") or {})
-                data["content"] = content
+                data["content"] = sanitized
+                data["ebook"] = sanitized
                 data["preview_html"] = result.get("preview_html", "")
                 data["visual_plan"] = result.get("visual_plan", "")
                 data["product_summary"] = result.get("product_summary", "")
@@ -1426,9 +1694,18 @@ def enhance_ebook_route():
                 data["quality_score"] = result.get("quality_score")
                 data["quality_blocking"] = result.get("quality_blocking")
                 data["pipeline"] = pipeline.to_dict()
+                data["cover_search_query"] = result.get("cover_search_query") or ""
+                data["cover_prompt"] = ""
                 if fields.get("author_brand"):
                     data["author_brand"] = fields.get("author_brand")
+                for key in READINESS_FIELDS:
+                    if key in result:
+                        data[key] = result[key]
+                data["readiness"] = result.get("readiness")
+                data["exports"] = result.get("exports")
+                apply_ebook_readiness(data, project_type=str(project.get("type") or "ebook"))
                 _persist_draft_content_mutation(int(project_id), data)
+        result.pop("content", None)
         return jsonify(result)
     except ArtifactStateError as exc:
         return _error(str(exc), 409)
@@ -1437,25 +1714,333 @@ def enhance_ebook_route():
         return _error(str(exc), 500)
 
 
+@app.post("/ebook/save")
+def ebook_save_route():
+    """Transactional idempotent Save for factory ebooks. Does not regenerate."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_customer_path import save_factory_ebook
+
+        data = body.get("data") if isinstance(body.get("data"), dict) else body
+        name = str(body.get("name") or data.get("title") or "Ebook")
+        project_id = body.get("project_id") or data.get("_project_id")
+        saved = save_factory_ebook(
+            data,
+            name=name,
+            project_id=int(project_id) if project_id not in (None, "") else None,
+            user_confirmed=True,
+        )
+        return jsonify(saved)
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook save failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook/regenerate-cover")
+def ebook_regenerate_cover_route():
+    """Regenerate a factory ebook cover. Keeps the current cover if the new one fails."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_customer_path import regenerate_factory_cover
+        from services.quality.artifact_state import ArtifactStateError
+
+        project_id = body.get("project_id")
+        data = body.get("data") if isinstance(body.get("data"), dict) else {}
+        if project_id not in (None, ""):
+            project = database.get_project(int(project_id))
+            if not project:
+                return _error("Project not found.", 404)
+            _require_content_mutation_allowed(project.get("data") or {}, action="regenerate cover")
+            data = dict(project.get("data") or {})
+            data["_project_id"] = int(project_id)
+        if body.get("simulate_failure"):
+            current = data.get("cover_design")
+            return jsonify(
+                {
+                    "ok": False,
+                    "cover_regenerated": False,
+                    "cover": current,
+                    "message": "The current cover was kept.",
+                }
+            )
+        updated = regenerate_factory_cover(data)
+        if project_id not in (None, ""):
+            persist = dict(updated)
+            persist.pop("_project_id", None)
+            _persist_draft_content_mutation(int(project_id), persist)
+        return jsonify(
+            {
+                "ok": bool(updated.get("cover_regenerated")),
+                "cover_regenerated": bool(updated.get("cover_regenerated")),
+                "cover": updated.get("cover_design"),
+                "preview_html": updated.get("preview_html"),
+                "message": updated.get("message") or "",
+                "exports": updated.get("exports"),
+                "ebook_ready": updated.get("ebook_ready"),
+            }
+        )
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook cover regeneration failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/retry-ebook-visual")
+def retry_ebook_visual_route():
+    """Retry one missing factory stock photograph via the shared Pexels service."""
+    body = request.get_json(silent=True) or {}
+    package_id = str(body.get("package_id") or "").strip()
+    visual_id = str(body.get("visual_id") or "").strip()
+    aid = body.get("aid") if isinstance(body.get("aid"), dict) else {}
+    fields = body.get("fields") if isinstance(body.get("fields"), dict) else {}
+    title = str(body.get("title") or fields.get("ebook_title") or fields.get("topic") or "").strip()
+    if not package_id or not visual_id:
+        return _error("package_id and visual_id are required.", 400)
+    aid = dict(aid)
+    aid["visual_id"] = visual_id
+    aid["type"] = str(aid.get("type") or "stock photo")
+    try:
+        from services.ebook_factory_pipeline import (
+            NEXT_CHOOSE_COVER,
+            NEXT_RETRY_IMAGE,
+            READINESS_FIELDS,
+            apply_ebook_readiness,
+            ebook_project_readiness,
+            fill_photo_aid_from_pexels,
+            replace_visual_aid,
+        )
+        from services.quality.artifact_state import ArtifactStateError
+
+        filled = fill_photo_aid_from_pexels(
+            aid,
+            package_id=package_id,
+            title=title,
+            topic=str(fields.get("topic") or title),
+            audience=str(fields.get("audience") or ""),
+            chapter=str(aid.get("chapter") or body.get("chapter") or ""),
+        )
+        ok = bool(filled.get("has_file") and filled.get("rendered"))
+        filled["approved"] = False
+        payload = {"ok": ok, "aid": filled, "next_action": NEXT_RETRY_IMAGE if not ok else NEXT_CHOOSE_COVER}
+        project_id = body.get("project_id")
+        visual_plan = body.get("visual_plan") if isinstance(body.get("visual_plan"), dict) else {"chapters": []}
+        cover_design = body.get("cover_design") if isinstance(body.get("cover_design"), dict) else {}
+        if project_id not in (None, ""):
+            project = database.get_project(int(project_id))
+            if project:
+                try:
+                    _require_content_mutation_allowed(
+                        project.get("data") or {},
+                        action="retry missing ebook photograph",
+                    )
+                except ArtifactStateError as exc:
+                    return _error(str(exc), 409)
+                data = dict(project.get("data") or {})
+                manuscript = data.get("content")
+                ebook_ms = data.get("ebook")
+                plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else visual_plan
+                data["visual_plan"] = replace_visual_aid(plan, visual_id, filled)
+                data["package_id"] = str(data.get("package_id") or package_id)
+                if cover_design and not data.get("cover_design"):
+                    data["cover_design"] = cover_design
+                apply_ebook_readiness(data, project_type=str(project.get("type") or "ebook"))
+                data["content"] = manuscript
+                data["ebook"] = ebook_ms
+                _persist_draft_content_mutation(int(project_id), data)
+                state = data.get("readiness") or ebook_project_readiness(data)
+                payload["visual_plan"] = data.get("visual_plan")
+                payload["next_action"] = state.get("next_action") or payload["next_action"]
+                payload["readiness"] = state
+                for key in READINESS_FIELDS:
+                    payload[key] = state.get(key)
+                return jsonify(payload)
+        plan = replace_visual_aid(visual_plan, visual_id, filled)
+        state = ebook_project_readiness(
+            {
+                "product_type": "ebook",
+                "visual_plan": plan,
+                "cover_design": cover_design,
+                "package_id": package_id,
+            }
+        )
+        payload["visual_plan"] = plan
+        payload["next_action"] = state.get("next_action") or payload["next_action"]
+        payload["readiness"] = state
+        for key in READINESS_FIELDS:
+            payload[key] = state.get(key)
+        return jsonify(payload)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook visual retry failed")
+        return _error(str(exc), 500)
+
+
 @app.post("/discover-products")
 def discover_products_route():
     body = request.get_json(silent=True) or {}
+    mode = str(body.get("mode") or body.get("fma_mode") or "").strip().lower()
+    find_ideas = bool(body.get("find_ideas")) or mode in {"discover", "find", "find_ideas"}
     try:
+        if find_ideas:
+            result = discover_top_opportunities(
+                interest=body.get("interest", "") or body.get("topic", "") or body.get("idea", ""),
+                audience=body.get("audience", ""),
+                product_type=body.get("product_type", ""),
+                sales_platform=body.get("sales_platform") or body.get("platform") or "",
+                depth=body.get("depth") or "",
+                topic=body.get("topic") or body.get("idea") or body.get("interest") or "",
+                customer_problem=body.get("customer_problem") or body.get("problem"),
+                expertise=body.get("expertise"),
+                target_price=body.get("target_price") or body.get("price"),
+                keywords=body.get("keywords"),
+                niche=body.get("niche", ""),
+                goal=body.get("goal", ""),
+                difficulty=body.get("difficulty", ""),
+                carried_sources=body.get("carried_sources") or body.get("sources"),
+            )
+            if result.get("retryable") and not result.get("opportunities"):
+                result.setdefault(
+                    "error",
+                    "We couldn't complete the market research. Your idea and filters have been preserved. Please try again.",
+                )
+                result.setdefault("inputs", collect_inputs(body))
+                return jsonify(result), 503
+            return jsonify(result)
         return jsonify(
             discover_products(
-                body.get("interest", ""),
+                body.get("interest", "") or body.get("topic", ""),
                 body.get("audience", ""),
                 body.get("product_type", ""),
                 body.get("difficulty", ""),
                 body.get("goal", ""),
                 body.get("niche", ""),
+                topic=body.get("topic") or body.get("idea"),
+                customer_problem=body.get("customer_problem") or body.get("problem"),
+                sales_platform=body.get("sales_platform"),
+                expertise=body.get("expertise"),
+                target_price=body.get("target_price") or body.get("price"),
+                keywords=body.get("keywords"),
+                depth=body.get("depth"),
+                carried_sources=body.get("carried_sources") or body.get("sources"),
+                prior_opportunity=body.get("prior_opportunity"),
             )
         )
     except ValueError as exc:
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("product discovery failed")
+        return jsonify(
+            {
+                "error": (
+                    "We couldn't complete the market research. Your idea and filters have been "
+                    "preserved. Please try again."
+                ),
+                "inputs": collect_inputs(body),
+                "retryable": True,
+            }
+        ), 503
+
+
+@app.post("/factory-market-advantage")
+def factory_market_advantage_route():
+    """Primary Factory Market Advantage endpoint. Old /discover-products stays."""
+    return discover_products_route()
+
+
+@app.post("/research-to-builder")
+def research_to_builder_route():
+    """Save selected research as a DRAFT product_plan and name the correct builder.
+
+    Never generates a finished product, cover, PDF, or ZIP.
+    """
+    body = request.get_json(silent=True) or {}
+    opportunity = body.get("opportunity") or {}
+    if not isinstance(opportunity, dict) or not (
+        str(opportunity.get("product_idea") or "").strip()
+        or str(opportunity.get("niche") or "").strip()
+    ):
+        return _error("Choose Your Advantage before building. An opportunity is required.", 400)
+
+    research_payload = body.get("research") or {}
+    if not isinstance(research_payload, dict):
+        research_payload = {}
+    inputs = collect_inputs(body.get("inputs") or research_payload.get("inputs") or body)
+    product_type = (
+        opportunity.get("product_type")
+        or inputs.get("product_type")
+        or research_payload.get("product_type")
+        or ""
+    )
+    builder = resolve_factory_builder(product_type)
+    if builder.get("status") != "active":
+        return jsonify(
+            {
+                "error": (
+                    "This product type is not ready in the public builder yet. "
+                    "Save the research and pick an active Factory type."
+                ),
+                "builder": builder,
+                "generated": False,
+            }
+        ), 409
+
+    research_id = body.get("research_id") or body.get("project_id")
+    research_payload["selected_opportunity"] = opportunity
+    research_payload["stage"] = "research_saved"
+    name = f"Research: {opportunity.get('product_idea') or opportunity.get('niche') or inputs.get('topic') or 'Market Advantage'}"
+    try:
+        if research_id:
+            existing = database.get_project(int(research_id))
+            if not existing:
+                return _error("Research project not found.", 404)
+            saved_research = database.update_project(
+                int(research_id),
+                name=existing.get("name") or name,
+                type_="research_plan",
+                data={**(existing.get("data") or {}), **research_payload, "selected_opportunity": opportunity, "stage": "research_saved"},
+            )
+        else:
+            saved_research = database.create_project(
+                name,
+                "research_plan",
+                {**research_payload, "selected_opportunity": opportunity, "stage": "research_saved"},
+                user_saved=True,
+            )
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("research save during handoff failed")
         return _error(str(exc), 500)
+
+    draft = draft_handoff_payload(
+        opportunity=opportunity,
+        research={**research_payload, "id": saved_research.get("id")},
+        inputs=inputs,
+    )
+    draft["research_id"] = saved_research.get("id")
+    plan_name = (draft.get("plan") or {}).get("product_title") or name
+    # Same-record handoff: research_plan becomes product_plan DRAFT (existing Factory lineage).
+    saved_plan = database.update_project(
+        int(saved_research["id"]),
+        name=plan_name,
+        type_="product_plan",
+        data=draft,
+        user_saved=True,
+    )
+    return jsonify(
+        {
+            "id": saved_plan["id"],
+            "type": saved_plan["type"],
+            "data": saved_plan["data"],
+            "research_id": saved_research.get("id"),
+            "builder": builder,
+            "factory_id": builder.get("factory_id"),
+            "product_type": draft.get("product_type"),
+            "generated": False,
+            "auto_generated": False,
+            "artifact_state": (saved_plan.get("data") or {}).get("artifact_state"),
+        }
+    ), 201
 
 
 @app.post("/youtube/analyze")
@@ -1646,7 +2231,8 @@ def download_export_route(package_id: str, filename: str):
     """
     if not _PACKAGE_ID_RE.match(package_id or ""):
         return _error("Invalid download id.", 400)
-    if not is_allowed_download(filename):
+    coloring_preview = is_coloring_preview_filename(filename)
+    if not is_allowed_download(filename) and not coloring_preview:
         return _error("Unknown export file.", 404)
 
     directory = os.path.join(EXPORTS_DIR, package_id)
@@ -1660,6 +2246,8 @@ def download_export_route(package_id: str, filename: str):
     except OSError:
         return _error("Export file not found.", 404)
     if not os.path.isfile(file_path):
+        if coloring_preview:
+            return _error(coloring_preview_missing_message(filename), 404)
         return _error("Export file not found.", 404)
 
     # ── DOWNLOAD PIPELINE AGENT ───────────────────────────────────────────────
@@ -1685,8 +2273,10 @@ def download_export_route(package_id: str, filename: str):
         response.headers["Content-Disposition"] = f"attachment; filename={filename}"
         return response
 
-    # Passed: serve from disk
-    as_attachment = not filename.startswith("img_")
+    # Passed: serve from disk. Preview images must display in <img>, not download.
+    as_attachment = not (
+        filename.startswith("img_") or is_coloring_preview_filename(filename)
+    )
     return send_from_directory(directory, filename, as_attachment=as_attachment)
 
 
@@ -1940,6 +2530,13 @@ def export_product_route():
 
     try:
         project = _load_product_project(body)
+        data = project.get("data") or {}
+        if data.get("customer_keep") is True:
+            from services.customer_keep_exports import reuse_existing_keep_export
+
+            reused = reuse_existing_keep_export(project)
+            if reused is not None:
+                return jsonify(reused)
         # Deterministic disclaimer enforcement: the AI model may have dropped
         # the required disclaimer; insert it before PDF/ZIP rendering so the
         # customer never gets a non-compliant export. Idempotent.
@@ -2236,16 +2833,49 @@ def _enrich_project_artifact_fields(
     except Exception:
         # Unreadable evidence: omit fields so UI hides the control.
         pass
+    from services.ebook_factory_pipeline import apply_ebook_readiness
+
+    apply_ebook_readiness(data, project_type=str(project.get("type") or ""))
+    if str(data.get("product_type") or "").strip().lower() == "coloring_book":
+        from services.coloring_book.prompt_engine import stamp_coloring_author_fields
+
+        stamp_coloring_author_fields(data)
+        attach_coloring_preview_urls(data, project_id=project.get("id"))
     return project
 
 
 @app.get("/projects")
 def list_projects_route():
-    """List projects. By default hides system/test/temporary projects.
-    Pass ?include_system=1 to see everything."""
+    """List projects.
+
+    Customer default: up to 10 intentionally saved completed products.
+    Dashboard uses the same filter with ?limit=3.
+    Admin (?admin=1 or include_system=1) sees everything.
+    Factory source dropdowns use ?factory_sources=1.
+    """
     include_system = request.args.get("include_system", "0") == "1"
-    projects = database.list_projects(include_system=include_system)
-    return jsonify([_enrich_project_artifact_fields(p) for p in projects])
+    admin = request.args.get("admin", "0") == "1"
+    factory_sources = request.args.get("factory_sources", "0") == "1"
+    if include_system or admin:
+        projects = database.list_projects(include_system=True)
+        return jsonify([_enrich_project_artifact_fields(p) for p in projects])
+    if factory_sources:
+        projects = database.list_projects(include_system=False)
+        return jsonify([_enrich_project_artifact_fields(p) for p in projects])
+    try:
+        limit = int(request.args.get("limit", 10))
+    except (TypeError, ValueError):
+        limit = 10
+    try:
+        offset = int(request.args.get("offset", 0))
+    except (TypeError, ValueError):
+        offset = 0
+    limit = min(max(limit, 1), 10)
+    offset = max(offset, 0)
+    projects, has_more = database.get_customer_saved_products(limit=limit, offset=offset)
+    resp = jsonify([_enrich_project_artifact_fields(p) for p in projects])
+    resp.headers["X-Saved-Has-More"] = "1" if has_more else "0"
+    return resp
 
 
 @app.get("/projects/<int:project_id>")
@@ -2263,6 +2893,37 @@ def get_project_route(project_id: int):
         return _error(str(exc), 409)
 
 
+@app.get("/projects/<int:project_id>/coloring-preview/<filename>")
+def coloring_preview_route(project_id: int, filename: str):
+    """Serve on-disk coloring cover/interior images for the factory preview.
+
+    Project-scoped display URL. Does not regenerate artwork or alter PDF/ZIP.
+    """
+    if not is_coloring_preview_filename(filename):
+        return _error("Unknown coloring preview file.", 404)
+    project = database.get_project(project_id)
+    if not project:
+        return _error("Project not found.", 404)
+    data = project.get("data") if isinstance(project.get("data"), dict) else {}
+    if str(data.get("product_type") or "").strip().lower() != "coloring_book":
+        return _error("Coloring preview is only available for coloring books.", 404)
+    pkg = str(data.get("package_id") or data.get("export_package_id") or "").strip()
+    if not pkg or not _PACKAGE_ID_RE.match(pkg):
+        return _error("Coloring preview package is missing.", 404)
+    directory = os.path.join(EXPORTS_DIR, pkg)
+    file_path = os.path.join(directory, filename)
+    try:
+        exports_root = os.path.realpath(EXPORTS_DIR)
+        real_file = os.path.realpath(file_path)
+        if not real_file.startswith(exports_root + os.sep):
+            return _error("Invalid coloring preview path.", 400)
+    except OSError:
+        return _error(coloring_preview_missing_message(filename), 404)
+    if not os.path.isfile(file_path):
+        return _error(coloring_preview_missing_message(filename), 404)
+    return send_from_directory(directory, filename, as_attachment=False)
+
+
 @app.post("/projects")
 def create_project_route():
     """Create a project. Applies backend safety guard for test/debug names."""
@@ -2272,13 +2933,18 @@ def create_project_route():
     if not name or not type_:
         return _error("Project name and type are required.", 400)
 
-    # Resolve save flags — backend safety guard runs inside apply_save_flags
+    # Resolve save flags — backend safety guard runs inside apply_save_flags.
+    # user_saved=true is not enough to keep an internal/test name visible.
     explicit_save = body.get("user_saved")
+    confirmed = bool(body.get("user_confirmed_save"))
     user_saved, system_test, temporary = database.apply_save_flags(
         name=name,
         explicit_user_save=bool(explicit_save) if explicit_save is not None else None,
         system_test=body.get("system_test"),
         temporary=body.get("temporary"),
+        type_=type_,
+        data=body.get("data") if isinstance(body.get("data"), dict) else {},
+        user_confirmed_save=confirmed,
     )
 
     # Identity/state for new PDF products is stamped on Generate
@@ -2291,6 +2957,7 @@ def create_project_route():
         user_saved=user_saved,
         system_test=system_test,
         temporary=temporary,
+        user_confirmed_save=confirmed,
     )
     return jsonify(project), 201
 
@@ -2305,6 +2972,7 @@ def update_project_route(project_id: int):
     user_saved_arg = body.get("user_saved")
     system_test_arg = body.get("system_test")
     temporary_arg = body.get("temporary")
+    confirmed = bool(body.get("user_confirmed_save"))
 
     if name:
         name = name.strip()
@@ -2313,6 +2981,9 @@ def update_project_route(project_id: int):
             explicit_user_save=bool(user_saved_arg) if user_saved_arg is not None else None,
             system_test=bool(system_test_arg) if system_test_arg is not None else None,
             temporary=bool(temporary_arg) if temporary_arg is not None else None,
+            type_=body.get("type"),
+            data=body.get("data") if isinstance(body.get("data"), dict) else {},
+            user_confirmed_save=confirmed,
         )
     else:
         user_saved = bool(user_saved_arg) if user_saved_arg is not None else None
@@ -2339,6 +3010,7 @@ def update_project_route(project_id: int):
         user_saved=user_saved,
         system_test=system_test,
         temporary=temporary,
+        user_confirmed_save=confirmed,
     )
     if not project:
         return _error("Project not found.", 404)
@@ -2597,8 +3269,13 @@ def kdp_prepare_package_route(project_id: int):
 
 @app.delete("/projects/<int:project_id>")
 def delete_project_route(project_id: int):
-    if not database.delete_project(project_id):
-        return _error("Project not found.", 404)
+    from services.quality.artifact_state import ArtifactStateError
+
+    try:
+        if not database.delete_project(project_id):
+            return _error("Project not found.", 404)
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
     return jsonify({"ok": True})
 
 
@@ -2607,20 +3284,24 @@ def delete_all_projects():
     """Bulk-delete projects. Requires delete_all=1 AND user_saved_only=1.
     This prevents accidental deletion of hidden system/test records.
     Hidden records can only be deleted when the test/debug toggle is on
-    and they are individually confirmed."""
+    and they are individually confirmed. LOCKED projects are never deleted.
+    """
     import flask
     delete_all = flask.request.args.get("delete_all")
     user_saved_only = flask.request.args.get("user_saved_only")
     if delete_all != "1" or user_saved_only != "1":
         return _error("Invalid bulk-delete request.", 400)
-    conn = database.get_conn()
-    cur = conn.execute(
-        "DELETE FROM projects WHERE user_saved = 1 AND system_test = 0 AND temporary = 0"
+    result = database.delete_matching_projects(
+        "user_saved = 1 AND system_test = 0 AND temporary = 0"
     )
-    conn.commit()
-    deleted = cur.rowcount
-    conn.close()
-    return jsonify({"ok": True, "deleted": deleted})
+    return jsonify(
+        {
+            "ok": True,
+            "deleted": result["deleted"],
+            "locked_skipped": result["locked_skipped"],
+            "skipped_ids": result["skipped_ids"],
+        }
+    )
 
 
 @app.post("/admin/backup-db")
@@ -2638,7 +3319,7 @@ def admin_backup_db():
 
 @app.delete("/admin/delete-test-projects")
 def admin_delete_test_projects():
-    """Delete all projects flagged as system_test or temporary. Creates a backup first."""
+    """Delete test/debug/temporary projects. LOCKED rows are never deleted."""
     import datetime, shutil, os as _os
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     src = database.DB_PATH
@@ -2646,14 +3327,18 @@ def admin_delete_test_projects():
     bak_name = f"projects_BACKUP_{ts}.db"
     bak_path = _os.path.join(bak_dir, bak_name)
     shutil.copy2(src, bak_path)
-    conn = database.get_conn()
-    cur = conn.execute(
-        "DELETE FROM projects WHERE system_test = 1 OR temporary = 1 OR user_saved = 0"
+    result = database.delete_matching_projects(
+        "system_test = 1 OR temporary = 1 OR user_saved = 0"
     )
-    conn.commit()
-    deleted = cur.rowcount
-    conn.close()
-    return jsonify({"ok": True, "deleted": deleted, "backup_path": bak_path})
+    return jsonify(
+        {
+            "ok": True,
+            "deleted": result["deleted"],
+            "locked_skipped": result["locked_skipped"],
+            "skipped_ids": result["skipped_ids"],
+            "backup_path": bak_path,
+        }
+    )
 
 
 @app.get("/coloring-ai-status")
@@ -2772,9 +3457,19 @@ def cover_preview_route():
             return jsonify({"error": "Project not found"}), 404
         product_type = str((project.get("data") or {}).get("product_type") or "")
         if product_type == "coloring_book":
-            # Never preview an author brand / top-banner title on coloring covers.
+            from services.coloring_book.prompt_engine import (
+                coloring_cover_draws_author,
+                is_bank_rescue_theme,
+            )
+
             overrides = dict(overrides or {})
-            overrides["author"] = ""
+            pdata = project.get("data") or {}
+            cover = pdata.get("cover_design") if isinstance(pdata.get("cover_design"), dict) else {}
+            fields = pdata.get("fields") if isinstance(pdata.get("fields"), dict) else {}
+            style = str(cover.get("overlay_style") or "")
+            theme = str(fields.get("theme") or pdata.get("title") or "")
+            if (style and not coloring_cover_draws_author(style)) or is_bank_rescue_theme(theme):
+                overrides["author"] = ""
             overrides.setdefault("text_position", {"x": 50.0, "y": 81.0, "align": "center"})
             overrides.setdefault("text_overlay", True)
         cover = preview_cover(dict(project), overrides=overrides)
@@ -2805,14 +3500,37 @@ def cover_save_route():
             )
         product_type = str(((project or {}).get("data") or {}).get("product_type") or "")
         if product_type == "coloring_book":
+            from services.coloring_book.prompt_engine import (
+                coloring_cover_draws_author,
+                is_bank_rescue_theme,
+            )
+
             overrides = dict(overrides or {})
-            overrides["author"] = ""
+            pdata = ((project or {}).get("data") or {})
+            cover = pdata.get("cover_design") if isinstance(pdata.get("cover_design"), dict) else {}
+            fields = pdata.get("fields") if isinstance(pdata.get("fields"), dict) else {}
+            style = str(cover.get("overlay_style") or "")
+            theme = str(fields.get("theme") or pdata.get("title") or "")
+            hide_author = (style and not coloring_cover_draws_author(style)) or is_bank_rescue_theme(theme)
+            if hide_author:
+                overrides["author"] = ""
             overrides.setdefault("text_position", {"x": 50.0, "y": 81.0, "align": "center"})
             overrides.setdefault("text_y", 78)
             overrides.setdefault("text_overlay", True)
         saved = save_cover(existing, overrides, package_id=package_id)
         if product_type == "coloring_book":
-            saved["author"] = ""
+            pdata = ((project or {}).get("data") or {})
+            cover = pdata.get("cover_design") if isinstance(pdata.get("cover_design"), dict) else {}
+            fields = pdata.get("fields") if isinstance(pdata.get("fields"), dict) else {}
+            style = str(cover.get("overlay_style") or saved.get("overlay_style") or "")
+            theme = str(fields.get("theme") or pdata.get("title") or "")
+            from services.coloring_book.prompt_engine import (
+                coloring_cover_draws_author,
+                is_bank_rescue_theme,
+            )
+
+            if (style and not coloring_cover_draws_author(style)) or is_bank_rescue_theme(theme):
+                saved["author"] = ""
         # Persist to DB
         if project:
             data = dict(project.get("data") or {})
@@ -2884,7 +3602,18 @@ def cover_regenerate_route():
                 theme=topic,
             )
             cover = dict(cover or {})
-            cover["author"] = ""
+            if str(brief.get("overlay_style") or "") == "clean_title":
+                cover["author"] = ""
+            else:
+                from services.coloring_book.prompt_engine import resolve_coloring_book_author
+
+                cover["author"] = resolve_coloring_book_author(
+                    cover.get("author"),
+                    data.get("author"),
+                    data.get("author_brand"),
+                    fields.get("author_brand"),
+                    fields.get("author"),
+                )
             cover["title"] = brief.get("title") or title
             cover["subtitle"] = brief.get("subtitle") or subtitle
             cover["image_prompt"] = brief.get("cover_prompt") or cover.get("image_prompt")
@@ -2900,7 +3629,8 @@ def cover_regenerate_route():
         # Store the fingerprint alongside the new cover
         saved["cover_fingerprint"] = new_fingerprint
         if product_type == "coloring_book":
-            saved["author"] = ""
+            if str(brief.get("overlay_style") or "") == "clean_title":
+                saved["author"] = ""
             saved["text_position"] = {"x": 50.0, "y": 81.0, "align": "center"}
             saved["text_y"] = 78
         # Persist to DB

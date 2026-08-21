@@ -244,6 +244,7 @@ class ChooseIdeaBuildHandoffTests(unittest.TestCase):
         ):
             self.assertIn(name, src, f"missing JS contract: {name}")
 
+        self.assertIn("Choose Your Advantage", src)
         self.assertIn("Choose This Idea", src)
         self.assertIn('data-choose="${i}"', src)
         self.assertIn("b.onclick = () => chooseIdea(ops[Number(b.dataset.choose)])", src)

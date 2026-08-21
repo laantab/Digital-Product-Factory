@@ -1,0 +1,90 @@
+{
+  "ebook_ready": true,
+  "pdf_available": true,
+  "zip_available": true,
+  "next_action": "",
+  "cover_layout": "full_bleed_editorial",
+  "cover_query": "container vegetable garden patio",
+  "cover_photo_id": "12916203",
+  "cover_path": "C:\\Users\\user\\OneDrive\\Desktop\\Factory_Stabilized_Source_V2_20260809\\Factory_Stabilized_V2\\flask_app\\exports\\a76d99d229864ca9b326dd26e0bee9fa\\img_cover.png",
+  "package_id": "a76d99d229864ca9b326dd26e0bee9fa",
+  "pdf_path": "C:\\Users\\user\\OneDrive\\Desktop\\Factory_Stabilized_Source_V2_20260809\\Factory_Stabilized_V2\\flask_app\\exports\\a76d99d229864ca9b326dd26e0bee9fa\\ebook.pdf",
+  "contamination": [],
+  "visual_ai_spend_usd": 0,
+  "remaining_budget": 0.48,
+  "photo_count": 6,
+  "photos": [
+    {
+      "chapter": "Getting Started With Container Gardening",
+      "title": "Getting Started With Container Gardening photograph",
+      "query": "beginner container garden",
+      "source": "pexels",
+      "photo_id": "4750391",
+      "status": "resolved",
+      "has_file": true,
+      "path": "C:\\Users\\user\\OneDrive\\Desktop\\Factory_Stabilized_Source_V2_20260809\\Factory_Stabilized_V2\\flask_app\\exports\\a76d99d229864ca9b326dd26e0bee9fa\\img_v0_0.png"
+    },
+    {
+      "chapter": "Choosing the Right Containers and Soil",
+      "title": "Choosing the Right Containers and Soil photograph",
+      "query": "A relevant photograph for Choosing the Right Containers and Soil.",
+      "source": "pexels",
+      "photo_id": "4750388",
+      "status": "resolved",
+      "has_file": true,
+      "path": "C:\\Users\\user\\OneDrive\\Desktop\\Factory_Stabilized_Source_V2_20260809\\Factory_Stabilized_V2\\flask_app\\exports\\a76d99d229864ca9b326dd26e0bee9fa\\img_v1_0.png"
+    },
+    {
+      "chapter": "Picking Vegetables and Herbs That Grow Well in Pots",
+      "title": "Picking Vegetables and Herbs That Grow Well in Pots photograph",
+      "query": "tomatoes peppers lettuce herbs containers",
+      "source": "pexels",
+      "photo_id": "2720445",
+      "status": "resolved",
+      "has_file": true,
+      "path": "C:\\Users\\user\\OneDrive\\Desktop\\Factory_Stabilized_Source_V2_20260809\\Factory_Stabilized_V2\\flask_app\\exports\\a76d99d229864ca9b326dd26e0bee9fa\\img_v2_0.png"
+    },
+    {
+      "chapter": "Water, Sun, and Daily Care",
+      "title": "Water, Sun, and Daily Care photograph",
+      "query": "A relevant photograph for Water, Sun, and Daily Care.",
+      "source": "pexels",
+      "photo_id": "10574048",
+      "status": "resolved",
+      "has_file": true,
+      "path": "C:\\Users\\user\\OneDrive\\Desktop\\Factory_Stabilized_Source_V2_20260809\\Factory_Stabilized_V2\\flask_app\\exports\\a76d99d229864ca9b326dd26e0bee9fa\\img_v3_0.png"
+    },
+    {
+      "chapter": "Handling Pests and Plant Problems",
+      "title": "Handling Pests and Plant Problems photograph",
+      "query": "A relevant photograph for Handling Pests and Plant Problems.",
+      "source": "pexels",
+      "photo_id": "13541362",
+      "status": "resolved",
+      "has_file": true,
+      "path": "C:\\Users\\user\\OneDrive\\Desktop\\Factory_Stabilized_Source_V2_20260809\\Factory_Stabilized_V2\\flask_app\\exports\\a76d99d229864ca9b326dd26e0bee9fa\\img_v4_0.png"
+    },
+    {
+      "chapter": "Harvesting, Replanting, and Keeping Your Garden Going",
+      "title": "Harvesting, Replanting, and Keeping Your Garden Going photograph",
+      "query": "harvesting tomatoes herbs from pots",
+      "source": "pexels",
+      "photo_id": "4503267",
+      "status": "resolved",
+      "has_file": true,
+      "path": "C:\\Users\\user\\OneDrive\\Desktop\\Factory_Stabilized_Source_V2_20260809\\Factory_Stabilized_V2\\flask_app\\exports\\a76d99d229864ca9b326dd26e0bee9fa\\img_v5_0.png"
+    }
+  ],
+  "chapter_titles": [
+    "Getting Started With Container Gardening",
+    "Choosing the Right Containers and Soil",
+    "Picking Vegetables and Herbs That Grow Well in Pots",
+    "Water, Sun, and Daily Care",
+    "Handling Pests and Plant Problems",
+    "Harvesting, Replanting, and Keeping Your Garden Going"
+  ],
+  "cover_error": "",
+  "customer_error": null,
+  "4249_before": "465a3e10861cd056a98008a8131be157be9dc0d22ec93464fa831fcbb03367cd",
+  "4249_after": "465a3e10861cd056a98008a8131be157be9dc0d22ec93464fa831fcbb03367cd"
+}

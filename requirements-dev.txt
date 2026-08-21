@@ -1,3 +1,4 @@
 -r requirements.txt
 pytest==8.4.1
 opencv-python-headless==5.0.0.93
+playwright==1.52.0

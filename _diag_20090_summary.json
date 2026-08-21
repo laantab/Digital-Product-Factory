@@ -1,0 +1,489 @@
+{
+  "db_path": "C:\\Users\\user\\OneDrive\\Desktop\\Factory_Stabilized_Source_V2_20260809\\Factory_Stabilized_V2\\flask_app\\projects.db",
+  "db_exists": true,
+  "recent_ids": [
+    20090,
+    20079,
+    20075,
+    20073,
+    20071,
+    20061,
+    20060,
+    20052,
+    20045,
+    20044,
+    20036,
+    20035,
+    20031,
+    20023,
+    20022,
+    20021,
+    20020,
+    20019,
+    20018,
+    20017,
+    20016,
+    20015,
+    20014,
+    20013,
+    20012,
+    20011,
+    20010,
+    20009,
+    20007,
+    20006,
+    20005,
+    20004,
+    20003,
+    20002,
+    20001,
+    20000,
+    19999,
+    19998,
+    19997,
+    19982
+  ],
+  "title_matches": [
+    {
+      "id": 19519,
+      "name": ": Beginner\u2019s Guide to Container Gardening",
+      "type": "product"
+    },
+    {
+      "id": 20090,
+      "name": "Beginner\u2019s Guide to Container Gardening",
+      "type": "product"
+    }
+  ],
+  "row_20090": {
+    "id": 20090,
+    "name": "Beginner\u2019s Guide to Container Gardening",
+    "type": "product"
+  },
+  "project_20090": {
+    "id": 20090,
+    "name": "Beginner\u2019s Guide to Container Gardening",
+    "type": "product",
+    "data_keys": [
+      "_nextStepsResult",
+      "_savePromise",
+      "_saved_at",
+      "_user_declined_save",
+      "_workflow_save_pending",
+      "completion_blockers",
+      "content",
+      "cover_design",
+      "cover_prompt",
+      "cover_ready",
+      "cover_search_query",
+      "draft_files_only",
+      "ebook_ready",
+      "export_files",
+      "export_ready",
+      "exports",
+      "fields",
+      "hidden_from_customer",
+      "image_jobs",
+      "internal_record",
+      "manuscript_quality_failures",
+      "missing_photo_count",
+      "next_action",
+      "originality",
+      "package_id",
+      "pdf_available",
+      "pdf_enabled",
+      "pexels_status",
+      "pipeline",
+      "preview_html",
+      "product_label",
+      "product_summary",
+      "product_type",
+      "quality_blocking",
+      "quality_result",
+      "quality_score",
+      "readiness",
+      "rendered_visual_count",
+      "required_visual_count",
+      "stage",
+      "status_label",
+      "subtitle",
+      "temporary",
+      "title",
+      "user_confirmed_save",
+      "user_saved",
+      "visual_assets",
+      "visual_plan",
+      "visual_status_message",
+      "zip_available",
+      "zip_enabled"
+    ],
+    "title": "Beginner\u2019s Guide to Container Gardening",
+    "subtitle": "A practical guide to growing vegetables and herbs in pots, buckets, and small spaces",
+    "author": "Lonnie Brown",
+    "package_id": "be5f2b3ad3f54cb8afd50ebe0a53f4fe",
+    "status": null,
+    "ebook_ready": false,
+    "export_ready": false,
+    "pdf_available": false,
+    "pdf_path": null,
+    "cover_selected_layout": null,
+    "cover_image_path": null,
+    "cover_source_type": null,
+    "cover_has_source": false,
+    "cover_pexels_query": null,
+    "visual_budget_cap_usd": "0.48",
+    "visual_spend_usd": null,
+    "ai_visual_authorized": null,
+    "chapter_count": 8,
+    "aid_types": [
+      "stock photo",
+      "infographic",
+      "table",
+      "diagram",
+      "action step box",
+      "table",
+      "worksheet box",
+      "table",
+      "tip box",
+      "diagram",
+      "table",
+      "chart",
+      "tip box",
+      "diagram",
+      "table",
+      "action step box",
+      "infographic",
+      "table",
+      "diagram",
+      "worksheet box",
+      "tip box"
+    ],
+    "photo_count": 1,
+    "non_photo_count": 20,
+    "missing_photos": [
+      {
+        "chapter": "Simple, Practical Ways to Grow Vegetables and Herbs in Pots, Buckets, and Small Spaces",
+        "title": "Small-Space Container Garden Scene",
+        "path": "",
+        "status": "missing"
+      }
+    ],
+    "exports": {
+      "files": {
+        "html": {
+          "name": "ebook.html",
+          "url": "/download/be5f2b3ad3f54cb8afd50ebe0a53f4fe/ebook.html"
+        },
+        "txt": {
+          "name": "ebook.txt",
+          "url": "/download/be5f2b3ad3f54cb8afd50ebe0a53f4fe/ebook.txt"
+        }
+      },
+      "package_id": "be5f2b3ad3f54cb8afd50ebe0a53f4fe",
+      "pdf_available": false,
+      "pdf_message": "PDF is not available. Retry missing image"
+    },
+    "cover_error": null,
+    "customer_error": null,
+    "next_action": "Retry missing image",
+    "save_disabled_reason": null,
+    "fields_topic": "How beginners can grow vegetables and herbs in containers, including choosing pots, soil, plants, watering, sunlight, pest control, and harvesting.",
+    "fields_keys": [
+      "audience",
+      "author_brand",
+      "chapters",
+      "ebook_title",
+      "include_images",
+      "include_worksheets",
+      "reading_level",
+      "research_notes",
+      "tone",
+      "topic",
+      "use_research",
+      "visual_budget_cap_usd",
+      "visuals_authorized"
+    ]
+  },
+  "visual_plan_summary": [
+    {
+      "chapter": "Simple, Practical Ways to Grow Vegetables and Herbs in Pots, Buckets, and Small Spaces",
+      "aids": [
+        {
+          "type": "stock photo",
+          "title": "Small-Space Container Garden Scene",
+          "keywords": [
+            "container garden balcony",
+            "potted herbs and vegetables",
+            "small space gardening"
+          ],
+          "status": "missing",
+          "has_path": false
+        },
+        {
+          "type": "infographic",
+          "title": "What Container Gardening Makes Easier",
+          "keywords": [
+            "container gardening benefits",
+            "beginner garden infographic",
+            "small garden visuals"
+          ],
+          "status": null,
+          "has_path": false
+        }
+      ]
+    },
+    {
+      "chapter": "Table of Contents",
+      "aids": [
+        {
+          "type": "table",
+          "title": "Book Roadmap",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "diagram",
+          "title": "Learning Path Through the Book",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        }
+      ]
+    },
+    {
+      "chapter": "Getting Started With Container Gardening",
+      "aids": [
+        {
+          "type": "action step box",
+          "title": "Study Your Space Before You Buy",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "table",
+          "title": "A Good First Setup",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "worksheet box",
+          "title": "My Space Check",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        }
+      ]
+    },
+    {
+      "chapter": "Choosing the Right Containers and Soil",
+      "aids": [
+        {
+          "type": "table",
+          "title": "Container Size by Plant Type",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "tip box",
+          "title": "Drainage Comes First",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "diagram",
+          "title": "Simple Container Buying Plan",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        }
+      ]
+    },
+    {
+      "chapter": "Picking Vegetables and Herbs That Grow Well in Pots",
+      "aids": [
+        {
+          "type": "table",
+          "title": "Easy First Crops for Containers",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "chart",
+          "title": "Beginner Crop Mix",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "tip box",
+          "title": "Choose Plants for Your Space, Not Just Excitement",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        }
+      ]
+    },
+    {
+      "chapter": "Water, Sun, and Daily Care",
+      "aids": [
+        {
+          "type": "diagram",
+          "title": "Daily Container Care Routine",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "table",
+          "title": "Sun and Water Clues to Watch",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "action step box",
+          "title": "Five-Minute Daily Check",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        }
+      ]
+    },
+    {
+      "chapter": "Handling Pests and Plant Problems",
+      "aids": [
+        {
+          "type": "infographic",
+          "title": "Common Problem Checkpoints",
+          "keywords": [
+            "container plant problems",
+            "garden troubleshooting infographic",
+            "potted plant care visual"
+          ],
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "table",
+          "title": "Problem Source Quick Guide",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        }
+      ]
+    },
+    {
+      "chapter": "Harvesting, Replanting, and Keeping Your Garden Going",
+      "aids": [
+        {
+          "type": "diagram",
+          "title": "Keep the Garden Going Cycle",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "worksheet box",
+          "title": "Harvest and Replant Notes",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        },
+        {
+          "type": "tip box",
+          "title": "Grow What You Actually Use",
+          "keywords": null,
+          "status": null,
+          "has_path": false
+        }
+      ]
+    }
+  ],
+  "protected": {
+    "4249": {
+      "exists": true,
+      "name": "How to start a profitable event photography business with on-site photo printing. The guide should cover equipment, find",
+      "type": "ebook",
+      "cover_sha_field": "465a3e10861cd056a98008a8131be157be9dc0d22ec93464fa831fcbb03367cd",
+      "paths": {
+        "pdf_path": "C:\\Users\\user\\OneDrive\\Desktop\\Factory_Stabilized_Source_V2_20260809\\Factory_Stabilized_V2\\flask_app\\exports\\ebook-ws-0f45e1eab3a0\\ebook.pdf",
+        "image_path": "C:\\Users\\user\\OneDrive\\Desktop\\Factory_Stabilized_Source_V2_20260809\\Factory_Stabilized_V2\\flask_app\\exports\\ebook-ws-0f45e1eab3a0\\cover_photo\\variants\\ede95a7c077905dcbf633934b873e27c030f6f7fa05867366be89c27cfa4d936\\full_bleed_editorial\\cover.png"
+      },
+      "file_hashes": {
+        "pdf_path": "5245400c39b7fa684e09313ee01d85cda88ba856d1b3a207bbd94e363ee34938",
+        "image_path": "f2b8b65f5924115de3485622786b0828039b8803ce17884c10b3d60f1d2b2737"
+      },
+      "manuscript_sha": "79f0dbbb3d6901f93662676023539796eea5201dade5344202e93ea3b8b604d0"
+    },
+    "14626": {
+      "exists": true,
+      "name": "How to keep your teen safe online",
+      "type": "product",
+      "cover_sha_field": null,
+      "paths": {},
+      "file_hashes": {},
+      "manuscript_sha": "7b766ee016f277d436ceab3ed44408ac0834d0cf65f892805d28bfa889fd7d89"
+    },
+    "17365": {
+      "exists": true,
+      "name": "Deep Sea Ocean Creatures",
+      "type": "product",
+      "cover_sha_field": null,
+      "paths": {},
+      "file_hashes": {}
+    }
+  },
+  "env": {
+    "PEXELS_SET": false,
+    "FACTORY_TEST_MODE": null,
+    "dotenv_exists": true
+  },
+  "export_dirs_sample": [
+    "vis-zip-cba9ea6dfc11",
+    "vis-zip-c02c5aead5a5",
+    "vis-zip-a4debe8479d7",
+    "vis-zip-92ceb5ca0e2b",
+    "vis-zip-6220e12e7cfa",
+    "vis-zip-578d948a86d3",
+    "vis-zip-56f45a3cd9f5",
+    "vis-zip-39424d6083cd",
+    "vis-zip-35dc6d70e6cd",
+    "vis-zip-1ef26e355a9d",
+    "vis-zip-18c56e367413",
+    "vis-zip-12716404877c",
+    "vis-zip-0016879415a5",
+    "vis-review-e96226a22536",
+    "vis-review-d3ac42d7424c",
+    "vis-review-cefb32d40c99",
+    "vis-review-cbdf11d9b511",
+    "vis-review-caed850bfda4",
+    "vis-review-bf9d084f2157",
+    "vis-review-bbff265c6cd7",
+    "vis-review-88532a671d82",
+    "vis-review-823a522ff9bf",
+    "vis-review-3de89928f91e",
+    "vis-review-150ac342811b",
+    "vis-review-123ba0e9e6fd",
+    "vis-review-083562384910",
+    "vis-replace-d30fa3b880bc",
+    "vis-replace-c822ee71faa4",
+    "vis-replace-bd4151489964",
+    "vis-replace-a5e0dc148588",
+    "vis-replace-a2bed3e02d24",
+    "vis-replace-9c6729831594",
+    "vis-replace-942f77e043b0",
+    "vis-replace-80cdb45b5816",
+    "vis-replace-45faca7a3e8e",
+    "vis-match-ffa319190756",
+    "vis-match-fd9a17dfa364",
+    "vis-match-c7e89ea72642",
+    "vis-match-b8bfe3e2b769",
+    "vis-match-a7c57f1a76fa"
+  ]
+}

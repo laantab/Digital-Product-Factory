@@ -1,0 +1,87 @@
+{
+  "heading_count": 59,
+  "headings": [
+    "Beginner\u2019s Guide to Container Gardening",
+    "Simple, Practical Ways to Grow Vegetables and Herbs in Pots, Buckets, and Small Spaces",
+    "Table of Contents",
+    "Getting Started With Container Gardening",
+    "Why Containers Work So Well for Beginners",
+    "A Good First Setup",
+    "What You Need to Notice Before You Buy Anything",
+    "A Small-Space Mindset That Helps",
+    "Try This in the Next 24 Hours",
+    "Your Starting Point in One Sentence",
+    "Choosing the Right Containers and Soil",
+    "Picking a Pot by Plant Size",
+    "Materials: Plastic, Clay, Fabric, and Repurposed Options",
+    "Drainage Is Not Optional",
+    "Why Garden Soil Is the Wrong Choice",
+    "What Good Potting Mix Should Do",
+    "A Simple Buying Plan for Your First Weekend",
+    "Filling Containers the Right Way",
+    "Try This in the Next 24 Hours",
+    "A Better Foundation Means Fewer Problems Later"
+  ],
+  "split_chapter_titles": [
+    "Simple, Practical Ways to Grow Vegetables and Herbs in Pots, Buckets, and Small Spaces",
+    "Table of Contents",
+    "Getting Started With Container Gardening",
+    "Choosing the Right Containers and Soil",
+    "Picking Vegetables and Herbs That Grow Well in Pots",
+    "Water, Sun, and Daily Care",
+    "Handling Pests and Plant Problems",
+    "Harvesting, Replanting, and Keeping Your Garden Going"
+  ],
+  "preamble_len": 41,
+  "content_len": 31314,
+  "has_localhost": false,
+  "preview_has_localhost": false,
+  "visuals_authorized": "true",
+  "include_images": "Yes",
+  "visual_budget_cap_usd": "0.48",
+  "visual_ai_spend_usd": null,
+  "remaining_budget": 0.48,
+  "package_id": "be5f2b3ad3f54cb8afd50ebe0a53f4fe",
+  "cover_search_query": "portrait book cover beginners can grow vegetables herbs containers including",
+  "pexels_status_field": "Pexels connected",
+  "missing_photo_count": 1,
+  "required_visual_count": 21,
+  "rendered_visual_count": 20,
+  "user_saved": true,
+  "pexels_configured_after_dotenv": true,
+  "pexels_status_label": "Pexels connected",
+  "desc_flags": [
+    {
+      "title": "Simple, Practical Ways to Grow Vegetables and Herbs in Pots, Buckets, and Small Spaces",
+      "is_desc": true
+    },
+    {
+      "title": "Table of Contents",
+      "is_desc": true
+    },
+    {
+      "title": "Getting Started With Container Gardening",
+      "is_desc": false
+    },
+    {
+      "title": "Choosing the Right Containers and Soil",
+      "is_desc": false
+    },
+    {
+      "title": "Picking Vegetables and Herbs That Grow Well in Pots",
+      "is_desc": false
+    },
+    {
+      "title": "Water, Sun, and Daily Care",
+      "is_desc": false
+    },
+    {
+      "title": "Handling Pests and Plant Problems",
+      "is_desc": false
+    },
+    {
+      "title": "Harvesting, Replanting, and Keeping Your Garden Going",
+      "is_desc": false
+    }
+  ]
+}

@@ -188,46 +188,68 @@ def _shared_book_css(t: EbookTheme) -> str:
     opener_h2 = {
         "stacked_label": f"border-bottom: 2pt solid {t.color_rule}; padding-bottom: 0.28em;",
         "rule_under": f"border-bottom: 1.5pt solid {t.color_primary}; padding-bottom: 0.32em;",
-        "minimal": "border-bottom: none; padding-bottom: 0.12em;",
+        "minimal": f"border-bottom: 1pt solid {t.color_rule}; padding-bottom: 0.22em;",
     }.get(t.chapter_opener, f"border-bottom: 2pt solid {t.color_rule}; padding-bottom: 0.28em;")
+    para_gap = max(float(t.paragraph_spacing_em), 1.15)
+    line_h = max(float(t.line_height), 1.64)
     return f"""
 @page {{
   size: letter;
   margin: {t.margin_in}in;
 }}
+/* xhtml2pdf treats unspecified display as inline; force real book blocks. */
+section, article, header, footer, nav, div, p, h1, h2, h3, h4, h5, h6,
+ul, ol, blockquote, pre, figure, figcaption {{
+  display: block;
+}}
+li {{
+  display: block;
+}}
 body {{
+  display: block;
   font-family: {t.font_body};
   color: {t.color_text};
   font-size: {t.body_size_pt}pt;
-  line-height: {t.line_height};
+  line-height: {line_h};
   background: {t.page_bg};
 }}
-h1, h2, h3, h4, .chapter-title, .book-title, .chapter-num {{
+h1, h2, h3, h4, .chapter-title, .book-title, .chapter-num, .section-heading {{
+  display: block;
   font-family: {t.font_heading};
   color: {t.color_primary};
   page-break-after: avoid;
   page-break-inside: avoid;
 }}
-h1, .book-title {{ font-size: {t.h1_size_pt}pt; margin: 0 0 0.4em; line-height: 1.2; }}
+h1, .book-title {{ font-size: {t.h1_size_pt}pt; margin: 0 0 0.55em; line-height: 1.2; }}
 h2, .chapter-title {{
   font-size: {t.h2_size_pt}pt;
-  margin: 0 0 0.55em;
-  line-height: 1.25;
+  margin: 0 0 0.85em;
+  line-height: 1.28;
   {opener_h2}
 }}
-h3 {{ font-size: {t.h3_size_pt}pt; margin: 1.05em 0 0.4em; page-break-after: avoid; }}
-h4 {{ font-size: 12pt; margin: 0.9em 0 0.35em; color: {t.color_accent}; page-break-after: avoid; }}
+h3, .section-heading {{
+  font-size: {t.h3_size_pt}pt;
+  margin: 1.35em 0 0.55em;
+  line-height: 1.3;
+  page-break-after: avoid;
+}}
+h4 {{ font-size: 12pt; margin: 1.2em 0 0.45em; color: {t.color_accent}; page-break-after: avoid; }}
 p {{
-  margin: 0 0 {t.paragraph_spacing_em}em;
+  display: block;
+  margin: 0 0 {para_gap}em;
   orphans: 3;
   widows: 3;
 }}
+.title-sub, .title-author, .caption {{
+  display: block;
+}}
 .chapter-num {{
-  font-size: 9.5pt;
+  display: block;
+  font-size: 10pt;
   font-weight: 700;
   text-transform: uppercase;
   color: {t.color_accent};
-  margin: 0 0 6pt;
+  margin: 0 0 10pt;
 }}
 .back-matter-label {{
   font-size: 9.5pt;
@@ -237,44 +259,106 @@ p {{
   margin: 0 0 6pt;
 }}
 table, .ebook-table, .va-table {{
+  display: table;
   border-collapse: collapse;
   width: 100%;
-  margin: 10pt 0 14pt;
-  page-break-inside: avoid;
+  table-layout: fixed;
+  margin: 14pt 0 18pt;
 }}
 thead {{ display: table-header-group; }}
 tbody {{ display: table-row-group; }}
-tr {{ page-break-inside: avoid; }}
+tr {{ display: table-row; page-break-inside: avoid; }}
 th, td {{
+  display: table-cell;
   border: 1pt solid {t.color_rule};
-  padding: 6pt 8pt;
+  padding: 8pt 10pt;
   text-align: left;
   font-size: 9.5pt;
   vertical-align: top;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }}
 th {{
   background: {t.table_header_bg};
   color: {t.color_primary};
   font-weight: 700;
 }}
+.ebook-table-wide th, .ebook-table-wide td {{
+  font-size: 9.5pt;
+  padding: 7pt 8pt;
+}}
+.ebook-comparison {{
+  display: block;
+  margin: 14pt 0 18pt;
+}}
+table.ebook-card {{
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin: 0 0 14pt;
+  background: {t.callout_bg};
+}}
+table.ebook-card th, table.ebook-card td {{
+  font-size: 9.5pt;
+  line-height: 1.4;
+  vertical-align: top;
+  text-align: left;
+  padding: 5pt 8pt;
+  border: none;
+  border-bottom: 1pt solid {t.color_rule};
+}}
+table.ebook-card tr:last-child th, table.ebook-card tr:last-child td {{
+  border-bottom: none;
+}}
+table.ebook-card th.ebook-card-label, .ebook-card-label {{
+  width: 36%;
+  color: {t.color_primary};
+  font-weight: 700;
+}}
+table.ebook-card td.ebook-card-value {{
+  width: 66%;
+  font-weight: 400;
+}}
+ul, ol {{
+  display: block;
+  margin: 0 0 14pt 0;
+  padding: 0 0 0 4pt;
+}}
+ul li, ol li {{
+  display: block;
+  margin: 0 0 7pt;
+}}
 ul.checklist, .checklist {{
+  display: block;
   list-style: none;
-  margin: 8pt 0 14pt 0;
-  padding: 0;
+  margin: 10pt 0 16pt 0;
+  padding: 8pt 10pt;
+  background: {t.callout_bg};
   page-break-inside: avoid;
 }}
 ul.checklist li, .checklist li {{
-  margin: 5pt 0;
-  padding-left: 16pt;
+  display: block;
+  margin: 0 0 8pt;
+  padding: 4pt 4pt 4pt 4pt;
   border-left: 3pt solid {t.color_accent};
+  padding-left: 12pt;
+  page-break-inside: avoid;
+}}
+ul.checklist li .check-box, .checklist li .check-box {{
+  font-family: {t.font_body};
+  color: {t.color_accent};
+  font-weight: 700;
 }}
 ol.workflow, .workflow {{
-  margin: 8pt 0 14pt 18pt;
+  display: block;
+  margin: 10pt 0 16pt 18pt;
   padding: 0;
   page-break-inside: avoid;
 }}
 ol.workflow li, .workflow li {{
-  margin: 6pt 0;
+  display: block;
+  margin: 0 0 8pt;
 }}
 .callout, .example-callout, .visual-aid {{
   background: {t.callout_bg};
@@ -289,11 +373,54 @@ ol.workflow li, .workflow li {{
   font-style: italic;
   margin: 4pt 0 12pt;
 }}
+.ebook-figure {{
+  display: block;
+  margin: 14pt 0 16pt;
+  page-break-inside: avoid;
+  text-align: center;
+}}
+.ebook-figure img {{
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto 6pt;
+  border: 1pt solid {t.color_rule};
+}}
+.ebook-figure-table {{
+  text-align: left;
+}}
+.ebook-figure .va-title {{
+  display: block;
+  font-weight: 700;
+  text-align: left;
+  margin: 0 0 6pt;
+  color: {t.color_primary};
+}}
+.ebook-figure table {{
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10pt;
+  text-align: left;
+  margin: 0 0 6pt;
+}}
+.ebook-figure th, .ebook-figure td {{
+  display: table-cell;
+  border: 1pt solid {t.color_rule};
+  padding: 6pt 8pt;
+  vertical-align: top;
+}}
+.ebook-figure th {{
+  background: {t.color_rule};
+  color: {t.color_primary};
+  font-weight: 700;
+}}
 .sources-list, .source-ref {{
   font-size: 9.5pt;
   color: {t.color_muted};
 }}
 .sources-list li {{ margin: 4pt 0; }}
+.sources-list a {{ color: {t.color_primary}; text-decoration: underline; }}
 .page-foot, .running-footer {{
   color: {t.color_muted};
   font-size: 9pt;
@@ -301,13 +428,68 @@ ol.workflow li, .workflow li {{
   border-top: 1pt solid {t.color_rule};
   padding-top: 6pt;
 }}
-.title-page {{ text-align: center; padding-top: 1.8in; }}
-.legal-page {{ }}
-.toc-page {{ }}
-.chapter-page {{ }}
-.back-matter-page {{ }}
-.toc-list {{ list-style: none; margin: 0; padding: 0; }}
-.toc-list li {{ padding: 7pt 0; border-bottom: 1pt solid {t.color_rule}; }}
+.title-page {{ display: block; text-align: center; padding-top: 1.35in; }}
+.title-page p {{ margin: 0 0 10pt; }}
+.title-sub {{ margin: 0 0 10pt; font-size: 12.5pt; color: {t.color_muted}; }}
+.title-author {{ margin: 0 0 12pt; font-size: 12pt; }}
+.title-page .caption {{ margin: 16pt 0 0; }}
+.legal-page, .toc-page, .chapter-page, .back-matter-page {{ display: block; }}
+.heading-keep {{
+  display: block;
+  page-break-inside: avoid;
+}}
+.chapter-last-block {{
+  display: block;
+  page-break-inside: avoid !important;
+}}
+.chapter-last-block p, .chapter-last-block li, .chapter-last-block ul, .chapter-last-block ol {{
+  page-break-inside: avoid !important;
+  page-break-after: avoid;
+  -pdf-keep-with-next: true;
+  orphans: 4;
+  widows: 4;
+}}
+table.toc-list {{
+  display: table;
+  list-style: none;
+  margin: 8pt 0 0;
+  padding: 0;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}}
+ol.toc-list, ul.toc-list {{
+  display: block;
+  list-style: none;
+  margin: 8pt 0 0;
+  padding: 0;
+  width: 100%;
+}}
+table.toc-list tr {{
+  display: table-row;
+}}
+table.toc-list td {{
+  display: table-cell;
+  border: none;
+  border-bottom: 1pt solid {t.color_rule};
+  padding: 9pt 8pt;
+  font-size: 11.5pt;
+  vertical-align: bottom;
+}}
+.toc-list li {{
+  display: block;
+  padding: 9pt 0;
+  border-bottom: 1pt solid {t.color_rule};
+  font-size: 11.5pt;
+}}
+.toc-num {{
+  color: {t.color_accent};
+  font-weight: 700;
+}}
+.toc-page-num {{
+  color: {t.color_muted};
+  font-weight: 400;
+}}
 .toc-list a {{ color: {t.color_primary}; text-decoration: none; font-weight: 700; }}
 """
 

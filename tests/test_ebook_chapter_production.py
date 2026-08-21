@@ -42,8 +42,13 @@ from services.ebook_project_workspace import (  # noqa: E402
     execute_generate_manuscript,
     upsert_acceptance_project,
 )
+from tests._test_paths import resolve_test_exports_root  # noqa: E402
 
-FIXTURE_DIR = ROOT / "exports" / "ebook_design_fixture_pass_c"
+# render_strong_fixture_bundle() is a pure generator (build_design_ready_fixture_data()
+# is fully synthetic; nothing here reads pre-existing files from FIXTURE_DIR), so
+# pointing it at the isolated temp exports root is sufficient — no historical
+# content needs to be sourced or copied.
+FIXTURE_DIR = resolve_test_exports_root() / "ebook_design_fixture_pass_c"
 
 
 def _sha(text: str) -> str:

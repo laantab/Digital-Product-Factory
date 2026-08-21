@@ -24,6 +24,11 @@ from reportlab.lib.pagesizes import letter
 
 THEME = (
     "Thunder Volt is a Black superhero. "
+    "He is stopping two adult men from robbing a bank and getting away in New York City."
+)
+# Legacy shorter theme still used by some consistency fixtures
+THEME_SHORT = (
+    "Thunder Volt is a Black superhero. "
     "He is stopping two men from robbing a bank in New York City."
 )
 
@@ -69,27 +74,44 @@ class TestPromptEngineBibleAndScenes(unittest.TestCase):
         self.assertIn("CHARACTER BIBLE", block)
         self.assertIn("Thunder Volt", block)
 
-    def test_twelve_unique_bank_rescue_scenes(self):
+    def test_twenty_five_unique_bank_rescue_scenes(self):
         from services.coloring_book.prompt_engine import (
             BANK_RESCUE_SCENES,
             story_scenes_for_theme,
         )
 
-        scenes = story_scenes_for_theme(THEME, 12)
-        self.assertEqual(len(scenes), 12)
-        self.assertEqual(len(BANK_RESCUE_SCENES), 12)
+        scenes = story_scenes_for_theme(THEME, 25)
+        self.assertEqual(len(scenes), 25)
+        self.assertEqual(len(BANK_RESCUE_SCENES), 25)
         topics = [s["topic"] for s in scenes]
-        self.assertEqual(len(set(topics)), 12, f"Duplicate topics: {topics}")
+        self.assertEqual(len(set(topics)), 25, f"Duplicate topics: {topics}")
+        ids = [s["id"] for s in scenes]
+        self.assertEqual(len(set(ids)), 25, f"Duplicate scene ids: {ids}")
         joined = " ".join(s["topic"] + " " + s["beat"] for s in scenes).lower()
-        for kw in ("alarm", "skyline", "lands", "getaway", "lightning", "police", "finale"):
+        for kw in (
+            "alarm", "skyline", "lands", "getaway", "lightning", "police",
+            "finale", "civilian", "surrender", "get away", "adult",
+        ):
             self.assertIn(kw, joined, f"Missing scene keyword {kw!r}")
+        # First 12 pages remain a coherent subset for smaller books.
+        subset = story_scenes_for_theme(THEME, 12)
+        self.assertEqual(len(subset), 12)
+        self.assertEqual(len(set(s["topic"] for s in subset)), 12)
+
+    def test_bank_rescue_does_not_pad_alternate_angles(self):
+        from services.coloring_book.prompt_engine import story_scenes_for_theme
+
+        with self.assertRaises(ValueError):
+            story_scenes_for_theme(THEME, 26)
 
     def test_cover_copy_from_layout_not_full_theme(self):
         from services.coloring_book.prompt_engine import derive_cover_copy
 
         copy = derive_cover_copy(THEME)
         self.assertEqual(copy.title.upper(), "THUNDER VOLT")
-        self.assertIn("Bank Rescue", copy.subtitle)
+        self.assertIn("Superhero", copy.subtitle)
+        self.assertEqual(copy.overlay_style, "clean_title")
+        self.assertNotIn("JUMBO", copy.badge.upper())
         self.assertNotEqual(copy.title.lower(), THEME.lower())
 
 
@@ -126,18 +148,20 @@ class TestUserThemeReachesPrompts(unittest.TestCase):
 
         book = build_coloring_book(
             theme=THEME,
-            page_count=12,
+            page_count=25,
             quality_mode="basic_test",
             creation_mode="theme",
             art_style="Cartoon comic-book",
         )
         topics = [p.topic for p in book.pages]
-        self.assertEqual(len(set(topics)), 12)
+        self.assertEqual(len(set(topics)), 25)
         prompts = [p.line_art_prompt for p in book.pages]
-        # Each prompt should contain a distinct scene beat fragment
+        # Distinct story beats across the full 25-page sequence
         self.assertTrue(any("alarm" in p.lower() or "skyline" in p.lower() for p in prompts))
+        self.assertTrue(any("getaway" in p.lower() for p in prompts))
         self.assertTrue(any("police" in p.lower() for p in prompts))
         self.assertTrue(any("finale" in p.lower() for p in prompts))
+        self.assertTrue(any("civilian" in p.lower() for p in prompts))
 
     @patch("services.coloring_book.builder.generate_visual_image", side_effect=AssertionError("No paid image calls"))
     def test_cover_prompt_full_color_topic_matched(self, _img):
@@ -254,7 +278,9 @@ class TestInteriorLayout(unittest.TestCase):
         doc = fitz.open(stream=result.pdf_bytes, filetype="pdf")
         cover_text = doc[0].get_text()
         self.assertIn("THUNDER VOLT", cover_text.upper())
-        self.assertIn("Bank Rescue", cover_text)
+        self.assertIn("A Superhero Coloring Adventure", cover_text)
+        self.assertNotIn("JUMBO", cover_text.upper())
+        self.assertNotIn("COLORING PAGES", cover_text.upper())
 
 
 class TestSaveExportPreserve(unittest.TestCase):

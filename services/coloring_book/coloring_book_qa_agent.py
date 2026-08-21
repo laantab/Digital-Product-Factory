@@ -213,16 +213,20 @@ def validate_coloring_book_pdf(
         return len(violations) == 0, violations
 
     if is_digital_book:
-        # Digital Book: allow any page count >= 1.
-        # The expected_pdf_pages from the contract may not match the actual stored
-        # PDF if the project was generated before the contract existed (old projects
-        # may have pages=1 in fields but a 13-page PDF on disk). We are permissive
-        # here: a Digital Book is valid as long as it has >= 1 page.
         violations = []
         if inspection["page_count"] < 1:
             violations.append(
                 f"page_count={inspection['page_count']} (Digital Book must have >= 1 page)"
             )
+        # Strict exact-page gate when the contract opts in (new Thunder Volt / AI books).
+        # Old projects without strict_page_count remain permissive so stale fields.pages
+        # cannot block a valid on-disk PDF download.
+        if contract.get("strict_page_count") and expected_pages:
+            if inspection["page_count"] != int(expected_pages):
+                violations.append(
+                    f"page_count={inspection['page_count']} "
+                    f"(expected exactly {expected_pages} PDF pages)"
+                )
         return len(violations) == 0, violations
 
     # Unknown contract type: permissive
