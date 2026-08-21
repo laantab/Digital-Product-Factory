@@ -636,6 +636,18 @@ def get_customer_saved_projects(
     return get_customer_saved_products(limit=limit, offset=offset)
 
 
+def list_factory_source_projects() -> list[dict]:
+    """Source list for Publishing Studio / Platform Packages dropdowns.
+
+    Broader than the Saved Projects list — plans are publishable too — but
+    collapsed with the same newest-wins dedupe, so repeated QA runs of one
+    title contribute a single option instead of hundreds.
+    """
+    projects = list_projects(include_system=False)
+    projects.sort(key=_customer_sort_key, reverse=True)
+    return _dedupe_customer_projects(projects)
+
+
 def get_project(project_id: int) -> dict | None:
     conn = get_conn()
     row = conn.execute(

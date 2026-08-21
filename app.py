@@ -2860,7 +2860,7 @@ def list_projects_route():
         projects = database.list_projects(include_system=True)
         return jsonify([_enrich_project_artifact_fields(p) for p in projects])
     if factory_sources:
-        projects = database.list_projects(include_system=False)
+        projects = database.list_factory_source_projects()
         return jsonify([_enrich_project_artifact_fields(p) for p in projects])
     try:
         limit = int(request.args.get("limit", 10))

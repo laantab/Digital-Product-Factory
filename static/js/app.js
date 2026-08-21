@@ -465,6 +465,11 @@ function go(view) {
   if (view === "research") view = "market";
   current = view;
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("hidden", v.dataset.view !== view));
+  // Switching views keeps the previous view's scroll offset, which lands the
+  // user mid-content (e.g. inside a reopened product). Callers that want a
+  // specific element in view scroll to it after go() returns.
+  const mainScroll = document.getElementById("mainScroll");
+  if (mainScroll) mainScroll.scrollTop = 0;
   document.getElementById("pageTitle").textContent = TITLES[view];
   buildNav();
   if (view === "dashboard") loadDashboard();
@@ -475,6 +480,15 @@ function go(view) {
   if (view === "visual") initVisual();
   if (view === "publishing") initPublishing();
   if (view === "packages") initPackages();
+}
+
+// A launch package is always built FROM a saved product, so the dashboard card
+// routes to Saved Projects. The customer-facing entry point is inside the
+// opened product's "Optional: marketing & launch tools" section — the row-level
+// Launch Package button is admin-only, so do not send people looking for it.
+function goLaunchPackage() {
+  go("saved");
+  toast('Open a finished product, then use "Optional: marketing & launch tools" → Create Launch Package.');
 }
 
 // ---------- dashboard ----------
@@ -1191,6 +1205,17 @@ function _restoreEbookFactoryFields(d) {
   });
 }
 
+// Reopening a finished product lands in the Product Factory, where the type
+// picker (and any form left over from the last build) sits above the rendered
+// product. Without this the product renders offscreen and the view looks empty.
+// `keptForm` is true when we deliberately prefilled the form for this product.
+function _focusReopenedProduct(keptForm) {
+  const formWrap = document.getElementById("factoryFormWrap");
+  if (!keptForm && formWrap) formWrap.classList.add("hidden");
+  const out = document.getElementById("factoryOutput");
+  if (out) requestAnimationFrame(() => out.scrollIntoView({ behavior: "smooth", block: "start" }));
+}
+
 function openProject(p) {
   const d = p.data || {};
   if (p.type === "research") {
@@ -1214,11 +1239,13 @@ function openProject(p) {
     d._project_id = p.id;
     document.querySelectorAll('div[style*="z-index:999"]').forEach((el) => el.remove());
     // Saved/ready ebooks reopen as the finished product, not a blank Generate form.
-    if (!d.preview_html && !d.ebook_ready && productType("ebook")) {
+    const ebookKeptForm = !d.preview_html && !d.ebook_ready && !!productType("ebook");
+    if (ebookKeptForm) {
       selectFactoryType("ebook");
       _restoreEbookFactoryFields(d);
     }
     renderProduct(d);
+    _focusReopenedProduct(ebookKeptForm);
   } else if (p.type === "ad") {
     go("ad");
     document.getElementById("adInput").value = d.details || "";
@@ -1227,7 +1254,8 @@ function openProject(p) {
     go("factory");
     const readyEbook =
       String(d.product_type || "").toLowerCase() === "ebook" && !!(d.preview_html || d.ebook_ready);
-    if (d.product_type && productType(d.product_type) && !readyEbook) {
+    const keptForm = !!(d.product_type && productType(d.product_type) && !readyEbook);
+    if (keptForm) {
       selectFactoryType(d.product_type);
       const form = document.getElementById("factoryForm");
       Object.entries(d.fields || {}).forEach(([k, v]) => {
@@ -1239,6 +1267,7 @@ function openProject(p) {
     }
     d._project_id = p.id; // already saved; lets "Send to Publishing Studio" reuse it
     renderProduct(d);
+    _focusReopenedProduct(keptForm);
   } else if (p.type === "research_plan") {
     go("market");
     d._source_project_id = p.id; // choosing an opportunity updates this record in place

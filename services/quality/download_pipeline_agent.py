@@ -266,6 +266,17 @@ def resolve_download_request(
         except Exception:
             pass
 
+    # Standalone builder routes (/word-search-builder, /crossword-builder) generate
+    # straight to disk with no project row and no package_id, so product_type is
+    # only ever declared in `fields`. Without this it stays None and the orphan
+    # gate below blocks a file the builder just made. Deliberately scoped to
+    # callers with neither project nor package_id, so the main /download/ route
+    # (including the Pass 2 mismatch reset above) keeps its orphan protection.
+    if product_type is None and project is None and not package_id:
+        declared = str(fields_resolved.get("product_type") or "").strip()
+        if declared:
+            product_type = declared
+
     # Determine expected page count (must come before is_single_sheet)
     # Crossword books: each puzzle occupies ~2 pages (front + back).
     # Also read output_format from fields_resolved (not just top-level data).
@@ -487,6 +498,18 @@ def _validate_coloring_book_single_sheet(
     return len(violations) == 0, violations
 
 
+def _has_cover_keyword(text: str, keywords: list[str]) -> bool:
+    """Whole-word keyword match.
+
+    Plain substring matching treats ordinary prose as cover text: "cover" is
+    inside "discovered"/"recovery", so a crossword clue like "precious metal
+    discovered in california" blocked its own download. Word boundaries keep
+    the real cover wording matching while letting prose through.
+    """
+    low = text.lower()
+    return any(re.search(rf"\b{re.escape(kw)}\b", low) for kw in keywords)
+
+
 def _validate_cover_rules(
     context: DownloadContext,
     pdf_bytes: bytes,
@@ -505,9 +528,9 @@ def _validate_cover_rules(
         "coloring book", "workbook", "planner", "ebook",
         "coloring book cover", "title page",
     ]
-    if any(kw in all_lower for kw in cover_keywords):
+    if _has_cover_keyword(all_lower, cover_keywords):
         for i, txt in enumerate(insp["all_text"]):
-            if any(kw in txt.lower() for kw in cover_keywords):
+            if _has_cover_keyword(txt, cover_keywords):
                 violations.append(f"illegal_cover: keyword on page {i+1}: {txt[:60]!r}")
 
     # Single-page with cover keywords = cover violation
@@ -894,7 +917,7 @@ def validate_download(context: DownloadContext) -> DownloadResult:
         # Only block if cover is not eligible.
         if not context.cover_eligible:
             cover_keywords = ["cover page", "front cover", "book cover", "cover", "coloring book", "title page"]
-            if any(kw in all_lower for kw in cover_keywords):
+            if _has_cover_keyword(all_lower, cover_keywords):
                 violations.append("zip_contains_illegal_cover")
 
         # Orphan / stale-revision ZIP: must belong to a current project package.
