@@ -2900,6 +2900,34 @@ def _record_artifact_id(data) -> str:
     return str(data.get("artifact_id") or data.get("package_id") or "").strip()
 
 
+def _slim_workspace_list_item(project: dict) -> dict:
+    """Drop the huge legacy preview_html/content blobs from list responses.
+
+    Workspace ebooks (data.ebook_workspace is True) never render p.data
+    directly from a /projects list payload -- app.js's openProject() always
+    routes them to a fresh GET /ebook-workspace/<id> fetch instead (see
+    openEbookWorkspace). So carrying the full rendered preview_html (seen up
+    to ~480KB for one book) and raw manuscript content in every list/dashboard
+    response was pure dead weight -- enough of it, across a handful of saved
+    books, to make the browser tab stall while parsing/rendering the list.
+    Non-workspace ebooks/products DO render data.preview_html directly from
+    this same payload, so only workspace-flagged items are slimmed.
+    """
+    data = project.get("data") if isinstance(project.get("data"), dict) else None
+    if not isinstance(data, dict) or not data.get("ebook_workspace"):
+        return project
+    heavy_fields = ("preview_html", "ebook_preview_html", "content")
+    if not any(data.get(f) for f in heavy_fields):
+        return project
+    slim = dict(data)
+    for f in heavy_fields:
+        if slim.get(f):
+            slim[f] = ""
+    project = dict(project)
+    project["data"] = slim
+    return project
+
+
 def _enrich_project_artifact_fields(
     project: dict, *, raise_on_conflict: bool = False
 ) -> dict:
@@ -2952,10 +2980,10 @@ def list_projects_route():
     factory_sources = request.args.get("factory_sources", "0") == "1"
     if include_system or admin:
         projects = database.list_projects(include_system=True)
-        return jsonify([_enrich_project_artifact_fields(p) for p in projects])
+        return jsonify([_slim_workspace_list_item(_enrich_project_artifact_fields(p)) for p in projects])
     if factory_sources:
         projects = database.list_factory_source_projects()
-        return jsonify([_enrich_project_artifact_fields(p) for p in projects])
+        return jsonify([_slim_workspace_list_item(_enrich_project_artifact_fields(p)) for p in projects])
     try:
         limit = int(request.args.get("limit", 10))
     except (TypeError, ValueError):
@@ -2967,7 +2995,7 @@ def list_projects_route():
     limit = min(max(limit, 1), 10)
     offset = max(offset, 0)
     projects, has_more = database.get_customer_saved_products(limit=limit, offset=offset)
-    resp = jsonify([_enrich_project_artifact_fields(p) for p in projects])
+    resp = jsonify([_slim_workspace_list_item(_enrich_project_artifact_fields(p)) for p in projects])
     resp.headers["X-Saved-Has-More"] = "1" if has_more else "0"
     return resp
 

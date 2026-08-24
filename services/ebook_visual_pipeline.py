@@ -1373,8 +1373,13 @@ def visual_review_payload(data: dict) -> dict[str, Any]:
                 "caption": strip_customer_source_urls(str(aid.get("caption") or "")),
                 "description": description,
                 "source_label": source_label,
+                # Full-size preview_data_uri was computed and shipped here too,
+                # but app.js only ever renders thumb_data_uri on this screen --
+                # the full-size copy was pure dead weight (100-250KB per photo)
+                # that made the workspace payload big enough to freeze the
+                # browser tab while rendering it. Dropped; see [full-preview]
+                # route for the one place a full-size render is actually shown.
                 "thumb_data_uri": _thumb_data_uri(path) if path else "",
-                "preview_data_uri": _preview_data_uri(path) if path and is_photo else "",
                 "has_file": bool(path and os.path.isfile(path)),
                 "match_status": match_status,
                 "internally_ready": bool(aid.get("internally_ready") or match_status == MATCH_PASS),

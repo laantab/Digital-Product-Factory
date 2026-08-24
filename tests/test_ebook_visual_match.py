@@ -229,7 +229,11 @@ class EbookVisualMatchTests(unittest.TestCase):
         self.assertFalse(payload["assets"][0].get("page_url"))
         self.assertNotIn("match_score", payload["assets"][0])
         self.assertTrue(payload["assets"][0].get("replace_enabled"))
-        self.assertTrue(payload["assets"][0].get("preview_data_uri"))
+        self.assertTrue(payload["assets"][0].get("thumb_data_uri"))
+        # A full-size preview_data_uri per photo was pure dead weight -- app.js
+        # only ever rendered thumb_data_uri here -- and made this payload big
+        # enough to freeze the browser tab while rendering a full chapter set.
+        self.assertNotIn("preview_data_uri", payload["assets"][0])
         self.assertTrue(payload.get("simplified_review"))
 
     def test_08_pexels_links_absent_from_customer_pdf_and_zip(self):
