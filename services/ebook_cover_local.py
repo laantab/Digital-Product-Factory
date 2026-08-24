@@ -96,7 +96,11 @@ def generate_local_cover_pdf_bytes(
     c.setAuthor(author or "Digital Product Factory")
 
     theme = _theme_key(title, subtitle, topic, audience)
-    qa_marker = "Practical Family Guide"
+    # The series label printed on the cover must describe THIS book. Defaulting
+    # it to "Practical Family Guide" stamped a parenting label onto every other
+    # theme — and that exact string is listed in GENERIC_COVER_MARKERS, so the
+    # generator was branding its own output as a generic cover.
+    qa_marker = str(title or "Ebook")[:48]
     title_size = 26
     title_wrap = 28
     if theme == "event_photography":
@@ -113,6 +117,12 @@ def generate_local_cover_pdf_bytes(
         accent = (0.95, 0.78, 0.28)  # gold
         title_color = (0.06, 0.18, 0.28)
         sub_color = (0.18, 0.32, 0.38)
+        qa_marker = "Practical Family Guide"
+    elif theme == "finance":
+        _draw_general_bg(c, W, H)
+        accent = (0.18, 0.62, 0.51)  # green, reads as money without clip-art
+        title_color = (0.08, 0.12, 0.22)
+        sub_color = (0.25, 0.32, 0.40)
     else:
         _draw_general_bg(c, W, H)
         accent = (0.15, 0.55, 0.62)
@@ -147,11 +157,16 @@ def generate_local_cover_pdf_bytes(
             c.drawString(margin, y, line)
             y -= 14
 
-    author_fill = (0.98, 0.96, 0.92) if theme == "event_photography" else (0.25, 0.35, 0.40)
+    # Every theme background paints a dark band across the bottom of the page,
+    # and the byline sits inside it. Drawing it in dark slate rendered the
+    # author name and series label invisible on all themes except event
+    # photography; the footer is always light-on-dark.
+    author_fill = (0.98, 0.96, 0.92)
     c.setFillColorRGB(*author_fill)
-    c.setFont(bold if theme == "event_photography" else regular, 14 if theme == "event_photography" else 10)
+    c.setFont(bold if theme == "event_photography" else regular, 14 if theme == "event_photography" else 11)
     c.drawString(margin, 46, author or "Digital Product Factory")
     # QA marker — proves a ReportLab theme cover (not HTML purple shell)
+    c.setFillColorRGB(0.86, 0.90, 0.93)
     c.setFont(regular, 8)
     c.drawString(margin, 28, qa_marker)
     c.showPage()

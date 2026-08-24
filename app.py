@@ -2535,6 +2535,16 @@ def export_product_route():
             from services.customer_keep_exports import reuse_existing_keep_export
 
             reused = reuse_existing_keep_export(project)
+            # customer_keep protects an ACCEPTED artifact from being rebuilt.
+            # It must not prevent building one that never existed: a keep
+            # project whose package has no ebook.pdf was stuck permanently at
+            # "Build PDF" because this path returned the pdf-less bundle every
+            # time. With no PDF there is nothing to preserve, so fall through
+            # to the normal export and create it.
+            if reused is not None and not (
+                (reused.get("exports") or {}).get("files", {}).get("pdf")
+            ):
+                reused = None
             if reused is not None:
                 return jsonify(reused)
         # Deterministic disclaimer enforcement: the AI model may have dropped

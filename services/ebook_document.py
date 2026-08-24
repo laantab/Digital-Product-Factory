@@ -364,11 +364,15 @@ def strip_visual_instructions(md_text: str) -> tuple[str, list[str]]:
                 skip_block = True
             continue
         if skip_block:
-            if not line.strip() or line.lstrip().startswith(("#", "##")):
+            # Only a new heading ends the instruction section. Ending on a blank
+            # line meant the mandatory blank after "### Visual plan for this
+            # chapter" closed the block instantly, so the bullet body it
+            # introduces ("**Chart suggestion:** ...") shipped to customers.
+            if line.lstrip().startswith("#"):
                 skip_block = False
                 if line.strip() and not any(p.search(line) for p in VISUAL_INSTRUCTION_PATTERNS):
                     out.append(line)
-            else:
+            elif line.strip():
                 removed.append(line.strip()[:160])
             continue
         out.append(line)

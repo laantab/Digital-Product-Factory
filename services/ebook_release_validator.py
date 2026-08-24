@@ -309,7 +309,24 @@ def validate_ebook_release(
         r"about the author|disclaimer|copyright|table of contents|toc)\b",
         re.I,
     )
-    body_chapters = [c for c in doc.chapters if not _SKIP_SHORT.match((c.title or "").strip())]
+    # Everything before the Table of Contents is front matter. Manuscripts that
+    # write the subtitle as an H2 under the H1 ("## A practical guide for...")
+    # otherwise register it as a body chapter and fail as "too short (N words)",
+    # blocking release on a book whose real chapters are all fine.
+    _toc_order = next(
+        (
+            c.order
+            for c in doc.chapters
+            if re.match(r"^(table of contents|toc)\b", (c.title or "").strip(), re.I)
+        ),
+        None,
+    )
+    body_chapters = [
+        c
+        for c in doc.chapters
+        if not _SKIP_SHORT.match((c.title or "").strip())
+        and (_toc_order is None or c.order > _toc_order)
+    ]
     if len(body_chapters) < 3:
         issues.append(
             ReleaseIssue(

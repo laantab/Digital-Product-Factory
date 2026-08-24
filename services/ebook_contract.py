@@ -143,7 +143,18 @@ FOREVER_FORBIDDEN_MARKETING = frozenset({
     "time's running out",
     "time is running out",
     "last chance",
-    "secret",
+    # Hype constructions only. A bare "secret" token blocked legitimate
+    # subject vocabulary — a teen-safety book must be able to say "don't talk
+    # in secret from your parents" without being read as marketing overclaim.
+    "secret formula",
+    "secret method",
+    "secret system",
+    "secret trick",
+    "secret tricks",
+    "the secret to",
+    "secrets they don't want",
+    "insider secret",
+    "insider secrets",
     "guaranteed",
     "miracle cure",
     "instant results",
