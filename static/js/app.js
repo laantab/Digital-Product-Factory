@@ -4596,7 +4596,6 @@ function nextStepsPanel(d) {
          <button data-ns="open" class="${NS_BTN}">View in Saved Projects</button>
          <button data-ns="back" class="${NS_BTN}">Make another product</button>
        </div>
-       ${ebook ? `<details class="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><summary class="cursor-pointer text-sm font-medium text-slate-700">View Technical Details</summary><pre class="mt-2 text-xs overflow-auto max-h-40">${escapeHtml(JSON.stringify({ next_action: d.next_action, package_id: d.package_id, contamination: d.contamination }, null, 2))}</pre></details>` : ""}
        <details class="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
          <summary class="cursor-pointer text-sm font-medium text-slate-700">Optional: marketing &amp; launch tools</summary>
          <div class="flex flex-wrap gap-3 mt-3">
@@ -4798,8 +4797,7 @@ function nextStepsPanel(d) {
          ${ebook ? `<button data-ns="regen-cover" class="${NS_BTN} border-indigo-300 text-indigo-700 hover:bg-indigo-50">Regenerate Cover</button>` : ""}
          <button data-ns="continue-no-save" class="${NS_BTN} border-slate-300 text-slate-600 hover:bg-slate-50">Continue Without Saving</button>
          <button data-ns="back" class="${NS_BTN}">Cancel</button>
-       </div>
-       ${ebook ? `<details class="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><summary class="cursor-pointer text-sm font-medium text-slate-700">View Technical Details</summary><pre class="mt-2 text-xs overflow-auto max-h-40">${escapeHtml(JSON.stringify({ next_action: d.next_action, contamination: d.contamination, pexels_status: d.pexels_status, package_id: d.package_id }, null, 2))}</pre></details>` : ""}`
+       </div>`
     );
     const wireBtn = (sel, fn) => {
       const b = head.querySelector(sel);
@@ -6620,13 +6618,6 @@ function showEbookWorkspaceStage(stageId) {
         ${missing ? `<p class="text-xs text-amber-800 mt-2">This chapter visual still needs attention.</p>` : ""}
       </article>`;
     }).join("");
-    const techRows = technical.map((t) => `
-      <li class="text-xs font-mono break-all text-slate-600">
-        ${escapeHtml(String(t.visual_id || ""))}: ${escapeHtml(String(t.match_status || ""))}
-        ${t.match_score != null ? ` · score ${escapeHtml(String(t.match_score))}` : ""}
-        ${t.sha256 ? ` · ${escapeHtml(String(t.sha256))}` : ""}
-        ${t.rejection_reason ? `<div class="font-sans mt-1">${escapeHtml(String(t.rejection_reason))}</div>` : ""}
-      </li>`).join("");
     const canPrepare = ws.gates && ws.gates.visuals_enabled && stage.status !== "approved";
     const canApprove = review.approvable && stage.status !== "approved";
     const heading = review.heading || "Visuals Ready for Review";
@@ -6640,12 +6631,8 @@ function showEbookWorkspaceStage(stageId) {
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-3">${cards || `<p class="text-sm text-slate-500">No visual assets yet. Prepare the visual plan from the approved manuscript.</p>`}</div>
       <div class="flex flex-wrap gap-2 mb-3">
         ${canPrepare ? `<button type="button" class="btn-secondary text-sm" data-ws-prepare-visuals>Retry Automatically</button>` : ""}
-        ${canApprove ? `<button type="button" class="btn-primary text-sm" data-ws-approve-visuals>Approve All Visuals</button>` : `<p class="text-xs text-slate-500">Server status: ${escapeHtml(stage.status_label || stage.status || "")}${review.approvable ? "" : " — Approve All Visuals is available after every chapter visual is ready."}</p>`}
+        ${canApprove ? `<button type="button" class="btn-primary text-sm" data-ws-approve-visuals>Approve All Visuals</button>` : `<p class="text-xs text-slate-500">${review.approvable ? "" : "Every chapter visual needs to be ready before you can approve all visuals."}</p>`}
       </div>
-      <details class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <summary class="text-xs font-semibold text-slate-600 cursor-pointer">View Technical Details</summary>
-        <ul class="mt-2 space-y-2">${techRows || "<li class='text-xs text-slate-500'>No technical details.</li>"}</ul>
-      </details>
     `;
   } else if (stageId === "cover") {
     const c = (ws.design || {}).cover || {};

@@ -492,14 +492,19 @@ class AutomaticEbookVisualTests(unittest.TestCase):
         self.assertNotIn("match_score", payload["assets"][0])
         self.assertNotIn("sha256", payload["assets"][0])
 
-    def test_16_technical_details_behind_advanced_control(self):
+    def test_16_technical_details_never_shown_to_the_customer(self):
+        # The owner reviewed this screen directly and asked that raw hashes,
+        # match_status codes, and other internal debugging fields never be
+        # customer-visible -- not even behind a click-to-expand control.
         js = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("View Technical Details", js)
+        self.assertNotIn("View Technical Details", js)
         pkg = f"auto-{uuid.uuid4().hex[:8]}"
         aid = store_interior_photo(self._aid(alt=PARENT_ALT), _jpeg_bytes(), package_id=pkg)
         payload = visual_review_payload(
             {"visual_plan": {"chapters": [{"chapter": aid["chapter"], "chapter_index": 1, "aids": [aid]}]}}
         )
+        # The backend may still compute this for internal/admin tooling, but
+        # it must never be serialized into the rendered app.js review screen.
         self.assertTrue(payload["technical_assets"])
         self.assertIn("match_score", payload["technical_assets"][0])
         self.assertIn("sha256", payload["technical_assets"][0])
