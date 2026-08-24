@@ -2,6 +2,9 @@
 import os
 import re
 
+# Bump this by hand with each release commit/tag (see git tags for history).
+APP_VERSION = "1.0.0"
+
 from dotenv import load_dotenv
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_APP_DIR, ".env"))
@@ -106,7 +109,7 @@ def pexels_status_route():
 @app.route("/")
 def index():
     admin_on = os.environ.get("ADMIN_MODE", "").strip().lower() in {"1", "true", "yes"}
-    return render_template("index.html", factory_admin_mode=admin_on)
+    return render_template("index.html", factory_admin_mode=admin_on, app_version=APP_VERSION)
 
 
 @app.post("/research")

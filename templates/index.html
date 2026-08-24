@@ -916,6 +916,9 @@
   <!-- Toast -->
   <div id="toast" class="fixed bottom-5 right-5 z-50 hidden rounded-xl px-4 py-3 text-sm text-white shadow-lg"></div>
 
+  <!-- Version marker -->
+  <div class="fixed bottom-2 left-2 z-40 text-xs text-slate-400 select-none pointer-events-none">v{{ app_version|default('0.0.0') }}</div>
+
   <style>
     .btn-primary { background:#4f46e5; color:#fff; font-weight:600; font-size:0.875rem; padding:0.625rem 1.25rem; border-radius:0.75rem; transition:.15s; white-space:nowrap; }
     .btn-primary:hover { background:#4338ca; }
