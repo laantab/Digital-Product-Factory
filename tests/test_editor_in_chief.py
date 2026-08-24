@@ -21,6 +21,7 @@ from services.editor_in_chief import (  # noqa: E402
     CorrectionSession, Finding, ReviewReport, SelfApprovalError,
     KIND_JUDGMENT, KIND_OBJECTIVE, SEV_CRITICAL, SEV_MAJOR, SEV_MINOR,
     assert_independent_review, check_assets_present, check_chart_and_table_data,
+    check_cover_is_photo_backed,
     check_cross_project_duplication, check_customer_facing_leaks,
     check_identity_consistency, check_image_resolution, check_package_identity,
     check_page_count, check_page_quality, check_placeholder_and_leak, check_relevance,
@@ -175,6 +176,41 @@ class TestVisuals(unittest.TestCase):
         f = check_image_resolution([{"name": "low.png", "width": 600, "placed_inches": 6.0}],
                                    print_product=False)
         self.assertEqual(f, [])
+
+
+class TestCoverPhotoBacked(unittest.TestCase):
+    """Root cause: the local no-API cover fallback (flat vector icons on a
+    plain background) passes every geometric check in check_cover_page --
+    full bleed, no white frame -- so nothing flagged it and cover_quality
+    scored a full 10/10 for a cover that reads as a generic placeholder to a
+    customer. A book shipped with that cover before a human ever saw it.
+    """
+
+    def test_cover_with_no_source_type_is_flagged_for_human_review(self):
+        f = check_cover_is_photo_backed(
+            [{"kind": "cover", "name": "img_cover.png", "source_type": ""}]
+        )
+        self.assertTrue(f and f[0].code == "COVER_NOT_PHOTO_BACKED")
+        self.assertEqual(f[0].kind, KIND_JUDGMENT)
+        self.assertTrue(f[0].blocks(), "a non-photo cover must block automatic PASS")
+
+    def test_pexels_backed_cover_is_not_flagged(self):
+        f = check_cover_is_photo_backed(
+            [{"kind": "cover", "name": "img_cover.png", "source_type": "pexels"}]
+        )
+        self.assertEqual(f, [])
+
+    def test_uploaded_photo_cover_is_not_flagged(self):
+        f = check_cover_is_photo_backed(
+            [{"kind": "cover", "name": "img_cover.png", "source_type": "upload"}]
+        )
+        self.assertEqual(f, [])
+
+    def test_no_cover_asset_present_does_not_crash(self):
+        self.assertEqual(check_cover_is_photo_backed([]), [])
+        self.assertEqual(
+            check_cover_is_photo_backed([{"kind": "photo", "source_type": ""}]), []
+        )
 
 
 class TestSafetySensitive(unittest.TestCase):

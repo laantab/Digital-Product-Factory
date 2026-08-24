@@ -507,11 +507,23 @@ def _purpose_from_stored_brief(existing: dict[str, Any]) -> str:
     return PURPOSE_CHAPTER_SCENE
 
 
+def _hint_matches(blob: str, hints: tuple[str, ...]) -> bool:
+    """Word-boundary hint match.
+
+    Plain substring containment let "dance" fire on "guidance" and would
+    equally fire "cat" inside "vacation" or "dog" inside "dogma" -- a subtitle
+    reading "practical, calm guidance for parents" classified a teen-safety
+    book as needing literal dance-technique demonstration photos, which then
+    blocked every chapter's export on a missing how-to photograph.
+    """
+    return any(re.search(rf"\b{re.escape(token)}\b", blob) for token in hints)
+
+
 def classify_ebook_subject(*, title: str = "", topic: str = "", content: str = "") -> str:
     """Photo-led topics need real photographs; information-led topics may use charts."""
     blob = _norm(f"{title} {topic} {str(content or '')[:800]}")
-    photo_hit = any(token in blob for token in _PHOTO_LED_HINTS)
-    info_hit = any(token in blob for token in _INFORMATION_LED_HINTS)
+    photo_hit = _hint_matches(blob, _PHOTO_LED_HINTS)
+    info_hit = _hint_matches(blob, _INFORMATION_LED_HINTS)
     if photo_hit and not info_hit:
         return PHOTO_LED
     if info_hit and not photo_hit:

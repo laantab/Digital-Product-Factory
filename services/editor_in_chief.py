@@ -614,6 +614,36 @@ def check_cover_page(cover_page_image: str, *, max_border_pct: float = 2.0) -> l
     return out
 
 
+def check_cover_is_photo_backed(assets: list[dict[str, Any]]) -> list[Finding]:
+    """Flag a cover with no real photograph behind it for human sign-off.
+
+    The local no-API fallback cover generator draws flat vector shapes (a
+    colored band, plain icon silhouettes) on a solid background. It passes
+    every objective geometry check in check_cover_page -- full bleed, no
+    white frame -- so nothing else here would ever catch it, and cover_quality
+    scored a full 10/10 while the actual cover read as a generic placeholder
+    to a customer. Whether a non-photo cover is acceptable for a given book is
+    a subjective call the Editor-in-Chief must not make silently (same
+    reasoning as check_visual_subject_verification): this raises a judgment
+    finding so a human decides, rather than passing 10/10 with no signal at all.
+    """
+    for a in assets or []:
+        if a.get("kind") != "cover":
+            continue
+        if str(a.get("source_type") or "").strip():
+            return []
+        return [Finding(
+            code="COVER_NOT_PHOTO_BACKED", category="cover_quality",
+            severity=SEV_MAJOR, kind=KIND_JUDGMENT,
+            summary=(
+                "Cover has no real photograph behind it -- confirm this "
+                "illustrated/generic cover is acceptable to sell, or attach a photo."
+            ),
+            asset=a.get("name", ""), location="cover (page 1)",
+        )]
+    return []
+
+
 def check_page_count(declared: int, rendered: int, pdf_reported: int) -> list[Finding]:
     out: list[Finding] = []
     vals = {"declared": declared, "rendered": rendered, "pdf": pdf_reported}

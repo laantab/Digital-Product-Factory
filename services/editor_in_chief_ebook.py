@@ -20,7 +20,8 @@ from services.editor_in_chief import (
     check_cross_project_duplication, check_customer_facing_leaks,
     check_identity_consistency, check_image_resolution, check_package_identity,
     check_page_count, check_page_quality, check_placeholder_and_leak,
-    check_cover_page, check_relevance, check_self_duplication, check_typography,
+    check_cover_page, check_cover_is_photo_backed, check_relevance,
+    check_self_duplication, check_typography,
     check_visual_subject_verification, decide_verdict, inspect_image_file,
     is_safety_sensitive, score_categories,
 )
@@ -133,6 +134,13 @@ def collect_ebook_candidate(
         "pdf_pages": pdf_page_count(pdf_path),
         "declared_pages": int(data.get("page_count") or 0),
         "placement": placement,
+        # Real per-chapter grouping for the visual-sufficiency check. Aid dicts
+        # carry no "chapter" field of their own, so without this the fallback
+        # reconstruction in _plan_from_candidate() grouped every aid from every
+        # chapter under one bucket keyed by "" (aid.get("chapter") always
+        # missing) -- the visual_sufficiency check has never been able to tell
+        # which chapter's requirement a photo actually satisfied.
+        "_plan_chapters": list(plan.get("chapters") or []),
     }
 
 
@@ -184,6 +192,8 @@ def review_ebook(
     # -- visuals -----------------------------------------------------------
     rep.checks_run.append("asset_integrity")
     f += check_assets_present(assets)
+    rep.checks_run.append("cover_photo_backed")
+    f += check_cover_is_photo_backed(assets)
     rep.checks_run.append("image_resolution")
     f += check_image_resolution(assets, print_product=print_product)
     rep.checks_run.append("chart_and_table_data")

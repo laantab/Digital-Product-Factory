@@ -26,6 +26,8 @@
     "tests/test_export_pointer_sync.py",
     "tests/test_ebook_qa_validator_extraction.py",
     "tests/test_editor_in_chief_gate.py",
+    "tests/test_subject_classification_word_boundaries.py",
+    "tests/test_visual_requirements_skip_front_matter.py",
     "tests/test_visual_instruction_section_stripping.py",
     "tests/test_forbidden_marketing_precision.py",
     "tests/test_ebook_quality_repair.py",

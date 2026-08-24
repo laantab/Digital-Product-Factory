@@ -193,6 +193,11 @@ _DEMONSTRATION_SIGNALS = re.compile(
 _COMPARISON_SIGNALS = re.compile(r"\b(compare|comparison|versus|vs\.?|options?|alternatives?)\b", re.I)
 _NUMERIC_SIGNAL = re.compile(r"\$\d|\d+\s?%")
 _TABLE_SIGNAL = re.compile(r"(?m)^\|.+\|\s*\n\|[-:\s|]+\|")
+_FRONT_BACK_MATTER_RE = re.compile(
+    r"^(introduction|summary|conclusion|resources|sources|references|"
+    r"about the author|disclaimer|copyright|table of contents|toc)\b",
+    re.I,
+)
 
 
 def _norm(s: str) -> str:
@@ -314,6 +319,13 @@ def validate_visual_plan_typed(
         if not isinstance(ch, dict):
             continue
         name = str(ch.get("chapter") or "")
+        # Front/back matter is not instructional content and must never be
+        # asked to "show, not just tell": a visual_plan's own "Table of
+        # Contents" entry was being scored as a demonstration-led chapter and
+        # blocked export over a missing how-to photo for the TOC page. Same
+        # skip list already used for chapter-length rules (ebook_release_validator).
+        if _FRONT_BACK_MATTER_RE.match(name.strip()):
+            continue
         body = body_by_title.get(_norm(name), "")
         req = derive_chapter_requirement(name, body, book_demonstration_led=book_demo_led)
         aids = list(ch.get("aids") or [])
