@@ -383,6 +383,12 @@ _RAW_BRACKET_PATTERNS = [
     re.compile(r"\[Chart\]", re.IGNORECASE),
     re.compile(r"\[Worksheet\]", re.IGNORECASE),
     re.compile(r"\[Action Steps\]", re.IGNORECASE),
+    # Raw markdown that survived rendering. A polluted product_summary once
+    # printed "[Chapter](#anchor)" link lists verbatim on the title page and a
+    # trailing Summary page of a shipped PDF; the customer must never see
+    # markdown source syntax.
+    re.compile(r"\]\(#[a-z0-9-]"),
+    re.compile(r"\]\(https?://", re.IGNORECASE),
 ]
 
 # Worksheet header corruption: "Action W Done" instead of proper table header
@@ -466,10 +472,30 @@ def _extract_pdf_text_and_images(pdf_bytes: bytes) -> tuple[int, str, dict]:
     image_stats: dict = {"has_images": False}
 
     try:
+        # PyMuPDF is the pinned production dependency (requirements.txt) and is
+        # what the rest of the pipeline renders with. The earlier extractor
+        # chain started with pdfplumber/PyPDF2, which are NOT installed, then
+        # crashed in its regex fallback — so every QA run silently returned
+        # page_count=0 / "Could not parse PDF" and the PDF gate was dead.
+        import fitz
+
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        page_count = doc.page_count
+        for page in doc:
+            text_parts.append(page.get_text() or "")
+            if not image_stats["has_images"] and page.get_images():
+                image_stats["has_images"] = True
+        text = "\n".join(text_parts)
+        return page_count, text, image_stats
+
+    except Exception:
+        pass
+
+    try:
         import io
         import re as _re
 
-        # Try pdfplumber first (best text extraction)
+        # Try pdfplumber next (best text extraction when available)
         import pdfplumber
 
         buf = io.BytesIO(pdf_bytes)
@@ -500,11 +526,13 @@ def _extract_pdf_text_and_images(pdf_bytes: bytes) -> tuple[int, str, dict]:
     except Exception:
         pass
 
-    # Last resort: raw PDF text extraction via regex
+    # Last resort: raw PDF text extraction via regex. The matches are bytes,
+    # so they must be joined as bytes before decoding — joining them with a
+    # str separator raised TypeError and killed the whole extraction.
     import re as _re
 
-    text = " ".join(_re.findall(rb"BT.*?ET", pdf_bytes, re.DOTALL))
-    text = _re.sub(rb"\s+", b" ", text)
-    text = text.decode("latin-1", errors="replace")
+    raw = b" ".join(_re.findall(rb"BT.*?ET", pdf_bytes, re.DOTALL))
+    raw = _re.sub(rb"\s+", b" ", raw)
+    text = raw.decode("latin-1", errors="replace")
     page_count = len(_re.findall(rb"/Type\s*/Page\b", pdf_bytes))
     return page_count, text, image_stats

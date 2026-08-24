@@ -448,6 +448,32 @@ def sanitize_leaked_production_labels(md_text: str) -> tuple[str, list[str]]:
     return cleaned, removed
 
 
+def _repeated_heading_bodies_alike(text: str, heading: str) -> bool:
+    """True when sections under a repeated heading are near-copies of each other.
+
+    A heading that recurs once per chapter ("Try This in the Next 24 Hours")
+    with different exercises under each occurrence is deliberate instructional
+    structure, not scaffolding. Only near-identical bodies mark the repeats as
+    mechanical.
+    """
+    marker = re.compile(rf"^#{{2,3}}\s+{re.escape(heading)}\s*$", re.I | re.M)
+    any_heading = re.compile(r"^#{1,3}\s+", re.M)
+    bodies: list[set[str]] = []
+    for m in marker.finditer(text):
+        rest = text[m.end():]
+        nxt = any_heading.search(rest)
+        body = rest[: nxt.start()] if nxt else rest
+        words = set(re.findall(r"[a-z']+", body.lower()))
+        if words:
+            bodies.append(words)
+    for i in range(len(bodies)):
+        for j in range(i + 1, len(bodies)):
+            union = bodies[i] | bodies[j]
+            if union and len(bodies[i] & bodies[j]) / len(union) >= 0.8:
+                return True
+    return False
+
+
 def find_customer_content_defects(md_text: str) -> list[str]:
     """Return defect codes for leaked / placeholder / generic content."""
     defects: list[str] = []
@@ -477,8 +503,11 @@ def find_customer_content_defects(md_text: str) -> list[str]:
             continue
         if h in _BAD_DUP_HEADINGS and n > 1:
             defects.append(f"duplicate_heading:{h}")
-        elif n >= 4:
-            # 4+ identical headings usually means mechanical scaffolding
+        elif n >= 4 and _repeated_heading_bodies_alike(text, h):
+            # Many identical headings are only scaffolding when the sections
+            # under them are near-copies too; recurring per-chapter sections
+            # with distinct content are legitimate book structure. Copied
+            # bodies are additionally caught by duplicate_paragraph below.
             defects.append(f"duplicate_heading:{h}")
     # Duplicate paragraphs (near-exact, >= 100 chars, 3+ copies = scaffolding)
     paras = [p.strip() for p in re.split(r"\n\s*\n", text) if len(p.strip()) >= 100]

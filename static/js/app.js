@@ -918,8 +918,12 @@ function factoryEbookReady(d) {
 }
 
 function ebookOnDiskFiles(d) {
+  // export_package_id is the authoritative deliverable set; package_id is the
+  // asset package from generation. After a re-export the old package's files
+  // no longer match the authoritative digest and the download pipeline blocks
+  // them, so the export package must win whenever it exists.
   const pkg = String(
-    (d && (d.package_id || d.export_package_id || (d.fields && d.fields.package_id))) || ""
+    (d && (d.export_package_id || d.package_id || (d.fields && d.fields.package_id))) || ""
   ).trim();
   if (!pkg) return null;
   return {

@@ -37,7 +37,15 @@ def read_pdf_metadata(pdf_path: str) -> dict[str, str]:
         m = re.search(rb"/" + key.encode() + rb"\s*\(((?:[^()\\]|\\.)*)\)", raw)
         if m:
             try:
-                out[key] = m.group(1).decode("latin-1").replace("\\(", "(").replace("\\)", ")")
+                decoded = m.group(1).decode("latin-1")
+                # PDF literal strings escape non-ASCII bytes as \NNN octal
+                # (e.g. an apostrophe as \047). Leaving them unexpanded made a
+                # correct title read as "Beginner\047s Guide..." and raised a
+                # false META_TITLE_MISMATCH against its own product title.
+                decoded = re.sub(
+                    r"\\([0-7]{1,3})", lambda g: chr(int(g.group(1), 8)), decoded
+                )
+                out[key] = decoded.replace("\\(", "(").replace("\\)", ")")
             except Exception:  # noqa: BLE001
                 out[key] = ""
     return out
@@ -190,7 +198,15 @@ def review_ebook(
         rep.checks_run.append("rendered_page_analysis")
         res = analyse_rendered_pages(candidate["page_images"])
         page_stats = res.get("pages") or []
-        f += check_page_quality(page_stats)
+        page_texts: list[str] | None = None
+        try:
+            import fitz
+
+            doc = fitz.open(candidate.get("pdf_path") or "")
+            page_texts = [p.get_text() for p in doc]
+        except Exception:
+            page_texts = None
+        f += check_page_quality(page_stats, page_texts=page_texts)
         rep.checks_run.append("cover_page_composition")
         f += check_cover_page(candidate["page_images"][0])
     else:

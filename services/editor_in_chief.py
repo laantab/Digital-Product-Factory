@@ -457,6 +457,18 @@ def check_visual_subject_verification(assets: list[dict[str, Any]], *, subject_t
             continue
         if a.get("subject_verified_by_human") is True:
             continue
+        # The judgment call is about what THIS image depicts. When the visual
+        # carries meaningful context of its own (caption / placement) and that
+        # context contains no safety-sensitive term, the image does not depict
+        # the sensitive technique and needs no human sign-off — one incidental
+        # word elsewhere in the book must not block every photo in it. Empty
+        # or uninformative context stays conservatively flagged.
+        own_context = " ".join(
+            str(a.get(k) or "") for k in ("caption", "location", "title")
+        ).strip()
+        context_words = re.findall(r"[A-Za-z]{2,}", own_context)
+        if len(context_words) >= 2 and not is_safety_sensitive(own_context):
+            continue
         name = a.get("name") or os.path.basename(a.get("path") or "")
         out.append(Finding(
             code="VIS_SUBJECT_UNVERIFIED", category="accuracy",
@@ -496,9 +508,40 @@ def analyse_rendered_pages(page_images: list[str]) -> dict[str, Any]:
     return {"available": True, "pages": stats}
 
 
+_STRUCTURAL_PAGE_MARKERS = (
+    "table of contents",
+    "for educational and informational purposes",
+    "all rights reserved",
+)
+
+
+def _is_structural_page(text: str, page_num: int, total_pages: int) -> bool:
+    """Front/back-matter pages are supposed to be light on ink.
+
+    A title page, legal page, TOC, or closing summary that is mostly white
+    space is correct book design, not a defect; six such pages once dragged a
+    well-set book's interior score from 10 to 4. Body pages keep the sparse
+    check, and PAGE_BLANK still applies to every page.
+    """
+    t = " ".join(str(text or "").lower().split())
+    if any(m in t for m in _STRUCTURAL_PAGE_MARKERS):
+        return True
+    first_line = (str(text or "").strip().splitlines() or [""])[0].strip().lower()
+    if first_line == "summary":
+        return True
+    # Title page directly after the cover, and the book's closing page.
+    if page_num <= 2 and len(t) < 700:
+        return True
+    if total_pages and page_num == total_pages and len(t) < 700:
+        return True
+    return False
+
+
 def check_page_quality(page_stats: list[dict[str, Any]], *, blank_ink_pct: float = 1.0,
-                       sparse_ink_pct: float = 6.0) -> list[Finding]:
+                       sparse_ink_pct: float = 6.0,
+                       page_texts: list[str] | None = None) -> list[Finding]:
     out: list[Finding] = []
+    total = len(page_stats or [])
     for s in page_stats or []:
         if s["ink_pct"] < blank_ink_pct:
             out.append(Finding(
@@ -507,6 +550,11 @@ def check_page_quality(page_stats: list[dict[str, Any]], *, blank_ink_pct: float
                 summary="Rendered page is effectively blank.",
                 location=f"page {s['page']}", detail=f"ink {s['ink_pct']}%"))
         elif s["ink_pct"] < sparse_ink_pct and not s["has_imagery"]:
+            if page_texts is not None:
+                idx = int(s["page"]) - 1
+                text = page_texts[idx] if 0 <= idx < len(page_texts) else ""
+                if _is_structural_page(text, int(s["page"]), total):
+                    continue
             out.append(Finding(
                 code="PAGE_SPARSE", category="interior_design",
                 severity=SEV_MINOR, kind=KIND_OBJECTIVE,

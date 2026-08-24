@@ -194,6 +194,69 @@ def _fix_hyphen_list_paragraphs(soup: BeautifulSoup) -> None:
             p.replace_with(ul)
 
 
+# A TOC entry line: optional list marker, then a markdown anchor link and nothing
+# else. The closing paren is optional because stored summaries were truncated at
+# 400 chars, cutting the final link mid-anchor.
+_MD_TOC_LINE_RE = re.compile(r"^\s*(?:\d+[.)]|[-*+])?\s*\[[^\]]+\]\(#[^)\s]*\)?\s*$")
+_MD_INLINE_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)?")
+
+
+def clean_product_summary(text: str) -> str:
+    """Make a stored product summary safe to print in customer-facing output.
+
+    Manuscripts open with a markdown TOC, and the fallback summary derivation
+    used to grab that block verbatim, so saved projects can carry summaries that
+    are nothing but truncated ``[Chapter](#anchor)`` lines. Cleaning happens at
+    render time so those projects heal without rewriting their records. Returns
+    "" when nothing readable remains — callers must then omit the block.
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+    kept = [ln for ln in raw.splitlines() if ln.strip() and not _MD_TOC_LINE_RE.match(ln)]
+    joined = " ".join(kept)
+    joined = _MD_INLINE_LINK_RE.sub(r"\1", joined)
+    joined = re.sub(r"^\s*#{1,6}\s*", "", joined)
+    joined = re.sub(r"\s+", " ", joined).strip()
+    # A summary reduced to stray list numbers ("1. 2. 3.") is not readable text.
+    if not re.search(r"[A-Za-z]{3,}", joined):
+        return ""
+    return joined
+
+
+def derive_product_summary(content_md: str, limit: int = 400) -> str:
+    """First real prose paragraph of a manuscript, cut on a sentence boundary.
+
+    Skips the H1 and any leading TOC/list/heading blocks instead of blindly
+    taking the first paragraph, which is how markdown TOCs ended up printed on
+    title pages.
+    """
+    text = str(content_md or "").strip()
+    if not text:
+        return ""
+    for block in re.split(r"\n\s*\n", text):
+        stripped = block.strip()
+        if not stripped:
+            continue
+        lines = stripped.splitlines()
+        if all(
+            re.match(r"^\s*(?:#{1,6}\s|\d+[.)]\s|[-*+]\s|\[|!\[)", ln) or not ln.strip()
+            for ln in lines
+        ):
+            continue
+        prose = re.sub(r"\s+", " ", stripped).strip()
+        prose = _MD_INLINE_LINK_RE.sub(r"\1", prose)
+        if len(prose) < 40:
+            continue
+        if len(prose) <= limit:
+            return prose
+        cut = prose[:limit]
+        # Prefer ending on a completed sentence over a mid-word chop.
+        end = max(cut.rfind(". "), cut.rfind("! "), cut.rfind("? "))
+        return cut[: end + 1].strip() if end >= 120 else cut.rstrip() + "…"
+    return ""
+
+
 def _norm_title(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
 
@@ -612,11 +675,9 @@ def _photo_led_local_plan(title: str, content_md: str, fields: dict, chapter_tit
             aids.append(table)
         chapters.append({"chapter": name, "aids": aids})
     subtitle = str((fields or {}).get("subtitle") or "").strip()
-    summary = str((fields or {}).get("product_summary") or "").strip()
+    summary = clean_product_summary((fields or {}).get("product_summary"))
     if not summary:
-        first = re.sub(r"^#.*\n+", "", str(content_md or ""), count=1).strip()
-        para = first.split("\n\n")[0].strip()
-        summary = para[:400]
+        summary = derive_product_summary(content_md)
     return {
         "title": title,
         "subtitle": subtitle,
@@ -1621,7 +1682,7 @@ def render_preview_html(
             )
 
     summary_md, summary_aids = summary_block or ("", [])
-    summary_text = (product_summary or "").strip()
+    summary_text = clean_product_summary(product_summary)
     summary_body = ""
     if summary_md:
         summary_body = interleave_aids_in_html(

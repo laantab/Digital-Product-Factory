@@ -2603,6 +2603,30 @@ def export_product_route():
             return jsonify(result)
         data["export_package_id"] = result["package_id"]
         data["product_exports"] = result["exports"]
+        # Legacy download pointers must follow the new export package. Leaving
+        # pdf_path / pdf_sha256 / export_files on the previous package makes
+        # row-level download buttons request a stale file, which the download
+        # pipeline then blocks as a bytes-vs-authoritative mismatch.
+        _new_pkg = str(result.get("package_id") or "")
+        _pkg_dir = os.path.join(EXPORTS_DIR, _new_pkg) if _new_pkg else ""
+        _new_pdf = os.path.join(_pkg_dir, "ebook.pdf") if _pkg_dir else ""
+        if _new_pdf and os.path.isfile(_new_pdf):
+            import hashlib as _hashlib
+
+            data["pdf_path"] = _new_pdf
+            data["_pdf_path"] = _new_pdf
+            try:
+                with open(_new_pdf, "rb") as _fh:
+                    data["pdf_sha256"] = _hashlib.sha256(_fh.read()).hexdigest()
+            except OSError:
+                pass
+            if isinstance(data.get("export_files"), dict):
+                _files: dict = {"dir": _pkg_dir}
+                for _name in os.listdir(_pkg_dir):
+                    _fp = os.path.join(_pkg_dir, _name)
+                    if os.path.isfile(_fp):
+                        _files[_name] = _fp
+                data["export_files"] = _files
         # Ebook release gate: Export Ready / customer downloads only on PASS.
         is_ebook = (
             project.get("type") == "ebook"
@@ -2612,12 +2636,69 @@ def export_product_route():
         if is_ebook:
             release_status = str(data.get("release_status") or "").upper()
             cert = data.get("release_certificate") if isinstance(data.get("release_certificate"), dict) else None
+            # Editor-in-Chief completion review: every ebook export receives an
+            # automated editorial pass over the real rendered artifact before
+            # the factory calls it ready to sell. Findings are persisted so the
+            # UI can show what failed, where, why, and the next action.
+            eic_ok = True
+            try:
+                from services.editor_in_chief import VERDICT_PASS
+                from services.editor_in_chief_ebook import (
+                    collect_ebook_candidate,
+                    review_ebook,
+                )
+
+                if _new_pdf and os.path.isfile(_new_pdf):
+                    import tempfile
+
+                    import fitz
+
+                    page_dir = tempfile.mkdtemp(prefix="eic_pages_")
+                    page_images: list[str] = []
+                    pdf_doc = fitz.open(_new_pdf)
+                    for _pi, _page in enumerate(pdf_doc):
+                        _img = os.path.join(page_dir, f"p{_pi + 1:03d}.png")
+                        _page.get_pixmap(dpi=72).save(_img)
+                        page_images.append(_img)
+                    candidate = collect_ebook_candidate(
+                        data, package_dir=_pkg_dir, page_images=page_images
+                    )
+                    report = review_ebook(candidate)
+                    eic_ok = report.verdict == VERDICT_PASS
+                    data["editor_in_chief"] = {
+                        "verdict": report.verdict,
+                        "overall": report.overall,
+                        "scores": report.scores,
+                        "findings": [
+                            {
+                                "code": fi.code,
+                                "severity": fi.severity,
+                                "summary": fi.summary,
+                                "location": fi.location,
+                            }
+                            for fi in report.findings
+                        ],
+                        "checks_run": report.checks_run,
+                        "checks_skipped": report.checks_skipped,
+                    }
+                    result["editor_in_chief"] = data["editor_in_chief"]
+            except Exception:
+                # The reviewer itself failing must not hide the export, but it
+                # must be visible — an unreviewed ebook is not "ready".
+                app.logger.exception("editor-in-chief review failed")
+                eic_ok = False
+                data["editor_in_chief"] = {
+                    "verdict": "EDITOR-IN-CHIEF — REVIEW ERROR",
+                    "error": "Automated review could not run; see server log.",
+                }
+                result["editor_in_chief"] = data["editor_in_chief"]
             export_ready = (
                 bool(data.get("export_ready"))
                 and release_status == "PASS"
                 and bool(cert)
                 and str(cert.get("issued_by") or "") == "server"
                 and str(cert.get("status") or "").upper() == "PASS"
+                and eic_ok
             )
             data["export_ready"] = export_ready
             result["release_status"] = release_status

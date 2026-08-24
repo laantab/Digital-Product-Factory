@@ -13,7 +13,12 @@ from typing import Any
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 
-from services.ebook_package import EXPORTS_DIR, _split_chapters, fix_inline_hyphen_lists_html
+from services.ebook_package import (
+    EXPORTS_DIR,
+    _split_chapters,
+    clean_product_summary,
+    fix_inline_hyphen_lists_html,
+)
 from services.publishing import build_publishing_pdf_css, detect_template_key
 from services.visual_fallback import (
     looks_like_prompt,
@@ -709,7 +714,9 @@ def _full_page_cover_from_file(path: str) -> str:
     return (
         '<section class="pdf-page cover-page cda-cover-full-page">'
         f'<img src="{uri}" alt="Cover" '
-        'style="width:100%;max-height:8.5in;display:block;margin:0;padding:0;" />'
+        # Letter-page dimensions: the full-bleed page template (margin 0)
+        # lets the artwork reach the trim edge instead of sitting in a frame.
+        'style="width:612pt;height:792pt;display:block;margin:0;padding:0;" />'
         "</section>"
     )
 
@@ -726,7 +733,7 @@ def _full_page_cover_pdf_html(package_id: str, pending: bool = False) -> str:
         return (
             '<section class="pdf-page cover-page cda-cover-full-page">'
             f'<img src="{src}" alt="Cover" '
-            'style="width:100%;max-height:8.5in;display:block;margin:0;padding:0;" />'
+            'style="width:612pt;height:792pt;display:block;margin:0;padding:0;" />'
             "</section>"
         )
     # Pending placeholder
@@ -1450,6 +1457,33 @@ def _build_from_markdown(
     return "".join(parts), has_summary
 
 
+# Full-bleed cover support. xhtml2pdf applies @page margins to every page, so a
+# photo cover always sat inside a white frame. When the body opens with a
+# full-bleed cover section, the document starts on a margin-0 page template and
+# switches to the normal content template for every following page. Documents
+# without such a cover keep the original single-template CSS untouched.
+_FULL_BLEED_PAGE_CSS = """
+@page { size: letter; margin: 0;
+  @frame cover_frame { left: 0pt; top: 0pt; width: 612pt; height: 792pt; } }
+@page main { size: letter;
+  @frame content_frame { left: 54pt; top: 50pt; width: 504pt; height: 691pt; } }
+"""
+_MAIN_TEMPLATE_SWITCH = '<pdf:nexttemplate name="main"/>'
+
+
+def _apply_full_bleed_cover_template(css: str, body_html: str) -> tuple[str, str]:
+    if "cda-cover-full-page" not in body_html or _MAIN_TEMPLATE_SWITCH in body_html:
+        return css, body_html
+    cover_end = body_html.find("</section>")
+    if cover_end < 0:
+        return css, body_html
+    # The switch must be seen before the cover's page-break-after fires, or the
+    # page AFTER the title page is the first one to get content margins.
+    body_html = body_html[:cover_end] + _MAIN_TEMPLATE_SWITCH + body_html[cover_end:]
+    css = re.sub(r"@page\s*\{[^}]*\}", "", css, count=1)
+    return _FULL_BLEED_PAGE_CSS + css, body_html
+
+
 def _wrap_pdf_document(title: str, body_html: str, template_key: str = "", body_class: str = "") -> str:
     if template_key or (body_class or "").startswith("tpl-"):
         css = build_publishing_pdf_css(template_key or body_class.replace("tpl-", ""))
@@ -1457,6 +1491,7 @@ def _wrap_pdf_document(title: str, body_html: str, template_key: str = "", body_
     else:
         css = _PDF_CSS
         cls = body_class
+    css, body_html = _apply_full_bleed_cover_template(css, body_html)
     class_attr = f' class="{cls}"' if cls else ""
     return (
         "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
@@ -1479,6 +1514,9 @@ def build_pdf_html(
     template_key: str = "",
     cover_design: dict | None = None,
 ) -> str:
+    # Stored summaries can be polluted with raw markdown TOC links (old fallback
+    # derivation); every summary render site below receives the cleaned value.
+    summary = clean_product_summary(summary) or None
     raw = str(doc_html or "").strip()
     soup = BeautifulSoup(raw, "html.parser") if raw else None
     body_class = ""

@@ -27,6 +27,7 @@ from services.ebook_package import (
     _download_url,
     _sanitize_html,
     _write_package,
+    clean_product_summary,
     is_allowed_download,
     render_preview_html,
     render_txt,
@@ -1127,6 +1128,11 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
     title, subtitle, author, doc_html, txt_doc, content, summary, cover_prompt, visual_plan, preview_source, template_key, cover_design = (
         _resolve_export_sources(project, publishing_layout)
     )
+    # Stored summaries may carry raw markdown TOC links from the old fallback
+    # derivation; clean once so the PDF, metadata, and product_summary.txt all
+    # ship readable prose.
+    if isinstance(summary, str):
+        summary = clean_product_summary(summary)
 
     summary_for_pdf = None
     if summary:
@@ -1144,13 +1150,17 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
         data_fields.get("output_format") or
         ""
     )
+    # Ebooks declare chapters rather than pages, so a missing page count must
+    # stay None (= unknown → the eligibility agent is permissive). Coercing it
+    # to 1 made every chapter-based ebook count as a 1-page product and
+    # silently stripped its approved photo cover at export time.
     try:
-        planned_count = int(
-            data_fields.get("pages") or
-            data_fields.get("num_pages") or
-            data.get("num_pages") or
-            1
+        _planned_raw = (
+            data_fields.get("pages")
+            or data_fields.get("num_pages")
+            or data.get("num_pages")
         )
+        planned_count = int(_planned_raw) if _planned_raw is not None else None
     except (ValueError, TypeError):
         planned_count = None
 
