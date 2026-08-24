@@ -3,7 +3,7 @@ import os
 import re
 
 # Bump this by hand with each release commit/tag (see git tags for history).
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 from dotenv import load_dotenv
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
