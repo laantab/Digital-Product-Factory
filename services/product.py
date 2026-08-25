@@ -208,6 +208,100 @@ def _planner(fields: dict) -> tuple[str, str, str]:
     return system, user, title
 
 
+# -------------------------------------------------------------------------- //
+# Faith Planner / Budget Planner
+#
+# Both are deterministic: no AI call, no paid image call, same request in ->
+# same PDF out. The generic `planner` builder above stays where it is and stays
+# hidden; these two are the shipped products, and they are built from a real
+# page planner rather than from a prompt, which is why they can carry an
+# Editor-in-Chief verdict at all.
+# -------------------------------------------------------------------------- //
+def _planner_pdf_payload(planner_type: str, fields: dict, *,
+                         package_id: str = "") -> dict:
+    from services.planner import PlannerPdfRequest, build_planner_pdf
+    from services.planner.builder import PLANNER_LABELS, clamp_pages
+    from services.quality.cover_eligibility_agent import (
+        apply_cover_eligibility_to_fields,
+        determine_cover_eligibility,
+    )
+
+    pkg = package_id or uuid.uuid4().hex
+    label = PLANNER_LABELS[planner_type]
+    title = (
+        _f(fields, "planner_title")
+        or _f(fields, "title")
+        or (f"{_f(fields, 'theme')} {label}".strip() if _f(fields, "theme") else label)
+    )
+    pages = clamp_pages(fields.get("pages") or fields.get("page_count"), planner_type)
+
+    eligibility = determine_cover_eligibility(
+        product_type=planner_type,
+        fields=fields,
+        planned_page_count=pages,
+        product_mode="book",
+    )
+    fixed_fields = apply_cover_eligibility_to_fields(eligibility, dict(fields))
+    include_cover = eligibility.cover_allowed and _yes_default(fields, "include_cover", True)
+
+    request = PlannerPdfRequest(
+        planner_type=planner_type,
+        title=title,
+        theme=_f(fields, "theme"),
+        audience=_f(fields, "audience"),
+        author=_f(fields, "author"),
+        pages=pages,
+        page_size=_f(fields, "page_size", "US Letter"),
+        include_cover=include_cover,
+        include_toc=_yes_default(fields, "include_toc", True),
+        include_notes=_yes_default(fields, "include_notes", True),
+        include_habit_tracker=_yes_default(fields, "include_habit_tracker", True),
+        include_calendar=_yes_default(fields, "include_calendar", True),
+        include_reflection=_yes_default(fields, "include_reflection", True),
+        package_id=pkg,
+    )
+    result = build_planner_pdf(request)
+    if result.errors or not result.pdf_bytes:
+        raise RuntimeError(f"Failed to generate {label} PDF: {result.errors}")
+
+    plan = result.plan
+    return {
+        "product_type": planner_type,
+        "product_label": label,
+        "title": plan.title if plan else title,
+        "subtitle": plan.subtitle if plan else "",
+        "fields": fixed_fields,
+        "content": "",
+        "pdf_bytes": base64.b64encode(result.pdf_bytes).decode("utf-8"),
+        "filename": result.filename,
+        "is_pdf": True,
+        "is_book": True,
+        "package_id": pkg,
+        "package_dir": result.package_dir,
+        "pdf_path": result.pdf_path,
+        "layout_info": result.layout_info,
+        "declared_pages": plan.page_count if plan else 0,
+        "warnings": result.warnings,
+        "image_jobs": [],
+    }
+
+
+def _yes_default(fields: dict, key: str, default: bool) -> bool:
+    """`_yes` treats a missing key as No; planner toggles default to Yes."""
+    raw = str(fields.get(key, "")).strip().lower()
+    if not raw:
+        return default
+    return raw in {"yes", "true", "1", "on"}
+
+
+def _generate_faith_planner_pdf(fields: dict) -> dict:
+    return _planner_pdf_payload("faith_planner", fields)
+
+
+def _generate_budget_planner_pdf(fields: dict) -> dict:
+    return _planner_pdf_payload("budget_planner", fields)
+
+
 def _coloring_book(fields: dict) -> tuple[str, str, str]:
     from services.factory.puzzle_plan import parse_puzzle_output_plan
 
@@ -2116,6 +2210,8 @@ _BUILDERS = {
     "math_worksheet": _math_worksheet,
     "spelling_worksheet": _spelling_worksheet,
     "planner": _planner,
+    "faith_planner": _planner,
+    "budget_planner": _planner,
     "marketing_kit": _marketing_kit,
 }
 
@@ -2129,6 +2225,8 @@ PRODUCT_LABELS = {
     "math_worksheet": "Math Worksheet",
     "spelling_worksheet": "Spelling Worksheet",
     "planner": "Planner",
+    "faith_planner": "Faith Planner",
+    "budget_planner": "Budget Planner",
     "marketing_kit": "Marketing Kit",
 }
 
@@ -2159,6 +2257,12 @@ def generate_product(product_type: str, fields: dict) -> dict:
     # Special handling for spelling_worksheet - use dedicated PDF generator
     if product_type == "spelling_worksheet":
         return _generate_spelling_worksheet_pdf(fields)
+
+    # Faith / Budget planners - deterministic page planner, no AI call
+    if product_type == "faith_planner":
+        return _generate_faith_planner_pdf(fields)
+    if product_type == "budget_planner":
+        return _generate_budget_planner_pdf(fields)
 
     # Special handling for ebook — one canonical customer pipeline.
     if product_type == "ebook":

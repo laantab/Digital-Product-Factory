@@ -177,6 +177,8 @@ ACTIVE_BUILDERS = {
     "word search book": "word_search",
     "crossword puzzle book": "crossword",
     "math worksheet": "math_worksheet",
+    "faith planner": "faith_planner",
+    "budget planner": "budget_planner",
 }
 
 HIDDEN_BUILDERS = {
@@ -314,6 +316,14 @@ MVP_STARTERS = {
         "with clear problems and answers."
     ),
     "Planner": "Start with: a simple planner for {audience} organized around {idea}.",
+    "Faith Planner": (
+        "Start with: an undated devotional planner for {audience} built around "
+        "{idea}, with a reading plan, prayer log, and reflection pages."
+    ),
+    "Budget Planner": (
+        "Start with: an undated budget planner for {audience} built around "
+        "{idea}, with monthly worksheets, an expense log, and a debt tracker."
+    ),
 }
 
 
@@ -741,6 +751,12 @@ def resolve_factory_builder(product_type: str) -> dict:
         return {"status": "hidden", "factory_id": "flip_book", "label": "Flip Book"}
     if "cover" in pt:
         return {"status": "hidden", "factory_id": "cover_design", "label": "Cover Design"}
+    # Faith and Budget planners are shipped builders; the generic "planner"
+    # remains hidden, so the specific match has to be tested first.
+    if "faith" in pt and "planner" in pt:
+        return {"status": "active", "factory_id": "faith_planner", "label": "Faith Planner"}
+    if ("budget" in pt or "money" in pt or "finance" in pt) and "planner" in pt:
+        return {"status": "active", "factory_id": "budget_planner", "label": "Budget Planner"}
     if "planner" in pt or "planning" in pt:
         return {"status": "hidden", "factory_id": "planner", "label": "Planner"}
     if "marketing" in pt:

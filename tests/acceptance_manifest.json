@@ -26,6 +26,7 @@
     "tests/test_export_pointer_sync.py",
     "tests/test_ebook_qa_validator_extraction.py",
     "tests/test_editor_in_chief_gate.py",
+    "tests/test_planner_products.py",
     "tests/test_subject_classification_word_boundaries.py",
     "tests/test_visual_requirements_skip_front_matter.py",
     "tests/test_visual_instruction_section_stripping.py",
@@ -77,6 +78,7 @@
     "tests/test_math_worksheet_pdf_visual_qa.py",
     "tests/test_kdp_foundations_pass1.py",
     "tests/test_kdp_preflight_pass2.py",
-    "test_crossword_quality.py"
+    "test_crossword_quality.py",
+    "tests/test_billing.py"
   ]
 }

@@ -310,6 +310,26 @@ def determine_cover_eligibility(
             enforce_page_count=True,
         )
 
+    # ── Planners (faith / budget) ───────────────────────────────────────────
+    # A planner is always a book: the smallest one the builder will emit is 12
+    # pages, so the only way to land under the minimum is an explicit request
+    # for something that is not really a planner.
+    if product_type in ("faith_planner", "budget_planner", "planner"):
+        under_min = _under_minimum_pages(planned_page_count)
+        return CoverEligibility(
+            cover_allowed=not under_min,
+            must_block_cover=under_min,
+            planned_page_count=planned_page_count,
+            product_type=product_type,
+            product_mode=product_mode,
+            reason=(
+                f"{product_type} under 5 pages cannot include a cover."
+                if under_min else
+                f"{product_type} with 5+ pages may include a cover."
+            ),
+            enforce_page_count=True,
+        )
+
     # ── Unknown product type ────────────────────────────────────────────────
     # Be conservative: block covers for unknown types unless page count is clearly large
     under_min = _under_minimum_pages(planned_page_count)

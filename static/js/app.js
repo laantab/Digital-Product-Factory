@@ -23,7 +23,7 @@ const TITLES = { dashboard: "Dashboard", saved: "Saved Projects", market: "Facto
 const MARKET_PRODUCT_TYPES = [
   "Ebook", "Workbook", "Checklist", "Coloring Book", "Word Search Book",
   "Crossword Puzzle Book", "Flip Book", "Math Worksheet", "Spelling Worksheet",
-  "Planner", "Not Sure Yet",
+  "Faith Planner", "Budget Planner", "Planner", "Not Sure Yet",
 ];
 
 let current = "dashboard";
@@ -257,6 +257,51 @@ const PRODUCT_TYPES = [
     ],
   },
   {
+    id: "faith_planner",
+    label: "Faith Planner",
+    icon: "M12 3v18M7 8h10M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z",
+    desc: "Undated devotional planner: reading plan, prayer log, reflection",
+    guide:
+      "Everything is generated locally — no AI call, no image credits. Set a page count and click Generate. " +
+      "The 52-week reading plan, prayer log, memory cards, and daily study pages are built in.",
+    fields: [
+      { name: "planner_title", label: "Planner title", type: "text", placeholder: "Leave blank for 'Faith Planner'" },
+      { name: "theme", label: "Theme / niche", type: "text", placeholder: "e.g. Women's, Family, New Believer" },
+      { name: "audience", label: "Target audience", type: "text", placeholder: "Printed on the cover as a small label" },
+      { name: "author", label: "Author / brand name", type: "text" },
+      { name: "pages", label: "Number of pages", type: "number", value: "60", hint: "12-200. Rounded to keep whole weekly units intact." },
+      { name: "page_size", label: "Page size", type: "select", options: ["US Letter", "A4", "6x9", "A5"] },
+      { name: "include_cover", label: "Include cover page", type: "select", options: YN, default: "Yes" },
+      { name: "include_toc", label: "Include table of contents", type: "select", options: YN, default: "Yes" },
+      { name: "include_calendar", label: "Include monthly overview", type: "select", options: YN, default: "Yes" },
+      { name: "include_habit_tracker", label: "Include habit tracker", type: "select", options: YN, default: "Yes" },
+      { name: "include_reflection", label: "Include monthly reflection", type: "select", options: YN, default: "Yes" },
+      { name: "include_notes", label: "Include notes pages", type: "select", options: YN, default: "Yes" },
+    ],
+  },
+  {
+    id: "budget_planner",
+    label: "Budget Planner",
+    icon: "M3 6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2zM3 10h18M7 15h4",
+    desc: "Undated budget system: monthly worksheets, debt and savings trackers",
+    guide:
+      "Everything is generated locally — no AI call, no image credits. Set a page count and click Generate. " +
+      "Includes the financial snapshot, monthly income/fixed/variable worksheets, expense log, and debt payoff tracker.",
+    fields: [
+      { name: "planner_title", label: "Planner title", type: "text", placeholder: "Leave blank for 'Budget Planner'" },
+      { name: "theme", label: "Theme / niche", type: "text", placeholder: "e.g. Family, Student, Freelancer" },
+      { name: "audience", label: "Target audience", type: "text", placeholder: "Printed on the cover as a small label" },
+      { name: "author", label: "Author / brand name", type: "text" },
+      { name: "pages", label: "Number of pages", type: "number", value: "60", hint: "12-200. Rounded to keep whole monthly units intact." },
+      { name: "page_size", label: "Page size", type: "select", options: ["US Letter", "A4", "6x9", "A5"] },
+      { name: "include_cover", label: "Include cover page", type: "select", options: YN, default: "Yes" },
+      { name: "include_toc", label: "Include table of contents", type: "select", options: YN, default: "Yes" },
+      { name: "include_calendar", label: "Include bill calendar", type: "select", options: YN, default: "Yes" },
+      { name: "include_habit_tracker", label: "Include money habit tracker", type: "select", options: YN, default: "Yes" },
+      { name: "include_notes", label: "Include notes pages", type: "select", options: YN, default: "Yes" },
+    ],
+  },
+  {
     id: "planner",
     label: "Planner",
     icon: "M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z",
@@ -480,6 +525,262 @@ function go(view) {
   if (view === "visual") initVisual();
   if (view === "publishing") initPublishing();
   if (view === "packages") initPackages();
+  if (view === "subscription") initBilling();
+}
+
+// --------------------------------------------------------------------------
+// Billing / subscription plans
+//
+// Every price shown here comes from GET /billing/plans, which reads
+// services/billing/plans.py. Nothing about money is hardcoded in the browser:
+// a price typed into markup is a price that eventually disagrees with the one
+// the customer is actually charged.
+// --------------------------------------------------------------------------
+const ACCOUNT_REF_KEY = "factory_account_ref";
+let billingCatalog = null;
+let billingPeriod = "monthly";
+let billingBusy = false;
+
+function accountRef() {
+  let ref = "";
+  try {
+    ref = window.localStorage.getItem(ACCOUNT_REF_KEY) || "";
+  } catch (err) {
+    ref = "";
+  }
+  return ref;
+}
+
+async function ensureAccountRef() {
+  let ref = accountRef();
+  if (ref) return ref;
+  const res = await api("/billing/account", { method: "POST", body: "{}" });
+  ref = res.account_ref || "";
+  try {
+    window.localStorage.setItem(ACCOUNT_REF_KEY, ref);
+  } catch (err) {
+    /* private browsing — the ref lives for this page load only */
+  }
+  return ref;
+}
+
+function setBillingPeriod(period) {
+  billingPeriod = period === "annual" ? "annual" : "monthly";
+  document.querySelectorAll(".billing-period-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.period === billingPeriod);
+  });
+  renderBillingPlans();
+}
+
+async function initBilling() {
+  document.querySelectorAll(".billing-period-tab").forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", () => setBillingPeriod(btn.dataset.period));
+  });
+  const grid = document.getElementById("billingPlanGrid");
+  if (grid && !billingCatalog) {
+    grid.innerHTML = `<div class="col-span-full text-center text-sm text-slate-400 py-8">Loading plans…</div>`;
+  }
+  try {
+    const ref = accountRef();
+    billingCatalog = await api(`/billing/plans${ref ? `?account_ref=${encodeURIComponent(ref)}` : ""}`);
+    document.getElementById("billingStaticFallback")?.classList.add("hidden");
+    setBillingPeriod(billingPeriod);
+  } catch (err) {
+    // Keep the static fallback visible rather than showing an empty page.
+    document.getElementById("billingStaticFallback")?.classList.remove("hidden");
+    if (grid) grid.innerHTML = "";
+    toast(err.message, "error");
+  }
+}
+
+function planPriceFor(plan, period) {
+  const cents = period === "annual" ? plan.annual_cents : plan.monthly_cents;
+  return { cents, display: period === "annual" ? plan.annual_display : plan.monthly_display };
+}
+
+function planFeatureList(plan) {
+  return plan.features
+    .map(
+      (f) =>
+        `<li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> ${escapeHtml(f)}</li>`
+    )
+    .join("");
+}
+
+function renderBillingPlans() {
+  if (!billingCatalog) return;
+  const grid = document.getElementById("billingPlanGrid");
+  const founderWrap = document.getElementById("founderPlanCard");
+  const notice = document.getElementById("billingProviderNotice");
+  if (!grid) return;
+
+  const currentPlanId = (billingCatalog.current || {}).plan_id || "free";
+  const ladder = billingCatalog.plans.filter((p) => !p.limited_seats);
+  const founder = billingCatalog.plans.find((p) => p.limited_seats);
+
+  grid.className = "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-6xl mx-auto";
+  grid.innerHTML = ladder
+    .map((plan) => {
+      const period = plan.periods.includes(billingPeriod)
+        ? billingPeriod
+        : plan.periods[0] || "monthly";
+      const price = planPriceFor(plan, period);
+      const isCurrent = plan.id === currentPlanId;
+      const free = plan.monthly_cents === 0 && plan.annual_cents === 0;
+      const border = plan.highlight
+        ? "border-2 border-brand-500 shadow-lg shadow-brand-100/50"
+        : "border border-slate-200";
+      const suffix = free ? "forever" : period === "annual" ? "per year" : "per month";
+      const equiv =
+        !free && period === "annual" && plan.annual_monthly_equivalent
+          ? `<div class="text-xs text-emerald-600 mt-1 font-semibold">${escapeHtml(plan.annual_monthly_equivalent)}/mo — save ${escapeHtml(plan.annual_saving_display)}</div>`
+          : "";
+      let cta;
+      if (isCurrent) {
+        cta = `<div class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-center text-sm font-semibold text-slate-400">Current Plan</div>`;
+      } else if (free) {
+        cta = `<div class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-center text-sm font-medium text-slate-400">No card required</div>`;
+      } else {
+        const style = plan.highlight
+          ? "bg-brand-600 hover:bg-brand-700 text-white"
+          : "border border-brand-300 text-brand-700 hover:bg-brand-50";
+        cta = `<button data-plan="${escapeHtml(plan.id)}" data-period="${escapeHtml(period)}" class="billing-cta rounded-xl ${style} px-4 py-2.5 text-sm font-semibold text-center transition">Choose ${escapeHtml(plan.name)}</button>`;
+      }
+      const cap =
+        plan.products_per_month >= 0
+          ? `<div class="text-xs text-slate-400 mt-2">${plan.products_per_month} finished products per month</div>`
+          : "";
+      return `
+        <div class="rounded-2xl ${border} bg-white p-7 flex flex-col relative">
+          ${plan.highlight ? `<div class="absolute -top-3 left-1/2 -translate-x-1/2"><span class="rounded-full bg-brand-600 text-white text-xs font-bold px-3 py-1">Most Popular</span></div>` : ""}
+          <div class="mb-5">
+            <div class="text-sm font-bold ${plan.highlight ? "text-brand-600" : "text-slate-500"} uppercase tracking-wide mb-1">${escapeHtml(plan.name)}</div>
+            <div class="text-4xl font-extrabold text-slate-900">${escapeHtml(price.display)}</div>
+            <div class="text-sm text-slate-400 mt-1">${suffix}</div>
+            ${equiv}
+            <div class="text-xs text-slate-500 mt-2">${escapeHtml(plan.tagline)}</div>
+            ${cap}
+          </div>
+          <ul class="space-y-2.5 flex-1 mb-7">${planFeatureList(plan)}</ul>
+          ${cta}
+          ${plan.note ? `<p class="mt-3 text-xs text-slate-400">${escapeHtml(plan.note)}</p>` : ""}
+        </div>`;
+    })
+    .join("");
+
+  if (founder && founderWrap) {
+    const remaining = founder.seats_remaining;
+    const total = founder.seats_total;
+    const taken = Math.max(0, total - remaining);
+    const pct = total ? Math.round((taken / total) * 100) : 0;
+    const soldOut = founder.sold_out;
+    founderWrap.classList.remove("hidden");
+    founderWrap.innerHTML = `
+      <div class="rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-50 to-white p-7">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-6">
+          <div class="flex-1">
+            <div class="flex items-center gap-3 mb-2">
+              <span class="rounded-full bg-amber-500 text-white text-xs font-bold px-3 py-1">Limited — first ${total} members</span>
+              ${soldOut ? `<span class="rounded-full bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1">Sold out</span>` : ""}
+            </div>
+            <h3 class="text-xl font-extrabold text-slate-900">${escapeHtml(founder.name)}</h3>
+            <p class="text-sm text-slate-600 mt-1">${escapeHtml(founder.tagline)}</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-2 mt-4">${planFeatureList(founder)}</ul>
+            <p class="mt-4 text-xs text-slate-500">${escapeHtml(founder.note)}</p>
+          </div>
+          <div class="lg:w-64 shrink-0">
+            <div class="text-4xl font-extrabold text-slate-900">${escapeHtml(founder.annual_display)}</div>
+            <div class="text-sm text-slate-500">per year, locked for life</div>
+            <div class="text-xs text-emerald-700 font-semibold mt-1">${escapeHtml(founder.annual_monthly_equivalent)}/mo equivalent</div>
+            <div class="mt-4">
+              <div class="h-2 rounded-full bg-amber-100 overflow-hidden">
+                <div class="h-full bg-amber-500" style="width:${pct}%"></div>
+              </div>
+              <div class="text-xs font-semibold text-slate-600 mt-2">
+                ${soldOut ? "All founding seats taken" : `${remaining} of ${total} seats left`}
+              </div>
+            </div>
+            ${
+              soldOut
+                ? `<div class="mt-4 rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-center text-sm font-semibold text-slate-400">Fully subscribed</div>`
+                : `<button data-plan="${escapeHtml(founder.id)}" data-period="annual" class="billing-cta mt-4 w-full rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 text-sm font-bold transition">Claim a founding seat</button>`
+            }
+          </div>
+        </div>
+      </div>`;
+  } else if (founderWrap) {
+    founderWrap.classList.add("hidden");
+  }
+
+  if (notice) {
+    if (billingCatalog.checkout_available) {
+      notice.innerHTML = "";
+    } else {
+      // Say plainly that checkout is not live yet rather than showing buttons
+      // that fail when clicked.
+      notice.innerHTML = `
+        <div class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Checkout is not connected yet.</strong>
+          Add your Stripe or Lemon Squeezy keys to <code>.env</code> and restart the app.
+          See <code>docs/BILLING_SETUP.md</code>. Prices below are live from the catalog.
+        </div>`;
+    }
+  }
+
+  grid.querySelectorAll(".billing-cta").forEach(bindCheckoutButton);
+  founderWrap?.querySelectorAll(".billing-cta").forEach(bindCheckoutButton);
+}
+
+function bindCheckoutButton(btn) {
+  btn.addEventListener("click", () => startCheckout(btn.dataset.plan, btn.dataset.period, btn));
+}
+
+function billingProvider() {
+  const providers = ((billingCatalog || {}).providers || {}).providers || {};
+  if (providers.stripe && providers.stripe.configured) return "stripe";
+  if (providers.lemon_squeezy && providers.lemon_squeezy.configured) return "lemon_squeezy";
+  return "";
+}
+
+async function startCheckout(planId, period, btn) {
+  if (billingBusy) return;
+  const provider = billingProvider();
+  if (!provider) {
+    toast("Checkout is not connected yet — add your payment keys to .env.", "error");
+    return;
+  }
+  billingBusy = true;
+  const original = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Opening checkout…";
+  }
+  try {
+    const ref = await ensureAccountRef();
+    const res = await api("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({
+        plan_id: planId,
+        billing_period: period,
+        provider,
+        account_ref: ref,
+      }),
+    });
+    // The provider's hosted page handles the card. The Factory never sees it.
+    window.location.href = res.checkout_url;
+  } catch (err) {
+    toast(err.message, "error");
+    // A refused founder seat means the cohort filled while this page was open.
+    await initBilling();
+  } finally {
+    billingBusy = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
 }
 
 // A launch package is always built FROM a saved product, so the dashboard card
