@@ -271,14 +271,19 @@ def lemon_create_checkout(
         raise BillingConfigError("LEMONSQUEEZY_STORE_ID is not set.")
     custom = {"account_ref": client_reference_id}
     custom.update({k: str(v) for k, v in (metadata or {}).items()})
+    checkout_data: dict[str, Any] = {"custom": custom}
+    # Lemon Squeezy validates checkout_data.email whenever the key is present,
+    # even when its value is null -- "must be a valid email address" is
+    # returned for a JSON null just as it would be for "not-an-email". Leaving
+    # the key out entirely (rather than sending None) is what actually means
+    # "let the customer type their own email on the hosted checkout page."
+    if customer_email:
+        checkout_data["email"] = customer_email
     payload = {
         "data": {
             "type": "checkouts",
             "attributes": {
-                "checkout_data": {
-                    "email": customer_email or None,
-                    "custom": custom,
-                },
+                "checkout_data": checkout_data,
                 "product_options": {"redirect_url": success_url},
             },
             "relationships": {

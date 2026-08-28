@@ -13,37 +13,49 @@ fail when clicked.
 
 ## What was decided, and why
 
-| Plan | Monthly | Annual | Products / month |
-|---|---|---|---|
-| Free | $0 | — | 3 |
-| Starter | $9.99 | $99 | 10 |
-| **Pro** (Most Popular) | **$24.99** | **$249** | 50 |
-| Studio | $39.99 | $399 | 200 |
-| **Founder's Plan** | — | **$99, locked for life** | 50 (Pro-level) |
+Four plans, monthly-only, matching the products built by hand in the Lemon
+Squeezy dashboard on 2026-08-25:
+
+| Plan | Monthly | Products / month |
+|---|---|---|
+| Free | $0 | 3 |
+| Starter | $19.00 | 10 |
+| Founder Launch | $29.00, locked for life, 100 seats | 50 (Pro-level) |
+| **Pro** (Most Popular) | **$39.00** | 50 |
+| Agency | $99.00 | 200 |
 
 Prices live in `services/billing/plans.py`. That file is the single source of
 truth: the pricing page reads it, and checkout re-checks the provider's amount
-against it and refuses if they disagree.
+against it and refuses if they disagree. Because Lemon Squeezy has no API for
+creating products, the dashboard is what actually decides these numbers —
+`plans.py` was written to match it, not the other way around. If a price ever
+changes in the dashboard, change `plans.py` first, or every checkout on that
+plan starts failing the price-agreement check.
+
+There are no annual variants right now — all four products are monthly-only.
+`plans.py` keeps `annual_cents = 0` rather than removing the concept, so an
+annual tier can be turned on later by setting a price, without touching the
+pricing page or the checkout code.
 
 **Why every paid tier is metered.** Each finished product costs real money to
-make — model calls, sometimes a stock-photo lookup. "Unlimited" on a $9.99 tier
-means the heaviest users pay the least and cost the most. The caps are
-generous enough that a normal seller never notices, and they keep the bottom of
-the ladder from being the thing that loses money.
+make — model calls, sometimes a stock-photo lookup. Unmetered generation on
+the cheapest tier means the heaviest users pay the least and cost the most.
+The caps are generous enough that a normal seller never notices, and they keep
+the bottom of the ladder from being the thing that loses money.
 
-**Why Pro is $24.99 and Studio exists.** Pro is the plan intended to be bought;
-Studio's job is partly to make Pro read as the sensible middle. Studio also
-carries the two things that genuinely justify a higher price — white-label
-exports and a resale licence — rather than being the same product with a bigger
-number.
+**Why Founder Launch is $29/month and not "under half of Pro."** The offer
+used to be priced as an annual plan at under half of Pro's annual price. Now
+that both are flat monthly numbers, $29 against Pro's $39 is a real discount —
+about 26% off, for the life of the subscription — but it is *not* half price.
+Don't reintroduce a "half the price of Pro" line in marketing copy; it's no
+longer true. `docs/BILLING_COPY.md` was written without that claim.
 
-**Why the Founder's Plan is $99/year and not a lifetime deal.** A lifetime deal
-takes cash once and creates a cost that recurs forever, which is a bad trade
-for a product with per-use costs. $99/year locked for life is close to the same
-emotional offer — it is under half the Pro price and it never rises — while
-still paying for itself every year the customer stays. If you would rather run
-a true lifetime deal, that is a pricing decision, not a code change: set the
-amount in `plans.py` and say so in the plan copy.
+**Agency currently reads as "Pro plus more volume," not a distinct tier.**
+Two features that would justify Agency's higher price — white-label exports
+and a commercial resale licence — are computed as entitlement flags in
+`plans.py` but implemented nowhere else in the codebase. They are deliberately
+left out of `BILLING_COPY.md` rather than sold and not delivered. Build them,
+or decide Agency is a volume tier and price/copy it as one.
 
 **Founder seat safety.** The cohort is exactly 100 people. The cap is enforced
 by the database inside a transaction, not by hiding the button, so two
@@ -108,18 +120,39 @@ subscription is later cancelled.
 
 ## 2. Lemon Squeezy
 
-Lemon Squeezy has no API for creating products, so build them by hand:
+Lemon Squeezy has no API for creating products, so they're built by hand in
+the dashboard. Four subscription products, each with one monthly variant,
+already exist there as of 2026-08-25:
 
-1. Settings → API → create an API key → `LEMONSQUEEZY_API_KEY`.
-2. Your store id is the number in the store dashboard URL → `LEMONSQUEEZY_STORE_ID`.
-3. Create one **subscription** product per plan and period, with the exact
-   amounts in the table above. Copy each **variant id** into the matching
-   `LEMONSQUEEZY_VARIANT_*` line in `.env`.
-4. Settings → Webhooks → add `<FACTORY_PUBLIC_URL>/billing/webhook/lemonsqueezy`
+| Product | Price | Billing |
+|---|---|---|
+| Starter | $19.00 | every 1 month |
+| Founder Launch | $29.00 | every 1 month |
+| Pro | $39.00 | every 1 month |
+| Agency | $99.00 | every 1 month |
+
+Every variant must be a **subscription** with **no free trial** — a trial
+makes the first invoice $0, which the price check below reads as a mismatch
+and refuses the sale.
+
+1. Settings → API → create an API key, with **test mode** on → `LEMONSQUEEZY_API_KEY`.
+2. Settings → Webhooks → add `<FACTORY_PUBLIC_URL>/billing/webhook/lemonsqueezy`
    with events `subscription_created`, `subscription_cancelled`,
    `subscription_expired`, `subscription_payment_failed`,
    `subscription_resumed`. Copy the signing secret to
    `LEMONSQUEEZY_WEBHOOK_SECRET`.
+3. Put the API key and webhook secret in `.env`, then run:
+
+   ```bash
+   .venv/Scripts/python.exe scripts/lemonsqueezy_ids.py
+   ```
+
+   Read-only — it never creates, changes, or prints your API key. It fetches
+   your store id, lists every subscription variant, matches each one to a
+   plan in `plans.py` by price and billing interval, and prints the exact
+   `LEMONSQUEEZY_STORE_ID` and `LEMONSQUEEZY_VARIANT_*` lines to paste into
+   `.env`. If a variant's price doesn't match `plans.py` exactly, it says so
+   instead of guessing.
 
 If both providers are configured, Stripe is used for checkout. Both webhook
 endpoints stay active either way, so an existing Lemon Squeezy subscriber keeps
@@ -133,14 +166,18 @@ working.
 .venv/Scripts/python.exe -m pytest tests/test_billing.py -q
 ```
 
-Then, with test keys in place:
+Then, with a test-mode key in place:
 
 1. Open the Subscription screen. The provider warning banner should be gone.
-2. Buy the Starter plan with Stripe's test card `4242 4242 4242 4242`.
-3. Confirm the webhook arrived (Stripe CLI output, or the dashboard's event
-   log) and that `GET /billing/subscription?account_ref=...` reports `active`.
+2. Buy the Starter plan. In Lemon Squeezy test mode, Stripe's test card
+   `4242 4242 4242 4242` works at their hosted checkout too.
+3. Confirm the webhook arrived (the dashboard's event log) and that
+   `GET /billing/subscription?account_ref=...` reports `active`.
 4. Claim a founding seat and confirm the seat counter drops by one.
-5. Cancel it in the Stripe dashboard and confirm the seat comes back.
+5. Cancel it in the Lemon Squeezy dashboard and confirm the seat comes back.
+
+This needs a public URL for the webhook to reach — see the ngrok setup this
+session already walked through. Only run the tunnel while actively testing.
 
 ---
 

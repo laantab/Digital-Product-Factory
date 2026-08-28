@@ -46,11 +46,13 @@ class PlanCatalogTests(unittest.TestCase):
     """Pricing is coherent, and inside the band the owner asked for."""
 
     def test_every_paid_plan_sits_in_the_requested_price_band(self):
+        # Matches the four products built by hand in Lemon Squeezy on
+        # 2026-08-25: Starter $19, Founder Launch $29, Pro $39, Agency $99.
         for plan in P.ALL_PLANS:
             if plan.monthly_cents:
                 with self.subTest(plan=plan.id):
-                    self.assertGreaterEqual(plan.monthly_cents, 999)
-                    self.assertLessEqual(plan.monthly_cents, 3999)
+                    self.assertGreaterEqual(plan.monthly_cents, 1900)
+                    self.assertLessEqual(plan.monthly_cents, 9900)
 
     def test_the_ladder_increases_in_price_and_in_capacity(self):
         ladder = [P.STARTER, P.PRO, P.STUDIO]
@@ -59,16 +61,15 @@ class PlanCatalogTests(unittest.TestCase):
                 self.assertLess(lower.monthly_cents, higher.monthly_cents)
                 self.assertLess(lower.products_per_month, higher.products_per_month)
 
-    def test_annual_really_does_save_at_least_two_months(self):
-        # The pricing page advertises "2 months free" on the annual tab. Annual
-        # prices are additionally rounded down to a whole dollar, so the
-        # guarantee is "at most ten months of the monthly price", not exactly.
-        for plan in (P.STARTER, P.PRO, P.STUDIO):
+    def test_no_plan_currently_offers_an_annual_period(self):
+        # The Lemon Squeezy dashboard only has monthly products today. Annual
+        # pricing stays at 0 rather than being deleted from the dataclass, so
+        # turning an annual tier on later is a price change here, not a
+        # rebuild of the pricing page or the checkout flow.
+        for plan in P.ALL_PLANS:
             with self.subTest(plan=plan.id):
-                self.assertLessEqual(plan.annual_cents, plan.monthly_cents * 10)
-                self.assertGreater(plan.annual_cents, plan.monthly_cents * 9)
-                # Whole dollars, so the page never shows "$249.90 per year".
-                self.assertEqual(plan.annual_cents % 100, 0)
+                self.assertEqual(plan.annual_cents, 0)
+                self.assertFalse(P.is_period_available(plan, P.ANNUAL))
 
     def test_exactly_one_plan_is_flagged_most_popular(self):
         highlighted = [p for p in P.ALL_PLANS if p.highlight]
@@ -82,12 +83,13 @@ class PlanCatalogTests(unittest.TestCase):
                 self.assertGreater(plan.products_per_month, 0)
 
     def test_founder_plan_undercuts_pro_and_locks_the_price(self):
-        # "Everything in Pro, for less than half the Pro price" is printed on
-        # the card, so it has to remain true.
-        self.assertLess(P.FOUNDER.annual_cents, P.PRO.annual_cents // 2)
-        # ...and it must sit above Starter annual, or the two plans read as the
-        # same offer and Starter annual has no reason to exist.
-        self.assertGreater(P.FOUNDER.annual_cents, P.STARTER.annual_cents)
+        # Founder Launch is $29 against Pro's $39 — a real discount, but not
+        # the "under half of Pro" claim the older $119/yr-vs-$249/yr pricing
+        # made. Do not restate that claim in plan copy; it is no longer true.
+        self.assertLess(P.FOUNDER.monthly_cents, P.PRO.monthly_cents)
+        # ...and it must sit above Starter, or the two plans read as the same
+        # offer and Starter has no reason to exist next to it.
+        self.assertGreater(P.FOUNDER.monthly_cents, P.STARTER.monthly_cents)
         self.assertTrue(P.FOUNDER.price_locked_for_life)
         self.assertEqual(P.FOUNDER.limited_seats, 100)
         # Founder entitlements match Pro, so the offer is a discount and not a
@@ -95,9 +97,9 @@ class PlanCatalogTests(unittest.TestCase):
         self.assertEqual(
             P.FOUNDER.products_per_month, P.PRO.products_per_month)
 
-    def test_founder_plan_is_annual_only(self):
-        self.assertTrue(P.is_period_available(P.FOUNDER, P.ANNUAL))
-        self.assertFalse(P.is_period_available(P.FOUNDER, P.MONTHLY))
+    def test_founder_plan_is_monthly_only(self):
+        self.assertTrue(P.is_period_available(P.FOUNDER, P.MONTHLY))
+        self.assertFalse(P.is_period_available(P.FOUNDER, P.ANNUAL))
 
     def test_prices_render_the_way_a_customer_expects(self):
         self.assertEqual(P.format_price(0), "$0")
@@ -110,11 +112,11 @@ class PlanCatalogTests(unittest.TestCase):
             P.get_plan("enterprise")
 
     def test_a_provider_price_that_disagrees_stops_checkout(self):
-        P.verify_provider_price("pro", P.MONTHLY, 2499, "usd")  # agrees
+        P.verify_provider_price("pro", P.MONTHLY, 3900, "usd")  # agrees
         with self.assertRaises(ValueError):
             P.verify_provider_price("pro", P.MONTHLY, 2999, "usd")
         with self.assertRaises(ValueError):
-            P.verify_provider_price("pro", P.MONTHLY, 2499, "gbp")
+            P.verify_provider_price("pro", P.MONTHLY, 3900, "gbp")
 
     def test_catalog_reports_seats_for_the_founder_plan(self):
         payload = P.catalog(founder_seats_remaining=42)
@@ -269,6 +271,66 @@ class LemonWebhookTests(unittest.TestCase):
             PR.verify_lemon_webhook(b"{}", "", secret=self.SECRET)
 
 
+class LemonCheckoutPayloadTests(unittest.TestCase):
+    """Pins the exact request body sent to POST /checkouts.
+
+    Regression: this call site previously sent `"email": customer_email or
+    None`, so an account with no email on file produced a literal JSON `null`.
+    Lemon Squeezy validates `checkout_data.email` whenever the key is present
+    — even when the value is null — and rejected every such checkout with
+    "must be a valid email address", a 502 no unit test caught because nothing
+    here inspected the payload actually placed on the wire. The fix omits the
+    key entirely when there is no email, letting the customer type their own
+    on Lemon Squeezy's hosted page instead.
+    """
+
+    def _captured_payload(self, **kwargs):
+        captured = {}
+
+        def fake_request(method, url, data=None, headers=None, timeout=None):
+            captured["method"] = method
+            captured["url"] = url
+            captured["body"] = json.loads(data) if data else None
+            resp = mock.Mock()
+            resp.status_code = 201
+            resp.json.return_value = {
+                "data": {"id": "chk_1",
+                         "attributes": {"url": "https://pay.example/chk_1"}}}
+            return resp
+
+        with mock.patch.dict(os.environ, {
+            "LEMONSQUEEZY_API_KEY": "ls_test", "LEMONSQUEEZY_STORE_ID": "999",
+        }, clear=False), \
+             mock.patch("services.billing.providers.requests.request",
+                       side_effect=fake_request):
+            PR.lemon_create_checkout(
+                variant_id="var_1", success_url="https://app.example/ok",
+                client_reference_id="acct_x", **kwargs)
+        return captured["body"]
+
+    def test_no_email_key_is_sent_when_the_customer_has_no_email(self):
+        body = self._captured_payload(customer_email="")
+        checkout_data = body["data"]["attributes"]["checkout_data"]
+        self.assertNotIn("email", checkout_data)
+
+    def test_a_real_email_is_included_when_present(self):
+        body = self._captured_payload(customer_email="buyer@example.com")
+        checkout_data = body["data"]["attributes"]["checkout_data"]
+        self.assertEqual(checkout_data["email"], "buyer@example.com")
+
+    def test_the_account_ref_always_travels_in_custom_data(self):
+        body = self._captured_payload(customer_email="")
+        custom = body["data"]["attributes"]["checkout_data"]["custom"]
+        self.assertEqual(custom["account_ref"], "acct_x")
+
+    def test_metadata_is_stringified_into_custom_data(self):
+        body = self._captured_payload(
+            customer_email="", metadata={"plan_id": "founder", "seat": 7})
+        custom = body["data"]["attributes"]["checkout_data"]["custom"]
+        self.assertEqual(custom["plan_id"], "founder")
+        self.assertEqual(custom["seat"], "7")  # stringified, not left as int
+
+
 class WebhookHandlingTests(unittest.TestCase):
     """Providers deliver more than once; that must not double-count anything."""
 
@@ -361,7 +423,7 @@ class CheckoutTests(unittest.TestCase):
             "STRIPE_SECRET_KEY": "sk_test_x",
             "STRIPE_WEBHOOK_SECRET": "whsec_x",
             "STRIPE_PRICE_PRO_MONTHLY": "price_pro_m",
-            "STRIPE_PRICE_FOUNDER_ANNUAL": "price_founder_a",
+            "STRIPE_PRICE_FOUNDER_MONTHLY": "price_founder_m",
         }
         env.update(extra)
         return mock.patch.dict(os.environ, env, clear=False)
@@ -383,10 +445,12 @@ class CheckoutTests(unittest.TestCase):
                 SVC.start_checkout(plan_id="free", billing_period="monthly",
                                    provider="stripe", account_ref="acct_x")
 
-    def test_a_monthly_founder_seat_is_refused(self):
+    def test_an_annual_founder_seat_is_refused(self):
+        # Founder Launch is monthly-only in the Lemon Squeezy dashboard; there
+        # is no annual variant to sell.
         with self._configured_env():
             with self.assertRaises(SVC.CheckoutError):
-                SVC.start_checkout(plan_id="founder", billing_period="monthly",
+                SVC.start_checkout(plan_id="founder", billing_period="annual",
                                    provider="stripe", account_ref="acct_x")
 
     def test_an_unknown_provider_is_refused(self):
@@ -397,14 +461,14 @@ class CheckoutTests(unittest.TestCase):
     def test_a_successful_checkout_returns_a_provider_link(self):
         with self._configured_env(), \
              mock.patch.object(PR, "stripe_price",
-                               return_value={"unit_amount": 2499, "currency": "usd"}), \
+                               return_value={"unit_amount": P.PRO.monthly_cents, "currency": "usd"}), \
              mock.patch.object(PR, "stripe_create_checkout",
                                return_value={"id": "cs_live", "url": "https://pay.example/cs_live"}):
             result = SVC.start_checkout(
                 plan_id="pro", billing_period="monthly", provider="stripe",
                 account_ref="acct_ok")
         self.assertEqual(result["checkout_url"], "https://pay.example/cs_live")
-        self.assertEqual(result["price_display"], "$24.99")
+        self.assertEqual(result["price_display"], "$39")
 
     def test_a_price_that_disagrees_with_the_catalog_stops_checkout(self):
         with self._configured_env(), \
@@ -419,11 +483,11 @@ class CheckoutTests(unittest.TestCase):
     def test_a_founder_seat_is_claimed_before_the_provider_is_called(self):
         with self._configured_env(), \
              mock.patch.object(PR, "stripe_price",
-                               return_value={"unit_amount": P.FOUNDER.annual_cents, "currency": "usd"}), \
+                               return_value={"unit_amount": P.FOUNDER.monthly_cents, "currency": "usd"}), \
              mock.patch.object(PR, "stripe_create_checkout",
                                return_value={"id": "cs_f", "url": "https://pay.example/f"}):
             result = SVC.start_checkout(
-                plan_id="founder", billing_period="annual", provider="stripe",
+                plan_id="founder", billing_period="monthly", provider="stripe",
                 account_ref="acct_founder")
         self.assertEqual(result["founder_seat"], 1)
         self.assertEqual(result["seats_remaining"], 99)
@@ -431,11 +495,11 @@ class CheckoutTests(unittest.TestCase):
     def test_a_failed_provider_call_gives_the_founder_seat_back(self):
         with self._configured_env(), \
              mock.patch.object(PR, "stripe_price",
-                               return_value={"unit_amount": P.FOUNDER.annual_cents, "currency": "usd"}), \
+                               return_value={"unit_amount": P.FOUNDER.monthly_cents, "currency": "usd"}), \
              mock.patch.object(PR, "stripe_create_checkout",
                                side_effect=PR.BillingProviderError("card network down")):
             with self.assertRaises(PR.BillingProviderError):
-                SVC.start_checkout(plan_id="founder", billing_period="annual",
+                SVC.start_checkout(plan_id="founder", billing_period="monthly",
                                    provider="stripe", account_ref="acct_fail")
         self.assertEqual(S.founder_seats_taken(), 0)
 
@@ -443,11 +507,11 @@ class CheckoutTests(unittest.TestCase):
         for i in range(100):
             S.reserve_founder_seat(
                 account_ref=f"acct_{i}", provider="stripe",
-                billing_period="annual", price_cents=9900, currency="usd",
-                limit=100)
+                billing_period="monthly", price_cents=P.FOUNDER.monthly_cents,
+                currency="usd", limit=100)
         with self._configured_env():
             with self.assertRaises(SVC.CheckoutError) as ctx:
-                SVC.start_checkout(plan_id="founder", billing_period="annual",
+                SVC.start_checkout(plan_id="founder", billing_period="monthly",
                                    provider="stripe", account_ref="acct_late")
         self.assertIn("fully subscribed", str(ctx.exception).lower())
 

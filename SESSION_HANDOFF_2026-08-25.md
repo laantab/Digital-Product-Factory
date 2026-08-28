@@ -2,6 +2,130 @@
 
 **Start a new session with:** "Read flask_app/SESSION_HANDOFF_2026-08-25.md and continue."
 
+---
+
+# PICK UP HERE — Billing is DONE and verified end to end with a real transaction
+
+Updated 2026-08-26 evening. **Every piece of the billing system has now been
+proven working with a real Lemon Squeezy test-mode purchase, not just code
+review or a dry run.** This closes out the multi-session billing effort that
+started 2026-08-25. Everything below "## 2. Billing" in this file is now
+historical background — read it for the *reasoning*, but for *current status*
+trust this section, not that one (it still says "NOT connected", which is
+stale).
+
+## What was proven, live, this session
+
+Full loop, checked at every step via the Lemon Squeezy API and the app's own
+DB, not just the UI:
+
+1. **All 4 product images fixed.** Root cause: clicking the visible "browse"
+   button opens the OS's native file picker, which browser automation cannot
+   see or click — so every earlier upload attempt silently did nothing. Fixed
+   by uploading directly to the underlying file input element instead (see
+   `mcp__claude-in-chrome__file_upload` in this session's transcript). Also
+   found and deleted stray copies of each image sitting in the wrong section
+   (**Files** — deliverables — instead of **Media** — the checkout thumbnail).
+   All 4 confirmed via `large_thumb_url` on the product record.
+2. **A real test purchase completed.** Founder Launch, $29/mo, test card
+   `4242 4242 4242 4242`, real Lemon Squeezy order and subscription created.
+3. **Found and fixed a real bug: the webhook pointed at the wrong URL.**
+   `https://testme.com/webhooks` — a leftover placeholder from 2026-06-05, not
+   the tunnel. Lemon Squeezy tried to deliver and got nowhere; the purchase
+   above never activated until manually reconciled from Lemon Squeezy's own
+   record. **Fixed via the API**: webhook URL now points at
+   `<FACTORY_PUBLIC_URL>/billing/webhook/lemonsqueezy`, secret resynced to
+   match `.env`, events corrected to the documented 5.
+4. **Verified the fix holds, not just patched around:** cancelled that same
+   test subscription via the API, and this time — with no manual
+   intervention — the `subscription_cancelled` webhook arrived, was recorded
+   in `billing_events`, and the founder seat released itself (99 → 100)
+   automatically. That second event landing on its own, unassisted, is the
+   proof the fix is real.
+5. **Fixed a second real bug found along the way**, unrelated to the webhook
+   URL: `services/billing/providers.py::lemon_create_checkout` sent
+   `"email": customer_email or None`, which Lemon Squeezy's API rejects
+   ("must be a valid email address") whenever the key is present at all, even
+   as JSON `null`. Fixed to omit the key entirely when there is no email on
+   file. Covered by 4 new tests in `LemonCheckoutPayloadTests` (`tests/test_billing.py`)
+   that pin the exact payload shape sent to `POST /checkouts` — this class did
+   not exist before and is why nothing had caught it.
+
+## Current live state (checked just before this handoff)
+
+- App (5055) and cloudflared tunnel both up, same URL as the last several
+  handoffs: `https://arguments-enormous-rivers-glasses.trycloudflare.com`.
+  Restart commands unchanged if they've died — see the historical section
+  below. **If the tunnel URL changes, three things need updating**:
+  `FACTORY_PUBLIC_URL` in `.env`, the webhook URL in the Lemon Squeezy
+  dashboard (now editable via API too — see `services/billing/providers.py`,
+  no helper script for it yet), and restart the app.
+- Founder seats: **100/100** (the test purchase was cleanly cancelled).
+- `checkout_available: true`. All 4 products have images and correct prices.
+- The webhook is correctly configured — confirm with:
+  ```python
+  from services.billing import providers as PR
+  b = PR._lemon_request('GET', '/webhooks?filter[store_id]=397800')
+  for w in b.get('data') or []:
+      print((w.get('attributes') or {}).get('url'))
+  ```
+  Should print the tunnel URL, not `testme.com`. If the tunnel URL has since
+  changed and this still shows the old one, that is the very bug from item 3
+  above recurring — fix it the same way.
+
+## Real gaps, not oversights — each needs an owner decision
+
+None of these block what exists today; each is a deliberate stopping point.
+
+1. **No user accounts.** The browser holds an anonymous `account_ref` in
+   `localStorage`. It identifies a subscription but authenticates nothing —
+   clearing browser data loses the link to a paid subscription. Should land
+   before taking money from strangers who aren't the owner testing on their
+   own machine.
+2. **Plan limits are computed but not enforced.** `usage_payload()` correctly
+   knows the cap and current usage; `/generate-product` does not check it.
+   Every plan is effectively unlimited in practice right now.
+3. **The public URL is a temporary quick tunnel.** Fine for testing,
+   needs a real domain (or at minimum a stable named tunnel) before anyone
+   outside this machine can actually subscribe.
+
+## Traps, still true
+
+- **Two Lemon Squeezy stores exist**: `397800 Digital Product Factory AI`
+  (real, everything belongs here) and `145172 Tryme` (empty, ignore).
+- **ngrok is a dead end** here: account needs agent >= 3.20, winget ships
+  3.3.1, self-update gets blocked by Windows Defender. Do not add an
+  antivirus exclusion — cloudflared works, keep using it.
+- **Never type the owner's keys, tokens, or card details.** They enter those
+  themselves; verify results via the API/DB instead. This was tested for real
+  this session — the owner filled in the test card personally while I only
+  focused the field.
+- Owner's ngrok authtoken was exposed in a screenshot two sessions ago; unclear
+  if they revoked it. Low urgency since ngrok is unused, but worth a check.
+- The `1316638`/`1316646`/`1318410`/`1316656` product ids and the `2058724`
+  etc. variant ids are already correct in `.env` — do not re-run
+  `scripts/lemonsqueezy_ids.py` unless a product is actually added or changed,
+  it is safe but unnecessary.
+
+## Repo state — verified purchase, but NOTHING pushed, gate not re-run
+
+- Uncommitted: `plans.py`, `providers.py` (new fix this session),
+  `.env.example`, `docs/BILLING_SETUP.md`, `static/js/app.js`,
+  `templates/index.html`, `tests/test_billing.py`, this handoff, plus new
+  `docs/BILLING_COPY.md`, `scripts/lemonsqueezy_ids.py`,
+  `scripts/setup_billing_keys.ps1`, `scripts/generate_plan_images.py`,
+  `Setup_Billing_Keys.bat`.
+- `tests/test_billing.py` passes (59, up from 55 — added
+  `LemonCheckoutPayloadTests`), but **`preflight_check.py` has still not been
+  run since any of this session's changes** — run the full gate before
+  committing anything.
+- `56b72b8` (v1.3.0) remains **local only, 1 commit ahead of origin/main**.
+  Repo is public; owner has deliberately not pushed unlaunched pricing.
+  **Do not push without asking** — this is now more true than ever, since a
+  push would also publish a real (if cancelled) test transaction's plumbing.
+
+---
+
 ## State right now
 
 - **Release gate GREEN: 1016 tests**, 0 failures, 0 errors, 0 skipped, 0 paid API calls.

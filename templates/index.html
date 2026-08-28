@@ -852,11 +852,12 @@
           <div class="text-center max-w-2xl mx-auto">
             <h2 class="text-2xl font-extrabold text-slate-900">Simple, Transparent Pricing</h2>
             <p class="mt-2 text-slate-500">Start free. Upgrade when you're ready to scale.</p>
-            <div class="mt-5 inline-flex rounded-xl bg-slate-100 p-1 text-sm font-semibold">
-              <button id="billingPeriodMonthly" data-period="monthly" class="billing-period-tab rounded-lg px-4 py-1.5 transition">Monthly</button>
-              <button id="billingPeriodAnnual" data-period="annual" class="billing-period-tab rounded-lg px-4 py-1.5 transition">Annual <span class="text-emerald-600">- 2 months free</span></button>
-            </div>
           </div>
+          <!-- No monthly/annual toggle: every plan in services/billing/plans.py is
+               monthly-only right now, matching what's built in Lemon Squeezy. If an
+               annual price is ever added there, re-add the .billing-period-tab
+               buttons here — renderBillingPlans() and setBillingPeriod() in
+               static/js/app.js already handle a plan offering more than one period. -->
 
           <!-- Founder's Plan: rendered separately because it is a limited cohort,
                not another column in the ladder. -->

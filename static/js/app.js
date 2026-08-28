@@ -691,9 +691,16 @@ function renderBillingPlans() {
             <p class="mt-4 text-xs text-slate-500">${escapeHtml(founder.note)}</p>
           </div>
           <div class="lg:w-64 shrink-0">
-            <div class="text-4xl font-extrabold text-slate-900">${escapeHtml(founder.annual_display)}</div>
-            <div class="text-sm text-slate-500">per year, locked for life</div>
-            <div class="text-xs text-emerald-700 font-semibold mt-1">${escapeHtml(founder.annual_monthly_equivalent)}/mo equivalent</div>
+            ${(() => {
+              // The Founder's Plan may not always be monthly-only — periods[0]
+              // is whatever this plan actually offers right now, so this card
+              // never quietly drifts out of sync with services/billing/plans.py.
+              const fPeriod = founder.periods[0] || "monthly";
+              const fPrice = planPriceFor(founder, fPeriod);
+              const fSuffix = fPeriod === "annual" ? "per year, locked for life" : "per month, locked for life";
+              return `
+            <div class="text-4xl font-extrabold text-slate-900">${escapeHtml(fPrice.display)}</div>
+            <div class="text-sm text-slate-500">${fSuffix}</div>
             <div class="mt-4">
               <div class="h-2 rounded-full bg-amber-100 overflow-hidden">
                 <div class="h-full bg-amber-500" style="width:${pct}%"></div>
@@ -705,8 +712,9 @@ function renderBillingPlans() {
             ${
               soldOut
                 ? `<div class="mt-4 rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-center text-sm font-semibold text-slate-400">Fully subscribed</div>`
-                : `<button data-plan="${escapeHtml(founder.id)}" data-period="annual" class="billing-cta mt-4 w-full rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 text-sm font-bold transition">Claim a founding seat</button>`
-            }
+                : `<button data-plan="${escapeHtml(founder.id)}" data-period="${escapeHtml(fPeriod)}" class="billing-cta mt-4 w-full rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 text-sm font-bold transition">Claim a founding seat</button>`
+            }`;
+            })()}
           </div>
         </div>
       </div>`;

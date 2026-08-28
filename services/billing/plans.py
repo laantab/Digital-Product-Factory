@@ -14,8 +14,21 @@ most. The paid tiers are therefore metered by finished products per month, and
 "effectively unlimited" only appears at the top, where the price can absorb it.
 
 The ladder is good / better / best with the middle tier as the intended
-default: Pro is the one flagged Most Popular, and Studio exists partly to make
+default: Pro is the one flagged Most Popular, and Agency exists partly to make
 Pro read as the sensible choice.
+
+These four prices (Starter, Founder Launch, Pro, Agency) mirror the products
+built by hand in the Lemon Squeezy dashboard on 2026-08-25 — see
+`docs/BILLING_SETUP.md`. Lemon Squeezy has no API for creating products, so
+the dashboard is authoritative and this file was written to match it, not the
+other way around. If a price ever changes in the dashboard, change it here
+first and re-check the dashboard, or checkout will refuse every sale on that
+plan (see `verify_provider_price`).
+
+All four plans are monthly-only for now — the dashboard has no annual
+variants. `annual_cents` is kept at 0 rather than deleted so an annual tier
+can be turned on later by setting a price, without any other code changing;
+`is_period_available` already reads that generically.
 
 Amounts are integer cents. Never use floats for money.
 """
@@ -98,8 +111,8 @@ STARTER = Plan(
     id="starter",
     name="Starter",
     tagline="For the first products you intend to sell",
-    monthly_cents=999,
-    annual_cents=9900,
+    monthly_cents=1900,
+    annual_cents=0,
     products_per_month=10,
     order=1,
     features=(
@@ -116,37 +129,38 @@ PRO = Plan(
     id="pro",
     name="Pro",
     tagline="For a real catalog and a real launch",
-    monthly_cents=2499,
-    annual_cents=24900,
+    monthly_cents=3900,
+    annual_cents=0,
     products_per_month=50,
     highlight=True,
-    order=2,
+    order=3,
     features=(
         "50 finished products per month",
         "Everything in Starter",
         "Unlimited Factory Market Advantage research",
         "Launch Package: landing page, freebie, ads, email sequence",
         "Ad and promotion package generator",
-        "Priority generation queue",
         "Priority support",
     ),
 )
 
+# Displayed to customers as "Agency" — kept as the internal id `studio` so the
+# LEMONSQUEEZY_VARIANT_STUDIO_* / STRIPE_PRICE_STUDIO_* env names and existing
+# `entitlements()` checks below don't need to change with the rename.
 STUDIO = Plan(
     id="studio",
-    name="Studio",
-    tagline="For selling under your own brand, at volume",
-    monthly_cents=3999,
-    annual_cents=39900,
+    name="Agency",
+    tagline="For client work and publishing at volume",
+    monthly_cents=9900,
+    annual_cents=0,
     products_per_month=200,
-    order=3,
+    order=4,
     note="200 products a month is a fair-use ceiling, not a hard stop — talk to "
          "us before you hit it.",
     features=(
         "200 finished products per month",
         "Everything in Pro",
-        "White-label exports with your own brand on every page",
-        "Commercial resale licence",
+        "Commercial use across unlimited client projects",
         "Bulk export and batch generation",
         "Named support contact",
     ),
@@ -154,31 +168,26 @@ STUDIO = Plan(
 
 FOUNDER = Plan(
     id="founder",
-    name="Founder's Plan",
+    name="Founder Launch",
     tagline="For the first 100 people who back the Factory",
-    monthly_cents=0,                  # annual only, on purpose
-    # $119/yr — just under half of Pro's $249, and deliberately *above*
-    # Starter's $99. Pricing it at $99 made the two identical on the page,
-    # which both flattened the founder offer and left Starter annual with no
-    # reason to exist while seats remained.
-    annual_cents=11900,
+    monthly_cents=2900,
+    annual_cents=0,
     products_per_month=50,            # Pro-level entitlements
     limited_seats=FOUNDER_SEAT_LIMIT,
     price_locked_for_life=True,
-    order=4,
-    note="Annual only. Your price never rises for as long as the subscription "
-         "stays active — including through every future price increase.",
+    order=2,
+    note="Your price never rises for as long as the subscription stays "
+         "active — including through every future price increase.",
     features=(
-        "Everything in Pro, for less than half the Pro price",
+        "Everything in Pro, at a permanently discounted rate",
         "50 finished products per month",
         "Price locked for life — renewals never increase",
-        "Founding member badge on your account",
         "Direct line to the roadmap: founders vote on what gets built next",
         "First access to every new product type",
     ),
 )
 
-ALL_PLANS: tuple[Plan, ...] = (FREE, STARTER, PRO, STUDIO, FOUNDER)
+ALL_PLANS: tuple[Plan, ...] = (FREE, STARTER, FOUNDER, PRO, STUDIO)
 PLANS_BY_ID = {p.id: p for p in ALL_PLANS}
 PAID_PLAN_IDS = tuple(p.id for p in ALL_PLANS if p.monthly_cents or p.annual_cents)
 DEFAULT_PLAN_ID = FREE.id
@@ -192,8 +201,9 @@ def get_plan(plan_id: str) -> Plan:
 
 
 def is_period_available(plan: Plan, period: str) -> bool:
-    """The Founder's Plan is annual only; a monthly founder seat would let
-    someone hold a lifetime-locked price for one month's commitment."""
+    """A period is on offer only if this file has a nonzero price for it.
+    Every plan is monthly-only today because that is all that exists in the
+    Lemon Squeezy dashboard; see the module docstring."""
     if period not in BILLING_PERIODS:
         return False
     return plan.price_cents(period) > 0
