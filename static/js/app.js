@@ -2466,7 +2466,11 @@ function recommendationSummaryFrom(d) {
     internal_recommendation: internal,
     user_decision: userDecision,
     why_we_recommend: why,
-    what_to_build: `Start with: a ${productType || "Factory product"} for ${audience} based on ${productName} that helps with ${problem}.`,
+    // "helps with <problem>" has to survive the customer stating the problem as
+    // a full clause ("families overspend because ..."), so the clause is
+    // introduced rather than dropped in after a preposition. Mirrors
+    // _as_need_phrase() in services/market_research.py.
+    what_to_build: `Start with: a ${productType || "Factory product"} for ${audience} based on ${productName}, addressing this problem: ${String(problem).replace(/\.$/, "")}.`,
     component_signals: [
       { key: "demand", label: "Demand", signal: plainComponentSignal(comps.demand) },
       { key: "competition_opportunity", label: "Competition", signal: plainComponentSignal(comps.competition_opportunity) },
@@ -2517,17 +2521,46 @@ function simpleScoreSignalsHtml(summary) {
   <p class="text-xs text-slate-500 mt-2">${escapeHtml((summary && summary.disclaimer) || "Scores and revenue estimates are research indicators, not guaranteed sales or earnings.")}</p>`;
 }
 
+// The headings have to agree with the verdict underneath them. Announcing
+// "Here is what we recommend." / "Why We Recommend It" above a verdict of
+// "Needs Improvement" (with three signals reading More Research Needed) reads
+// as though Factory did not look at its own findings, which is exactly the
+// trust the transparent scoring is meant to buy.
+function recommendationHeadings(summary) {
+  const decision = (summary && summary.user_decision) || "";
+  if (decision === "AVOID") {
+    return {
+      headline: "Here is what we found.",
+      why: "What The Evidence Shows",
+      build: "If You Still Want To Build It",
+    };
+  }
+  if (decision === "IMPROVE THE IDEA") {
+    return {
+      headline: "Here is what we found.",
+      why: "What The Evidence Shows",
+      build: "What We Suggest Building",
+    };
+  }
+  return {
+    headline: "Here is what we recommend.",
+    why: "Why We Recommend It",
+    build: "What We Recommend Building",
+  };
+}
+
 function recommendationSummaryHtml(d, summary) {
+  const headings = recommendationHeadings(summary);
   return `<div id="fmaRecommendationSummary" data-fma-view="recommendation-summary" class="rounded-2xl border-2 border-brand-500 bg-white p-6">
     <div class="text-xs font-semibold uppercase tracking-widest text-brand-600">Factory Market Advantage</div>
-    <h3 class="text-lg font-bold text-slate-900 mt-1">Here is what we recommend.</h3>
+    <h3 class="text-lg font-bold text-slate-900 mt-1">${escapeHtml(headings.headline)}</h3>
     <p class="text-sm text-slate-500 mb-4">Find it. Prove it—before you build it.</p>
     <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Your Best Opportunity</div>
     <div class="text-2xl font-bold text-slate-900 mt-1">${escapeHtml(summary.product_name)}</div>
     <div class="mt-2 text-sm"><span class="font-semibold">Opportunity:</span> ${escapeHtml(summary.opportunity_label)}</div>
-    <h4 class="text-base font-bold text-slate-900 mt-5 mb-2">Why We Recommend It</h4>
+    <h4 class="text-base font-bold text-slate-900 mt-5 mb-2">${escapeHtml(headings.why)}</h4>
     <p class="text-sm text-slate-700">${escapeHtml(summary.why_we_recommend)}</p>
-    <h4 class="text-base font-bold text-slate-900 mt-5 mb-2">What We Recommend Building</h4>
+    <h4 class="text-base font-bold text-slate-900 mt-5 mb-2">${escapeHtml(headings.build)}</h4>
     <p class="text-sm text-slate-700">${escapeHtml(summary.what_to_build)}</p>
     ${simpleScoreSignalsHtml(summary)}
     <div class="mt-3">

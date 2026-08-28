@@ -1747,6 +1747,18 @@ def recommended_mvp_text(
     return text
 
 
+def _restates(candidate: str, already_said: str) -> bool:
+    """True when `candidate` carries no information beyond `already_said`.
+
+    Compares on the stated problem's own words rather than whole strings, so a
+    sentence that merely wraps the problem in boilerplate ("A Budget Planner for
+    <audience> addressing <problem>") is recognised as a restatement.
+    """
+    core = _clean(already_said).rstrip(".").lower()
+    text = _clean(candidate).lower()
+    return bool(core) and core in text
+
+
 def why_we_recommend_text(
     *,
     inputs: dict,
@@ -1794,6 +1806,12 @@ def why_we_recommend_text(
     why = reject_unsupported_trend_language(
         _clean(reco.get("why_selected")) or _clean(top.get("why_opportunity"))
     )
+    # A "why" that just replays the customer's own problem statement adds
+    # nothing after the sentence above already quoted it -- that is exactly what
+    # the input-backed draft produces when the AI is unavailable, and it read as
+    # a stutter on the results page. Prefer the generic angle sentence instead.
+    if why and problem and _restates(why, problem):
+        why = ""
     if standout_signal == "Good Signal":
         if why:
             sentences.append(why if why.endswith(".") else why + ".")

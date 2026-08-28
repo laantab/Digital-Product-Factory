@@ -95,6 +95,14 @@ def _error(message: str, status: int = 400):
     return jsonify({"error": message}), status
 
 
+# Shown when research dies outright. Deliberately says nothing about which
+# provider failed or why -- that goes to the log, not the customer's page.
+RESEARCH_FAILURE_MESSAGE = (
+    "We couldn't complete the research just now. Your inputs have been kept — "
+    "please try again."
+)
+
+
 @app.get("/pexels-status")
 def pexels_status_route():
     """Safe Pexels configuration status for the running Flask process. Never returns the key."""
@@ -266,11 +274,14 @@ def research_route():
         )
     except ValueError as exc:
         return _error(str(exc), 400)
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
+        # The exception text is logged, never returned: this payload's "error"
+        # is rendered straight into the results page, and provider exceptions
+        # carry key fragments and stack detail no customer should see.
         app.logger.exception("research failed")
         return jsonify(
             {
-                "error": str(exc),
+                "error": RESEARCH_FAILURE_MESSAGE,
                 "inputs": collect_inputs(body),
                 "retryable": True,
             }

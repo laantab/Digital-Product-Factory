@@ -18,8 +18,9 @@ sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 os.environ["FACTORY_TEST_MODE"] = "1"
 
-from app import app  # noqa: E402
+from app import RESEARCH_FAILURE_MESSAGE, app  # noqa: E402
 import database  # noqa: E402
+import services.market_research as MR  # noqa: E402
 from services.book_sales_estimate import estimate_book_sales  # noqa: E402
 from services.factory_advantage import (  # noqa: E402
     DISCLAIMER,
@@ -1758,6 +1759,120 @@ class FactoryMarketAdvantageUxTests(unittest.TestCase):
             self._idea_research()
         after = _4249_fingerprint(database.get_project(4249)["data"])
         self.assertEqual(before, after)
+
+
+class DegradedModePresentationTests(unittest.TestCase):
+    """What the customer sees when the AI or live research is unavailable.
+
+    All three regressions here were found by running one real research through
+    the deployed app with a dead OpenAI key: the page printed the raw provider
+    exception, the input-backed draft read as broken mad-libs, and the headings
+    still said "Why We Recommend It" over a "Needs Improvement" verdict.
+    """
+
+    INPUTS = {
+        "topic": "budget planner for young families",
+        "audience": "young parents 25-40 living paycheck to paycheck",
+        "customer_problem": (
+            "families overspend because they have no simple monthly system "
+            "they actually stick to"
+        ),
+        "product_type": "Budget Planner",
+    }
+
+    def test_provider_failures_never_reach_the_customer_as_exception_text(self):
+        boom = RuntimeError(
+            "Error code: 401 - Incorrect API key provided: sk-proj-abc123. "
+            "You can find your API key at https://platform.openai.com/account/api-keys."
+        )
+        with patch("services.market_research._test_mode", return_value=False), patch(
+            "services.market_research.chat_json", side_effect=boom
+        ):
+            raw, err = MR._safe_chat_json("sys", "user", self.INPUTS)
+        self.assertTrue(raw.get("opportunities"), "input-backed draft should still be returned")
+        self.assertEqual(err, MR.AI_UNAVAILABLE_MESSAGE)
+        for leaked in ("401", "sk-proj", "api-keys", "Traceback", "RuntimeError"):
+            self.assertNotIn(leaked, err)
+
+    def test_live_research_failures_never_reach_the_customer_as_exception_text(self):
+        with patch("services.market_research._test_mode", return_value=False), patch.dict(
+            os.environ, {"TAVILY_API_KEY": "tvly-test"}, clear=False
+        ), patch("tavily.TavilyClient", side_effect=RuntimeError("connection refused to 10.0.0.1")):
+            live, _context, _sources, err = MR._tavily_context("budgeting", "parents")
+        self.assertFalse(live)
+        self.assertEqual(err, MR.LIVE_RESEARCH_UNAVAILABLE_MESSAGE)
+        self.assertNotIn("10.0.0.1", err)
+        self.assertNotIn("RuntimeError", err)
+
+    def test_research_route_returns_a_safe_message_not_the_exception(self):
+        with patch("app.research", side_effect=RuntimeError("sk-proj-secret leaked here")):
+            client = app.test_client()
+            resp = client.post("/research", json=dict(self.INPUTS))
+        self.assertEqual(resp.status_code, 503)
+        body = resp.get_json()
+        self.assertEqual(body["error"], RESEARCH_FAILURE_MESSAGE)
+        self.assertNotIn("sk-proj", body["error"])
+        self.assertTrue(body["retryable"])
+        self.assertTrue(body["inputs"], "inputs are preserved so the user can retry")
+
+    def test_the_draft_idea_name_does_not_repeat_the_product_type(self):
+        raw = MR._offline_raw(self.INPUTS)
+        name = raw["opportunities"][0]["product_idea"]
+        # "budget planner for young families" already names the type.
+        self.assertEqual(name, "budget planner for young families")
+        self.assertEqual(name.lower().count("budget planner"), 1)
+
+    def test_the_draft_idea_name_still_adds_a_type_the_topic_lacks(self):
+        raw = MR._offline_raw({**self.INPUTS, "topic": "money habits for new parents"})
+        self.assertEqual(
+            raw["opportunities"][0]["product_idea"],
+            "money habits for new parents Budget Planner",
+        )
+
+    def test_a_clause_shaped_problem_reads_grammatically_in_the_draft(self):
+        raw = MR._offline_raw(self.INPUTS)
+        why = raw["opportunities"][0]["why_opportunity"]
+        self.assertNotIn("addressing families overspend", why)
+        self.assertIn("addressing this problem: families overspend", why)
+
+    def test_the_recommendation_does_not_restate_the_problem_twice(self):
+        score = compute_factory_advantage(self.INPUTS, {"sources": [], "live": False})
+        raw = MR._offline_raw(self.INPUTS)
+        summary = build_recommendation_summary(
+            self.INPUTS,
+            score=score,
+            opportunities=raw["opportunities"],
+            evidence={"sources": [], "live": False},
+            recommendation=raw["recommendation"],
+        )
+        why = summary["why_we_recommend"]
+        self.assertEqual(
+            why.lower().count("families overspend"),
+            1,
+            f"customer problem restated more than once: {why}",
+        )
+
+    def test_headings_agree_with_a_negative_verdict(self):
+        js = APP_JS.read_text(encoding="utf-8")
+        helper = js.split("function recommendationHeadings(", 1)[1].split(
+            "function recommendationSummaryHtml(", 1)[0]
+        # The positive wording must not be what an IMPROVE/AVOID verdict shows.
+        self.assertIn(USER_DECISION_IMPROVE, helper)
+        self.assertIn(USER_DECISION_AVOID, helper)
+        self.assertIn("Here is what we found.", helper)
+        self.assertIn("What The Evidence Shows", helper)
+        # ...and the positive wording is still there for a BUILD verdict.
+        self.assertIn("Here is what we recommend.", helper)
+        self.assertIn("Why We Recommend It", helper)
+
+    def test_the_summary_card_renders_the_chosen_headings_not_fixed_text(self):
+        js = APP_JS.read_text(encoding="utf-8")
+        card = js.split("function recommendationSummaryHtml(", 1)[1].split(
+            "function renderDiscovery(", 1)[0]
+        self.assertIn("recommendationHeadings(summary)", card)
+        self.assertIn("escapeHtml(headings.headline)", card)
+        self.assertIn("escapeHtml(headings.why)", card)
+        self.assertIn("escapeHtml(headings.build)", card)
 
 
 if __name__ == "__main__":
