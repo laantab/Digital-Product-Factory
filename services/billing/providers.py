@@ -246,6 +246,14 @@ def _lemon_request(method: str, path: str, payload: dict | None = None) -> dict[
             headers=headers, timeout=_TIMEOUT)
     except requests.RequestException as exc:
         raise BillingProviderError(f"Could not reach Lemon Squeezy: {exc}") from exc
+    # DELETE (and some other calls) return 204 No Content on success -- there
+    # is no body to parse, so don't try. Any other empty-body response is
+    # only expected alongside an error status.
+    if resp.status_code == 204 or not resp.content:
+        if resp.status_code >= 400:
+            raise BillingProviderError(
+                f"Lemon Squeezy rejected the request ({resp.status_code}).")
+        return {}
     try:
         body = resp.json()
     except ValueError:

@@ -331,6 +331,38 @@ class LemonCheckoutPayloadTests(unittest.TestCase):
         self.assertEqual(custom["seat"], "7")  # stringified, not left as int
 
 
+class LemonRequestEmptyBodyTests(unittest.TestCase):
+    """Regression: DELETE (and other calls) return 204 No Content on success.
+
+    `_lemon_request` used to call `resp.json()` unconditionally, which raised
+    a JSONDecodeError on a 204 and masked the fact that the delete actually
+    succeeded -- found live when deleting a duplicate webhook via the API.
+    """
+
+    def _call(self, status_code, content=b""):
+        resp = mock.Mock()
+        resp.status_code = status_code
+        resp.content = content
+        resp.json.side_effect = ValueError("no JSON object could be decoded")
+
+        with mock.patch.dict(os.environ, {
+            "LEMONSQUEEZY_API_KEY": "ls_test",
+        }, clear=False), \
+             mock.patch("services.billing.providers.requests.request",
+                        return_value=resp):
+            return PR._lemon_request("DELETE", "/webhooks/1")
+
+    def test_a_204_with_no_body_returns_an_empty_dict_instead_of_raising(self):
+        self.assertEqual(self._call(204), {})
+
+    def test_any_success_status_with_an_empty_body_returns_an_empty_dict(self):
+        self.assertEqual(self._call(200, content=b""), {})
+
+    def test_an_error_status_with_an_empty_body_still_raises(self):
+        with self.assertRaises(PR.BillingProviderError):
+            self._call(404, content=b"")
+
+
 class WebhookHandlingTests(unittest.TestCase):
     """Providers deliver more than once; that must not double-count anything."""
 
