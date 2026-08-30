@@ -3,11 +3,25 @@ import os
 import re
 
 # Bump this by hand with each release commit/tag (see git tags for history).
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 from dotenv import load_dotenv
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(_APP_DIR, ".env"))
+# In normal use .env is the single source of truth: without override=True,
+# python-dotenv leaves any variable already in the process environment alone,
+# so a stale Windows user-level variable silently beats the file. That cost a
+# long debugging session on 2026-08-29 -- a revoked TAVILY_API_KEY left in the
+# Windows user environment shadowed the working key in .env, and live research
+# failed with 401 while .env looked perfectly correct and tested fine on its own.
+#
+# Under FACTORY_TEST_MODE the opposite must hold: the harness owns the
+# environment. tests/test_ebook_real_browser_customer_path.py launches an
+# isolated server as a SUBPROCESS with the API keys explicitly blanked, and
+# that subprocess runs outside conftest's network guard -- those blanks are its
+# only protection against real paid calls. Overriding them from .env handed it
+# live credentials and hung the test.
+_FACTORY_TEST_MODE = str(os.environ.get("FACTORY_TEST_MODE") or "") == "1"
+load_dotenv(os.path.join(_APP_DIR, ".env"), override=not _FACTORY_TEST_MODE)
 
 from flask import Flask, jsonify, make_response, render_template, request, send_file, send_from_directory
 import base64
@@ -71,6 +85,9 @@ app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
 
 with app.app_context():
     database.init_db()
+    from services.billing.store import init_billing_db
+
+    init_billing_db()
     from services.ebook_pexels import pexels_status_label
 
     app.logger.info("%s", pexels_status_label())
@@ -90,6 +107,14 @@ def _no_store_static(response):
 
 def _error(message: str, status: int = 400):
     return jsonify({"error": message}), status
+
+
+# Shown when research dies outright. Deliberately says nothing about which
+# provider failed or why -- that goes to the log, not the customer's page.
+RESEARCH_FAILURE_MESSAGE = (
+    "We couldn't complete the research just now. Your inputs have been kept — "
+    "please try again."
+)
 
 
 @app.get("/pexels-status")
@@ -112,6 +137,137 @@ def index():
     return render_template("index.html", factory_admin_mode=admin_on, app_version=APP_VERSION)
 
 
+# --------------------------------------------------------------------------- #
+# Billing
+#
+# The browser holds an opaque account reference and sends it with each call.
+# It is not an identity and grants nothing: every route below either returns
+# public catalog data or starts a checkout the payment provider authenticates.
+# Subscription state is only ever changed by a signature-verified webhook.
+# --------------------------------------------------------------------------- #
+def _account_ref() -> str:
+    body = request.get_json(silent=True) or {}
+    return str(
+        body.get("account_ref")
+        or request.args.get("account_ref")
+        or request.headers.get("X-Factory-Account")
+        or ""
+    ).strip()[:64]
+
+
+@app.get("/billing/plans")
+def billing_plans_route():
+    """Public pricing catalog, live founder-seat count, and provider status."""
+    from services.billing import pricing_payload
+
+    try:
+        return jsonify(pricing_payload(_account_ref()))
+    except Exception:  # noqa: BLE001
+        app.logger.exception("billing plans failed")
+        return _error("Pricing is temporarily unavailable.", 500)
+
+
+@app.get("/billing/subscription")
+def billing_subscription_route():
+    from services.billing import subscription_payload, usage_payload
+    from services.billing.store import get_active_subscription
+
+    account_ref = _account_ref()
+    if not account_ref:
+        return _error("account_ref is required.", 400)
+    try:
+        payload = subscription_payload(get_active_subscription(account_ref))
+        payload["usage"] = usage_payload(account_ref)
+        return jsonify(payload)
+    except Exception:  # noqa: BLE001
+        app.logger.exception("billing subscription failed")
+        return _error("Subscription status is temporarily unavailable.", 500)
+
+
+@app.post("/billing/account")
+def billing_account_route():
+    """Mint an opaque account reference for a browser that has none yet."""
+    from services.billing import new_account_ref
+
+    return jsonify({"account_ref": new_account_ref()})
+
+
+@app.post("/billing/checkout")
+def billing_checkout_route():
+    from services.billing import CheckoutError, start_checkout
+
+    body = request.get_json(silent=True) or {}
+    try:
+        result = start_checkout(
+            plan_id=str(body.get("plan_id") or ""),
+            billing_period=str(body.get("billing_period") or "monthly"),
+            provider=str(body.get("provider") or ""),
+            account_ref=_account_ref(),
+            customer_email=str(body.get("email") or "").strip()[:254],
+        )
+        return jsonify(result)
+    except CheckoutError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        # Never leak a provider key or stack detail into a customer-facing error.
+        app.logger.exception("checkout failed")
+        return _error(
+            "Checkout could not be started. The payment provider reported a "
+            "problem; nothing has been charged.", 502)
+
+
+@app.post("/billing/webhook/stripe")
+def billing_stripe_webhook_route():
+    from services.billing import handle_stripe_event
+    from services.billing.providers import (
+        BillingConfigError,
+        WebhookVerificationError,
+        verify_stripe_webhook,
+    )
+
+    try:
+        event = verify_stripe_webhook(
+            request.get_data(), request.headers.get("Stripe-Signature", ""))
+    except WebhookVerificationError as exc:
+        app.logger.warning("rejected stripe webhook: %s", exc)
+        return _error("Signature verification failed.", 400)
+    except BillingConfigError as exc:
+        app.logger.error("stripe webhook not configured: %s", exc)
+        return _error("Webhook endpoint is not configured.", 503)
+    try:
+        return jsonify(handle_stripe_event(event))
+    except Exception:  # noqa: BLE001
+        # A 500 makes Stripe retry, which is what we want if we failed to apply
+        # a genuine event.
+        app.logger.exception("stripe webhook handling failed")
+        return _error("Could not process the event.", 500)
+
+
+@app.post("/billing/webhook/lemonsqueezy")
+def billing_lemon_webhook_route():
+    from services.billing import handle_lemon_event
+    from services.billing.providers import (
+        BillingConfigError,
+        WebhookVerificationError,
+        verify_lemon_webhook,
+    )
+
+    try:
+        event = verify_lemon_webhook(
+            request.get_data(), request.headers.get("X-Signature", ""))
+    except WebhookVerificationError as exc:
+        app.logger.warning("rejected lemon squeezy webhook: %s", exc)
+        return _error("Signature verification failed.", 400)
+    except BillingConfigError as exc:
+        app.logger.error("lemon squeezy webhook not configured: %s", exc)
+        return _error("Webhook endpoint is not configured.", 503)
+    try:
+        return jsonify(handle_lemon_event(event))
+    except Exception:  # noqa: BLE001
+        app.logger.exception("lemon squeezy webhook handling failed")
+        return _error("Could not process the event.", 500)
+
+
 @app.post("/research")
 def research_route():
     body = request.get_json(silent=True) or {}
@@ -132,11 +288,14 @@ def research_route():
         )
     except ValueError as exc:
         return _error(str(exc), 400)
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
+        # The exception text is logged, never returned: this payload's "error"
+        # is rendered straight into the results page, and provider exceptions
+        # carry key fragments and stack detail no customer should see.
         app.logger.exception("research failed")
         return jsonify(
             {
-                "error": str(exc),
+                "error": RESEARCH_FAILURE_MESSAGE,
                 "inputs": collect_inputs(body),
                 "retryable": True,
             }
@@ -2623,6 +2782,19 @@ def export_product_route():
         _new_pkg = str(result.get("package_id") or "")
         _pkg_dir = os.path.join(EXPORTS_DIR, _new_pkg) if _new_pkg else ""
         _new_pdf = os.path.join(_pkg_dir, "ebook.pdf") if _pkg_dir else ""
+        # Deterministic PDF products (planners, worksheets) name their file
+        # after the product rather than ebook.pdf. Fall back to whatever the
+        # package actually published, or the download pointers below stay on a
+        # file this package does not contain.
+        if _pkg_dir and not os.path.isfile(_new_pdf):
+            _pdf_url = str(
+                (((result.get("exports") or {}).get("files") or {}).get("pdf") or {}).get("url") or ""
+            )
+            _pdf_basename = _pdf_url.rsplit("/", 1)[-1] if _pdf_url else ""
+            if _pdf_basename:
+                _candidate = os.path.join(_pkg_dir, _pdf_basename)
+                if os.path.isfile(_candidate):
+                    _new_pdf = _candidate
         if _new_pdf and os.path.isfile(_new_pdf):
             import hashlib as _hashlib
 
@@ -2725,6 +2897,109 @@ def export_product_route():
                     data["stage"] = data.get("stage") or "product_generated"
             else:
                 data["stage"] = "export_ready"
+
+        # Planner release gate: the same rule as the ebook path — an automated
+        # editorial pass over the real rendered PDF decides Export Ready. The
+        # planner reviewer is a separate module because a planner's repeated
+        # worksheet pages and typographic cover would fail the ebook rules for
+        # reasons that are not defects.
+        planner_type = str(data.get("product_type") or project.get("type") or "").lower()
+        if planner_type in ("faith_planner", "budget_planner"):
+            eic_ok = False
+            try:
+                from services.editor_in_chief import VERDICT_PASS
+                from services.editor_in_chief_planner import (
+                    collect_planner_candidate,
+                    review_planner,
+                )
+                from services.planner import PlannerPdfRequest, build_planner_pdf
+
+                _pf = data.get("fields") or {}
+                # Rebuild the page plan from the saved fields so the reviewer
+                # has the structure to measure the PDF against. The builder is
+                # deterministic, so this reproduces the exported page plan.
+                rebuilt = build_planner_pdf(PlannerPdfRequest(
+                    planner_type=planner_type,
+                    title=str(data.get("title") or ""),
+                    theme=str(_pf.get("theme") or ""),
+                    audience=str(_pf.get("audience") or ""),
+                    author=str(_pf.get("author") or ""),
+                    pages=int(data.get("declared_pages") or 60),
+                    page_size=str(_pf.get("page_size") or "US Letter"),
+                ))
+                # Review the PDF the customer will actually receive. Only fall
+                # back to the rebuilt copy when no exported file can be found —
+                # reviewing a stand-in and reporting it as a verdict on the
+                # shipped artifact is the failure this gate exists to prevent.
+                _planner_pdf = ""
+                for _cand in (data.get("pdf_path"), data.get("_pdf_path")):
+                    if _cand and os.path.isfile(str(_cand)):
+                        _planner_pdf = str(_cand)
+                        break
+                if not _planner_pdf and _pkg_dir and os.path.isdir(_pkg_dir):
+                    for _name in sorted(os.listdir(_pkg_dir)):
+                        if _name.lower().endswith(".pdf"):
+                            _planner_pdf = os.path.join(_pkg_dir, _name)
+                            break
+                if not _planner_pdf:
+                    _planner_pdf = rebuilt.pdf_path
+                    data.setdefault("editor_in_chief_notes", []).append(
+                        "Reviewed a deterministic rebuild: no exported planner "
+                        "PDF was found in the package directory."
+                    )
+                import tempfile
+
+                import fitz
+
+                page_dir = tempfile.mkdtemp(prefix="eic_planner_")
+                page_images: list[str] = []
+                pdf_doc = fitz.open(_planner_pdf)
+                for _pi, _page in enumerate(pdf_doc):
+                    _img = os.path.join(page_dir, f"p{_pi + 1:03d}.png")
+                    _page.get_pixmap(dpi=72).save(_img)
+                    page_images.append(_img)
+                pdf_doc.close()
+
+                candidate = collect_planner_candidate(
+                    rebuilt.plan, pdf_path=_planner_pdf,
+                    package_dir=_pkg_dir or rebuilt.package_dir,
+                    page_images=page_images,
+                    author=str((data.get("fields") or {}).get("author") or ""),
+                )
+                report = review_planner(candidate)
+                eic_ok = report.verdict == VERDICT_PASS
+                data["editor_in_chief"] = {
+                    "verdict": report.verdict,
+                    "overall": report.overall,
+                    "scores": report.scores,
+                    "findings": [
+                        {
+                            "code": fi.code,
+                            "severity": fi.severity,
+                            "summary": fi.summary,
+                            "location": fi.location,
+                        }
+                        for fi in report.findings
+                    ],
+                    "checks_run": report.checks_run,
+                    "checks_skipped": report.checks_skipped,
+                }
+                result["editor_in_chief"] = data["editor_in_chief"]
+            except Exception:
+                # An unreviewed planner is not "ready" — same stance as ebooks.
+                app.logger.exception("editor-in-chief planner review failed")
+                eic_ok = False
+                data["editor_in_chief"] = {
+                    "verdict": "EDITOR-IN-CHIEF — REVIEW ERROR",
+                    "error": "Automated review could not run; see server log.",
+                }
+                result["editor_in_chief"] = data["editor_in_chief"]
+            data["export_ready"] = bool(eic_ok)
+            result["export_ready"] = bool(eic_ok)
+            data["stage"] = "export_ready" if eic_ok else (
+                data.get("stage") or "product_generated"
+            )
+
         if data.get("is_pdf") or data.get("pdf_bytes"):
             stamp_artifact_identity(data)
         _persist_product_data(project, data)
@@ -3470,7 +3745,7 @@ def coloring_ai_status():
     from ai_client import _is_placeholder_key, get_key_source, get_base_url_source
 
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(override=not _FACTORY_TEST_MODE)  # see the module-level call
 
     model = os.environ.get("AI_INTEGRATIONS_IMAGE_MODEL", "gpt-image-1")
 

@@ -177,6 +177,8 @@ ACTIVE_BUILDERS = {
     "word search book": "word_search",
     "crossword puzzle book": "crossword",
     "math worksheet": "math_worksheet",
+    "faith planner": "faith_planner",
+    "budget planner": "budget_planner",
 }
 
 HIDDEN_BUILDERS = {
@@ -314,6 +316,14 @@ MVP_STARTERS = {
         "with clear problems and answers."
     ),
     "Planner": "Start with: a simple planner for {audience} organized around {idea}.",
+    "Faith Planner": (
+        "Start with: an undated devotional planner for {audience} built around "
+        "{idea}, with a reading plan, prayer log, and reflection pages."
+    ),
+    "Budget Planner": (
+        "Start with: an undated budget planner for {audience} built around "
+        "{idea}, with monthly worksheets, an expense log, and a debt tracker."
+    ),
 }
 
 
@@ -741,14 +751,28 @@ def resolve_factory_builder(product_type: str) -> dict:
         return {"status": "hidden", "factory_id": "flip_book", "label": "Flip Book"}
     if "cover" in pt:
         return {"status": "hidden", "factory_id": "cover_design", "label": "Cover Design"}
-    if "planner" in pt or "planning" in pt:
+    # Faith and Budget planners are shipped builders; the generic "planner"
+    # remains hidden, so the specific match has to be tested first.
+    if "faith" in pt and "planner" in pt:
+        return {"status": "active", "factory_id": "faith_planner", "label": "Faith Planner"}
+    if ("budget" in pt or "money" in pt or "finance" in pt) and "planner" in pt:
+        return {"status": "active", "factory_id": "budget_planner", "label": "Budget Planner"}
+    if "planner" in pt:
         return {"status": "hidden", "factory_id": "planner", "label": "Planner"}
     if "marketing" in pt:
         return {"status": "hidden", "factory_id": "marketing_kit", "label": "Marketing Kit"}
     if pt in EBOOK_ALIASES or pt == "ebook":
         return {"status": "active", "factory_id": "ebook", "label": "Ebook"}
-    if "book" in pt or "guide" in pt:
+    # Match the aliases as substrings too, so a described type keeps its head
+    # noun: "Printable inventory and meal planning workbook" is a workbook that
+    # happens to be about planning, and belongs in the Ebook Builder.
+    if any(alias in pt for alias in EBOOK_ALIASES) or "book" in pt:
         return {"status": "active", "factory_id": "ebook", "label": "Ebook"}
+    # "planning" is a modifier, not a product noun -- it must never outrank a
+    # real product word above. Reaching here means nothing else matched, so a
+    # bare "meal planning printable" can still land on the planner.
+    if "planning" in pt:
+        return {"status": "hidden", "factory_id": "planner", "label": "Planner"}
     return {"status": "unknown", "factory_id": None, "label": product_type}
 
 
@@ -1731,6 +1755,18 @@ def recommended_mvp_text(
     return text
 
 
+def _restates(candidate: str, already_said: str) -> bool:
+    """True when `candidate` carries no information beyond `already_said`.
+
+    Compares on the stated problem's own words rather than whole strings, so a
+    sentence that merely wraps the problem in boilerplate ("A Budget Planner for
+    <audience> addressing <problem>") is recognised as a restatement.
+    """
+    core = _clean(already_said).rstrip(".").lower()
+    text = _clean(candidate).lower()
+    return bool(core) and core in text
+
+
 def why_we_recommend_text(
     *,
     inputs: dict,
@@ -1778,6 +1814,12 @@ def why_we_recommend_text(
     why = reject_unsupported_trend_language(
         _clean(reco.get("why_selected")) or _clean(top.get("why_opportunity"))
     )
+    # A "why" that just replays the customer's own problem statement adds
+    # nothing after the sentence above already quoted it -- that is exactly what
+    # the input-backed draft produces when the AI is unavailable, and it read as
+    # a stutter on the results page. Prefer the generic angle sentence instead.
+    if why and problem and _restates(why, problem):
+        why = ""
     if standout_signal == "Good Signal":
         if why:
             sentences.append(why if why.endswith(".") else why + ".")

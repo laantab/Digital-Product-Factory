@@ -853,6 +853,23 @@
             <h2 class="text-2xl font-extrabold text-slate-900">Simple, Transparent Pricing</h2>
             <p class="mt-2 text-slate-500">Start free. Upgrade when you're ready to scale.</p>
           </div>
+          <!-- No monthly/annual toggle: every plan in services/billing/plans.py is
+               monthly-only right now, matching what's built in Lemon Squeezy. If an
+               annual price is ever added there, re-add the .billing-period-tab
+               buttons here — renderBillingPlans() and setBillingPeriod() in
+               static/js/app.js already handle a plan offering more than one period. -->
+
+          <!-- Founder's Plan: rendered separately because it is a limited cohort,
+               not another column in the ladder. -->
+          <div id="founderPlanCard" class="hidden max-w-5xl mx-auto"></div>
+
+          <!-- Server-rendered plan grid. Prices come from services/billing/plans.py
+               so the page can never drift from what the customer is charged. -->
+          <div id="billingPlanGrid" class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto"></div>
+          <div id="billingProviderNotice" class="max-w-3xl mx-auto"></div>
+
+          <!-- Static fallback, replaced as soon as /billing/plans responds. -->
+          <div id="billingStaticFallback" class="hidden">
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             <!-- Free -->
             <div class="rounded-2xl border border-slate-200 bg-white p-7 flex flex-col">
@@ -907,7 +924,8 @@
               <button onclick="toast('Checkout coming soon!')" class="rounded-xl border border-brand-300 text-brand-700 hover:bg-brand-50 px-4 py-2.5 text-sm font-semibold text-center transition">Upgrade to Pro</button>
             </div>
           </div>
-          <p class="text-center text-xs text-slate-400 max-w-md mx-auto">Payments are processed securely. Cancel anytime. All plans include a 14-day free trial.</p>
+          </div>
+          <p class="text-center text-xs text-slate-400 max-w-lg mx-auto">Payments are processed securely by Stripe or Lemon Squeezy. The Factory never sees or stores your card details. Cancel anytime.</p>
         </section>
       </main>
     </div>
@@ -928,6 +946,8 @@
     .nav-link.active { background:#4f46e5; color:#fff; }
     .yt-tab { color:#64748b; }
     .yt-tab.active { background:#fff; color:#4338ca; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+    .billing-period-tab { color:#64748b; }
+    .billing-period-tab.active { background:#fff; color:#4338ca; box-shadow:0 1px 2px rgba(0,0,0,.08); }
   </style>
   <script>window.FACTORY_ADMIN_MODE = {{ 'true' if factory_admin_mode|default(false) else 'false' }};</script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>

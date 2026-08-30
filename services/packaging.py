@@ -713,6 +713,90 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
 
     # Special handling for spelling_worksheet — use the stored PDF, never fall through to ebook.
     # Spelling worksheet ZIP contains ONLY product-specific files. No ebook.html / ebook.txt.
+    # Faith / Budget planner — package the PDF the planner builder already made.
+    # Without this branch the generic ebook path renders a PDF from `content`,
+    # which a planner deliberately leaves empty, and the download pointer ends
+    # up on a near-blank ebook.pdf instead of the book the customer bought.
+    if data.get("product_type") in ("faith_planner", "budget_planner") and data.get("is_pdf"):
+        import base64
+
+        planner_type = data["product_type"]
+        label = "Faith Planner" if planner_type == "faith_planner" else "Budget Planner"
+        if not data.get("pdf_bytes"):
+            raise ValueError(f"{label} PDF is not available on this project.")
+        try:
+            pdf_bytes = base64.b64decode(data["pdf_bytes"])
+        except Exception as exc:
+            raise ValueError(f"{label} PDF decode failed: {exc}") from exc
+        if not pdf_bytes.startswith(b"%PDF"):
+            raise ValueError(f"{label} PDF export is invalid.")
+
+        slug = re.sub(
+            r"[^A-Za-z0-9]+", "_",
+            data.get("title") or project.get("name") or planner_type
+        ).strip("_").lower() or planner_type
+        pdf_name = data.get("filename") or f"{slug}.pdf"
+        fields = data.get("fields") or {}
+        layout = data.get("layout_info") if isinstance(data.get("layout_info"), dict) else {}
+
+        files: dict[str, str | bytes] = {
+            pdf_name: pdf_bytes,
+            "metadata.json": json.dumps({
+                "product_type": planner_type,
+                "product_label": label,
+                "title": data.get("title") or slug,
+                "subtitle": data.get("subtitle") or "",
+                "theme": fields.get("theme") or "",
+                "audience": fields.get("audience") or "",
+                "page_size": fields.get("page_size") or layout.get("page_size") or "US Letter",
+                "pages": layout.get("total_pages") or data.get("declared_pages") or 0,
+                "page_kinds": layout.get("page_kinds") or {},
+                "render_engine": layout.get("render_engine") or "planner_direct",
+                "filename": pdf_name,
+            }, indent=2),
+            "PRINTING.txt": (
+                f"{data.get('title') or label}\n"
+                f"{'-' * 40}\n"
+                f"Pages: {layout.get('total_pages') or data.get('declared_pages') or 0}\n"
+                f"Page size: {fields.get('page_size') or layout.get('page_size') or 'US Letter'}\n\n"
+                "Printing at home: print single-sided on plain paper and use a\n"
+                "ring binder or comb binding so the book lies flat while writing.\n\n"
+                "Print on demand: this interior is designed for a standard trim\n"
+                "with a 0.6 inch margin on every side. Check your printer's\n"
+                "bleed and gutter requirements before uploading.\n"
+            ),
+        }
+
+        package_id = uuid.uuid4().hex
+        _write_package(package_id, files)
+
+        # The planner package must never carry the generic ebook fallback files.
+        pkg_dir = os.path.join(EXPORTS_DIR, package_id)
+        zip_path = os.path.join(pkg_dir, "package.zip")
+        if os.path.isfile(zip_path):
+            import zipfile as _zipfile
+
+            with _zipfile.ZipFile(zip_path, "r") as zf:
+                names = zf.namelist()
+                if {"ebook.html", "ebook.txt", "ebook.pdf"} & set(names):
+                    raise ValueError(
+                        f"{label} ZIP must not contain ebook fallback files. "
+                        "Blocked by QA."
+                    )
+
+        # The legacy download pointers are updated by the export route, not
+        # here: packaging must not mutate `data`, or the artifact-immutability
+        # guard rejects the save that follows.
+        exports_files = {
+            "pdf": {"name": pdf_name, "url": _download_url(package_id, pdf_name)},
+            "zip": {"name": f"{slug}.zip", "url": _download_url(package_id, "package.zip")},
+        }
+        return _finalize_export_result(
+            package_id,
+            {"pdf_available": True, "files": exports_files},
+            data=data if isinstance(data, dict) else None,
+        )
+
     if data.get("product_type") == "spelling_worksheet" and data.get("is_pdf"):
         import base64
 

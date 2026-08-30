@@ -28,6 +28,25 @@ from services.factory_advantage import (
 
 logger = logging.getLogger(__name__)
 
+# Customer-facing degraded-mode notices.
+#
+# These strings reach the browser via `provider_error`, so they must never carry
+# exception text: a raw provider error leaks API keys (an OpenAI 401 echoes a
+# masked-but-identifiable key), model names, and stack detail into the customer's
+# page. The full exception is still logged server-side with exc_info=True, which
+# is where it belongs -- the operator needs it, the customer does not.
+AI_UNAVAILABLE_MESSAGE = (
+    "Our research assistant is temporarily unavailable, so this report was built "
+    "from your inputs alone. Try again in a moment for a fully researched report."
+)
+LIVE_RESEARCH_UNAVAILABLE_MESSAGE = (
+    "Live web research is temporarily unavailable, so this report relies on fewer "
+    "outside sources than usual."
+)
+LIVE_RESEARCH_NOT_CONFIGURED_MESSAGE = (
+    "Live web research is unavailable (no Tavily key configured)."
+)
+
 PRODUCT_TYPES = [
     "Ebook",
     "Workbook",
@@ -77,7 +96,7 @@ def _tavily_context(
         return False, "", [], None
     key = os.environ.get("TAVILY_API_KEY")
     if not key:
-        return False, "", [], "Live web research is unavailable (no Tavily key configured)."
+        return False, "", [], LIVE_RESEARCH_NOT_CONFIGURED_MESSAGE
     try:
         from tavily import TavilyClient
 
@@ -94,8 +113,9 @@ def _tavily_context(
             include_answer=True,
         )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Tavily search failed; falling back to AI-estimated research", exc_info=True)
-        return False, "", [], f"Live web research failed: {exc}"
+        logger.warning(
+            "Tavily search failed; falling back to AI-estimated research: %s", exc, exc_info=True)
+        return False, "", [], LIVE_RESEARCH_UNAVAILABLE_MESSAGE
 
     access_date = datetime.now(timezone.utc).date().isoformat()
     sources = [
@@ -220,6 +240,38 @@ def _coerce_opportunities(raw: dict) -> tuple[list[dict], dict]:
     return cleaned, recommendation
 
 
+def _idea_name(topic: str, product_type: str) -> str:
+    """"budget planner for young families" + "Budget Planner" -> no stutter.
+
+    The topic a customer types very often already names the product type
+    ("budget planner for young families"), and blindly appending it produced
+    "budget planner for young families Budget Planner" on the results page.
+    """
+    topic = (topic or "").strip()
+    ptype = (product_type or "").strip()
+    if not ptype:
+        return topic
+    if not topic:
+        return ptype
+    if ptype.lower() in topic.lower():
+        return topic
+    return f"{topic} {ptype}"
+
+
+def _as_need_phrase(problem: str) -> str:
+    """Turn a stated problem into something that reads after "addressing ...".
+
+    Customers state the problem as a full clause ("families overspend because
+    they have no simple monthly system"), which is ungrammatical after a
+    preposition. Wrapping it keeps the customer's own words without producing
+    "addressing families overspend because ...".
+    """
+    problem = (problem or "").strip().rstrip(".")
+    if not problem:
+        return "the stated need"
+    return f"this problem: {problem}"
+
+
 def _offline_raw(inputs: dict) -> dict:
     """Deterministic opportunities from user inputs when AI is blocked or unavailable."""
     topic = (inputs.get("topic") or inputs.get("niche") or inputs.get("interest") or "Untitled idea").strip()
@@ -241,13 +293,13 @@ def _offline_raw(inputs: dict) -> dict:
         opportunities.append(
             {
                 "niche": inputs.get("niche") or topic,
-                "product_idea": f"{topic} {ptype}".strip(),
+                "product_idea": _idea_name(topic, ptype),
                 "product_type": ptype,
                 "target_audience": audience,
                 "customer_problem": problem,
                 "why_opportunity": (
                     f"A {ptype} for {audience or 'this audience'} addressing "
-                    f"{problem or 'the stated need'}."
+                    f"{_as_need_phrase(problem)}."
                 ),
                 "price_range": inputs.get("target_price") or "",
                 "difficulty": inputs.get("difficulty") or "Medium",
@@ -278,8 +330,9 @@ def _safe_chat_json(system: str, user: str, inputs: dict, max_completion_tokens:
             raw = {}
         return raw, None
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Research AI call failed; using input-backed draft", exc_info=True)
-        return _offline_raw(inputs), f"Research assistant failed: {exc}"
+        logger.warning(
+            "Research AI call failed; using input-backed draft: %s", exc, exc_info=True)
+        return _offline_raw(inputs), AI_UNAVAILABLE_MESSAGE
 
 
 def discover_products(
@@ -578,8 +631,8 @@ def _discovery_chat_json(system: str, user: str) -> tuple[dict, str | None]:
             raw = {}
         return raw, None
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Discovery research assistant failed", exc_info=True)
-        return {}, f"Research assistant failed: {exc}"
+        logger.warning("Discovery research assistant failed: %s", exc, exc_info=True)
+        return {}, AI_UNAVAILABLE_MESSAGE
 
 
 def _score_discovered_opportunity(opp: dict, sources: list, live: bool, filter_inputs: dict) -> dict:

@@ -14,8 +14,11 @@ _client = None
 _key_source = ""
 _base_url_source = ""
 
-# Load .env on module import if not already loaded
-load_dotenv()
+# Load .env on module import if not already loaded. The file wins over a stale
+# variable left in the OS environment, except under FACTORY_TEST_MODE where the
+# test harness owns the environment -- see the fuller note in app.py. The two
+# must agree, or the app and this module resolve different keys.
+load_dotenv(override=str(os.environ.get("FACTORY_TEST_MODE") or "") != "1")
 
 # General-purpose model. gpt-5 family: temperature is fixed at 1 and
 # `max_completion_tokens` is used instead of `max_tokens`.

@@ -23,7 +23,7 @@ const TITLES = { dashboard: "Dashboard", saved: "Saved Projects", market: "Facto
 const MARKET_PRODUCT_TYPES = [
   "Ebook", "Workbook", "Checklist", "Coloring Book", "Word Search Book",
   "Crossword Puzzle Book", "Flip Book", "Math Worksheet", "Spelling Worksheet",
-  "Planner", "Not Sure Yet",
+  "Faith Planner", "Budget Planner", "Planner", "Not Sure Yet",
 ];
 
 let current = "dashboard";
@@ -257,6 +257,51 @@ const PRODUCT_TYPES = [
     ],
   },
   {
+    id: "faith_planner",
+    label: "Faith Planner",
+    icon: "M12 3v18M7 8h10M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z",
+    desc: "Undated devotional planner: reading plan, prayer log, reflection",
+    guide:
+      "Everything is generated locally — no AI call, no image credits. Set a page count and click Generate. " +
+      "The 52-week reading plan, prayer log, memory cards, and daily study pages are built in.",
+    fields: [
+      { name: "planner_title", label: "Planner title", type: "text", placeholder: "Leave blank for 'Faith Planner'" },
+      { name: "theme", label: "Theme / niche", type: "text", placeholder: "e.g. Women's, Family, New Believer" },
+      { name: "audience", label: "Target audience", type: "text", placeholder: "Printed on the cover as a small label" },
+      { name: "author", label: "Author / brand name", type: "text" },
+      { name: "pages", label: "Number of pages", type: "number", value: "60", hint: "12-200. Rounded to keep whole weekly units intact." },
+      { name: "page_size", label: "Page size", type: "select", options: ["US Letter", "A4", "6x9", "A5"] },
+      { name: "include_cover", label: "Include cover page", type: "select", options: YN, default: "Yes" },
+      { name: "include_toc", label: "Include table of contents", type: "select", options: YN, default: "Yes" },
+      { name: "include_calendar", label: "Include monthly overview", type: "select", options: YN, default: "Yes" },
+      { name: "include_habit_tracker", label: "Include habit tracker", type: "select", options: YN, default: "Yes" },
+      { name: "include_reflection", label: "Include monthly reflection", type: "select", options: YN, default: "Yes" },
+      { name: "include_notes", label: "Include notes pages", type: "select", options: YN, default: "Yes" },
+    ],
+  },
+  {
+    id: "budget_planner",
+    label: "Budget Planner",
+    icon: "M3 6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2zM3 10h18M7 15h4",
+    desc: "Undated budget system: monthly worksheets, debt and savings trackers",
+    guide:
+      "Everything is generated locally — no AI call, no image credits. Set a page count and click Generate. " +
+      "Includes the financial snapshot, monthly income/fixed/variable worksheets, expense log, and debt payoff tracker.",
+    fields: [
+      { name: "planner_title", label: "Planner title", type: "text", placeholder: "Leave blank for 'Budget Planner'" },
+      { name: "theme", label: "Theme / niche", type: "text", placeholder: "e.g. Family, Student, Freelancer" },
+      { name: "audience", label: "Target audience", type: "text", placeholder: "Printed on the cover as a small label" },
+      { name: "author", label: "Author / brand name", type: "text" },
+      { name: "pages", label: "Number of pages", type: "number", value: "60", hint: "12-200. Rounded to keep whole monthly units intact." },
+      { name: "page_size", label: "Page size", type: "select", options: ["US Letter", "A4", "6x9", "A5"] },
+      { name: "include_cover", label: "Include cover page", type: "select", options: YN, default: "Yes" },
+      { name: "include_toc", label: "Include table of contents", type: "select", options: YN, default: "Yes" },
+      { name: "include_calendar", label: "Include bill calendar", type: "select", options: YN, default: "Yes" },
+      { name: "include_habit_tracker", label: "Include money habit tracker", type: "select", options: YN, default: "Yes" },
+      { name: "include_notes", label: "Include notes pages", type: "select", options: YN, default: "Yes" },
+    ],
+  },
+  {
     id: "planner",
     label: "Planner",
     icon: "M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z",
@@ -480,6 +525,270 @@ function go(view) {
   if (view === "visual") initVisual();
   if (view === "publishing") initPublishing();
   if (view === "packages") initPackages();
+  if (view === "subscription") initBilling();
+}
+
+// --------------------------------------------------------------------------
+// Billing / subscription plans
+//
+// Every price shown here comes from GET /billing/plans, which reads
+// services/billing/plans.py. Nothing about money is hardcoded in the browser:
+// a price typed into markup is a price that eventually disagrees with the one
+// the customer is actually charged.
+// --------------------------------------------------------------------------
+const ACCOUNT_REF_KEY = "factory_account_ref";
+let billingCatalog = null;
+let billingPeriod = "monthly";
+let billingBusy = false;
+
+function accountRef() {
+  let ref = "";
+  try {
+    ref = window.localStorage.getItem(ACCOUNT_REF_KEY) || "";
+  } catch (err) {
+    ref = "";
+  }
+  return ref;
+}
+
+async function ensureAccountRef() {
+  let ref = accountRef();
+  if (ref) return ref;
+  const res = await api("/billing/account", { method: "POST", body: "{}" });
+  ref = res.account_ref || "";
+  try {
+    window.localStorage.setItem(ACCOUNT_REF_KEY, ref);
+  } catch (err) {
+    /* private browsing — the ref lives for this page load only */
+  }
+  return ref;
+}
+
+function setBillingPeriod(period) {
+  billingPeriod = period === "annual" ? "annual" : "monthly";
+  document.querySelectorAll(".billing-period-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.period === billingPeriod);
+  });
+  renderBillingPlans();
+}
+
+async function initBilling() {
+  document.querySelectorAll(".billing-period-tab").forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", () => setBillingPeriod(btn.dataset.period));
+  });
+  const grid = document.getElementById("billingPlanGrid");
+  if (grid && !billingCatalog) {
+    grid.innerHTML = `<div class="col-span-full text-center text-sm text-slate-400 py-8">Loading plans…</div>`;
+  }
+  try {
+    const ref = accountRef();
+    billingCatalog = await api(`/billing/plans${ref ? `?account_ref=${encodeURIComponent(ref)}` : ""}`);
+    document.getElementById("billingStaticFallback")?.classList.add("hidden");
+    setBillingPeriod(billingPeriod);
+  } catch (err) {
+    // Keep the static fallback visible rather than showing an empty page.
+    document.getElementById("billingStaticFallback")?.classList.remove("hidden");
+    if (grid) grid.innerHTML = "";
+    toast(err.message, "error");
+  }
+}
+
+function planPriceFor(plan, period) {
+  const cents = period === "annual" ? plan.annual_cents : plan.monthly_cents;
+  return { cents, display: period === "annual" ? plan.annual_display : plan.monthly_display };
+}
+
+function planFeatureList(plan) {
+  return plan.features
+    .map(
+      (f) =>
+        `<li class="flex items-start gap-2 text-sm text-slate-600"><span class="text-emerald-500 mt-0.5">✓</span> ${escapeHtml(f)}</li>`
+    )
+    .join("");
+}
+
+function renderBillingPlans() {
+  if (!billingCatalog) return;
+  const grid = document.getElementById("billingPlanGrid");
+  const founderWrap = document.getElementById("founderPlanCard");
+  const notice = document.getElementById("billingProviderNotice");
+  if (!grid) return;
+
+  const currentPlanId = (billingCatalog.current || {}).plan_id || "free";
+  const ladder = billingCatalog.plans.filter((p) => !p.limited_seats);
+  const founder = billingCatalog.plans.find((p) => p.limited_seats);
+
+  grid.className = "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-6xl mx-auto";
+  grid.innerHTML = ladder
+    .map((plan) => {
+      const period = plan.periods.includes(billingPeriod)
+        ? billingPeriod
+        : plan.periods[0] || "monthly";
+      const price = planPriceFor(plan, period);
+      const isCurrent = plan.id === currentPlanId;
+      const free = plan.monthly_cents === 0 && plan.annual_cents === 0;
+      const border = plan.highlight
+        ? "border-2 border-brand-500 shadow-lg shadow-brand-100/50"
+        : "border border-slate-200";
+      const suffix = free ? "forever" : period === "annual" ? "per year" : "per month";
+      const equiv =
+        !free && period === "annual" && plan.annual_monthly_equivalent
+          ? `<div class="text-xs text-emerald-600 mt-1 font-semibold">${escapeHtml(plan.annual_monthly_equivalent)}/mo — save ${escapeHtml(plan.annual_saving_display)}</div>`
+          : "";
+      let cta;
+      if (isCurrent) {
+        cta = `<div class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-center text-sm font-semibold text-slate-400">Current Plan</div>`;
+      } else if (free) {
+        cta = `<div class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-center text-sm font-medium text-slate-400">No card required</div>`;
+      } else {
+        const style = plan.highlight
+          ? "bg-brand-600 hover:bg-brand-700 text-white"
+          : "border border-brand-300 text-brand-700 hover:bg-brand-50";
+        cta = `<button data-plan="${escapeHtml(plan.id)}" data-period="${escapeHtml(period)}" class="billing-cta rounded-xl ${style} px-4 py-2.5 text-sm font-semibold text-center transition">Choose ${escapeHtml(plan.name)}</button>`;
+      }
+      const cap =
+        plan.products_per_month >= 0
+          ? `<div class="text-xs text-slate-400 mt-2">${plan.products_per_month} finished products per month</div>`
+          : "";
+      return `
+        <div class="rounded-2xl ${border} bg-white p-7 flex flex-col relative">
+          ${plan.highlight ? `<div class="absolute -top-3 left-1/2 -translate-x-1/2"><span class="rounded-full bg-brand-600 text-white text-xs font-bold px-3 py-1">Most Popular</span></div>` : ""}
+          <div class="mb-5">
+            <div class="text-sm font-bold ${plan.highlight ? "text-brand-600" : "text-slate-500"} uppercase tracking-wide mb-1">${escapeHtml(plan.name)}</div>
+            <div class="text-4xl font-extrabold text-slate-900">${escapeHtml(price.display)}</div>
+            <div class="text-sm text-slate-400 mt-1">${suffix}</div>
+            ${equiv}
+            <div class="text-xs text-slate-500 mt-2">${escapeHtml(plan.tagline)}</div>
+            ${cap}
+          </div>
+          <ul class="space-y-2.5 flex-1 mb-7">${planFeatureList(plan)}</ul>
+          ${cta}
+          ${plan.note ? `<p class="mt-3 text-xs text-slate-400">${escapeHtml(plan.note)}</p>` : ""}
+        </div>`;
+    })
+    .join("");
+
+  if (founder && founderWrap) {
+    const remaining = founder.seats_remaining;
+    const total = founder.seats_total;
+    const taken = Math.max(0, total - remaining);
+    const pct = total ? Math.round((taken / total) * 100) : 0;
+    const soldOut = founder.sold_out;
+    founderWrap.classList.remove("hidden");
+    founderWrap.innerHTML = `
+      <div class="rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-50 to-white p-7">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-6">
+          <div class="flex-1">
+            <div class="flex items-center gap-3 mb-2">
+              <span class="rounded-full bg-amber-500 text-white text-xs font-bold px-3 py-1">Limited — first ${total} members</span>
+              ${soldOut ? `<span class="rounded-full bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1">Sold out</span>` : ""}
+            </div>
+            <h3 class="text-xl font-extrabold text-slate-900">${escapeHtml(founder.name)}</h3>
+            <p class="text-sm text-slate-600 mt-1">${escapeHtml(founder.tagline)}</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-2 mt-4">${planFeatureList(founder)}</ul>
+            <p class="mt-4 text-xs text-slate-500">${escapeHtml(founder.note)}</p>
+          </div>
+          <div class="lg:w-64 shrink-0">
+            ${(() => {
+              // The Founder's Plan may not always be monthly-only — periods[0]
+              // is whatever this plan actually offers right now, so this card
+              // never quietly drifts out of sync with services/billing/plans.py.
+              const fPeriod = founder.periods[0] || "monthly";
+              const fPrice = planPriceFor(founder, fPeriod);
+              const fSuffix = fPeriod === "annual" ? "per year, locked for life" : "per month, locked for life";
+              return `
+            <div class="text-4xl font-extrabold text-slate-900">${escapeHtml(fPrice.display)}</div>
+            <div class="text-sm text-slate-500">${fSuffix}</div>
+            <div class="mt-4">
+              <div class="h-2 rounded-full bg-amber-100 overflow-hidden">
+                <div class="h-full bg-amber-500" style="width:${pct}%"></div>
+              </div>
+              <div class="text-xs font-semibold text-slate-600 mt-2">
+                ${soldOut ? "All founding seats taken" : `${remaining} of ${total} seats left`}
+              </div>
+            </div>
+            ${
+              soldOut
+                ? `<div class="mt-4 rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-center text-sm font-semibold text-slate-400">Fully subscribed</div>`
+                : `<button data-plan="${escapeHtml(founder.id)}" data-period="${escapeHtml(fPeriod)}" class="billing-cta mt-4 w-full rounded-xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 text-sm font-bold transition">Claim a founding seat</button>`
+            }`;
+            })()}
+          </div>
+        </div>
+      </div>`;
+  } else if (founderWrap) {
+    founderWrap.classList.add("hidden");
+  }
+
+  if (notice) {
+    if (billingCatalog.checkout_available) {
+      notice.innerHTML = "";
+    } else {
+      // Say plainly that checkout is not live yet rather than showing buttons
+      // that fail when clicked.
+      notice.innerHTML = `
+        <div class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Checkout is not connected yet.</strong>
+          Add your Stripe or Lemon Squeezy keys to <code>.env</code> and restart the app.
+          See <code>docs/BILLING_SETUP.md</code>. Prices below are live from the catalog.
+        </div>`;
+    }
+  }
+
+  grid.querySelectorAll(".billing-cta").forEach(bindCheckoutButton);
+  founderWrap?.querySelectorAll(".billing-cta").forEach(bindCheckoutButton);
+}
+
+function bindCheckoutButton(btn) {
+  btn.addEventListener("click", () => startCheckout(btn.dataset.plan, btn.dataset.period, btn));
+}
+
+function billingProvider() {
+  const providers = ((billingCatalog || {}).providers || {}).providers || {};
+  if (providers.stripe && providers.stripe.configured) return "stripe";
+  if (providers.lemon_squeezy && providers.lemon_squeezy.configured) return "lemon_squeezy";
+  return "";
+}
+
+async function startCheckout(planId, period, btn) {
+  if (billingBusy) return;
+  const provider = billingProvider();
+  if (!provider) {
+    toast("Checkout is not connected yet — add your payment keys to .env.", "error");
+    return;
+  }
+  billingBusy = true;
+  const original = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Opening checkout…";
+  }
+  try {
+    const ref = await ensureAccountRef();
+    const res = await api("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({
+        plan_id: planId,
+        billing_period: period,
+        provider,
+        account_ref: ref,
+      }),
+    });
+    // The provider's hosted page handles the card. The Factory never sees it.
+    window.location.href = res.checkout_url;
+  } catch (err) {
+    toast(err.message, "error");
+    // A refused founder seat means the cohort filled while this page was open.
+    await initBilling();
+  } finally {
+    billingBusy = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
 }
 
 // A launch package is always built FROM a saved product, so the dashboard card
@@ -2157,7 +2466,11 @@ function recommendationSummaryFrom(d) {
     internal_recommendation: internal,
     user_decision: userDecision,
     why_we_recommend: why,
-    what_to_build: `Start with: a ${productType || "Factory product"} for ${audience} based on ${productName} that helps with ${problem}.`,
+    // "helps with <problem>" has to survive the customer stating the problem as
+    // a full clause ("families overspend because ..."), so the clause is
+    // introduced rather than dropped in after a preposition. Mirrors
+    // _as_need_phrase() in services/market_research.py.
+    what_to_build: `Start with: a ${productType || "Factory product"} for ${audience} based on ${productName}, addressing this problem: ${String(problem).replace(/\.$/, "")}.`,
     component_signals: [
       { key: "demand", label: "Demand", signal: plainComponentSignal(comps.demand) },
       { key: "competition_opportunity", label: "Competition", signal: plainComponentSignal(comps.competition_opportunity) },
@@ -2208,17 +2521,46 @@ function simpleScoreSignalsHtml(summary) {
   <p class="text-xs text-slate-500 mt-2">${escapeHtml((summary && summary.disclaimer) || "Scores and revenue estimates are research indicators, not guaranteed sales or earnings.")}</p>`;
 }
 
+// The headings have to agree with the verdict underneath them. Announcing
+// "Here is what we recommend." / "Why We Recommend It" above a verdict of
+// "Needs Improvement" (with three signals reading More Research Needed) reads
+// as though Factory did not look at its own findings, which is exactly the
+// trust the transparent scoring is meant to buy.
+function recommendationHeadings(summary) {
+  const decision = (summary && summary.user_decision) || "";
+  if (decision === "AVOID") {
+    return {
+      headline: "Here is what we found.",
+      why: "What The Evidence Shows",
+      build: "If You Still Want To Build It",
+    };
+  }
+  if (decision === "IMPROVE THE IDEA") {
+    return {
+      headline: "Here is what we found.",
+      why: "What The Evidence Shows",
+      build: "What We Suggest Building",
+    };
+  }
+  return {
+    headline: "Here is what we recommend.",
+    why: "Why We Recommend It",
+    build: "What We Recommend Building",
+  };
+}
+
 function recommendationSummaryHtml(d, summary) {
+  const headings = recommendationHeadings(summary);
   return `<div id="fmaRecommendationSummary" data-fma-view="recommendation-summary" class="rounded-2xl border-2 border-brand-500 bg-white p-6">
     <div class="text-xs font-semibold uppercase tracking-widest text-brand-600">Factory Market Advantage</div>
-    <h3 class="text-lg font-bold text-slate-900 mt-1">Here is what we recommend.</h3>
+    <h3 class="text-lg font-bold text-slate-900 mt-1">${escapeHtml(headings.headline)}</h3>
     <p class="text-sm text-slate-500 mb-4">Find it. Prove it—before you build it.</p>
     <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Your Best Opportunity</div>
     <div class="text-2xl font-bold text-slate-900 mt-1">${escapeHtml(summary.product_name)}</div>
     <div class="mt-2 text-sm"><span class="font-semibold">Opportunity:</span> ${escapeHtml(summary.opportunity_label)}</div>
-    <h4 class="text-base font-bold text-slate-900 mt-5 mb-2">Why We Recommend It</h4>
+    <h4 class="text-base font-bold text-slate-900 mt-5 mb-2">${escapeHtml(headings.why)}</h4>
     <p class="text-sm text-slate-700">${escapeHtml(summary.why_we_recommend)}</p>
-    <h4 class="text-base font-bold text-slate-900 mt-5 mb-2">What We Recommend Building</h4>
+    <h4 class="text-base font-bold text-slate-900 mt-5 mb-2">${escapeHtml(headings.build)}</h4>
     <p class="text-sm text-slate-700">${escapeHtml(summary.what_to_build)}</p>
     ${simpleScoreSignalsHtml(summary)}
     <div class="mt-3">
@@ -2568,13 +2910,39 @@ async function buildThisProduct() {
     const plan = (result.data && result.data.plan) || {};
     const factoryId = result.factory_id || (result.builder && result.builder.factory_id);
     if (factoryId === "ebook") {
+      // Start the Ebook Project workspace, not the legacy Ebook Builder.
+      //
+      // The Builder's generate button POSTs /generate-ebook, the legacy
+      // one-shot generator that services/ebook.py documents as unable to
+      // produce Export Ready ebooks: prose only, no package, no PDF, no ZIP,
+      // and no Editor-in-Chief (that runs during /export-product, which this
+      // path never reaches). The workspace is the pipeline that ends in a
+      // reviewed, downloadable product, so Build This Product goes there.
       const brief = result.data || {};
       brief._project_id = result.id;
       pendingEbookBrief = brief;
-      go("ebook");
-      document.getElementById("ebookInput").value = plan.product_title || op.product_idea || "";
-      renderBriefPanel(brief);
-      toast("Draft opened in Ebook Builder. Review the brief — nothing was auto-generated.");
+      const topic = plan.product_title || op.product_idea || "";
+      if (!topic) {
+        toast("Saved as a blueprint. Add a product title to start the Ebook Project.", "error");
+        return;
+      }
+      try {
+        const created = await api("/ebook-workspace", {
+          method: "POST",
+          body: JSON.stringify({
+            topic,
+            author: String(plan.author || brief.author_brand || "").trim(),
+            audience: plan.target_audience || op.target_audience || "",
+            outcome: plan.main_transformation || plan.product_promise || "",
+            name: String(topic).slice(0, 120),
+          }),
+        });
+        loadProjects();
+        toast("Ebook Project created from your research.");
+        await openEbookWorkspace(created.project.id);
+      } catch (e) {
+        toast("Could not start the Ebook Project: " + (e.message || String(e)), "error");
+      }
       return;
     }
     go("factory");
@@ -3161,23 +3529,42 @@ function resolveFactoryTypeFromPlan(plan) {
   if (pt.includes("marketing") || pt.includes("sales copy") || pt.includes("ad script")) {
     return { status: "hidden", factoryId: "marketing_kit", hiddenReason: hiddenReasonFor("marketing_kit") };
   }
+  // Faith and Budget planners are shipped builders; only the generic "planner"
+  // is hidden, so the specific ones have to be tested first or a described
+  // faith planner ("undated faith planner for busy moms") is wrongly blocked.
+  if (pt.includes("faith") && pt.includes("planner")) {
+    return { status: "active", factoryId: "faith_planner" };
+  }
+  if ((pt.includes("budget") || pt.includes("money") || pt.includes("finance")) && pt.includes("planner")) {
+    return { status: "active", factoryId: "budget_planner" };
+  }
+  if (pt.includes("planner")) {
+    return { status: "hidden", factoryId: "planner", hiddenReason: hiddenReasonFor("planner") };
+  }
+
+  // 5. Default active catch-all: book/guide/workbook/checklist → ebook.
+  // This runs BEFORE the weak modifiers below. Live research names a product
+  // in prose, so "Printable inventory and meal planning workbook" arrives here
+  // matching both "printable" and "planning" — it is a workbook that happens to
+  // be about planning, and the Ebook Builder handles it. Testing the modifiers
+  // first sent it to the hidden planner, and Build This Product answered "not
+  // ready in the public builder yet" for a product the Factory can build.
+  if (pt.includes("book") || pt.includes("guide") || pt.includes("workbook") || pt.includes("checklist")) {
+    return { status: "active", factoryId: "ebook" };
+  }
+
+  // 6. Weak modifiers: reached only when no product noun matched at all, so
+  // "Printable and fillable digital planning kit" still lands on the planner.
   if (
-    pt.includes("planner") ||
     pt.includes("planning") ||
     pt.includes("printable") ||
     pt.includes("fillable") ||
     /\bkit\b/.test(pt) ||
     pt.includes("routine") ||
     pt.includes("schedule") ||
-    pt.includes("tracker") ||
-    pt.includes("weekly kit")
+    pt.includes("tracker")
   ) {
     return { status: "hidden", factoryId: "planner", hiddenReason: hiddenReasonFor("planner") };
-  }
-
-  // 5. Default active catch-all: book/guide/workbook/checklist → ebook.
-  if (pt.includes("book") || pt.includes("guide") || pt.includes("workbook") || pt.includes("checklist")) {
-    return { status: "active", factoryId: "ebook" };
   }
   return { status: "unknown" };
 }
@@ -3266,24 +3653,44 @@ async function sendToBuilder(d) {
     return;
   }
 
-  // Active Ebook: open the dedicated Ebook Builder view with the researched
-  // brief attached, pre-fill the source input, and AUTO-FIRE the build. The
-  // "Build Product" / "Send to Product Builder" click is the user saying
-  // "build it" — they shouldn't have to click a second button to actually
-  // generate. The post-save Next Steps panel (Download PDF / ZIP / Selling)
-  // appears automatically when the build finishes.
+  // Active Ebook: create a real Ebook Project workspace and open it there.
+  //
+  // This used to call runEbook(), which POSTs /generate-ebook — the LEGACY
+  // one-shot generator that services/ebook.py documents as unable to produce
+  // Export Ready ebooks. It returns prose and nothing else: no package, no
+  // PDF, no ZIP, and because the Editor-in-Chief runs during /export-product,
+  // the book was never reviewed either. On 2026-08-29 a customer clicked
+  // Build This Product, got a finished-looking ebook they could not save, and
+  // reasonably asked what had happened to their reviewer. Nothing had: the
+  // book never reached the stage that runs it.
+  //
+  // The workspace is the pipeline that actually ends in a reviewed,
+  // downloadable product (manuscript → visuals → cover → preflight → export),
+  // so the build button goes there instead.
   if (resolution.status === "active" && resolution.factoryId === "ebook") {
     pendingEbookBrief = d;
-    go("ebook");
-    document.getElementById("ebookInput").value = plan.product_title || "";
-    renderBriefPanel(d);
-    toast("Building your ebook from the research...");
-    // Auto-fire the build. runEbook() reads the source from #ebookInput
-    // (just set above) and POSTs to /generate-ebook with the attached
-    // pendingEbookBrief as the contract. The async /generate-ebook call
-    // (which can take 30+ seconds for a full ebook) is the user-perceived
-    // "build" — the spinner in #ebookOutput keeps them oriented.
-    runEbook();
+    const topic = plan.product_title || d.title || "";
+    if (!topic) {
+      toast("Saved as a blueprint. Add a product title to start the Ebook Project.", "error");
+      return;
+    }
+    try {
+      const created = await api("/ebook-workspace", {
+        method: "POST",
+        body: JSON.stringify({
+          topic,
+          author: String(plan.author || d.author_brand || "").trim(),
+          audience: plan.target_audience || "",
+          outcome: plan.main_transformation || plan.product_promise || "",
+          name: String(topic).slice(0, 120),
+        }),
+      });
+      loadProjects();
+      toast("Ebook Project created from your research.");
+      await openEbookWorkspace(created.project.id);
+    } catch (e) {
+      toast("Could not start the Ebook Project: " + (e.message || String(e)), "error");
+    }
     return;
   }
 
