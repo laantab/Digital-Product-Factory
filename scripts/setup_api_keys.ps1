@@ -85,6 +85,20 @@ function Set-KeyInteractive {
             Write-Host "  Check you copied the right key."
             return $false
         }
+    } else {
+        # No positive prefix to check (Pexels has none), so check negatively
+        # instead: reject a key that plainly belongs to one of the other
+        # services. Pasting the same key into two prompts is an easy slip, and
+        # Pexels' search endpoint answers 200 even for a junk key -- so without
+        # this guard a wrong key here fails silently, much later, on a cover.
+        foreach ($foreign in @(@("sk-", "OpenAI"), @("tvly-", "Tavily"))) {
+            if ($value.StartsWith($foreign[0])) {
+                Write-Host ""
+                Write-Host "  That looks like your $($foreign[1]) key (it starts with '$($foreign[0])'). Not saved." -ForegroundColor Red
+                Write-Host "  Each service needs its own key -- check you copied the right one."
+                return $false
+            }
+        }
     }
     foreach ($name in $EnvNames) {
         $script:lines = Set-EnvValue $script:lines $name $value

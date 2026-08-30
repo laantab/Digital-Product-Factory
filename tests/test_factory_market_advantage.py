@@ -1761,6 +1761,114 @@ class FactoryMarketAdvantageUxTests(unittest.TestCase):
         self.assertEqual(before, after)
 
 
+class DescribedProductTypeRoutingTests(unittest.TestCase):
+    """A described product type must route on its head noun, not a modifier.
+
+    Live research names the product in prose rather than picking a catalog
+    label, so `resolve_factory_builder` sees strings like "Printable inventory
+    and meal planning workbook". That routed to the hidden generic Planner --
+    because the incidental gerund in "meal planning" was tested before any
+    product noun -- and Build This Product answered "not ready in the public
+    builder yet" for a workbook the Ebook Builder handles perfectly well.
+    """
+
+    def _route(self, product_type: str) -> tuple[str, str]:
+        row = resolve_factory_builder(product_type)
+        return row["status"], row["label"]
+
+    def test_a_workbook_about_planning_is_still_a_workbook(self):
+        self.assertEqual(
+            self._route("Printable inventory and meal planning workbook"),
+            ("active", "Ebook"),
+        )
+
+    def test_a_guide_about_planning_is_still_a_guide(self):
+        self.assertEqual(
+            self._route("Zero-waste weekly meal-planning guide with shopping lists"),
+            ("active", "Ebook"),
+        )
+
+    def test_a_named_planner_still_routes_to_its_own_builder(self):
+        self.assertEqual(self._route("Faith Planner"), ("active", "Faith Planner"))
+        self.assertEqual(self._route("Budget Planner"), ("active", "Budget Planner"))
+        self.assertEqual(self._route("budget planner workbook"), ("active", "Budget Planner"))
+
+    def test_a_generic_planner_is_still_hidden(self):
+        self.assertEqual(self._route("Planner"), ("hidden", "Planner"))
+        self.assertEqual(self._route("daily planner"), ("hidden", "Planner"))
+
+    def test_planning_alone_still_reaches_the_planner(self):
+        # No product noun anywhere, so the modifier is all there is to go on.
+        self.assertEqual(
+            self._route("zero-waste meal planning printable"), ("hidden", "Planner"))
+
+    def test_the_puzzle_and_worksheet_builders_are_unaffected(self):
+        for product_type, expected in (
+            ("Coloring Book", ("active", "Coloring Book")),
+            ("Word Search Book", ("active", "Word Search Book")),
+            ("Crossword Puzzle Book", ("active", "Crossword Puzzle Book")),
+            ("Math Worksheet", ("active", "Math Worksheet")),
+            ("Spelling Worksheet", ("hidden", "Spelling Worksheet")),
+            ("Flip Book", ("hidden", "Flip Book")),
+            ("Marketing Kit", ("hidden", "Marketing Kit")),
+        ):
+            with self.subTest(product_type=product_type):
+                self.assertEqual(self._route(product_type), expected)
+
+
+class BuildHandoffRoutingJsTests(unittest.TestCase):
+    """The browser has its own copy of the builder routing, and it drives the
+    Build This Product button.
+
+    `resolveFactoryTypeFromPlan` in static/js/app.js duplicates the logic of
+    `resolve_factory_builder`. Fixing only the Python left the button still
+    refusing to build, because the message the customer sees is produced
+    client-side. Order matters there for the same reason it does in Python:
+    "Printable inventory and meal planning workbook" matches the modifiers
+    "printable" AND "planning" before it ever reaches "workbook".
+    """
+
+    def _routing_source(self) -> str:
+        js = APP_JS.read_text(encoding="utf-8")
+        return js.split("function resolveFactoryTypeFromPlan(", 1)[1].split(
+            "function hiddenReasonFor(", 1)[0]
+
+    def test_the_product_noun_catch_all_precedes_the_weak_modifiers(self):
+        fn = self._routing_source()
+        catch_all = fn.find('pt.includes("book")')
+        self.assertGreater(catch_all, 0, "the book/guide/workbook catch-all is gone")
+        for modifier in ('"planning"', '"printable"', '"fillable"', '"tracker"'):
+            position = fn.find(f"pt.includes({modifier})")
+            self.assertGreater(
+                position, catch_all,
+                f"pt.includes({modifier}) is tested before the product-noun "
+                f"catch-all, so a workbook/guide is routed to the hidden planner",
+            )
+
+    def test_named_planners_precede_the_generic_planner(self):
+        fn = self._routing_source()
+        faith = fn.find('"faith_planner"')
+        budget = fn.find('"budget_planner"')
+        generic = fn.find('factoryId: "planner"')
+        self.assertGreater(faith, 0, "faith_planner routing is missing")
+        self.assertGreater(budget, 0, "budget_planner routing is missing")
+        self.assertLess(faith, generic, "a described faith planner is blocked")
+        self.assertLess(budget, generic, "a described budget planner is blocked")
+
+    def test_the_two_implementations_agree_on_the_reported_cases(self):
+        """The Python and JS routings must not disagree about the same input."""
+        for product_type, expected_id in (
+            ("Printable inventory and meal planning workbook", "ebook"),
+            ("Zero-waste weekly meal-planning guide with shopping lists", "ebook"),
+            ("Undated faith planner for busy moms", "faith_planner"),
+            ("Coloring Book", "coloring_book"),
+        ):
+            with self.subTest(product_type=product_type):
+                row = resolve_factory_builder(product_type)
+                self.assertEqual(row["status"], "active")
+                self.assertEqual(row["factory_id"], expected_id)
+
+
 class DegradedModePresentationTests(unittest.TestCase):
     """What the customer sees when the AI or live research is unavailable.
 

@@ -3503,23 +3503,42 @@ function resolveFactoryTypeFromPlan(plan) {
   if (pt.includes("marketing") || pt.includes("sales copy") || pt.includes("ad script")) {
     return { status: "hidden", factoryId: "marketing_kit", hiddenReason: hiddenReasonFor("marketing_kit") };
   }
+  // Faith and Budget planners are shipped builders; only the generic "planner"
+  // is hidden, so the specific ones have to be tested first or a described
+  // faith planner ("undated faith planner for busy moms") is wrongly blocked.
+  if (pt.includes("faith") && pt.includes("planner")) {
+    return { status: "active", factoryId: "faith_planner" };
+  }
+  if ((pt.includes("budget") || pt.includes("money") || pt.includes("finance")) && pt.includes("planner")) {
+    return { status: "active", factoryId: "budget_planner" };
+  }
+  if (pt.includes("planner")) {
+    return { status: "hidden", factoryId: "planner", hiddenReason: hiddenReasonFor("planner") };
+  }
+
+  // 5. Default active catch-all: book/guide/workbook/checklist → ebook.
+  // This runs BEFORE the weak modifiers below. Live research names a product
+  // in prose, so "Printable inventory and meal planning workbook" arrives here
+  // matching both "printable" and "planning" — it is a workbook that happens to
+  // be about planning, and the Ebook Builder handles it. Testing the modifiers
+  // first sent it to the hidden planner, and Build This Product answered "not
+  // ready in the public builder yet" for a product the Factory can build.
+  if (pt.includes("book") || pt.includes("guide") || pt.includes("workbook") || pt.includes("checklist")) {
+    return { status: "active", factoryId: "ebook" };
+  }
+
+  // 6. Weak modifiers: reached only when no product noun matched at all, so
+  // "Printable and fillable digital planning kit" still lands on the planner.
   if (
-    pt.includes("planner") ||
     pt.includes("planning") ||
     pt.includes("printable") ||
     pt.includes("fillable") ||
     /\bkit\b/.test(pt) ||
     pt.includes("routine") ||
     pt.includes("schedule") ||
-    pt.includes("tracker") ||
-    pt.includes("weekly kit")
+    pt.includes("tracker")
   ) {
     return { status: "hidden", factoryId: "planner", hiddenReason: hiddenReasonFor("planner") };
-  }
-
-  // 5. Default active catch-all: book/guide/workbook/checklist → ebook.
-  if (pt.includes("book") || pt.includes("guide") || pt.includes("workbook") || pt.includes("checklist")) {
-    return { status: "active", factoryId: "ebook" };
   }
   return { status: "unknown" };
 }

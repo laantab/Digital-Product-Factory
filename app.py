@@ -7,7 +7,21 @@ APP_VERSION = "1.3.0"
 
 from dotenv import load_dotenv
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(_APP_DIR, ".env"))
+# In normal use .env is the single source of truth: without override=True,
+# python-dotenv leaves any variable already in the process environment alone,
+# so a stale Windows user-level variable silently beats the file. That cost a
+# long debugging session on 2026-08-29 -- a revoked TAVILY_API_KEY left in the
+# Windows user environment shadowed the working key in .env, and live research
+# failed with 401 while .env looked perfectly correct and tested fine on its own.
+#
+# Under FACTORY_TEST_MODE the opposite must hold: the harness owns the
+# environment. tests/test_ebook_real_browser_customer_path.py launches an
+# isolated server as a SUBPROCESS with the API keys explicitly blanked, and
+# that subprocess runs outside conftest's network guard -- those blanks are its
+# only protection against real paid calls. Overriding them from .env handed it
+# live credentials and hung the test.
+_FACTORY_TEST_MODE = str(os.environ.get("FACTORY_TEST_MODE") or "") == "1"
+load_dotenv(os.path.join(_APP_DIR, ".env"), override=not _FACTORY_TEST_MODE)
 
 from flask import Flask, jsonify, make_response, render_template, request, send_file, send_from_directory
 import base64
@@ -3731,7 +3745,7 @@ def coloring_ai_status():
     from ai_client import _is_placeholder_key, get_key_source, get_base_url_source
 
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(override=not _FACTORY_TEST_MODE)  # see the module-level call
 
     model = os.environ.get("AI_INTEGRATIONS_IMAGE_MODEL", "gpt-image-1")
 

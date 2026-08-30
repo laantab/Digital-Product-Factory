@@ -757,14 +757,22 @@ def resolve_factory_builder(product_type: str) -> dict:
         return {"status": "active", "factory_id": "faith_planner", "label": "Faith Planner"}
     if ("budget" in pt or "money" in pt or "finance" in pt) and "planner" in pt:
         return {"status": "active", "factory_id": "budget_planner", "label": "Budget Planner"}
-    if "planner" in pt or "planning" in pt:
+    if "planner" in pt:
         return {"status": "hidden", "factory_id": "planner", "label": "Planner"}
     if "marketing" in pt:
         return {"status": "hidden", "factory_id": "marketing_kit", "label": "Marketing Kit"}
     if pt in EBOOK_ALIASES or pt == "ebook":
         return {"status": "active", "factory_id": "ebook", "label": "Ebook"}
-    if "book" in pt or "guide" in pt:
+    # Match the aliases as substrings too, so a described type keeps its head
+    # noun: "Printable inventory and meal planning workbook" is a workbook that
+    # happens to be about planning, and belongs in the Ebook Builder.
+    if any(alias in pt for alias in EBOOK_ALIASES) or "book" in pt:
         return {"status": "active", "factory_id": "ebook", "label": "Ebook"}
+    # "planning" is a modifier, not a product noun -- it must never outrank a
+    # real product word above. Reaching here means nothing else matched, so a
+    # bare "meal planning printable" can still land on the planner.
+    if "planning" in pt:
+        return {"status": "hidden", "factory_id": "planner", "label": "Planner"}
     return {"status": "unknown", "factory_id": None, "label": product_type}
 
 
