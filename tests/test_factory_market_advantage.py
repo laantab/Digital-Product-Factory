@@ -1711,7 +1711,15 @@ class FactoryMarketAdvantageUxTests(unittest.TestCase):
         js = APP_JS.read_text(encoding="utf-8")
         build_fn = js.split("async function buildThisProduct(", 1)[1].split("async function runFactoryMarketAdvantage(", 1)[0]
         self.assertIn("/research-to-builder", build_fn)
-        self.assertNotIn("/generate", build_fn)
+        # Check the CODE, not the comments. The point of this guard is that
+        # Build This Product never calls a generate endpoint -- generating
+        # costs money and the click means "open a draft", not "spend". A
+        # comment that names /generate-ebook while explaining why the function
+        # deliberately avoids it is documentation, not a call, and used to
+        # fail this assertion.
+        code_only = re.sub(r"/\*.*?\*/", "", build_fn, flags=re.S)
+        code_only = re.sub(r"//[^\n]*", "", code_only)
+        self.assertNotIn("/generate", code_only)
 
     def test_no_openai_or_tavily_when_viewing_completed_report_payload(self):
         research = self._idea_research().get_json()

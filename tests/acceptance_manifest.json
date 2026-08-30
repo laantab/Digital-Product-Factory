@@ -79,6 +79,7 @@
     "tests/test_kdp_foundations_pass1.py",
     "tests/test_kdp_preflight_pass2.py",
     "test_crossword_quality.py",
-    "tests/test_billing.py"
+    "tests/test_billing.py",
+    "tests/test_customer_journey_every_product_type.py"
   ]
 }

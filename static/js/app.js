@@ -2910,13 +2910,39 @@ async function buildThisProduct() {
     const plan = (result.data && result.data.plan) || {};
     const factoryId = result.factory_id || (result.builder && result.builder.factory_id);
     if (factoryId === "ebook") {
+      // Start the Ebook Project workspace, not the legacy Ebook Builder.
+      //
+      // The Builder's generate button POSTs /generate-ebook, the legacy
+      // one-shot generator that services/ebook.py documents as unable to
+      // produce Export Ready ebooks: prose only, no package, no PDF, no ZIP,
+      // and no Editor-in-Chief (that runs during /export-product, which this
+      // path never reaches). The workspace is the pipeline that ends in a
+      // reviewed, downloadable product, so Build This Product goes there.
       const brief = result.data || {};
       brief._project_id = result.id;
       pendingEbookBrief = brief;
-      go("ebook");
-      document.getElementById("ebookInput").value = plan.product_title || op.product_idea || "";
-      renderBriefPanel(brief);
-      toast("Draft opened in Ebook Builder. Review the brief — nothing was auto-generated.");
+      const topic = plan.product_title || op.product_idea || "";
+      if (!topic) {
+        toast("Saved as a blueprint. Add a product title to start the Ebook Project.", "error");
+        return;
+      }
+      try {
+        const created = await api("/ebook-workspace", {
+          method: "POST",
+          body: JSON.stringify({
+            topic,
+            author: String(plan.author || brief.author_brand || "").trim(),
+            audience: plan.target_audience || op.target_audience || "",
+            outcome: plan.main_transformation || plan.product_promise || "",
+            name: String(topic).slice(0, 120),
+          }),
+        });
+        loadProjects();
+        toast("Ebook Project created from your research.");
+        await openEbookWorkspace(created.project.id);
+      } catch (e) {
+        toast("Could not start the Ebook Project: " + (e.message || String(e)), "error");
+      }
       return;
     }
     go("factory");
@@ -3627,24 +3653,44 @@ async function sendToBuilder(d) {
     return;
   }
 
-  // Active Ebook: open the dedicated Ebook Builder view with the researched
-  // brief attached, pre-fill the source input, and AUTO-FIRE the build. The
-  // "Build Product" / "Send to Product Builder" click is the user saying
-  // "build it" — they shouldn't have to click a second button to actually
-  // generate. The post-save Next Steps panel (Download PDF / ZIP / Selling)
-  // appears automatically when the build finishes.
+  // Active Ebook: create a real Ebook Project workspace and open it there.
+  //
+  // This used to call runEbook(), which POSTs /generate-ebook — the LEGACY
+  // one-shot generator that services/ebook.py documents as unable to produce
+  // Export Ready ebooks. It returns prose and nothing else: no package, no
+  // PDF, no ZIP, and because the Editor-in-Chief runs during /export-product,
+  // the book was never reviewed either. On 2026-08-29 a customer clicked
+  // Build This Product, got a finished-looking ebook they could not save, and
+  // reasonably asked what had happened to their reviewer. Nothing had: the
+  // book never reached the stage that runs it.
+  //
+  // The workspace is the pipeline that actually ends in a reviewed,
+  // downloadable product (manuscript → visuals → cover → preflight → export),
+  // so the build button goes there instead.
   if (resolution.status === "active" && resolution.factoryId === "ebook") {
     pendingEbookBrief = d;
-    go("ebook");
-    document.getElementById("ebookInput").value = plan.product_title || "";
-    renderBriefPanel(d);
-    toast("Building your ebook from the research...");
-    // Auto-fire the build. runEbook() reads the source from #ebookInput
-    // (just set above) and POSTs to /generate-ebook with the attached
-    // pendingEbookBrief as the contract. The async /generate-ebook call
-    // (which can take 30+ seconds for a full ebook) is the user-perceived
-    // "build" — the spinner in #ebookOutput keeps them oriented.
-    runEbook();
+    const topic = plan.product_title || d.title || "";
+    if (!topic) {
+      toast("Saved as a blueprint. Add a product title to start the Ebook Project.", "error");
+      return;
+    }
+    try {
+      const created = await api("/ebook-workspace", {
+        method: "POST",
+        body: JSON.stringify({
+          topic,
+          author: String(plan.author || d.author_brand || "").trim(),
+          audience: plan.target_audience || "",
+          outcome: plan.main_transformation || plan.product_promise || "",
+          name: String(topic).slice(0, 120),
+        }),
+      });
+      loadProjects();
+      toast("Ebook Project created from your research.");
+      await openEbookWorkspace(created.project.id);
+    } catch (e) {
+      toast("Could not start the Ebook Project: " + (e.message || String(e)), "error");
+    }
     return;
   }
 
