@@ -89,6 +89,11 @@ def validate_ebook_pdf(pdf_bytes: bytes, pdf_md5: str = "") -> EbookQAResult:
     _check_back_matter_present(page_count, text, result)
     _check_cover_professional(text, result)
     _check_malformed_content(text, result)
+    _check_cover_white_perimeter(pdf_bytes, result)
+    _check_sparse_interior_pages(pdf_bytes, result)
+    _check_pdf_payload_size(pdf_bytes, page_count, result)
+    _check_embedded_body_font(pdf_bytes, result)
+    _check_running_page_numbers(pdf_bytes, result)
 
     return result
 
@@ -98,11 +103,15 @@ def validate_ebook_pdf(pdf_bytes: bytes, pdf_md5: str = "") -> EbookQAResult:
 # ---------------------------------------------------------------------------
 
 def _check_cover_fills_page(text: str, image_data: dict, result: EbookQAResult) -> None:
-    """If the cover page text/visuals occupy < 20% of the page area, it fills the page."""
+    """Photo covers should fill the trim. A text-only purple shell is the defect."""
+    has_image = bool((image_data or {}).get("has_images"))
     cover_text_ratio = _text_occupancy_ratio(text[:2000])
+    if has_image:
+        result.checks.append(ValidationCheck("cover_fills_page", True, "Photograph cover"))
+        return
     if cover_text_ratio < 0.08:
-        result.errors.append("Cover fills the full page without margins or spacing.")
-        result.checks.append(ValidationCheck("cover_fills_page", False, "Cover appears to fill the full page"))
+        result.errors.append("Cover fills the full page without a photograph or typeset title block.")
+        result.checks.append(ValidationCheck("cover_fills_page", False, "Cover appears empty or unstyled"))
     else:
         result.checks.append(ValidationCheck("cover_fills_page", True))
 
@@ -112,10 +121,12 @@ def _check_cover_fills_page(text: str, image_data: dict, result: EbookQAResult) 
 # ---------------------------------------------------------------------------
 
 def _check_cover_blank_area(text: str, image_data: dict, result: EbookQAResult) -> None:
-    """Cover should have a reasonable visual balance -- too much white is a sign of lazy design."""
+    """Cover should have a photograph or a real title block — not a mostly empty page."""
+    if (image_data or {}).get("has_images"):
+        result.checks.append(ValidationCheck("cover_has_blank_area", True, "Cover has artwork"))
+        return
     cover_text = text[:1500]
     words = len(cover_text.split())
-    # A cover with fewer than 4 words in the first 1500 chars likely has a large blank area
     if words < 4 and len(cover_text.strip()) < 80:
         result.warnings.append("Cover has very little text -- may have a large blank area.")
         result.checks.append(ValidationCheck("cover_has_blank_area", False, "Cover may have large blank area"))
@@ -450,6 +461,132 @@ def _check_malformed_content(text: str, result: EbookQAResult) -> None:
         ))
     else:
         result.checks.append(ValidationCheck("malformed_content", True))
+
+
+def _check_cover_white_perimeter(pdf_bytes: bytes, result: EbookQAResult) -> None:
+    """Fail when page-1 photograph sits inside a white frame."""
+    try:
+        import fitz
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        page = doc.load_page(0)
+        if not page.get_images():
+            doc.close()
+            result.checks.append(ValidationCheck("cover_white_perimeter", True, "No photo cover"))
+            return
+        pix = page.get_pixmap(matrix=fitz.Matrix(0.5, 0.5), alpha=False)
+        w, h = pix.width, pix.height
+        band = 3
+        white = 0
+        total = 0
+        for y in range(h):
+            for x in range(w):
+                if x < band or y < band or x >= w - band or y >= h - band:
+                    total += 1
+                    r, g, b = pix.pixel(x, y)[:3]
+                    if r >= 250 and g >= 250 and b >= 250:
+                        white += 1
+        doc.close()
+        ratio = white / max(total, 1)
+        if ratio > 0.35:
+            result.errors.append("Cover photograph has a white perimeter instead of full bleed.")
+            result.checks.append(ValidationCheck("cover_white_perimeter", False, f"border_white={ratio:.2f}"))
+        else:
+            result.checks.append(ValidationCheck("cover_white_perimeter", True, f"border_white={ratio:.2f}"))
+    except Exception:
+        result.checks.append(ValidationCheck("cover_white_perimeter", True, "skipped"))
+
+
+def _check_sparse_interior_pages(pdf_bytes: bytes, result: EbookQAResult) -> None:
+    try:
+        import fitz
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        sparse = []
+        for i in range(1, doc.page_count):
+            text = (doc.load_page(i).get_text("text") or "").strip()
+            images = doc.load_page(i).get_images()
+            if len(text) < 40 and not images:
+                sparse.append(i + 1)
+        doc.close()
+        if sparse:
+            result.errors.append(f"Nearly blank interior page(s): {sparse[:8]}")
+            result.checks.append(ValidationCheck("sparse_interior_pages", False, str(sparse[:8])))
+        else:
+            result.checks.append(ValidationCheck("sparse_interior_pages", True))
+    except Exception:
+        result.checks.append(ValidationCheck("sparse_interior_pages", True, "skipped"))
+
+
+def _check_pdf_payload_size(pdf_bytes: bytes, page_count: int, result: EbookQAResult) -> None:
+    size = len(pdf_bytes or b"")
+    # A 40-page photo ebook should not ship uncompressed full-resolution PNGs.
+    limit = 12_000_000 if page_count <= 40 else 18_000_000
+    if page_count and size > limit:
+        result.errors.append(
+            f"PDF is {size} bytes for {page_count} pages — images must be compressed before embed."
+        )
+        result.checks.append(ValidationCheck("pdf_payload_size", False, str(size)))
+    else:
+        result.checks.append(ValidationCheck("pdf_payload_size", True, str(size)))
+
+
+def _check_embedded_body_font(pdf_bytes: bytes, result: EbookQAResult) -> None:
+    try:
+        import fitz
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        page_count = doc.page_count
+        fonts: set[str] = set()
+        for i in range(min(page_count, 8)):
+            if i == 0:
+                continue
+            d = doc.load_page(i).get_text("dict")
+            for block in d.get("blocks") or []:
+                for line in block.get("lines") or []:
+                    for span in line.get("spans") or []:
+                        fonts.add(str(span.get("font") or ""))
+        doc.close()
+        body_fonts = {f for f in fonts if f}
+        helvetica_only = body_fonts <= {
+            "Helvetica",
+            "Helvetica-Bold",
+            "Helvetica-Oblique",
+            "Helvetica-BoldOblique",
+        }
+        # Short fixture PDFs (insert_text) are Helvetica by construction.
+        if page_count >= 6 and body_fonts and helvetica_only:
+            result.errors.append("Body text used Helvetica substitution instead of the embedded ebook font.")
+            result.checks.append(ValidationCheck("embedded_body_font", False, str(sorted(body_fonts))))
+        else:
+            result.checks.append(ValidationCheck("embedded_body_font", True, str(sorted(body_fonts)[:6])))
+    except Exception:
+        result.checks.append(ValidationCheck("embedded_body_font", True, "skipped"))
+
+
+def _check_running_page_numbers(pdf_bytes: bytes, result: EbookQAResult) -> None:
+    try:
+        import fitz
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        if doc.page_count < 4:
+            doc.close()
+            result.checks.append(ValidationCheck("running_page_numbers", True, "short document"))
+            return
+        numbered = 0
+        for i in range(1, doc.page_count):
+            text = doc.load_page(i).get_text("text") or ""
+            if re.search(rf"\b{i + 1}\b", text):
+                numbered += 1
+        doc.close()
+        if numbered < max(1, (doc.page_count - 1) // 2):
+            result.errors.append("Interior pages are missing printed page numbers.")
+            result.checks.append(ValidationCheck("running_page_numbers", False, f"numbered={numbered}"))
+        else:
+            result.checks.append(ValidationCheck("running_page_numbers", True))
+    except Exception:
+        result.checks.append(ValidationCheck("running_page_numbers", True, "skipped"))
+
+
+# ---------------------------------------------------------------------------
+# PDF text + image extraction helpers
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------

@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 from services.ebook_design_spec import EbookDesign, is_unnumbered_back_matter_title
 from services.ebook_design_system import LAYOUT_GUARDS, theme_css
-from services.ebook_package import _split_chapters, _sanitize_html, fix_inline_hyphen_lists_html
+from services.ebook_package import _split_chapters, _sanitize_html, fix_inline_hyphen_lists_html, _MD_TOC_LINE_RE
 
 # Visual/todo tokens: [photo], [photo: cat], [insert image] — not [photographylaunchpad.com].
 _PLACEHOLDER_RE = re.compile(
@@ -778,14 +778,19 @@ def render_designed_ebook_html(
         f"<p>Title: {_e(title)}. Author: {_e(author)}. All rights reserved.</p>"
     )
     if preamble:
-        stripped = _strip_identity_preamble(
-            _strip_leading_heading(_md_fragment(preamble), title),
-            title=title,
-            subtitle=subtitle,
-            author=author,
+        toc_only = all(
+            (not ln.strip()) or _MD_TOC_LINE_RE.match(ln) or ln.strip().startswith("#")
+            for ln in preamble.splitlines()
         )
-        if BeautifulSoup(stripped, "html.parser").get_text(" ", strip=True):
-            parts.append(stripped)
+        if not toc_only:
+            stripped = _strip_identity_preamble(
+                _strip_leading_heading(_md_fragment(preamble), title),
+                title=title,
+                subtitle=subtitle,
+                author=author,
+            )
+            if BeautifulSoup(stripped, "html.parser").get_text(" ", strip=True):
+                parts.append(stripped)
     parts.append(
         '<p class="caption">The full disclaimer and source list appear as unnumbered back matter. '
         "They are not numbered chapters.</p>"

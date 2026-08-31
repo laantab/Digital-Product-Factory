@@ -26,9 +26,10 @@ from services.visual_fallback import (
     pdf_image_data_uri,
     pdf_image_fallback_html,
     safe_caption,
+    image_asset_path,
 )
 
-PDF_EXPORT_VERSION = "visual-v5"  # embedded fonts, no letter-spacing, full cover, TOC pages
+PDF_EXPORT_VERSION = "visual-v6"  # embedded TTF, full-bleed cover, 12pt body, compressed images
 
 
 # ---------------------------------------------------------------------------
@@ -249,11 +250,18 @@ def _log_validation(pdf_bytes: bytes) -> None:
     except Exception:
         _logger.exception("[EBOOK-QA] Validator crashed -- non-blocking, continuing")
 
+_PDF_IMAGE_HASHES: list[int] = []
+
+
+def _reset_pdf_image_dedupe() -> None:
+    _PDF_IMAGE_HASHES.clear()
+
+
 _PDF_CSS = """
-@page { size: letter; margin: 0.7in 0.75in; }
+@page { size: letter; margin: 0.85in 0.75in 0.9in 0.75in; }
 /* EbookSans is registered via @font-face + reportlab TTFont. Do not set glyph tracking. */
-body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-serif; color: #1e293b;
-  font-size: 11pt; line-height: 1.5; }
+body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-serif; color: #111827;
+  font-size: 12pt; line-height: 1.55; }
 .pdf-page { display: block; }
 
 /* Cover */
@@ -283,11 +291,14 @@ body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-ser
 .cover-analytics { font-size: 8pt; color: #64748b; text-align: center; padding-top: 6pt; }
 
 /* Inside title */
-.title-page { page-break-after: always; text-align: center; padding-top: 1.1in; }
-.title-page .title-main { font-size: 24pt; color: #134e4a; margin: 0 0 10pt; }
-.title-page .title-sub { font-size: 12pt; color: #475569; margin: 0 auto 20pt; max-width: 85%; }
-.title-page .summary-lead { font-size: 11pt; color: #334155; text-align: left; margin: 20pt auto 0; max-width: 92%; line-height: 1.5; }
-.title-disclaimer { font-size: 8.5pt; color: #64748b; margin-top: 28pt; font-style: italic; }
+.title-page { page-break-after: always; text-align: center; padding-top: 0.55in; }
+.title-page .title-main { font-size: 26pt; color: #134e4a; margin: 0 0 10pt; }
+.title-page .title-sub { font-size: 13pt; color: #334155; margin: 0 auto 16pt; max-width: 85%; }
+.title-page .summary-lead { font-size: 12pt; color: #111827; text-align: left; margin: 18pt auto 0; max-width: 92%; line-height: 1.55; }
+.title-disclaimer { font-size: 10pt; color: #334155; margin-top: 22pt; font-style: italic; }
+.legal-page { page-break-before: always; padding-top: 0.1in; }
+.legal-page h2 { font-size: 20pt; color: #134e4a; margin: 0 0 14pt; }
+.legal-page p { font-size: 12pt; color: #111827; line-height: 1.55; margin: 0 0 10pt; }
 
 /* TOC — page-break-after only (chapters use page-break-before; both = blank page) */
 .toc-page { padding-top: 0.15in; }
@@ -303,11 +314,14 @@ body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-ser
 .chapter-title, .chapter-page > h2:first-of-type { font-size: 24pt; color: #134e4a; margin: 0 0 14pt;
   padding-bottom: 8pt; border-bottom: 2pt solid #99f6e4; }
 h3 { font-size: 15pt; color: #115e59; margin: 16pt 0 8pt; }
-p { margin: 0 0 9pt; display: block; }
+p { margin: 0 0 10pt; display: block; font-size: 12pt; color: #111827; }
+.pdf-callout { border-left: 3pt solid #0f766e; background: #f0fdfa; padding: 10pt 12pt; margin: 12pt 0; }
 table.pdf-h3-keep, table.pdf-p-keep, table.pdf-list-keep, table.pdf-li-keep { width: 100%; margin: 8pt 0; border: none; }
 td.pdf-h3-cell, td.pdf-p-cell, td.pdf-list-cell, td.pdf-li-cell { border: none; background: transparent; padding: 3pt 0; }
 td.pdf-h3-cell { font-size: 15pt; color: #115e59; font-weight: bold; padding: 10pt 0 4pt; }
-td.pdf-li-cell { padding: 2pt 0 2pt 12pt; }
+td.pdf-p-cell { font-size: 12pt; color: #111827; line-height: 1.55; padding: 4pt 0 8pt; }
+td.pdf-li-cell { padding: 3pt 0 3pt 12pt; font-size: 12pt; color: #111827; line-height: 1.5; }
+td.pdf-list-cell { font-size: 12pt; color: #111827; }
 ul, ol { margin: 0 0 10pt 16pt; padding-left: 14pt; }
 li { margin: 4pt 0; display: block; }
 ul { list-style-type: disc; }
@@ -752,7 +766,7 @@ def _inside_title_page_html(
 ) -> str:
     sub = f'<p class="title-sub">{_e(subtitle)}</p>' if subtitle else ""
     sum_block = ""
-    if summary and str(summary).strip():
+    if summary and str(summary).strip() and not _looks_like_markdown_source(str(summary)):
         sum_block = f'<p class="summary-lead">{_e(str(summary).strip())}</p>'
     auth = f'<p class="title-sub">by {_e(author)}</p>' if author else ""
     disclaimer = (
@@ -806,16 +820,30 @@ def _toc_page_html(
 
 def _summary_page_html(summary: str) -> str:
     text = summary if isinstance(summary, str) else str(summary)
+    if _looks_like_markdown_source(text):
+        return ""
     blocks = "".join(
         f"<p>{_e(para.strip())}</p>"
         for para in re.split(r"\n\s*\n", text.strip())
         if para.strip()
     )
+    if not blocks.strip():
+        return ""
     return (
         '<section class="pdf-page summary-page">'
         f"<h2>Summary</h2>{blocks}"
         "</section>"
     )
+
+
+def _append_summary_if_needed(parts: list[str], summary: str | None, has_summary: bool) -> bool:
+    if has_summary or not summary:
+        return has_summary
+    html = _summary_page_html(str(summary))
+    if html:
+        parts.append(html)
+        return True
+    return False
 
 
 def _resolve_image_src(src: str) -> str:
@@ -860,8 +888,24 @@ def _visual_aid_type(aid: Tag | None) -> str:
     return "infographic"
 
 
+def _embed_local_pdf_image(path: str) -> str:
+    """Compressed JPEG data URI, skipping near-duplicate photographs already used."""
+    from services.ebook_pdf_images import jpeg_data_uri_from_path, is_near_duplicate
+
+    if not path or not os.path.isfile(path):
+        return ""
+    try:
+        uri, phash, _digest = jpeg_data_uri_from_path(path)
+    except Exception:
+        return ""
+    if is_near_duplicate(phash, _PDF_IMAGE_HASHES):
+        return ""
+    _PDF_IMAGE_HASHES.append(phash)
+    return uri
+
+
 def _resolve_pdf_image_block(img_wrap: Tag) -> str:
-    """Embed existing PNG or return a polished fallback card -- never raw prompts."""
+    """Embed a compressed local PNG/JPEG or return a polished fallback — never raw prompts."""
     img = img_wrap.find("img", class_="va-img")
     vid = str(img_wrap.get("data-vid") or (img.get("data-vid") if img else "") or "")
     src = str(img.get("src") if img else "")
@@ -870,7 +914,15 @@ def _resolve_pdf_image_block(img_wrap: Tag) -> str:
     title, caption = _visual_aid_meta(aid) if aid else ("Image", "")
     atype = _visual_aid_type(aid)
 
-    data_uri = pdf_image_data_uri(pkg, vid) if pkg and vid else ""
+    local_path = image_asset_path(pkg, vid) if pkg and vid else ""
+    if local_path:
+        data_uri = _embed_local_pdf_image(local_path)
+        if not data_uri:
+            if aid:
+                aid["data-skip-pdf"] = "1"
+            return ""
+    else:
+        data_uri = pdf_image_data_uri(pkg, vid) if pkg and vid else ""
     if data_uri:
         return (
             f'<img class="pdf-visual-img" src="{data_uri}" alt="{_e(title)}" width="420" '
@@ -901,18 +953,23 @@ def _tag_pdf_visual_images(inner: str) -> str:
 
 def _pdf_visual_block_html(title: str, inner: str, caption: str) -> str:
     """Single keep-together unit: title + visual + caption (xhtml2pdf table wrapper)."""
+    title = (title or "").strip()
+    caption = (caption or "").strip()
+    if caption and title and caption.casefold() == title.casefold():
+        caption = ""
     cap = (
         f'<p class="va-caption pdf-visual-caption">{_e(caption)}</p>'
         if caption and not _looks_like_prompt(caption)
         else ""
     )
+    title_html = f'<div class="pdf-visual-title">{_e(title)}</div>' if title else ""
     body = _tag_pdf_visual_images(inner)
     return (
         '<table class="pdf-visual-keep" width="100%" cellpadding="0" cellspacing="0">'
         "<tr><td>"
         '<table class="pdf-visual-frame" width="100%" cellpadding="0" cellspacing="0">'
         '<tr><td class="pdf-visual-block">'
-        f'<div class="pdf-visual-title">{_e(title)}</div>'
+        f"{title_html}"
         f'<div class="pdf-visual-body">{body}</div>'
         f"{cap}"
         "</td></tr></table>"
@@ -941,7 +998,16 @@ def _wrap_loose_visual_blocks(soup: BeautifulSoup) -> None:
 def _compact_visual_aids(soup: BeautifulSoup) -> None:
     """Replace preview visual-aid chrome with a single PDF-friendly keep-together block."""
     for aid in list(soup.find_all(class_="visual-aid")):
+        if aid.get("data-skip-pdf"):
+            aid.decompose()
+            continue
         title, caption = _visual_aid_meta(aid)
+        classes = " ".join(aid.get("class") or [])
+        is_photo = "stock-photo" in classes or "stock_photo" in classes or "va-photo" in classes
+        if is_photo:
+            # One label under the photograph — never title + identical caption.
+            label = caption or title
+            title, caption = "", label
         content_el = aid.select_one(".va-content")
         if content_el:
             inner = _strip_embedded_captions(content_el.decode_contents())
@@ -950,6 +1016,9 @@ def _compact_visual_aids(soup: BeautifulSoup) -> None:
             for tag in clone.select(".va-label, .va-title, .va-caption"):
                 tag.decompose()
             inner = _strip_embedded_captions(clone.decode_contents() if clone else "")
+        if is_photo and "<img" not in inner:
+            aid.decompose()
+            continue
         block = BeautifulSoup(_pdf_visual_block_html(title, inner, caption), "html.parser")
         aid.replace_with(block)
     _wrap_loose_visual_blocks(soup)
@@ -993,6 +1062,67 @@ def _blockify_pdf_flow(soup: BeautifulSoup) -> None:
         if any(item in parent_class for item in skip_parents):
             continue
         _wrap_as_pdf_table(tag, table_class="pdf-list-keep", cell_class="pdf-list-cell")
+
+
+_MD_INLINE_LEAK_RE = re.compile(r"\[([^\]]{1,120})\]\([^)]*\)")
+_MD_HEADING_LEAK_RE = re.compile(r"(?m)^#{1,6}\s+")
+_CALLOUT_HEADING_RE = re.compile(
+    r"^(try this|example scenario|your starting point|a simple buying plan|a weekly care routine)",
+    re.I,
+)
+
+
+def _strip_markdown_source_tokens(soup: BeautifulSoup) -> None:
+    """Keep link labels, drop raw markdown anchors that escaped the HTML pipeline."""
+    for node in list(soup.find_all(string=True)):
+        if not isinstance(node, NavigableString):
+            continue
+        text = str(node)
+        if "](" not in text and "#" not in text[:3]:
+            if not _MD_HEADING_LEAK_RE.search(text) and "```" not in text:
+                continue
+        cleaned = _MD_INLINE_LEAK_RE.sub(r"\1", text)
+        cleaned = _MD_HEADING_LEAK_RE.sub("", cleaned)
+        cleaned = cleaned.replace("```", "")
+        if cleaned != text:
+            node.replace_with(cleaned)
+
+
+def _looks_like_markdown_source(text: str) -> bool:
+    sample = str(text or "")
+    if re.search(r"\]\(#", sample):
+        return True
+    if re.search(r"\[(?:\d+\.\s*)?[^\]]+\]\([^)]+\)", sample):
+        return True
+    if re.search(r"(?m)^#{1,6}\s+\S", sample):
+        return True
+    return False
+
+
+def _wrap_action_callouts(soup: BeautifulSoup) -> None:
+    """Give recurring action/example headings a callout so pages are not walls of type."""
+    for heading in list(soup.find_all(["h3", "h4"])):
+        label = heading.get_text(" ", strip=True)
+        if not _CALLOUT_HEADING_RE.search(label):
+            continue
+        if heading.find_parent(class_="pdf-callout"):
+            continue
+        wrapper = soup.new_tag("div")
+        wrapper["class"] = ["pdf-callout"]
+        heading.insert_before(wrapper)
+        wrapper.append(heading.extract())
+        sibling = wrapper.next_sibling
+        moved = 0
+        while sibling is not None and moved < 6:
+            nxt = sibling.next_sibling
+            if isinstance(sibling, NavigableString) and not str(sibling).strip():
+                sibling = nxt
+                continue
+            if getattr(sibling, "name", None) in {"h2", "h3", "h4"}:
+                break
+            wrapper.append(sibling.extract())
+            moved += 1
+            sibling = nxt
 
 
 def _prepare_pdf_content(node: Tag | BeautifulSoup | str) -> str:
@@ -1068,7 +1198,15 @@ def _prepare_pdf_content(node: Tag | BeautifulSoup | str) -> str:
         pkg = package_id_from_url(src)
         aid = img.find_parent(class_="visual-aid")
         title, caption = _visual_aid_meta(aid) if aid else ("Image", "")
-        data_uri = pdf_image_data_uri(pkg, vid) if pkg and vid else ""
+        local_path = image_asset_path(pkg, vid) if pkg and vid else ""
+        data_uri = _embed_local_pdf_image(local_path) if local_path else (
+            pdf_image_data_uri(pkg, vid) if pkg and vid else ""
+        )
+        if local_path and not data_uri:
+            if aid:
+                aid["data-skip-pdf"] = "1"
+            img.decompose()
+            continue
         if data_uri:
             img["src"] = data_uri
             img["width"] = "420"
@@ -1105,6 +1243,9 @@ def _prepare_pdf_content(node: Tag | BeautifulSoup | str) -> str:
         if href.startswith("#"):
             continue
         a.replace_with(NavigableString(a.get_text(" ", strip=True)))
+
+    _strip_markdown_source_tokens(clone)
+    _wrap_action_callouts(clone)
 
     html_out = clone.decode_contents() if hasattr(clone, "decode_contents") else str(clone)
     html_out = fix_inline_hyphen_lists_html(html_out)
@@ -1166,8 +1307,10 @@ def _extract_publishing_pages(soup: BeautifulSoup, summary: str | None) -> tuple
         parts.append(f'<section class="pdf-page {cls}">{body}</section>')
 
     if summary and not has_summary:
-        parts.append(_summary_page_html(summary))
-        has_summary = True
+        html = _summary_page_html(summary)
+        if html:
+            parts.append(html)
+            has_summary = True
 
     return "".join(parts), has_summary
 
@@ -1236,30 +1379,37 @@ def _extract_structured_visual_pages(
     """Build flat, one-section-per-page PDF layout from ebook preview."""
     parts: list[str] = [_cover_page_from_design(cover_design, title, subtitle, author)]
 
+    has_legal = bool(book.select_one("section.sheet.legal"))
     title_sheet = book.select_one("section.sheet.title-page")
     if title_sheet:
         body = _sheet_body_html(title_sheet)
-        sum_block = ""
-        if summary and str(summary).strip() and "summary-lead" not in body:
-            sum_block = f'<p class="summary-lead">{_e(str(summary).strip())}</p>'
-        disclaimer = (
-            '<p class="title-disclaimer">For educational and informational purposes only. '
-            "No warranty is made regarding results from applying this material.</p>"
-        )
+        disclaimer = ""
+        if not has_legal:
+            disclaimer = (
+                '<p class="title-disclaimer">For educational and informational purposes only. '
+                "No warranty is made regarding results from applying this material.</p>"
+            )
         parts.append(
             '<section class="pdf-page title-page">'
-            f"{body}{sum_block}{disclaimer}"
+            f"{body}{disclaimer}"
             "</section>"
         )
     else:
-        parts.append(_inside_title_page_html(title, subtitle, summary, author))
+        parts.append(_inside_title_page_html(title, subtitle, None if has_legal else summary, author))
 
     chapter_titles: list[str] = []
     has_summary = False
 
     for sheet in book.select("section.sheet"):
         classes = set(sheet.get("class") or [])
-        if classes & {"cover", "title-page", "legal"}:
+        if classes & {"cover", "title-page"}:
+            continue
+        if "legal" in classes:
+            legal_body = _sheet_body_html(sheet)
+            if legal_body.strip():
+                parts.append(
+                    f'<section class="pdf-page legal-page">{legal_body}</section>'
+                )
             continue
         if "toc" in classes:
             toc_entries: list[tuple[str, str]] = []
@@ -1286,6 +1436,15 @@ def _extract_structured_visual_pages(
             continue
 
         if "summary" in classes:
+            summary_text = BeautifulSoup(body, "html.parser").get_text(" ", strip=True)
+            if _looks_like_markdown_source(summary_text):
+                continue
+            cleaned_summary = (summary or "").strip()
+            if cleaned_summary and summary_text.replace(" ", "")[:80] == cleaned_summary.replace(" ", "")[:80]:
+                # Trailing restatement of the opening paragraph is not a conclusion.
+                continue
+            if len(summary_text) < 80:
+                continue
             has_summary = True
             parts.append(
                 f'<section class="pdf-page summary-page">{body}</section>'
@@ -1306,8 +1465,10 @@ def _extract_structured_visual_pages(
             )
 
     if summary and not has_summary:
-        parts.append(_summary_page_html(summary))
-        has_summary = True
+        html = _summary_page_html(summary)
+        if html:
+            parts.append(html)
+            has_summary = True
 
     # Extract back matter sections (Quick Reference, FAQ, Action Plan)
     # These are div.bm-section elements, not section.sheet elements
@@ -1388,8 +1549,10 @@ def _extract_visual_pages(
             )
 
     if summary and not has_summary:
-        parts.append(_summary_page_html(summary))
-        has_summary = True
+        html = _summary_page_html(summary)
+        if html:
+            parts.append(html)
+            has_summary = True
 
     return "".join(parts), has_summary
 
@@ -1451,8 +1614,10 @@ def _build_from_markdown(
         _norm_heading(t) in {"summary", "product summary"} for t, _ in chapters
     )
     if summary and not has_summary:
-        parts.append(_summary_page_html(summary))
-        has_summary = True
+        html = _summary_page_html(summary)
+        if html:
+            parts.append(html)
+            has_summary = True
 
     return "".join(parts), has_summary
 
@@ -1641,9 +1806,10 @@ def _sanitize_pdf_local_link_uris(pdf_bytes: bytes) -> bytes:
 def _html_to_pdf_xhtml2pdf(html_doc: str) -> bytes:
     from xhtml2pdf import pisa
 
-    from services.ebook_fonts import EBOOK_FONT, ebook_font_face_css, ensure_ebook_fonts
+    from services.ebook_fonts import EBOOK_FONT, ebook_font_face_css, ensure_ebook_fonts, patch_xhtml2pdf_local_ttf
 
     ensure_ebook_fonts()
+    patch_xhtml2pdf_local_ttf()
     html_doc = _strip_letter_spacing_css(html_doc)
     face_css = ebook_font_face_css()
     if face_css and "<style" in html_doc:
@@ -1689,7 +1855,7 @@ def _apply_pdf_metadata(
             {
                 "/Title": title or "Ebook",
                 "/Author": author or "Anonymous Author",
-                "/Subject": subject or subtitle or title or "Ebook",
+        "/Subject": subject or title or "Ebook",
                 "/Keywords": keywords or "ebook",
                 "/Creator": "Ebook Generator",
                 "/Producer": "Ebook Generator",
@@ -1817,8 +1983,14 @@ def _count_blank_pages(pdf_bytes: bytes) -> int:
     blank = 0
     for i in range(doc.page_count):
         text = (doc.load_page(i).get_text("text") or "").strip()
-        # Nearly empty page
-        if len(text) < 8:
+        if len(text) < 12:
+            blank += 1
+        elif (
+            len(text) < 180
+            and "for educational and informational purposes only" in text.lower()
+            and "copyright" not in text.lower()
+            and "table of contents" not in text.lower()
+        ):
             blank += 1
     doc.close()
     return blank
@@ -1838,7 +2010,13 @@ def _remove_accidental_blank_pages(pdf_bytes: bytes) -> bytes:
             keep.append(i)
             continue
         text = (doc.load_page(i).get_text("text") or "").strip()
-        if len(text) >= 12:
+        low = text.lower()
+        if len(text) >= 12 and not (
+            len(text) < 180
+            and "for educational and informational purposes only" in low
+            and "copyright" not in low
+            and "table of contents" not in low
+        ):
             keep.append(i)
     doc.close()
     if len(keep) == PdfReader(io.BytesIO(pdf_bytes)).get_num_pages():
@@ -1940,8 +2118,10 @@ def generate_product_pdf(
     from services.ebook_cover_local import generate_local_cover_pdf_bytes
     from services.ebook_fonts import ensure_ebook_fonts
     from services.ebook_package import _split_chapters
+    from services.ebook_pdf_images import full_bleed_cover_pdf_bytes, stamp_running_matter
 
     ensure_ebook_fonts()
+    _reset_pdf_image_dedupe()
 
     pdf_html = build_pdf_html(
         doc_html=doc_html,
@@ -1956,16 +2136,6 @@ def generate_product_pdf(
         cover_design=cover_design,
     )
 
-    # Replace generic purple/teal shell or missing image cover with a full-page
-    # local theme cover (title/subtitle drawn by ReportLab — no image API).
-    shell_markers = (
-        'bgcolor="#312e81"',
-        'bgcolor="#0f766e"',
-        "cover-shell",
-        "Cover image is being generated",
-    )
-    # Always prefer the ReportLab theme cover for ebooks unless a real
-    # full-page PNG cover exists on disk (user-uploaded / paid regen).
     img_path = ""
     if isinstance(cover_design, dict):
         img_path = str(cover_design.get("image_path") or "")
@@ -1976,7 +2146,6 @@ def generate_product_pdf(
     has_real_png_cover = bool(img_path and os.path.isfile(img_path) and os.path.getsize(img_path) > 20_000)
     use_local_cover = not has_real_png_cover
 
-    # Prefer on-disk local cover PDF when package already generated one
     local_cover_path = ""
     if isinstance(cover_design, dict):
         local_cover_path = str(cover_design.get("local_cover_pdf") or "")
@@ -1987,22 +2156,44 @@ def generate_product_pdf(
             if os.path.isfile(candidate):
                 local_cover_path = candidate
 
-    if use_local_cover:
-        soup = BeautifulSoup(pdf_html, "html.parser")
-        cover_sec = soup.find("section", class_=lambda c: c and "cover-page" in (c if isinstance(c, list) else [c]))
-        if cover_sec:
-            cover_sec.decompose()
-        stripped_html = str(soup)
+    visual_locked = preview_source == "visual" or (
+        isinstance(preview_source, str) and "sheet cover" in preview_source[:5000]
+    )
+
+    def _body_pdf_from_html(html_doc: str) -> bytes:
         try:
-            body_pdf = _html_to_pdf_xhtml2pdf(stripped_html)
-            body_pdf = _strip_cover_section_from_pdf(body_pdf)
+            return _html_to_pdf_xhtml2pdf(html_doc)
         except Exception:
-            if preview_source == "visual":
+            if visual_locked:
                 raise
-            sections = _extract_pdf_sections(stripped_html)
-            body_pdf = _build_pdf_reportlab(
+            sections = _extract_pdf_sections(html_doc)
+            return _build_pdf_reportlab(
                 title=title, subtitle=subtitle, author=author, sections=sections
             )
+
+    def _strip_html_cover(html_doc: str) -> str:
+        soup = BeautifulSoup(html_doc, "html.parser")
+        for sec in soup.select("section.cover-page, section.cda-cover-full-page"):
+            sec.decompose()
+        text = str(soup)
+        text = text.replace('<pdf:nexttemplate name="main"/>', "")
+        return text
+
+    if has_real_png_cover:
+        body_html = _strip_html_cover(pdf_html)
+        body_pdf = _body_pdf_from_html(body_html)
+        try:
+            cover_pdf = full_bleed_cover_pdf_bytes(img_path)
+        except Exception:
+            cover_pdf = b""
+        if cover_pdf.startswith(b"%PDF"):
+            pdf_bytes = _prepend_pdf_bytes(cover_pdf, body_pdf)
+        else:
+            pdf_bytes = body_pdf
+    elif use_local_cover:
+        stripped_html = _strip_html_cover(pdf_html)
+        body_pdf = _body_pdf_from_html(stripped_html)
+        body_pdf = _strip_cover_section_from_pdf(body_pdf)
         if local_cover_path and os.path.isfile(local_cover_path):
             with open(local_cover_path, "rb") as fh:
                 rl_cover = fh.read()
@@ -2018,24 +2209,20 @@ def generate_product_pdf(
             )
         pdf_bytes = _prepend_pdf_bytes(rl_cover, body_pdf)
     else:
-        try:
-            pdf_bytes = _html_to_pdf_xhtml2pdf(pdf_html)
-        except Exception:
-            if preview_source == "visual":
-                raise
-            sections = _extract_pdf_sections(pdf_html)
-            pdf_bytes = _build_pdf_reportlab(
-                title=title, subtitle=subtitle, author=author, sections=sections
-            )
+        pdf_bytes = _body_pdf_from_html(pdf_html)
 
-    # TOC page numbers + strip accidental blank pages
     chapter_titles: list[str] = []
     if content:
         _intro, chapters = _split_chapters(content)
-        chapter_titles = [c[0] for c in chapters if c and c[0]]
+        chapter_titles = [
+            c[0]
+            for c in chapters
+            if c and c[0] and _norm_heading(c[0]) not in _SKIP_SECTION_HEADINGS
+        ]
     if chapter_titles:
         pdf_bytes = _rebuild_toc_with_page_numbers(pdf_bytes, chapter_titles)
     pdf_bytes = _remove_accidental_blank_pages(pdf_bytes)
+    pdf_bytes = stamp_running_matter(pdf_bytes, title=title, author=author)
 
     meta_subject = subject or subtitle or title or "Ebook"
     meta_keywords = keywords or ", ".join(

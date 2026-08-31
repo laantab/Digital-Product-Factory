@@ -1144,6 +1144,10 @@ def ebook_project_readiness(data: dict | None) -> dict[str, Any]:
             pdf_ok = False
     if not pdf_ok:
         blockers.append(NEXT_BUILD_PDF)
+    if data.get("ebook_pdf_qa_passed") is False or (
+        isinstance(data.get("ebook_pdf_qa_errors"), list) and data.get("ebook_pdf_qa_errors")
+    ):
+        blockers.append("Repair PDF quality defects before Ready")
 
     zip_path = str(export_files.get("package.zip") or "")
     if zip_path and os.path.isfile(zip_path):

@@ -599,11 +599,23 @@ def _write_sellable_pdf(result: dict, *, title: str, subtitle: str, author: str,
             content=content,
             summary=str(result.get("product_summary") or ""),
             visual_plan=result.get("visual_plan"),
-            preview_source=html,
+            preview_source="visual",
             cover_design=cover,
             topic=str((result.get("fields") or {}).get("topic") or title),
         )
         pdf = _sanitize_pdf_local_link_uris(pdf)
+        from services.ebook_qa_validator import validate_ebook_pdf
+
+        qa = validate_ebook_pdf(pdf)
+        result["ebook_pdf_qa_passed"] = bool(qa.passed)
+        result["ebook_pdf_qa_errors"] = list(qa.errors or [])
+        if not qa.passed:
+            result["export_ready"] = False
+            blockers = list(result.get("completion_blockers") or [])
+            for err in qa.errors:
+                if err not in blockers:
+                    blockers.append(err)
+            result["completion_blockers"] = blockers
     except Exception:
         result["pdf_error"] = "PDF could not be built from the saved manuscript and cover."
         return result
@@ -615,9 +627,12 @@ def _write_sellable_pdf(result: dict, *, title: str, subtitle: str, author: str,
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(html)
     zip_path = os.path.join(pdir, "package.zip")
+    customer_names = {"ebook.pdf", "ebook.html", "ebook.txt", "product_summary.txt"}
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for name in os.listdir(pdir):
             if name == "package.zip":
+                continue
+            if name not in customer_names:
                 continue
             zf.write(os.path.join(pdir, name), name)
     files = dict(result.get("export_files") or {})

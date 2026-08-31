@@ -7,6 +7,7 @@ letter-spacing in ebook PDF CSS.
 from __future__ import annotations
 
 import os
+import shutil
 from functools import lru_cache
 
 import reportlab
@@ -34,6 +35,7 @@ def ebook_font_paths() -> dict[str, str | None]:
     reportlab_fonts = os.path.join(os.path.dirname(reportlab.__file__), "fonts")
     return {
         "regular": _first_existing([
+            os.path.join(bundled, "EbookSans-regular.ttf"),
             os.path.join(bundled, "DejaVuSans.ttf"),
             os.path.join(bundled, "LiberationSans-Regular.ttf"),
             os.path.join(reportlab_fonts, "Vera.ttf"),
@@ -42,6 +44,7 @@ def ebook_font_paths() -> dict[str, str | None]:
             os.path.join(fonts_dir, "calibri.ttf"),
         ]),
         "bold": _first_existing([
+            os.path.join(bundled, "EbookSans-bold.ttf"),
             os.path.join(bundled, "DejaVuSans-Bold.ttf"),
             os.path.join(bundled, "LiberationSans-Bold.ttf"),
             os.path.join(reportlab_fonts, "VeraBd.ttf"),
@@ -50,6 +53,7 @@ def ebook_font_paths() -> dict[str, str | None]:
             os.path.join(fonts_dir, "calibrib.ttf"),
         ]),
         "italic": _first_existing([
+            os.path.join(bundled, "EbookSans-italic.ttf"),
             os.path.join(bundled, "DejaVuSans-Oblique.ttf"),
             os.path.join(bundled, "LiberationSans-Italic.ttf"),
             os.path.join(reportlab_fonts, "VeraIt.ttf"),
@@ -58,6 +62,7 @@ def ebook_font_paths() -> dict[str, str | None]:
             os.path.join(fonts_dir, "calibrii.ttf"),
         ]),
         "bold_italic": _first_existing([
+            os.path.join(bundled, "EbookSans-bold_italic.ttf"),
             os.path.join(bundled, "DejaVuSans-BoldOblique.ttf"),
             os.path.join(bundled, "LiberationSans-BoldItalic.ttf"),
             os.path.join(reportlab_fonts, "VeraBI.ttf"),
@@ -68,20 +73,64 @@ def ebook_font_paths() -> dict[str, str | None]:
     }
 
 
+def materialize_ebook_font_files() -> dict[str, str]:
+    """Copy discovered TTFs into services/fonts so xhtml2pdf can open a .ttf path."""
+    dest_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+    os.makedirs(dest_dir, exist_ok=True)
+    out: dict[str, str] = {}
+    for face, src in ebook_font_paths().items():
+        if not src:
+            continue
+        dest = os.path.join(dest_dir, f"EbookSans-{face}.ttf")
+        if os.path.abspath(src) != os.path.abspath(dest):
+            if (not os.path.isfile(dest)) or os.path.getsize(dest) < 1000:
+                shutil.copyfile(src, dest)
+        if os.path.isfile(dest):
+            out[face] = dest
+    return out
+
+
+def patch_xhtml2pdf_local_ttf() -> None:
+    """Stop xhtml2pdf from copying TTFs to extensionless temp files (Windows lock)."""
+    from xhtml2pdf.files import pisaFileObject
+
+    if getattr(pisaFileObject.getNamedFile, "_ebook_patched", False):
+        return
+
+    orig = pisaFileObject.getNamedFile
+
+    def getNamedFile(self):  # type: ignore[no-untyped-def]
+        uri = str(self.uri or "")
+        uri = uri.replace("file:///", "").replace("file://", "")
+        if uri.startswith("/") and len(uri) > 2 and uri[2] == ":":
+            uri = uri[1:]
+        uri = uri.replace("/", os.sep)
+        if uri.lower().endswith((".ttf", ".ttc", ".otf")) and os.path.isfile(uri):
+            return uri
+        return orig(self)
+
+    getNamedFile._ebook_patched = True  # type: ignore[attr-defined]
+    pisaFileObject.getNamedFile = getNamedFile  # type: ignore[method-assign]
+
+
 @lru_cache(maxsize=1)
 def ensure_ebook_fonts() -> tuple[str, str, str, str]:
     """Register EbookSans faces; return (regular, bold, italic, bold_italic)."""
+    patch_xhtml2pdf_local_ttf()
     registered = set(pdfmetrics.getRegisteredFontNames())
-    paths = ebook_font_paths()
-    regular_path = paths["regular"]
+    local = materialize_ebook_font_files()
+    regular_path = local.get("regular") or ebook_font_paths()["regular"]
     if not regular_path:
         return "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique"
 
     mapping = [
-        (EBOOK_FONT, paths["regular"]),
-        (EBOOK_FONT_BOLD, paths["bold"] or paths["regular"]),
-        (EBOOK_FONT_ITALIC, paths["italic"] or paths["regular"]),
-        (EBOOK_FONT_BOLD_ITALIC, paths["bold_italic"] or paths["bold"] or paths["regular"]),
+        (EBOOK_FONT, local.get("regular") or regular_path),
+        (EBOOK_FONT_BOLD, local.get("bold") or local.get("regular") or regular_path),
+        (EBOOK_FONT_ITALIC, local.get("italic") or local.get("regular") or regular_path),
+        (
+            EBOOK_FONT_BOLD_ITALIC,
+            local.get("bold_italic") or local.get("bold") or local.get("regular") or regular_path,
+        ),
     ]
     for name, path in mapping:
         if name not in registered and path:
@@ -96,31 +145,28 @@ def ensure_ebook_fonts() -> tuple[str, str, str, str]:
     return EBOOK_FONT, bold, italic, bold_italic
 
 
+@lru_cache(maxsize=1)
 def ebook_font_face_css() -> str:
-    """@font-face rules pointing at absolute file URLs for xhtml2pdf."""
+    """@font-face rules pointing at local .ttf files xhtml2pdf can embed."""
     ensure_ebook_fonts()
-    paths = ebook_font_paths()
+    local = materialize_ebook_font_files()
     parts: list[str] = []
     faces = [
-        (EBOOK_FONT, paths["regular"], "normal", "normal"),
-        (EBOOK_FONT_BOLD, paths["bold"] or paths["regular"], "bold", "normal"),
-        (EBOOK_FONT_ITALIC, paths["italic"] or paths["regular"], "normal", "italic"),
+        (local.get("regular"), "normal", "normal"),
+        (local.get("bold") or local.get("regular"), "bold", "normal"),
+        (local.get("italic") or local.get("regular"), "normal", "italic"),
         (
-            EBOOK_FONT_BOLD_ITALIC,
-            paths["bold_italic"] or paths["bold"] or paths["regular"],
+            local.get("bold_italic") or local.get("bold") or local.get("regular"),
             "bold",
             "italic",
         ),
     ]
-    for family, path, weight, style in faces:
+    for path, weight, style in faces:
         if not path:
             continue
         url = path.replace("\\", "/")
-        if not url.startswith("/"):
-            # Windows drive path for xhtml2pdf
-            url = "/" + url
         parts.append(
-            f"@font-face {{ font-family: '{EBOOK_FONT}'; src: url('file://{url}'); "
+            f"@font-face {{ font-family: '{EBOOK_FONT}'; src: url('{url}'); "
             f"font-weight: {weight}; font-style: {style}; }}"
         )
     return "\n".join(parts)

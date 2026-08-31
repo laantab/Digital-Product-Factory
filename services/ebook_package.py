@@ -1058,7 +1058,12 @@ def render_aid_html(aid: dict, package_id: str = "", *, chapter_title: str = "")
     caption = str(aid.get("caption") or "").strip()
     if re.match(r"(?i)^a relevant photograph for\b", caption):
         caption = ""
-    if not inner and not aid_title:
+    if caption and aid_title and _norm_title(caption) == _norm_title(aid_title):
+        caption = ""
+    if atype in {"stock photo", "photo"}:
+        caption = caption or aid_title
+        aid_title = ""
+    if not inner and not aid_title and not caption:
         return ""
     parts: list[str] = []
     if atype not in {"stock photo", "photo"}:
