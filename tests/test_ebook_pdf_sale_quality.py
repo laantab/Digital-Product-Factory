@@ -52,8 +52,12 @@ class EbookPdfSaleQualityTests(unittest.TestCase):
                         fonts.add(span.get("font"))
         doc.close()
         self.assertTrue(fonts, "no text spans")
+        joined = " ".join(fonts)
         self.assertTrue(
-            any("EbookSans" in (f or "") or "Arial" in (f or "") or "DejaVu" in (f or "") for f in fonts),
+            any(
+                token in joined
+                for token in ("EbookSans", "Arial", "DejaVu", "Vera", "Bitstream")
+            ),
             f"expected embedded TTF, got {fonts}",
         )
         self.assertFalse(fonts <= {"Helvetica", "Helvetica-Bold", "Helvetica-Oblique"})
@@ -225,6 +229,65 @@ class EbookPdfSaleQualityTests(unittest.TestCase):
         self.assertIn("legal-page", html)
         self.assertIn("All rights reserved", html)
         self.assertNotIn("](#", html)
+
+    def test_18_duplicate_summary_skipped_legal_kept(self):
+        from bs4 import BeautifulSoup
+        from services.pdf_export import _extract_structured_visual_pages, _PDF_CSS
+
+        opening = "Container gardening is one of the easiest ways to grow food at home."
+        soup = BeautifulSoup(
+            f"""
+            <div class="book">
+              <section class="sheet title-page"><h1>Title</h1></section>
+              <section class="sheet legal"><h2>Copyright &amp; Disclaimer</h2>
+                <p>Copyright 2026. All rights reserved. Educational use only.</p></section>
+              <section class="sheet toc"><h2>Table of Contents</h2>
+                <ul class="toc-list"><li><a href="#c1">One</a></li></ul></section>
+              <section class="sheet chapter" id="c1"><h2>One</h2>
+                <p>{opening} More chapter text here for a full opener.</p></section>
+              <section class="sheet summary"><h2>Summary</h2><p>{opening}</p></section>
+            </div>
+            """,
+            "html.parser",
+        )
+        book = soup.select_one(".book")
+        html, _ = _extract_structured_visual_pages(
+            book, title="Title", subtitle="Sub", author="A", summary=opening, cover_design=None
+        )
+        self.assertIn("legal-page", html)
+        self.assertIn("toc-page", html)
+        self.assertNotIn("summary-page", html)
+        self.assertRegex(_PDF_CSS, r"\.toc-page\s*\{[^}]*page-break-after:\s*always")
+        self.assertRegex(_PDF_CSS, r"\.legal-page\s*\{[^}]*page-break-after:\s*always")
+
+    def test_19_stripped_cover_keeps_main_page_template(self):
+        from services.pdf_export import (
+            _MAIN_TEMPLATE_SWITCH,
+            _apply_full_bleed_cover_template,
+            _PDF_CSS,
+        )
+
+        body = (
+            '<section class="pdf-page cover-page cda-cover-full-page">cover</section>'
+            '<section class="pdf-page chapter-page"><p>Chapter body.</p></section>'
+        )
+        css, html = _apply_full_bleed_cover_template(_PDF_CSS, body)
+        self.assertIn(_MAIN_TEMPLATE_SWITCH, html)
+        wrapped = (
+            "<!DOCTYPE html><html><head><style>" + css + "</style></head><body>"
+            + html
+            + "</body></html>"
+        )
+        from bs4 import BeautifulSoup
+        import re as _re
+
+        soup = BeautifulSoup(wrapped, "html.parser")
+        for sec in soup.select("section.cover-page, section.cda-cover-full-page"):
+            sec.decompose()
+        text = str(soup).replace(_MAIN_TEMPLATE_SWITCH, "")
+        text = _re.sub(r"(<body[^>]*>)", r"\1" + _MAIN_TEMPLATE_SWITCH, text, count=1)
+        self.assertIn(_MAIN_TEMPLATE_SWITCH, text)
+        self.assertNotIn("cda-cover-full-page", text)
 
     def test_16_readiness_blocks_on_qa_errors(self):
         from services.ebook_factory_pipeline import ebook_project_readiness

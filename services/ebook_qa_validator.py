@@ -570,18 +570,20 @@ def _check_running_page_numbers(pdf_bytes: bytes, result: EbookQAResult) -> None
             result.checks.append(ValidationCheck("running_page_numbers", True, "short document"))
             return
         numbered = 0
-        for i in range(1, doc.page_count):
+        page_count = doc.page_count
+        for i in range(1, page_count):
             text = doc.load_page(i).get_text("text") or ""
-            if re.search(rf"\b{i + 1}\b", text):
+            needle = str(i + 1)
+            if re.search(r"(?<!\d)" + re.escape(needle) + r"(?!\d)", text):
                 numbered += 1
         doc.close()
-        if numbered < max(1, (doc.page_count - 1) // 2):
+        if numbered < max(1, (page_count - 1) // 2):
             result.errors.append("Interior pages are missing printed page numbers.")
             result.checks.append(ValidationCheck("running_page_numbers", False, f"numbered={numbered}"))
         else:
-            result.checks.append(ValidationCheck("running_page_numbers", True))
-    except Exception:
-        result.checks.append(ValidationCheck("running_page_numbers", True, "skipped"))
+            result.checks.append(ValidationCheck("running_page_numbers", True, f"numbered={numbered}"))
+    except Exception as exc:
+        result.checks.append(ValidationCheck("running_page_numbers", True, f"skipped:{type(exc).__name__}"))
 
 
 # ---------------------------------------------------------------------------

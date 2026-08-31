@@ -33,42 +33,45 @@ def ebook_font_paths() -> dict[str, str | None]:
     here = os.path.dirname(os.path.abspath(__file__))
     bundled = os.path.join(here, "fonts")
     reportlab_fonts = os.path.join(os.path.dirname(reportlab.__file__), "fonts")
+    # Prefer Arial (Helvetica-compatible metrics) over ReportLab Vera, which is
+    # wider and wraps designed-path tables / last pages. Materialized EbookSans-*.ttf
+    # is a destination, not a preferred source.
     return {
         "regular": _first_existing([
-            os.path.join(bundled, "EbookSans-regular.ttf"),
-            os.path.join(bundled, "DejaVuSans.ttf"),
-            os.path.join(bundled, "LiberationSans-Regular.ttf"),
-            os.path.join(reportlab_fonts, "Vera.ttf"),
             os.path.join(fonts_dir, "arial.ttf"),
             os.path.join(fonts_dir, "Arial.ttf"),
+            os.path.join(bundled, "LiberationSans-Regular.ttf"),
+            os.path.join(bundled, "DejaVuSans.ttf"),
+            os.path.join(reportlab_fonts, "Vera.ttf"),
             os.path.join(fonts_dir, "calibri.ttf"),
+            os.path.join(bundled, "EbookSans-regular.ttf"),
         ]),
         "bold": _first_existing([
-            os.path.join(bundled, "EbookSans-bold.ttf"),
-            os.path.join(bundled, "DejaVuSans-Bold.ttf"),
-            os.path.join(bundled, "LiberationSans-Bold.ttf"),
-            os.path.join(reportlab_fonts, "VeraBd.ttf"),
             os.path.join(fonts_dir, "arialbd.ttf"),
             os.path.join(fonts_dir, "Arialbd.ttf"),
+            os.path.join(bundled, "LiberationSans-Bold.ttf"),
+            os.path.join(bundled, "DejaVuSans-Bold.ttf"),
+            os.path.join(reportlab_fonts, "VeraBd.ttf"),
             os.path.join(fonts_dir, "calibrib.ttf"),
+            os.path.join(bundled, "EbookSans-bold.ttf"),
         ]),
         "italic": _first_existing([
-            os.path.join(bundled, "EbookSans-italic.ttf"),
-            os.path.join(bundled, "DejaVuSans-Oblique.ttf"),
-            os.path.join(bundled, "LiberationSans-Italic.ttf"),
-            os.path.join(reportlab_fonts, "VeraIt.ttf"),
             os.path.join(fonts_dir, "ariali.ttf"),
             os.path.join(fonts_dir, "Ariali.ttf"),
+            os.path.join(bundled, "LiberationSans-Italic.ttf"),
+            os.path.join(bundled, "DejaVuSans-Oblique.ttf"),
+            os.path.join(reportlab_fonts, "VeraIt.ttf"),
             os.path.join(fonts_dir, "calibrii.ttf"),
+            os.path.join(bundled, "EbookSans-italic.ttf"),
         ]),
         "bold_italic": _first_existing([
-            os.path.join(bundled, "EbookSans-bold_italic.ttf"),
-            os.path.join(bundled, "DejaVuSans-BoldOblique.ttf"),
-            os.path.join(bundled, "LiberationSans-BoldItalic.ttf"),
-            os.path.join(reportlab_fonts, "VeraBI.ttf"),
             os.path.join(fonts_dir, "arialbi.ttf"),
             os.path.join(fonts_dir, "Arialbi.ttf"),
+            os.path.join(bundled, "LiberationSans-BoldItalic.ttf"),
+            os.path.join(bundled, "DejaVuSans-BoldOblique.ttf"),
+            os.path.join(reportlab_fonts, "VeraBI.ttf"),
             os.path.join(fonts_dir, "calibriz.ttf"),
+            os.path.join(bundled, "EbookSans-bold_italic.ttf"),
         ]),
     }
 
@@ -83,7 +86,9 @@ def materialize_ebook_font_files() -> dict[str, str]:
             continue
         dest = os.path.join(dest_dir, f"EbookSans-{face}.ttf")
         if os.path.abspath(src) != os.path.abspath(dest):
-            if (not os.path.isfile(dest)) or os.path.getsize(dest) < 1000:
+            src_size = os.path.getsize(src)
+            dest_size = os.path.getsize(dest) if os.path.isfile(dest) else 0
+            if dest_size != src_size:
                 shutil.copyfile(src, dest)
         if os.path.isfile(dest):
             out[face] = dest

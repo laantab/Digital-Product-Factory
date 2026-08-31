@@ -258,7 +258,7 @@ def _reset_pdf_image_dedupe() -> None:
 
 
 _PDF_CSS = """
-@page { size: letter; margin: 0.85in 0.75in 0.9in 0.75in; }
+@page { size: letter; margin: 1.05in 0.75in 1.05in 0.75in; }
 /* EbookSans is registered via @font-face + reportlab TTFont. Do not set glyph tracking. */
 body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-serif; color: #111827;
   font-size: 12pt; line-height: 1.55; }
@@ -296,12 +296,12 @@ body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-ser
 .title-page .title-sub { font-size: 13pt; color: #334155; margin: 0 auto 16pt; max-width: 85%; }
 .title-page .summary-lead { font-size: 12pt; color: #111827; text-align: left; margin: 18pt auto 0; max-width: 92%; line-height: 1.55; }
 .title-disclaimer { font-size: 10pt; color: #334155; margin-top: 22pt; font-style: italic; }
-.legal-page { page-break-before: always; padding-top: 0.1in; }
+.legal-page { page-break-after: always; padding-top: 0.1in; }
 .legal-page h2 { font-size: 20pt; color: #134e4a; margin: 0 0 14pt; }
 .legal-page p { font-size: 12pt; color: #111827; line-height: 1.55; margin: 0 0 10pt; }
 
-/* TOC — page-break-after only (chapters use page-break-before; both = blank page) */
-.toc-page { padding-top: 0.15in; }
+/* TOC — own page; never share a sheet with copyright (rebuild replaces TOC page). */
+.toc-page { page-break-after: always; padding-top: 0.15in; }
 .toc-page h2 { font-size: 22pt; color: #134e4a; margin: 0 0 16pt; border: none; padding: 0; }
 .toc-list { list-style: none; margin: 0; padding: 0; }
 .toc-list li { padding: 7pt 0; border-bottom: 1pt solid #e2e8f0; font-size: 11pt; color: #334155; }
@@ -310,13 +310,17 @@ body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-ser
 
 /* Chapters */
 .chapter-page { page-break-before: always; padding-top: 0.12in; }
-.chapter-num { font-size: 9pt; font-weight: bold; text-transform: uppercase; color: #0f766e; margin-bottom: 6pt; }
+.chapter-num { display: block; font-size: 9pt; font-weight: bold; text-transform: uppercase; color: #0f766e; margin-bottom: 6pt; }
 .chapter-title, .chapter-page > h2:first-of-type { font-size: 24pt; color: #134e4a; margin: 0 0 14pt;
   padding-bottom: 8pt; border-bottom: 2pt solid #99f6e4; }
 h3 { font-size: 15pt; color: #115e59; margin: 16pt 0 8pt; }
 p { margin: 0 0 10pt; display: block; font-size: 12pt; color: #111827; }
 .pdf-callout { border-left: 3pt solid #0f766e; background: #f0fdfa; padding: 10pt 12pt; margin: 12pt 0; }
-table.pdf-h3-keep, table.pdf-p-keep, table.pdf-list-keep, table.pdf-li-keep { width: 100%; margin: 8pt 0; border: none; }
+table.pdf-callout { width: 100%; border-collapse: collapse; padding: 0; }
+td.pdf-callout-cell { border: none; background: #f0fdfa; padding: 10pt 12pt; }
+table.pdf-h3-keep, table.pdf-p-keep, table.pdf-list-keep, table.pdf-li-keep {
+  width: 100%; margin: 0 0 2pt 0; border: none; border-collapse: collapse;
+}
 td.pdf-h3-cell, td.pdf-p-cell, td.pdf-list-cell, td.pdf-li-cell { border: none; background: transparent; padding: 3pt 0; }
 td.pdf-h3-cell { font-size: 15pt; color: #115e59; font-weight: bold; padding: 10pt 0 4pt; }
 td.pdf-p-cell { font-size: 12pt; color: #111827; line-height: 1.55; padding: 4pt 0 8pt; }
@@ -1039,15 +1043,16 @@ def _wrap_as_pdf_table(tag: Tag, *, table_class: str, cell_class: str) -> None:
 
 
 def _blockify_pdf_flow(soup: BeautifulSoup) -> None:
-    skip_parents = {"pdf-visual-keep", "pdf-h3-keep", "pdf-p-keep", "pdf-list-keep", "pdf-li-keep"}
-    for tag in list(soup.find_all(["h2", "h3", "h4"])):
-        if tag.find_parent("table", class_=lambda c: c and any(x in (c if isinstance(c, list) else str(c).split()) for x in skip_parents)):
-            continue
-        _wrap_as_pdf_table(tag, table_class="pdf-h3-keep", cell_class="pdf-h3-cell")
+    """Force paragraphs and lists onto block lines. Headings stay as real blocks
+    so xhtml2pdf does not stack heading tables on top of the following paragraph.
+    """
+    skip_parents = {"pdf-visual-keep", "pdf-h3-keep", "pdf-p-keep", "pdf-list-keep", "pdf-li-keep", "pdf-callout"}
     for tag in list(soup.find_all("p")):
         parent_table = tag.find_parent("table")
         parent_class = " ".join(parent_table.get("class") or []) if parent_table else ""
         if any(item in parent_class for item in skip_parents):
+            continue
+        if tag.find_parent(class_="pdf-callout"):
             continue
         _wrap_as_pdf_table(tag, table_class="pdf-p-keep", cell_class="pdf-p-cell")
     for tag in list(soup.find_all("li")):
@@ -1107,10 +1112,18 @@ def _wrap_action_callouts(soup: BeautifulSoup) -> None:
             continue
         if heading.find_parent(class_="pdf-callout"):
             continue
-        wrapper = soup.new_tag("div")
+        wrapper = soup.new_tag("table")
         wrapper["class"] = ["pdf-callout"]
+        wrapper["width"] = "100%"
+        wrapper["cellpadding"] = "0"
+        wrapper["cellspacing"] = "0"
+        tr = soup.new_tag("tr")
+        td = soup.new_tag("td")
+        td["class"] = ["pdf-callout-cell"]
+        wrapper.append(tr)
+        tr.append(td)
         heading.insert_before(wrapper)
-        wrapper.append(heading.extract())
+        td.append(heading.extract())
         sibling = wrapper.next_sibling
         moved = 0
         while sibling is not None and moved < 6:
@@ -1120,7 +1133,7 @@ def _wrap_action_callouts(soup: BeautifulSoup) -> None:
                 continue
             if getattr(sibling, "name", None) in {"h2", "h3", "h4"}:
                 break
-            wrapper.append(sibling.extract())
+            td.append(sibling.extract())
             moved += 1
             sibling = nxt
 
@@ -1439,9 +1452,19 @@ def _extract_structured_visual_pages(
             summary_text = BeautifulSoup(body, "html.parser").get_text(" ", strip=True)
             if _looks_like_markdown_source(summary_text):
                 continue
+            body_only = re.sub(r"^summary\s+", "", summary_text, flags=re.I).strip()
             cleaned_summary = (summary or "").strip()
-            if cleaned_summary and summary_text.replace(" ", "")[:80] == cleaned_summary.replace(" ", "")[:80]:
-                # Trailing restatement of the opening paragraph is not a conclusion.
+            chapter_open = ""
+            first_ch = book.select_one("section.sheet.chapter")
+            if first_ch:
+                chapter_open = first_ch.get_text(" ", strip=True)
+            def _norm_cmp(value: str) -> str:
+                return re.sub(r"\s+", "", value or "").casefold()[:96]
+            if cleaned_summary and _norm_cmp(body_only) == _norm_cmp(cleaned_summary):
+                has_summary = True  # skip duplicate; do not re-inject product_summary
+                continue
+            if chapter_open and _norm_cmp(body_only) and _norm_cmp(body_only) in _norm_cmp(chapter_open):
+                has_summary = True
                 continue
             if len(summary_text) < 80:
                 continue
@@ -1631,7 +1654,7 @@ _FULL_BLEED_PAGE_CSS = """
 @page { size: letter; margin: 0;
   @frame cover_frame { left: 0pt; top: 0pt; width: 612pt; height: 792pt; } }
 @page main { size: letter;
-  @frame content_frame { left: 54pt; top: 50pt; width: 504pt; height: 691pt; } }
+  @frame content_frame { left: 54pt; top: 72pt; width: 504pt; height: 648pt; } }
 """
 _MAIN_TEMPLATE_SWITCH = '<pdf:nexttemplate name="main"/>'
 
@@ -1811,19 +1834,26 @@ def _html_to_pdf_xhtml2pdf(html_doc: str) -> bytes:
     ensure_ebook_fonts()
     patch_xhtml2pdf_local_ttf()
     html_doc = _strip_letter_spacing_css(html_doc)
-    face_css = ebook_font_face_css()
+    uses_ebook_sans = EBOOK_FONT in html_doc
+    face_css = ebook_font_face_css() if uses_ebook_sans else ""
     if face_css and "<style" in html_doc:
         html_doc = html_doc.replace("<style", f"<style>{face_css}</style><style", 1)
     elif face_css and "<head>" in html_doc:
         html_doc = html_doc.replace("<head>", f"<head><style>{face_css}</style>", 1)
 
     buf = io.BytesIO()
+    # Do not force EbookSans onto designed-path HTML (Georgia/Calibri). That
+    # substitution wrapped tables and clipped the fixture's last pages.
+    default_css = (
+        f"body {{ font-family: {EBOOK_FONT}, Helvetica, Arial, sans-serif; }}"
+        if uses_ebook_sans
+        else None
+    )
     result = pisa.CreatePDF(
         html_doc,
         dest=buf,
         encoding="utf-8",
-        # Prefer embedded EbookSans for body text
-        default_css=f"body {{ font-family: {EBOOK_FONT}, Helvetica, Arial, sans-serif; }}",
+        default_css=default_css,
     )
     if result.err:
         raise RuntimeError("xhtml2pdf conversion failed")
@@ -1959,7 +1989,8 @@ def _rebuild_toc_with_page_numbers(
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     for i in range(min(doc.page_count, 8)):
         text = (doc.load_page(i).get_text("text") or "").lower()
-        if "table of contents" in text:
+        # Never replace a copyright/disclaimer sheet that happened to mention TOC.
+        if "table of contents" in text and "copyright" not in text:
             toc_idx = i
             break
     doc.close()
@@ -2176,7 +2207,12 @@ def generate_product_pdf(
         for sec in soup.select("section.cover-page, section.cda-cover-full-page"):
             sec.decompose()
         text = str(soup)
-        text = text.replace('<pdf:nexttemplate name="main"/>', "")
+        # Keep a single main-template switch at the start of the body. The
+        # HTML cover (and the switch that lived inside it) is gone; without
+        # this, xhtml2pdf keeps the margin-0 cover @page for every interior
+        # sheet and stamps collide with body text.
+        text = text.replace(_MAIN_TEMPLATE_SWITCH, "")
+        text = re.sub(r"(<body[^>]*>)", r"\1" + _MAIN_TEMPLATE_SWITCH, text, count=1)
         return text
 
     if has_real_png_cover:
@@ -2220,8 +2256,10 @@ def generate_product_pdf(
             if c and c[0] and _norm_heading(c[0]) not in _SKIP_SECTION_HEADINGS
         ]
     if chapter_titles:
+        pdf_bytes = _remove_accidental_blank_pages(pdf_bytes)
         pdf_bytes = _rebuild_toc_with_page_numbers(pdf_bytes, chapter_titles)
-    pdf_bytes = _remove_accidental_blank_pages(pdf_bytes)
+    else:
+        pdf_bytes = _remove_accidental_blank_pages(pdf_bytes)
     pdf_bytes = stamp_running_matter(pdf_bytes, title=title, author=author)
 
     meta_subject = subject or subtitle or title or "Ebook"

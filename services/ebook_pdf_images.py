@@ -76,7 +76,7 @@ def hamming_distance(a: int, b: int) -> int:
     return (int(a) ^ int(b)).bit_count()
 
 
-def is_near_duplicate(phash: int, seen: Iterable[int], *, max_distance: int = 10) -> bool:
+def is_near_duplicate(phash: int, seen: Iterable[int], *, max_distance: int = 14) -> bool:
     return any(hamming_distance(phash, prev) <= max_distance for prev in seen)
 
 
@@ -155,7 +155,7 @@ def stamp_running_matter(
             if i == 0:
                 continue
             rect = page.rect
-            header_rect = fitz.Rect(54, 16, rect.width - 54, 34)
+            header_rect = fitz.Rect(54, 28, rect.width - 54, 46)
             page.insert_textbox(
                 header_rect,
                 header,
@@ -174,12 +174,12 @@ def stamp_running_matter(
                     align=2,
                 )
             page.draw_line(
-                fitz.Point(54, 36),
-                fitz.Point(rect.width - 54, 36),
+                fitz.Point(54, 48),
+                fitz.Point(rect.width - 54, 48),
                 color=(0.86, 0.89, 0.91),
                 width=0.4,
             )
-            footer_rect = fitz.Rect(54, rect.height - 32, rect.width - 54, rect.height - 14)
+            footer_rect = fitz.Rect(54, rect.height - 48, rect.width - 54, rect.height - 28)
             page.insert_textbox(
                 footer_rect,
                 str(i + 1),
