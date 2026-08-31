@@ -29,7 +29,7 @@ from services.visual_fallback import (
     image_asset_path,
 )
 
-PDF_EXPORT_VERSION = "visual-v6"  # embedded TTF, full-bleed cover, 12pt body, compressed images
+PDF_EXPORT_VERSION = "visual-v7"  # leftover-page absorb, bold headings, embedded header font
 
 
 # ---------------------------------------------------------------------------
@@ -310,11 +310,22 @@ body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-ser
 
 /* Chapters */
 .chapter-page { page-break-before: always; padding-top: 0.12in; }
+h1, h2, h3, .chapter-title, .chapter-page > h2:first-of-type, .title-page .title-main,
+.legal-page h2, .toc-page h2, .summary-page h2, .action-page h2, .resources-page h2,
+.chapter-num, td.pdf-h3-cell {
+  font-family: EbookSans-Bold, EbookSans, Helvetica, Arial, sans-serif;
+  font-weight: bold;
+}
 .chapter-num { display: block; font-size: 9pt; font-weight: bold; text-transform: uppercase; color: #0f766e; margin-bottom: 6pt; }
 .chapter-title, .chapter-page > h2:first-of-type { font-size: 24pt; color: #134e4a; margin: 0 0 14pt;
-  padding-bottom: 8pt; border-bottom: 2pt solid #99f6e4; }
-h3 { font-size: 15pt; color: #115e59; margin: 16pt 0 8pt; }
+  padding-bottom: 8pt; border-bottom: 2pt solid #99f6e4; font-weight: bold; }
+h3 { font-size: 15pt; color: #115e59; margin: 16pt 0 8pt; font-weight: bold; }
+.title-page .title-main { font-weight: bold; }
+.legal-page h2, .toc-page h2 { font-weight: bold; }
 p { margin: 0 0 10pt; display: block; font-size: 12pt; color: #111827; }
+table.pdf-chapter-tail { width: 100%; margin: 0; border: none; border-collapse: collapse;
+  page-break-inside: avoid !important; break-inside: avoid !important; }
+td.pdf-chapter-tail-cell { border: none; background: transparent; padding: 0; }
 .pdf-callout { border-left: 3pt solid #0f766e; background: #f0fdfa; padding: 10pt 12pt; margin: 12pt 0; }
 table.pdf-callout { width: 100%; border-collapse: collapse; padding: 0; }
 td.pdf-callout-cell { border: none; background: #f0fdfa; padding: 10pt 12pt; }
@@ -1046,7 +1057,15 @@ def _blockify_pdf_flow(soup: BeautifulSoup) -> None:
     """Force paragraphs and lists onto block lines. Headings stay as real blocks
     so xhtml2pdf does not stack heading tables on top of the following paragraph.
     """
-    skip_parents = {"pdf-visual-keep", "pdf-h3-keep", "pdf-p-keep", "pdf-list-keep", "pdf-li-keep", "pdf-callout"}
+    skip_parents = {
+        "pdf-visual-keep",
+        "pdf-h3-keep",
+        "pdf-p-keep",
+        "pdf-list-keep",
+        "pdf-li-keep",
+        "pdf-callout",
+        "pdf-chapter-tail",
+    }
     for tag in list(soup.find_all("p")):
         parent_table = tag.find_parent("table")
         parent_class = " ".join(parent_table.get("class") or []) if parent_table else ""
@@ -1136,6 +1155,100 @@ def _wrap_action_callouts(soup: BeautifulSoup) -> None:
             td.append(sibling.extract())
             moved += 1
             sibling = nxt
+
+
+_CHAPTER_CLOSER_MAX_CHARS = 480
+_CHAPTER_TAIL_MAX_CHARS = 800
+
+
+def _is_pdf_visual_node(tag: Tag) -> bool:
+    classes = " ".join(tag.get("class") or [])
+    if any(token in classes for token in ("pdf-visual-keep", "pdf-visual-block", "pdf-visual-frame")):
+        return True
+    if tag.find(class_="pdf-visual-keep") or tag.find("img"):
+        return True
+    return False
+
+
+def _keep_short_chapter_tails(root: Tag | BeautifulSoup) -> None:
+    """Keep a short chapter closer with a little preceding text.
+
+    Unbreakable leftover paragraphs land alone on the next sheet (empty lower
+    half). Wrap that short tail with nearby text so it travels with the flow.
+    Never include photographs or a whole subsection — those overflow the
+    page frame when marked unbreakable. Universal, not title-specific.
+    """
+    chapters = list(root.select("section.chapter-page"))
+    if not chapters and isinstance(root, Tag):
+        chapters = [root]
+    for chapter in chapters:
+        children = [c for c in chapter.find_all(recursive=False) if isinstance(c, Tag)]
+        if len(children) < 2:
+            continue
+        start = 0
+        first_cls = " ".join(children[0].get("class") or [])
+        if children[0].name in {"h1", "h2"} or "chapter-title" in first_cls or "chapter-num" in first_cls:
+            start = 1
+            if start < len(children):
+                nxt_cls = " ".join(children[start].get("class") or [])
+                if children[start].name in {"h1", "h2"} or "chapter-title" in nxt_cls:
+                    start += 1
+        body = children[start:]
+        if len(body) < 2:
+            continue
+        last = body[-1]
+        if last.find_parent("table", class_="pdf-chapter-tail"):
+            continue
+        last_text = last.get_text(" ", strip=True)
+        if not last_text or len(last_text) > _CHAPTER_CLOSER_MAX_CHARS:
+            continue
+        if _is_pdf_visual_node(last):
+            continue
+        take = 1
+        total = len(last_text)
+        for prev in reversed(body[:-1]):
+            if _is_pdf_visual_node(prev):
+                break
+            prev_text = prev.get_text(" ", strip=True)
+            if total + len(prev_text) > _CHAPTER_TAIL_MAX_CHARS:
+                break
+            prev_cls = " ".join(prev.get("class") or [])
+            take += 1
+            total += len(prev_text)
+            if prev.name in {"h3", "h4"} or "pdf-h3" in prev_cls:
+                break
+            if take >= 8:
+                break
+        group = body[-take:]
+        if len(group) < 2:
+            continue
+        soup = chapter
+        while soup.parent is not None:
+            soup = soup.parent
+        table = soup.new_tag("table")
+        table["class"] = ["pdf-chapter-tail"]
+        table["width"] = "100%"
+        table["cellpadding"] = "0"
+        table["cellspacing"] = "0"
+        tr = soup.new_tag("tr")
+        td = soup.new_tag("td")
+        td["class"] = ["pdf-chapter-tail-cell"]
+        tr.append(td)
+        table.append(tr)
+        group[0].insert_before(table)
+        for node in group:
+            td.append(node.extract())
+
+
+def _keep_short_chapter_tails_html(body: str) -> str:
+    if not body or "chapter-page" not in body:
+        return body
+    soup = BeautifulSoup(f'<div id="pdf-root">{body}</div>', "html.parser")
+    root = soup.find(id="pdf-root")
+    if root is None:
+        return body
+    _keep_short_chapter_tails(root)
+    return root.decode_contents()
 
 
 def _prepare_pdf_content(node: Tag | BeautifulSoup | str) -> str:
@@ -1750,6 +1863,7 @@ def build_pdf_html(
     if not body.strip():
         body = _cover_page_from_design(cover_design, title, subtitle, author)
 
+    body = _keep_short_chapter_tails_html(body)
     return _wrap_pdf_document(title, body, template_key=template_key, body_class=body_class)
 
 

@@ -7,6 +7,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import os
 from typing import Iterable
 
 from PIL import Image
@@ -134,6 +135,17 @@ def full_bleed_cover_pdf_bytes(path: str) -> bytes:
     return out
 
 
+def _stamp_fontname(page, fontfile: str | None) -> str:
+    """Register the embedded body TTF on this page; fall back to Helvetica only if missing."""
+    if not fontfile or not os.path.isfile(fontfile):
+        return "helv"
+    try:
+        page.insert_font(fontname="EbookSans", fontfile=fontfile)
+        return "EbookSans"
+    except Exception:
+        return "helv"
+
+
 def stamp_running_matter(
     pdf_bytes: bytes,
     *,
@@ -145,6 +157,12 @@ def stamp_running_matter(
 
     if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
         return pdf_bytes
+    try:
+        from services.ebook_fonts import ebook_stamp_fontfile
+
+        fontfile = ebook_stamp_fontfile()
+    except Exception:
+        fontfile = None
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     header = (title or "").strip()
     if len(header) > 68:
@@ -154,13 +172,14 @@ def stamp_running_matter(
         for i, page in enumerate(doc):
             if i == 0:
                 continue
+            fontname = _stamp_fontname(page, fontfile)
             rect = page.rect
             header_rect = fitz.Rect(54, 28, rect.width - 54, 46)
             page.insert_textbox(
                 header_rect,
                 header,
                 fontsize=8,
-                fontname="helv",
+                fontname=fontname,
                 color=(0.38, 0.42, 0.48),
                 align=0,
             )
@@ -169,7 +188,7 @@ def stamp_running_matter(
                     header_rect,
                     author_bit[:40],
                     fontsize=8,
-                    fontname="helv",
+                    fontname=fontname,
                     color=(0.38, 0.42, 0.48),
                     align=2,
                 )
@@ -184,7 +203,7 @@ def stamp_running_matter(
                 footer_rect,
                 str(i + 1),
                 fontsize=9,
-                fontname="helv",
+                fontname=fontname,
                 color=(0.38, 0.42, 0.48),
                 align=1,
             )

@@ -174,4 +174,23 @@ def ebook_font_face_css() -> str:
             f"@font-face {{ font-family: '{EBOOK_FONT}'; src: url('{url}'); "
             f"font-weight: {weight}; font-style: {style}; }}"
         )
+    # Expose the bold TTF as its own family. xhtml2pdf often ignores
+    # font-weight matching and will otherwise stamp h1/h2 in the regular face.
+    bold_path = local.get("bold") or local.get("regular")
+    if bold_path:
+        url = bold_path.replace("\\", "/")
+        parts.append(
+            f"@font-face {{ font-family: '{EBOOK_FONT_BOLD}'; src: url('{url}'); "
+            f"font-weight: normal; font-style: normal; }}"
+        )
+        parts.append(
+            f"@font-face {{ font-family: '{EBOOK_FONT_BOLD}'; src: url('{url}'); "
+            f"font-weight: bold; font-style: normal; }}"
+        )
     return "\n".join(parts)
+
+
+def ebook_stamp_fontfile() -> str | None:
+    """TrueType path for running headers/footers (same face as body, not Helvetica)."""
+    local = materialize_ebook_font_files()
+    return local.get("regular") or ebook_font_paths()["regular"]

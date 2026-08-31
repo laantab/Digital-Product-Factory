@@ -200,9 +200,20 @@ class EbookPdfSaleQualityTests(unittest.TestCase):
         stamped = stamp_running_matter(doc.tobytes(), title="Beginner Guide", author="Lonnie Brown")
         out = fitz.open(stream=stamped, filetype="pdf")
         text = out[1].get_text("text")
+        fonts = set()
+        d = out[1].get_text("dict")
+        for block in d.get("blocks") or []:
+            for line in block.get("lines") or []:
+                for span in line.get("spans") or []:
+                    fonts.add(str(span.get("font") or ""))
         out.close()
         self.assertIn("Beginner", text)
         self.assertIn("2", text)
+        joined = " ".join(fonts)
+        self.assertTrue(
+            any(token in joined for token in ("EbookSans", "Arial", "DejaVu", "Vera", "Bitstream")),
+            f"running header should use embedded body font, got {fonts}",
+        )
 
     def test_15_legal_sheet_not_skipped(self):
         from bs4 import BeautifulSoup
@@ -315,6 +326,67 @@ class EbookPdfSaleQualityTests(unittest.TestCase):
         src = (ROOT / "services" / "ebook_customer_path.py").read_text(encoding="utf-8")
         self.assertIn('customer_names = {"ebook.pdf"', src)
         self.assertIn("ebook.html", src)
+
+    def test_20_heading_css_requests_bold_family(self):
+        from services import pdf_export
+
+        self.assertIn("EbookSans-Bold", pdf_export._PDF_CSS)
+        self.assertRegex(
+            pdf_export._PDF_CSS,
+            r"\.chapter-title[^}]*font-weight:\s*bold",
+        )
+
+    def test_21_short_chapter_tail_kept_together(self):
+        from bs4 import BeautifulSoup
+        from services.pdf_export import _keep_short_chapter_tails
+
+        paras = "".join(
+            f"<p>Paragraph {i} about pots, drainage holes, and potting mix for beginners.</p>"
+            for i in range(6)
+        )
+        html = (
+            '<section class="pdf-page chapter-page">'
+            "<h2>Choosing the Right Containers and Soil</h2>"
+            "<h3>Filling Containers the Right Way</h3>"
+            f"{paras}"
+            "<p>When you match the pot size to the plant, you remove several common beginner problems before they start.</p>"
+            "</section>"
+        )
+        soup = BeautifulSoup(html, "html.parser")
+        _keep_short_chapter_tails(soup)
+        tail = soup.select_one("table.pdf-chapter-tail")
+        self.assertIsNotNone(tail)
+        text = tail.get_text(" ", strip=True)
+        self.assertIn("When you match the pot size", text)
+        self.assertIn("Filling Containers the Right Way", text)
+
+    def test_22_headings_render_bold_face(self):
+        import fitz
+        from services.pdf_export import _html_to_pdf_xhtml2pdf, _wrap_pdf_document
+
+        html = _wrap_pdf_document(
+            "Font Gate",
+            '<section class="pdf-page chapter-page">'
+            '<h2 class="chapter-title">Choosing the Right Containers</h2>'
+            "<p>Container gardening keeps soil in a pot with drainage holes.</p>"
+            "</section>",
+        )
+        pdf = _html_to_pdf_xhtml2pdf(html)
+        doc = fitz.open(stream=pdf, filetype="pdf")
+        heading_fonts = set()
+        for page in doc:
+            for block in page.get_text("dict").get("blocks") or []:
+                for line in block.get("lines") or []:
+                    for span in line.get("spans") or []:
+                        if float(span.get("size") or 0) >= 18:
+                            heading_fonts.add(str(span.get("font") or ""))
+        doc.close()
+        self.assertTrue(heading_fonts, "no heading spans")
+        joined = " ".join(heading_fonts)
+        self.assertTrue(
+            any(token in joined for token in ("Bold", "EbookSans-Bold")),
+            f"expected bold heading face, got {heading_fonts}",
+        )
 
 
 if __name__ == "__main__":
