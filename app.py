@@ -530,6 +530,107 @@ def save_ebook_workspace_research_route(project_id: int):
         return _error(str(exc), 500)
 
 
+@app.post("/ebook-workspace/<int:project_id>/run-research")
+def run_ebook_workspace_research_route(project_id: int):
+    """Execute confirmed topic research (server-authoritative).
+
+    Free estimate first via /estimate-cost with action "run_research"; this
+    route only runs after the customer confirms that estimate.
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_project_workspace import (
+            execute_run_research,
+            workspace_public_view,
+        )
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = dict(project.get("data") or {})
+        data["_project_id"] = project_id
+        out = execute_run_research(
+            data,
+            confirmation_token=str(body.get("confirmation_token") or ""),
+            expected_artifact_id=str(body.get("expected_artifact_id") or body.get("artifact_id") or ""),
+            expected_revision=int(body.get("expected_revision") or body.get("artifact_revision") or 0),
+            max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
+            idempotency_key=str(body.get("idempotency_key") or ""),
+        )
+        data = out["data"]
+        project = database.update_project(project_id, None, data) or project
+        return jsonify(
+            {
+                "ok": True,
+                "duplicate": bool(out.get("duplicate")),
+                "result": out.get("result") or {},
+                "workspace": workspace_public_view(project),
+            }
+        )
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook workspace research run failed")
+        return _error(str(exc), 500)
+
+
+def _run_confirmed_workspace_action(project_id: int, body: dict, executor, log_label: str):
+    """Shared route body for confirmed estimate-then-execute stage actions."""
+    try:
+        from services.ebook_project_workspace import workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = dict(project.get("data") or {})
+        data["_project_id"] = project_id
+        out = executor(
+            data,
+            confirmation_token=str(body.get("confirmation_token") or ""),
+            expected_artifact_id=str(body.get("expected_artifact_id") or body.get("artifact_id") or ""),
+            expected_revision=int(body.get("expected_revision") or body.get("artifact_revision") or 0),
+            max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
+            idempotency_key=str(body.get("idempotency_key") or ""),
+        )
+        data = out["data"]
+        project = database.update_project(project_id, None, data) or project
+        return jsonify(
+            {
+                "ok": True,
+                "duplicate": bool(out.get("duplicate")),
+                "result": out.get("result") or {},
+                "workspace": workspace_public_view(project),
+            }
+        )
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("%s failed", log_label)
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/title-options")
+def generate_ebook_workspace_title_options_route(project_id: int):
+    """Execute confirmed title-option generation (server-authoritative)."""
+    from services.ebook_project_workspace import execute_generate_title_options
+
+    body = request.get_json(silent=True) or {}
+    return _run_confirmed_workspace_action(
+        project_id, body, execute_generate_title_options, "ebook workspace title options"
+    )
+
+
+@app.post("/ebook-workspace/<int:project_id>/outline-options")
+def generate_ebook_workspace_outline_options_route(project_id: int):
+    """Execute confirmed outline-option generation (server-authoritative)."""
+    from services.ebook_project_workspace import execute_generate_outline_options
+
+    body = request.get_json(silent=True) or {}
+    return _run_confirmed_workspace_action(
+        project_id, body, execute_generate_outline_options, "ebook workspace outline options"
+    )
+
+
 @app.post("/ebook-workspace/<int:project_id>/approve")
 def approve_ebook_workspace_stage_route(project_id: int):
     body = request.get_json(silent=True) or {}

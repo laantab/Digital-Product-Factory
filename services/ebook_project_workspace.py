@@ -465,6 +465,7 @@ TOKEN_TTL_SECONDS = 30 * 60
 MANUSCRIPT_AUTH_MAX_USD = 1.50
 CORRECTION_AUTH_MAX_USD = 0.75
 CHAPTER_UNIT_USD = 0.15
+RESEARCH_AUTH_MAX_USD = 0.50
 
 
 def correction_auth_max_usd(ledger: dict | None) -> float:
@@ -1750,6 +1751,17 @@ def estimate_paid_action(data: dict, action: str) -> dict:
             raise ValueError(
                 "Manuscript already generated and awaits approval. Approve or request correction first."
             )
+    if action == "run_research":
+        if is_approved(ws, "research"):
+            raise ValueError(
+                "Research is already approved. Edit the research to revise it instead."
+            )
+        if stage_status(ws, "research") == STATUS_AWAITING and (
+            (ws.get("research_payload") or {}).get("summary")
+        ):
+            raise ValueError(
+                "Research already ran and awaits your approval. Approve it or edit it first."
+            )
     if action == "correct_manuscript":
         assert_can_run_stage(ws, "manuscript")
         if stage_status(ws, "manuscript") != STATUS_NEEDS_CORRECTION:
@@ -1907,6 +1919,421 @@ def cancel_paid_estimate(data: dict) -> dict:
         raise ValueError("Cancel estimate must not charge.")
     _append_history(data["ebook_workspace"], "cancel_estimate")
     return data
+
+
+def execute_run_research(
+    data: dict,
+    *,
+    confirmation_token: str,
+    expected_artifact_id: str,
+    expected_revision: int,
+    max_authorized_usd: float,
+    idempotency_key: str,
+    research_fn=None,
+) -> dict:
+    """Server-authoritative topic research after explicit cost confirmation.
+
+    Mirrors the manuscript flow: estimate (free) -> confirm -> execute.
+    ``research_fn`` is injectable for tests (zero paid calls). The default
+    engine performs one web search plus one synthesis call and reports how
+    many provider requests actually ran; only those are charged.
+    """
+    from services.ebook_research_engine import (
+        RESEARCH_FAILED_MESSAGE,
+        RESEARCH_UNIT_USD,
+    )
+
+    data = ensure_workspace(data)
+    ws = data["ebook_workspace"]
+    ledger = ws.setdefault("paid_call_ledger", empty_ledger())
+    idem_store = ledger.setdefault("idempotency_keys", {})
+    key = str(idempotency_key or "").strip()
+    if not key:
+        raise ValueError("Idempotency key is required.")
+    if key in idem_store:
+        prior = idem_store[key]
+        return {
+            "ok": True,
+            "duplicate": True,
+            "data": data,
+            "result": prior.get("result") or {},
+            "workspace_note": "Idempotent replay — no additional paid call.",
+        }
+    if is_approved(ws, "research"):
+        raise ValueError("Research is already approved. Edit the research to revise it instead.")
+    if stage_status(ws, "research") == STATUS_AWAITING and (
+        (ws.get("research_payload") or {}).get("summary")
+    ):
+        raise ValueError("Research already ran and awaits your approval. Approve it or edit it first.")
+
+    pending = consume_confirmation(data, "run_research", confirmation_token)
+
+    artifact_id = str(data.get("artifact_id") or data.get("package_id") or "")
+    revision = int(data.get("artifact_revision") or 1)
+    if str(expected_artifact_id or "") != artifact_id:
+        raise ValueError("Stale artifact ID — reopen the project and try again.")
+    if int(expected_revision) != revision:
+        raise ValueError("Stale artifact revision — reopen the project and try again.")
+    if str(pending.get("artifact_id") or "") != artifact_id:
+        raise ValueError("Confirmation token was issued for a different artifact.")
+    if int(pending.get("artifact_revision") or 0) != revision:
+        raise ValueError("Confirmation token was issued for a different revision.")
+
+    auth_max = round(float(max_authorized_usd), 4)
+    pending_max = round(
+        float(pending.get("max_authorized_usd") or pending.get("estimated_max_usd") or 0), 4
+    )
+    if auth_max <= 0:
+        raise ValueError("Maximum authorized charge must be positive.")
+    if abs(auth_max - pending_max) > 1e-9:
+        raise ValueError("Authorized charge does not match the pending estimate.")
+    if auth_max > RESEARCH_AUTH_MAX_USD + 1e-9:
+        raise ValueError(
+            f"Research authorization exceeds ${RESEARCH_AUTH_MAX_USD:.2f} maximum."
+        )
+
+    spent = round(float(ledger.get("spent_usd") or 0), 4)
+    remaining = round(float(ledger.get("remaining_usd") or 0), 4)
+    cap = round(float(ledger.get("budget_cap_usd") or DEFAULT_BUDGET_CAP_USD), 4)
+    if auth_max > remaining + 1e-9 or spent + auth_max > cap + 1e-9:
+        raise ValueError("Insufficient remaining budget for research.")
+
+    pending["used"] = True
+    ledger["pending_estimate"] = pending
+    ledger.setdefault("consumed_tokens", []).append(
+        {
+            "token": str(pending.get("confirmation_token")),
+            "action": "run_research",
+            "ts": _now(),
+            "idempotency_key": key,
+        }
+    )
+
+    if research_fn is None:
+        from services.ebook_research_engine import run_topic_research as research_fn
+
+    set_stage_status(ws, "research", STATUS_IN_PROGRESS, note="Running research")
+    topic = str(ws.get("topic") or data.get("title") or "").strip()
+    payload = research_fn(
+        topic=topic,
+        audience=str(ws.get("audience") or ""),
+        outcome=str(ws.get("outcome") or ""),
+    ) or {}
+
+    summary = str(payload.get("summary") or "").strip()
+    findings = [str(x).strip() for x in list(payload.get("key_findings") or []) if str(x).strip()]
+    if not summary or len(findings) < 3:
+        raise ValueError(RESEARCH_FAILED_MESSAGE)
+
+    paid_calls = max(0, int(payload.get("paid_calls") or 0))
+    charge = round(min(float(RESEARCH_UNIT_USD), auth_max, remaining), 4) if paid_calls else 0.0
+    ledger["spent_usd"] = round(spent + charge, 4)
+    ledger["remaining_usd"] = round(cap - float(ledger["spent_usd"]), 4)
+    ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + paid_calls
+    ledger.setdefault("calls", []).append(
+        {
+            "ts": _now(),
+            "provider": "tavily+openai",
+            "purpose": "run_research",
+            "estimated_cost_usd": charge,
+            "idempotency_key": key,
+            "meta": {
+                "topic": topic,
+                "live_search": bool(payload.get("live_search")),
+                "provider_requests": paid_calls,
+                "artifact_id": artifact_id,
+                "artifact_revision": revision,
+            },
+        }
+    )
+    ledger["pending_estimate"] = None
+
+    data = save_research(
+        data,
+        {
+            "summary": summary,
+            "key_findings": findings,
+            "notes_sections": dict(payload.get("notes_sections") or {}),
+            "source_urls": list(payload.get("source_urls") or []),
+            "topic": topic,
+        },
+        mark_awaiting=True,
+    )
+    ws = data["ebook_workspace"]
+    result = {
+        "research_status": "awaiting_approval",
+        "live_search": bool(payload.get("live_search")),
+        "provider_requests": paid_calls,
+        "charged_usd": charge,
+        "key_findings_count": len(findings),
+    }
+    idem_store[key] = {"result": result, "ts": _now()}
+    _append_history(ws, "run_research", charged_usd=charge, provider_requests=paid_calls)
+    return {"ok": True, "duplicate": False, "data": data, "result": result}
+
+
+def _consume_confirmed_simple_action(
+    data: dict,
+    *,
+    action: str,
+    auth_cap_usd: float,
+    confirmation_token: str,
+    expected_artifact_id: str,
+    expected_revision: int,
+    max_authorized_usd: float,
+    idempotency_key: str,
+) -> dict:
+    """Shared confirm/validate/mark-used step for simple paid stage actions.
+
+    Returns a context dict, or {"duplicate": True, "result": ...} for an
+    idempotent replay. Raises ValueError on any mismatch. Never charges.
+    """
+    ws = data["ebook_workspace"]
+    ledger = ws.setdefault("paid_call_ledger", empty_ledger())
+    idem_store = ledger.setdefault("idempotency_keys", {})
+    key = str(idempotency_key or "").strip()
+    if not key:
+        raise ValueError("Idempotency key is required.")
+    if key in idem_store:
+        return {"duplicate": True, "result": (idem_store[key] or {}).get("result") or {}}
+
+    pending = consume_confirmation(data, action, confirmation_token)
+
+    artifact_id = str(data.get("artifact_id") or data.get("package_id") or "")
+    revision = int(data.get("artifact_revision") or 1)
+    if str(expected_artifact_id or "") != artifact_id:
+        raise ValueError("Stale artifact ID — reopen the project and try again.")
+    if int(expected_revision) != revision:
+        raise ValueError("Stale artifact revision — reopen the project and try again.")
+    if str(pending.get("artifact_id") or "") != artifact_id:
+        raise ValueError("Confirmation token was issued for a different artifact.")
+    if int(pending.get("artifact_revision") or 0) != revision:
+        raise ValueError("Confirmation token was issued for a different revision.")
+
+    auth_max = round(float(max_authorized_usd), 4)
+    pending_max = round(
+        float(pending.get("max_authorized_usd") or pending.get("estimated_max_usd") or 0), 4
+    )
+    if auth_max <= 0:
+        raise ValueError("Maximum authorized charge must be positive.")
+    if abs(auth_max - pending_max) > 1e-9:
+        raise ValueError("Authorized charge does not match the pending estimate.")
+    if auth_max > float(auth_cap_usd) + 1e-9:
+        raise ValueError(f"Authorization exceeds ${float(auth_cap_usd):.2f} maximum for this action.")
+
+    spent = round(float(ledger.get("spent_usd") or 0), 4)
+    remaining = round(float(ledger.get("remaining_usd") or 0), 4)
+    cap = round(float(ledger.get("budget_cap_usd") or DEFAULT_BUDGET_CAP_USD), 4)
+    if auth_max > remaining + 1e-9 or spent + auth_max > cap + 1e-9:
+        raise ValueError("Insufficient remaining budget for this action.")
+
+    pending["used"] = True
+    ledger["pending_estimate"] = pending
+    ledger.setdefault("consumed_tokens", []).append(
+        {
+            "token": str(pending.get("confirmation_token")),
+            "action": action,
+            "ts": _now(),
+            "idempotency_key": key,
+        }
+    )
+    return {
+        "ledger": ledger,
+        "idem_store": idem_store,
+        "key": key,
+        "auth_max": auth_max,
+        "spent": spent,
+        "remaining": remaining,
+        "cap": cap,
+        "artifact_id": artifact_id,
+        "revision": revision,
+    }
+
+
+def _charge_simple_action(
+    ctx: dict,
+    *,
+    purpose: str,
+    unit_usd: float,
+    paid_calls: int,
+    meta: dict,
+) -> float:
+    """Record the charge for provider calls that actually ran. Returns charge."""
+    ledger = ctx["ledger"]
+    charge = (
+        round(min(float(unit_usd), float(ctx["auth_max"]), float(ctx["remaining"])), 4)
+        if paid_calls
+        else 0.0
+    )
+    ledger["spent_usd"] = round(float(ctx["spent"]) + charge, 4)
+    ledger["remaining_usd"] = round(float(ctx["cap"]) - float(ledger["spent_usd"]), 4)
+    ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + int(paid_calls)
+    ledger.setdefault("calls", []).append(
+        {
+            "ts": _now(),
+            "provider": "openai" if purpose != "run_research" else "tavily+openai",
+            "purpose": purpose,
+            "estimated_cost_usd": charge,
+            "idempotency_key": ctx["key"],
+            "meta": dict(meta or {}),
+        }
+    )
+    ledger["pending_estimate"] = None
+    return charge
+
+
+def execute_generate_title_options(
+    data: dict,
+    *,
+    confirmation_token: str,
+    expected_artifact_id: str,
+    expected_revision: int,
+    max_authorized_usd: float,
+    idempotency_key: str,
+    titles_fn=None,
+) -> dict:
+    """Server-authoritative title-option generation after cost confirmation."""
+    from services.ebook_research_engine import (
+        TITLE_FAILED_MESSAGE,
+        TITLE_UNIT_USD,
+    )
+
+    data = ensure_workspace(data)
+    ws = data["ebook_workspace"]
+    if not is_approved(ws, "research"):
+        raise ValueError("Approve research before generating title options.")
+    if is_approved(ws, "title"):
+        raise ValueError("Title is already approved.")
+    ctx = _consume_confirmed_simple_action(
+        data,
+        action="generate_title_options",
+        auth_cap_usd=TITLE_UNIT_USD,
+        confirmation_token=confirmation_token,
+        expected_artifact_id=expected_artifact_id,
+        expected_revision=expected_revision,
+        max_authorized_usd=max_authorized_usd,
+        idempotency_key=idempotency_key,
+    )
+    if ctx.get("duplicate"):
+        return {"ok": True, "duplicate": True, "data": data, "result": ctx.get("result") or {}}
+
+    if titles_fn is None:
+        from services.ebook_research_engine import generate_title_options as titles_fn
+
+    out = titles_fn(
+        topic=str(ws.get("topic") or data.get("title") or ""),
+        audience=str(ws.get("audience") or ""),
+        outcome=str(ws.get("outcome") or ""),
+        research=dict(ws.get("research_payload") or {}),
+    ) or {}
+    options = [
+        o
+        for o in list(out.get("options") or [])
+        if isinstance(o, dict) and str(o.get("title") or "").strip()
+    ]
+    if len(options) < 2:
+        raise ValueError(TITLE_FAILED_MESSAGE)
+
+    paid_calls = max(0, int(out.get("paid_calls") or 0))
+    charge = _charge_simple_action(
+        ctx,
+        purpose="generate_title_options",
+        unit_usd=TITLE_UNIT_USD,
+        paid_calls=paid_calls,
+        meta={"option_count": len(options), "artifact_id": ctx["artifact_id"]},
+    )
+    ws["title_options"] = options
+    set_stage_status(ws, "title", STATUS_AWAITING, note="Choose a title")
+    _append_history(ws, "generate_title_options", charged_usd=charge, option_count=len(options))
+    _recompute_next_action(ws)
+    data = sync_document_from_workspace(data)
+    result = {
+        "title_status": "awaiting_approval",
+        "option_count": len(options),
+        "provider_requests": paid_calls,
+        "charged_usd": charge,
+    }
+    ctx["idem_store"][ctx["key"]] = {"result": result, "ts": _now()}
+    return {"ok": True, "duplicate": False, "data": data, "result": result}
+
+
+def execute_generate_outline_options(
+    data: dict,
+    *,
+    confirmation_token: str,
+    expected_artifact_id: str,
+    expected_revision: int,
+    max_authorized_usd: float,
+    idempotency_key: str,
+    outlines_fn=None,
+) -> dict:
+    """Server-authoritative outline-option generation after cost confirmation."""
+    from services.ebook_research_engine import (
+        OUTLINE_FAILED_MESSAGE,
+        OUTLINE_UNIT_USD,
+    )
+
+    data = ensure_workspace(data)
+    ws = data["ebook_workspace"]
+    if not is_approved(ws, "title"):
+        raise ValueError("Approve the title before generating an outline.")
+    if is_approved(ws, "outline"):
+        raise ValueError("Outline is already approved.")
+    ctx = _consume_confirmed_simple_action(
+        data,
+        action="generate_outline_options",
+        auth_cap_usd=OUTLINE_UNIT_USD,
+        confirmation_token=confirmation_token,
+        expected_artifact_id=expected_artifact_id,
+        expected_revision=expected_revision,
+        max_authorized_usd=max_authorized_usd,
+        idempotency_key=idempotency_key,
+    )
+    if ctx.get("duplicate"):
+        return {"ok": True, "duplicate": True, "data": data, "result": ctx.get("result") or {}}
+
+    if outlines_fn is None:
+        from services.ebook_research_engine import generate_outline_options as outlines_fn
+
+    out = outlines_fn(
+        topic=str(ws.get("topic") or data.get("title") or ""),
+        audience=str(ws.get("audience") or ""),
+        outcome=str(ws.get("outcome") or ""),
+        title=str(data.get("title") or ""),
+        subtitle=str(data.get("subtitle") or ""),
+        research=dict(ws.get("research_payload") or {}),
+    ) or {}
+    options = []
+    for opt in list(out.get("options") or []):
+        if not isinstance(opt, dict):
+            continue
+        chapters = [c for c in list(opt.get("chapters") or []) if isinstance(c, dict) and str(c.get("title") or "").strip()]
+        if len(chapters) >= 3:
+            options.append(opt)
+    if not options:
+        raise ValueError(OUTLINE_FAILED_MESSAGE)
+
+    paid_calls = max(0, int(out.get("paid_calls") or 0))
+    charge = _charge_simple_action(
+        ctx,
+        purpose="generate_outline_options",
+        unit_usd=OUTLINE_UNIT_USD,
+        paid_calls=paid_calls,
+        meta={"option_count": len(options), "artifact_id": ctx["artifact_id"]},
+    )
+    ws["outline_options"] = options
+    set_stage_status(ws, "outline", STATUS_AWAITING, note="Choose an outline")
+    _append_history(ws, "generate_outline_options", charged_usd=charge, option_count=len(options))
+    _recompute_next_action(ws)
+    data = sync_document_from_workspace(data)
+    result = {
+        "outline_status": "awaiting_approval",
+        "option_count": len(options),
+        "provider_requests": paid_calls,
+        "charged_usd": charge,
+    }
+    ctx["idem_store"][ctx["key"]] = {"result": result, "ts": _now()}
+    return {"ok": True, "duplicate": False, "data": data, "result": result}
 
 
 def execute_generate_manuscript(

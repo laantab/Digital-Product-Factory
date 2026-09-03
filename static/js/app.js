@@ -6852,7 +6852,13 @@ function renderEbookWorkspace(ws) {
         <span class="text-sm text-slate-600">Next production action:</span>
         <b class="text-sm text-slate-900" data-ws-next-label>${escapeHtml(ws.next_action_label || ws.next_action || "—")}</b>
         ${
-          ws.next_action === "generate_manuscript" && ws.gates && ws.gates.manuscript_enabled
+          ws.next_action === "run_research"
+            ? `<button type="button" class="btn-primary text-sm" data-ws-run-research>Run Research…</button>`
+            : ws.next_action === "generate_title_options"
+            ? `<button type="button" class="btn-primary text-sm" data-ws-generate-titles>Generate Title Options…</button>`
+            : ws.next_action === "generate_outline_options"
+            ? `<button type="button" class="btn-primary text-sm" data-ws-generate-outlines>Generate Outline Options…</button>`
+            : ws.next_action === "generate_manuscript" && ws.gates && ws.gates.manuscript_enabled
             ? `<button type="button" class="btn-primary text-sm" data-ws-estimate-manuscript>Generate Manuscript…</button>`
             : (ws.next_action === "request_correction" || ws.next_action === "correct_manuscript") && ws.gates && ws.gates.correction_enabled
             ? `<button type="button" class="btn-primary text-sm" data-ws-request-correction-top>Request Correction…</button>`
@@ -6869,6 +6875,18 @@ function renderEbookWorkspace(ws) {
   root.querySelectorAll("[data-ws-stage]").forEach((btn) => {
     btn.onclick = () => showEbookWorkspaceStage(btn.getAttribute("data-ws-stage"));
   });
+  const runResearchBtn = root.querySelector("[data-ws-run-research]");
+  if (runResearchBtn) {
+    runResearchBtn.onclick = () => estimateResearchInWorkspace(ws.project_id);
+  }
+  const genTitlesBtn = root.querySelector("[data-ws-generate-titles]");
+  if (genTitlesBtn) {
+    genTitlesBtn.onclick = () => estimateOptionGenerationInWorkspace(ws.project_id, "title");
+  }
+  const genOutlinesBtn = root.querySelector("[data-ws-generate-outlines]");
+  if (genOutlinesBtn) {
+    genOutlinesBtn.onclick = () => estimateOptionGenerationInWorkspace(ws.project_id, "outline");
+  }
   const estBtn = root.querySelector("[data-ws-estimate-manuscript]");
   if (estBtn) {
     estBtn.onclick = () => estimateManuscriptInWorkspace(ws.project_id);
@@ -6920,13 +6938,40 @@ function showEbookWorkspaceStage(stageId) {
       <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1 mb-3">${rules}</ul>
       <h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Sources</h4>
       <ul class="text-sm space-y-1">${sources}</ul>
+      ${
+        ws.next_action === "run_research"
+          ? `<div class="mt-3"><button type="button" class="btn-primary text-sm" data-ws-run-research-panel>Run Research…</button></div>`
+          : stage.status !== "approved" && String(r.summary || "").trim()
+          ? `<div class="mt-3"><button type="button" class="btn-primary text-sm" data-ws-approve-research>Approve Research</button></div>`
+          : ""
+      }
     `;
   } else if (stageId === "title") {
+    const titleOptions = ws.title_options || [];
+    const titleApproved = stage.status === "approved";
+    const titleChoices = !titleApproved && titleOptions.length
+      ? `
+        <h4 class="text-xs font-semibold uppercase text-slate-500 mt-3 mb-1">Pick a title</h4>
+        <div class="space-y-2">${titleOptions.map((o, i) => `
+          <label class="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 cursor-pointer">
+            <input type="radio" name="wsTitleChoice" value="${escapeHtml(String(o.id || ""))}" ${i === 0 ? "checked" : ""} class="mt-1">
+            <span><span class="font-semibold text-slate-900">${escapeHtml(o.title || "")}</span><br>
+            <span class="text-sm text-slate-600">${escapeHtml(o.subtitle || "")}</span></span>
+          </label>`).join("")}
+        </div>
+        <div class="mt-3"><button type="button" class="btn-primary text-sm" data-ws-approve-title>Approve Title</button></div>
+      `
+      : "";
+    const titleGenerate = !titleApproved && !titleOptions.length && ws.next_action === "generate_title_options"
+      ? `<div class="mt-3"><button type="button" class="btn-primary text-sm" data-ws-generate-titles-panel>Generate Title Options…</button></div>`
+      : "";
     body = `
       <h3 class="text-sm font-bold text-slate-900 mb-2">Title · ${escapeHtml(stage.status_label || "")}</h3>
       <p class="text-lg font-semibold text-slate-900">${escapeHtml(ws.title || "—")}</p>
       <p class="text-sm text-slate-600 mt-1">${escapeHtml(ws.subtitle || "")}</p>
       <p class="text-xs text-slate-500 mt-3">Approved option: ${escapeHtml(ws.approved_title_id || "—")}</p>
+      ${titleChoices}
+      ${titleGenerate}
     `;
   } else if (stageId === "outline") {
     const chapters = (ws.outline || []).map((c) => `
@@ -6934,10 +6979,31 @@ function showEbookWorkspaceStage(stageId) {
         <div class="font-semibold text-slate-900">Chapter ${escapeHtml(String(c.order || ""))}: ${escapeHtml(c.title || "")}</div>
         <pre class="mt-1 text-xs text-slate-600 whitespace-pre-wrap font-sans">${escapeHtml(c.purpose || "")}</pre>
       </li>`).join("") || `<li class="text-slate-400 text-sm">No outline yet</li>`;
+    const outlineOptions = ws.outline_options || [];
+    const outlineApproved = stage.status === "approved";
+    const outlineChoices = !outlineApproved && outlineOptions.length
+      ? `
+        <h4 class="text-xs font-semibold uppercase text-slate-500 mt-3 mb-1">Pick an outline</h4>
+        <div class="space-y-2">${outlineOptions.map((o, i) => `
+          <label class="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 cursor-pointer">
+            <input type="radio" name="wsOutlineChoice" value="${escapeHtml(String(o.id || ""))}" ${i === 0 ? "checked" : ""} class="mt-1">
+            <span><span class="font-semibold text-slate-900">${escapeHtml(o.name || o.id || "Outline")}</span>
+            <span class="text-xs text-slate-500">· ${escapeHtml(String((o.chapters || []).length))} chapters</span><br>
+            <span class="text-sm text-slate-600">${(o.chapters || []).slice(0, 10).map((c) => escapeHtml(c.title || "")).join(" · ")}</span></span>
+          </label>`).join("")}
+        </div>
+        <div class="mt-3"><button type="button" class="btn-primary text-sm" data-ws-approve-outline>Approve Outline</button></div>
+      `
+      : "";
+    const outlineGenerate = !outlineApproved && !outlineOptions.length && ws.next_action === "generate_outline_options"
+      ? `<div class="mt-3"><button type="button" class="btn-primary text-sm" data-ws-generate-outlines-panel>Generate Outline Options…</button></div>`
+      : "";
     body = `
       <h3 class="text-sm font-bold text-slate-900 mb-2">Outline · ${escapeHtml(stage.status_label || "")}</h3>
       <p class="text-xs text-slate-500 mb-3">Approved option: ${escapeHtml(ws.approved_outline_id || "—")}</p>
       <ol class="space-y-2">${chapters}</ol>
+      ${outlineChoices}
+      ${outlineGenerate}
     `;
   } else if (stageId === "manuscript") {
     const m = ws.manuscript || {};
@@ -7295,6 +7361,26 @@ function showEbookWorkspaceStage(stageId) {
     const el = panel.querySelector(sel);
     if (el) el.onclick = fn;
   };
+  bind("[data-ws-run-research-panel]", () => estimateResearchInWorkspace(ws.project_id));
+  bind("[data-ws-approve-research]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "research" }, "Research approved. Next: Generate Title Options."));
+  bind("[data-ws-generate-titles-panel]", () => estimateOptionGenerationInWorkspace(ws.project_id, "title"));
+  bind("[data-ws-generate-outlines-panel]", () => estimateOptionGenerationInWorkspace(ws.project_id, "outline"));
+  bind("[data-ws-approve-title]", () => {
+    const chosen = panel.querySelector('input[name="wsTitleChoice"]:checked');
+    postEbookWorkspaceAction(
+      `/ebook-workspace/${ws.project_id}/approve`,
+      { stage: "title", choice_id: chosen ? chosen.value : null },
+      "Title approved. Next: Generate Outline Options."
+    );
+  });
+  bind("[data-ws-approve-outline]", () => {
+    const chosen = panel.querySelector('input[name="wsOutlineChoice"]:checked');
+    postEbookWorkspaceAction(
+      `/ebook-workspace/${ws.project_id}/approve`,
+      { stage: "outline", choice_id: chosen ? chosen.value : null },
+      "Outline approved. Next: Generate Manuscript."
+    );
+  });
   bind("[data-ws-prepare-visuals]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/visuals`, { action: "prepare" }, "Visuals ready for review."));
   bind("[data-ws-approve-visuals]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/visuals`, { action: "approve" }, "Visuals approved."));
   panel.querySelectorAll("[data-ws-replace-photo]").forEach((btn) => {
@@ -7662,6 +7748,175 @@ async function estimateCorrectionInWorkspace(projectId) {
           toast("Correction still needs structural fixes.", "error");
         } else {
           toast("Correction complete — awaiting approval.");
+        }
+      } catch (e) {
+        toast(e.message || String(e), "error");
+        setBusyEl(btn, false);
+        confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = false;
+      }
+    };
+  } catch (e) {
+    confirmEl.innerHTML = `<p class="text-sm text-rose-700">${escapeHtml(e.message || String(e))}</p>`;
+  }
+}
+
+async function estimateResearchInWorkspace(projectId) {
+  const confirmEl = document.querySelector("[data-ws-confirm]");
+  if (!confirmEl) return;
+  confirmEl.classList.remove("hidden");
+  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing cost estimate…</p>`;
+  try {
+    const res = await api(`/ebook-workspace/${projectId}/estimate-cost`, {
+      method: "POST",
+      body: JSON.stringify({ action: "run_research" }),
+    });
+    if (res.workspace) _ebookWorkspaceState = res.workspace;
+    const est = res.estimate || {};
+    const ws = _ebookWorkspaceState || {};
+    const idempotencyKey =
+      "rr-" + String(projectId) + "-" + String(est.confirmation_token || "").slice(0, 12) + "-" + Date.now();
+    confirmEl.innerHTML = `
+      <h4 class="text-sm font-bold text-amber-900">Confirm paid action</h4>
+      <p class="text-sm text-amber-900">${escapeHtml(est.label || "Run research")}</p>
+      <p class="text-sm">One web search plus one AI summary of your book topic.</p>
+      <p class="text-sm">Maximum total: <b>$${Number(est.max_total_usd != null ? est.max_total_usd : est.estimated_max_usd || 0).toFixed(3)}</b></p>
+      <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
+      <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "Confirmation required before any paid call. Opening this page does not spend.")}</p>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
+        <button type="button" class="btn-primary text-sm" data-ws-confirm-research>Confirm and Run Research</button>
+      </div>
+    `;
+    confirmEl.querySelector("[data-ws-cancel-confirm]").onclick = async () => {
+      try {
+        await api(`/ebook-workspace/${projectId}/cancel-estimate`, { method: "POST", body: "{}" });
+      } catch (e) { /* non-fatal */ }
+      confirmEl.classList.add("hidden");
+      confirmEl.innerHTML = "";
+      toast("Cancelled — nothing spent.");
+    };
+    confirmEl.querySelector("[data-ws-confirm-research]").onclick = async () => {
+      const btn = confirmEl.querySelector("[data-ws-confirm-research]");
+      setBusyEl(btn, true);
+      confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = true;
+      try {
+        const body = {
+          confirmation_token: est.confirmation_token,
+          expected_artifact_id: est.artifact_id || ws.artifact_id || "",
+          expected_revision: est.artifact_revision != null ? est.artifact_revision : (ws.artifact_revision || 1),
+          max_authorized_usd: est.max_authorized_usd != null ? est.max_authorized_usd : est.estimated_max_usd,
+          idempotency_key: idempotencyKey,
+        };
+        const run = await api(`/ebook-workspace/${projectId}/run-research`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        if (run.workspace) {
+          renderEbookWorkspace(run.workspace);
+        }
+        confirmEl.classList.add("hidden");
+        confirmEl.innerHTML = "";
+        if (run.duplicate) {
+          toast("Research already ran for this confirmation — no extra charge.");
+        } else if (run.result && run.result.live_search === false) {
+          toast("Research complete (no live web results) — review and approve it.");
+        } else {
+          toast("Research complete — review and approve it.");
+        }
+      } catch (e) {
+        toast(e.message || String(e), "error");
+        setBusyEl(btn, false);
+        confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = false;
+      }
+    };
+  } catch (e) {
+    confirmEl.innerHTML = `<p class="text-sm text-rose-700">${escapeHtml(e.message || String(e))}</p>`;
+  }
+}
+
+async function estimateOptionGenerationInWorkspace(projectId, kind) {
+  const cfg = kind === "title"
+    ? {
+        action: "generate_title_options",
+        endpoint: "title-options",
+        label: "Generate title options",
+        description: "One AI call that writes 3 title and subtitle options from your approved research.",
+        confirmText: "Confirm and Generate Titles",
+        successMessage: "Title options ready — pick one and approve it.",
+        idPrefix: "tt",
+        returnStage: "title",
+      }
+    : {
+        action: "generate_outline_options",
+        endpoint: "outline-options",
+        label: "Generate outline options",
+        description: "One AI call that drafts the chapter outline from your approved research and title.",
+        confirmText: "Confirm and Generate Outline",
+        successMessage: "Outline ready — review it and approve.",
+        idPrefix: "oo",
+        returnStage: "outline",
+      };
+  const confirmEl = document.querySelector("[data-ws-confirm]");
+  if (!confirmEl) return;
+  confirmEl.classList.remove("hidden");
+  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing cost estimate…</p>`;
+  try {
+    const res = await api(`/ebook-workspace/${projectId}/estimate-cost`, {
+      method: "POST",
+      body: JSON.stringify({ action: cfg.action }),
+    });
+    if (res.workspace) _ebookWorkspaceState = res.workspace;
+    const est = res.estimate || {};
+    const ws = _ebookWorkspaceState || {};
+    const idempotencyKey =
+      cfg.idPrefix + "-" + String(projectId) + "-" + String(est.confirmation_token || "").slice(0, 12) + "-" + Date.now();
+    confirmEl.innerHTML = `
+      <h4 class="text-sm font-bold text-amber-900">Confirm paid action</h4>
+      <p class="text-sm text-amber-900">${escapeHtml(est.label || cfg.label)}</p>
+      <p class="text-sm">${escapeHtml(cfg.description)}</p>
+      <p class="text-sm">Maximum total: <b>$${Number(est.max_total_usd != null ? est.max_total_usd : est.estimated_max_usd || 0).toFixed(3)}</b></p>
+      <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
+      <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "Confirmation required before any paid call. Opening this page does not spend.")}</p>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
+        <button type="button" class="btn-primary text-sm" data-ws-confirm-options>${escapeHtml(cfg.confirmText)}</button>
+      </div>
+    `;
+    confirmEl.querySelector("[data-ws-cancel-confirm]").onclick = async () => {
+      try {
+        await api(`/ebook-workspace/${projectId}/cancel-estimate`, { method: "POST", body: "{}" });
+      } catch (e) { /* non-fatal */ }
+      confirmEl.classList.add("hidden");
+      confirmEl.innerHTML = "";
+      toast("Cancelled — nothing spent.");
+    };
+    confirmEl.querySelector("[data-ws-confirm-options]").onclick = async () => {
+      const btn = confirmEl.querySelector("[data-ws-confirm-options]");
+      setBusyEl(btn, true);
+      confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = true;
+      try {
+        const body = {
+          confirmation_token: est.confirmation_token,
+          expected_artifact_id: est.artifact_id || ws.artifact_id || "",
+          expected_revision: est.artifact_revision != null ? est.artifact_revision : (ws.artifact_revision || 1),
+          max_authorized_usd: est.max_authorized_usd != null ? est.max_authorized_usd : est.estimated_max_usd,
+          idempotency_key: idempotencyKey,
+        };
+        const run = await api(`/ebook-workspace/${projectId}/${cfg.endpoint}`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        if (run.workspace) {
+          _ebookWorkspaceReturnOpts = _ebookWorkspaceReturnOpts || {};
+          _ebookWorkspaceReturnOpts.stage = cfg.returnStage;
+          renderEbookWorkspace(run.workspace);
+        }
+        confirmEl.classList.add("hidden");
+        confirmEl.innerHTML = "";
+        if (run.duplicate) {
+          toast("Already generated for this confirmation — no extra charge.");
+        } else {
+          toast(cfg.successMessage);
         }
       } catch (e) {
         toast(e.message || String(e), "error");
