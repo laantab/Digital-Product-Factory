@@ -382,8 +382,113 @@ def _run_cover(data: dict, pid: int) -> dict:
 
     from services.ebook_customer_path import complete_photo_cover
 
-    data = complete_photo_cover(data)
+    fields = data.get("fields") if isinstance(data.get("fields"), dict) else {}
+    package_id = str(data.get("package_id") or data.get("artifact_id") or "")
+    try:
+        # complete_photo_cover takes keyword-only arguments. Calling it with a
+        # bare dict raised TypeError on every attempt, so the cover stage could
+        # never run outside fixture mode.
+        data = complete_photo_cover(
+            data,
+            title=str(data.get("title") or ""),
+            subtitle=str(data.get("subtitle") or ""),
+            author=str(data.get("author_brand") or data.get("author") or ""),
+            fields=fields,
+            package_id=package_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.info("cover: stock search raised (%s); using an approved interior photo", exc)
+
+    # complete_photo_cover keeps the previous cover on failure rather than
+    # raising, so a blocked or empty stock search returns the data unchanged
+    # and approval then fails with "Select a cover before approving". Judge it
+    # by its result, not by whether it threw.
+    cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
+    if not str(cover.get("selected_layout") or "").strip():
+        # Rather than stall the build or reach for a paid generator, use a
+        # photograph this book has already approved for one of its own
+        # chapters: it is on disk, it cost nothing, and it is demonstrably
+        # about this subject.
+        data = _cover_from_approved_interior_photo(data, pid)
     return approve_stage(data, "cover")
+
+
+def _cover_from_approved_interior_photo(data: dict, pid: int) -> dict:
+    """Promote an already-approved interior photograph to the cover.
+
+    Free, offline, and honest: the image is one the visual validator has
+    already accepted for this book. Raises when the book has no such
+    photograph, because an unrelated stock filler would be worse than an
+    honest failure.
+    """
+    from services.ebook_photo_cover import (
+        PhotoCoverError, _activate_source, _store_source_bytes, select_layout,
+    )
+    from services.ebook_customer_path import _first_passing_layout
+    from services.ebook_design_workspace import stage_photo_cover
+
+    plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else {}
+    candidates: list[dict] = []
+    for chapter in (plan.get("chapters") or []):
+        for aid in (chapter.get("aids") or []):
+            if str(aid.get("type") or "").lower() not in {"photo", "stock photo"}:
+                continue
+            path = str(aid.get("asset_path") or "")
+            if path and os.path.isfile(path) and str(aid.get("match_status") or "") == "pass":
+                candidates.append(aid)
+    if not candidates:
+        raise PhotoCoverError(
+            "No approved photograph is available for the cover."
+        )
+
+    last_error = ""
+    for aid in candidates:
+        path = str(aid.get("asset_path") or "")
+        try:
+            with open(path, "rb") as handle:
+                raw = handle.read()
+            # Provenance travels with the picture. A cover sourced from Pexels
+            # must carry the photo id and photographer, or the cover validator
+            # rightly refuses it as an incomplete record.
+            rec = aid.get("pexels") if isinstance(aid.get("pexels"), dict) else {}
+            photo_id = str(rec.get("photo_id") or aid.get("photo_id") or "").strip()
+            photographer = str(rec.get("photographer") or aid.get("photographer") or "").strip()
+            source_type = str(aid.get("source") or "local_licensed")
+            if source_type == "pexels" and not (photo_id and photographer):
+                last_error = "interior photograph has an incomplete Pexels record"
+                continue
+            source = _store_source_bytes(
+                data, raw,
+                source_type=source_type,
+                # Keep the real extension: _store_source_bytes cross-checks the
+                # sniffed image type against it and refuses a mismatch.
+                filename=os.path.basename(path),
+                license_note=str(aid.get("license_note") or "Pexels License: free to use."),
+                project_id=pid,
+            )
+            if photographer:
+                source["photographer"] = photographer
+            if source_type == "pexels":
+                source["pexels"] = {
+                    "photo_id": photo_id,
+                    "photographer": photographer,
+                    "page_url": str(rec.get("page_url") or aid.get("page_url") or ""),
+                    "sha256": source.get("sha256"),
+                    "artifact_id": str(data.get("package_id") or ""),
+                    "project_id": pid,
+                    "query": str(rec.get("query") or aid.get("pexels_query") or ""),
+                }
+            data = _activate_source(data, source, project_id=pid)
+            layout = _first_passing_layout(data.get("cover_design"))
+            if not layout:
+                last_error = "no cover layout passed quality checks for this photograph"
+                continue
+            data = select_layout(data, layout, project_id=pid)
+            return stage_photo_cover(data, project_id=pid)
+        except PhotoCoverError as exc:
+            last_error = str(exc)
+            continue
+    raise PhotoCoverError(last_error or "No safe cover layout passed quality checks.")
 
 
 def _run_design(data: dict, pid: int) -> dict:

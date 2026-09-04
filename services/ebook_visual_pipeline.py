@@ -215,6 +215,151 @@ def _numeric_series(table: dict[str, Any]) -> dict[str, Any] | None:
     return best
 
 
+#: Verbs that open a genuine instruction the reader can follow.
+_IMPERATIVE_OPENERS = (
+    "sit", "stand", "lie", "close", "open", "inhale", "exhale", "breathe",
+    "hold", "pause", "notice", "note", "return", "bring", "let", "allow",
+    "start", "begin", "find", "choose", "pick", "set", "place", "put",
+    "keep", "repeat", "try", "practice", "practise", "focus", "count",
+    "relax", "release", "scan", "check", "write", "record", "track", "plan",
+    "avoid", "stop", "take", "move", "walk", "rest", "listen", "look",
+    "acknowledge", "remind", "schedule", "measure", "review", "adjust",
+)
+
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+
+
+#: Card labels are cut again by the renderer to fit the box, so keep them
+#: comfortably short here or the reader sees a sentence chopped mid-word.
+_LABEL_LIMIT = 78
+
+
+def _clean_sentence(text: str, *, limit: int = _LABEL_LIMIT) -> str:
+    """One manuscript sentence, tidied for a label. Never reworded."""
+    out = re.sub(r"[*_`#>]+", "", str(text or "")).strip()
+    out = re.sub(r"\s+", " ", out).strip(" -—:;")
+    if len(out) <= limit:
+        return out
+    cut = out[:limit].rsplit(" ", 1)[0]
+    return cut.rstrip(" ,;:—-") + "…"
+
+
+#: Sentences that open a story rather than state a point. A visual summarising
+#: the chapter should carry what the chapter teaches, not its scene-setting.
+_NARRATIVE_OPENERS = (
+    "imagine", "picture ", "suppose", "let's", "let’s", "it's 9", "it’s 9",
+    "you're standing", "you’re standing", "consider this", "for example",
+    "one morning", "last week", "meet ", "say you", "think about a time",
+)
+
+
+def _is_narrative(sentence: str) -> bool:
+    low = sentence.strip().lower()
+    if low.startswith(_NARRATIVE_OPENERS):
+        return True
+    # A fragment that begins inside a quotation is half a sentence.
+    head = sentence[:44]
+    return head.count('"') % 2 == 1 or head.count("”") > head.count("“")
+
+
+def _prose_sentences(body: str) -> list[str]:
+    text = re.sub(r"^#{1,6}\s+.*$", " ", str(body or ""), flags=re.M)
+    text = re.sub(r"\s+", " ", text)
+    return [s.strip() for s in _SENTENCE_SPLIT.split(text) if s.strip()]
+
+
+def _practice_sequence_items(body: str) -> list[str]:
+    """Steps the chapter actually tells the reader to perform, verbatim."""
+    items: list[str] = []
+    for sentence in _prose_sentences(body):
+        first = re.sub(r"[^a-z]", "", sentence.split(" ")[0].lower())
+        if first in _IMPERATIVE_OPENERS and 18 <= len(sentence) <= 150:
+            cleaned = _clean_sentence(sentence)
+            if cleaned and cleaned not in items:
+                items.append(cleaned)
+        if len(items) >= 7:
+            break
+    return items if len(items) >= 3 else []
+
+
+def _key_point_items(body: str, *, chapter_title: str = "") -> list[str]:
+    """The chapter's own statements, verbatim, as review points."""
+    anchors = {w for w in re.findall(r"[a-z]{5,}", str(chapter_title or "").lower())}
+    scored: list[tuple[int, str]] = []
+    for sentence in _prose_sentences(body):
+        # Short enough to survive the card without being chopped mid-word.
+        if not (40 <= len(sentence) <= 150):
+            continue
+        if sentence.endswith("?") or _is_narrative(sentence):
+            continue
+        # A fragment that starts lower-case is a broken sentence, not a point.
+        if not sentence[:1].isupper():
+            continue
+        low = sentence.lower()
+        score = sum(1 for a in anchors if a in low)
+        if any(cue in low for cue in (" is not ", " is about ", " means ", " helps ",
+                                      " part of ", " instead of ", " rather than ",
+                                      " the key ", " remember ")):
+            score += 2
+        if score:
+            scored.append((score, _clean_sentence(sentence)))
+    scored.sort(key=lambda row: row[0], reverse=True)
+    items: list[str] = []
+    for _score, text in scored:
+        if text and text not in items:
+            items.append(text)
+        if len(items) >= 6:
+            break
+    return items if len(items) >= 3 else []
+
+
+def derive_local_aid_from_prose(
+    chapter_index: int, title: str, body: str
+) -> dict[str, Any] | None:
+    """A useful local visual for a chapter written as prose.
+
+    Abstract, reflective and advice-led chapters have no table, numbered list
+    or bullet list to parse, so the planner used to fall through to a stock
+    photograph -- and stock photography answers an abstract heading with a
+    clock, a signpost or letter tiles. A chapter like that is better served by
+    showing its own instructions back to the reader.
+
+    Every item here is a sentence lifted from the approved manuscript and
+    trimmed at a word boundary. Nothing is reworded, summarised into a new
+    claim, or invented: this visualises information the book already contains.
+    """
+    visual_id = f"v_ch{chapter_index}"
+    steps = _practice_sequence_items(body)
+    if steps:
+        return {
+            "type": "workflow",
+            "visual_id": visual_id,
+            "title": f"{title}: practice sequence",
+            "caption": f"The steps of {title}, in the order the chapter gives them.",
+            "items": steps,
+            "chapter": title,
+            "chapter_index": chapter_index,
+            "placement": "after_opening",
+            "required": True,
+            "source": "local_manuscript_practice_sequence",
+        }
+    points = _key_point_items(body, chapter_title=title)
+    if points:
+        return {
+            "type": "checklist",
+            "visual_id": visual_id,
+            "title": f"{title}: key points",
+            "caption": f"The points {title} makes, in the chapter's own words.",
+            "items": points,
+            "chapter": title,
+            "chapter_index": chapter_index,
+            "placement": "after_opening",
+            "required": True,
+            "source": "local_manuscript_key_points",
+        }
+    return None
+
+
 def _choose_aid(chapter_index: int, title: str, body: str) -> dict[str, Any] | None:
     """Pick at most one visual that adds instructional value. Omit when none."""
     tables = _parse_tables(body)
@@ -411,6 +556,7 @@ def plan_content_aware_visuals(
     manuscript_md: str,
     *,
     title: str = "",
+    topic: str = "",
     research: dict | None = None,
     include_photographs: bool = False,
 ) -> dict[str, Any]:
@@ -421,10 +567,21 @@ def plan_content_aware_visuals(
 
     if ebook_fixture_mode():
         return _fixture_requirement_plan(manuscript_md, title=title)
+    from services.ebook_visual_match import is_photo_led_subject
+
     chapters = numbered_chapters(manuscript_md)
     plan_chapters: list[dict[str, Any]] = []
     for i, (ctitle, body) in enumerate(chapters, start=1):
         aid = _choose_aid(i, ctitle, body)
+        if aid is None:
+            # A photograph is the right answer for concrete people, actions,
+            # environments, equipment and physical demonstrations. It is the
+            # wrong answer for an abstract or advice-led chapter, where stock
+            # search returns a clock or a signpost for the heading's words.
+            # Those chapters get a visual built from their own text instead.
+            photo_led = is_photo_led_subject(title=title, topic=topic, content=body)
+            if not photo_led:
+                aid = derive_local_aid_from_prose(i, ctitle, body)
         if aid is None and include_photographs:
             excerpt = re.sub(r"\s+", " ", str(body or "")).strip()[:400]
             first = excerpt.split(".")[0].strip() if excerpt else ctitle
@@ -1627,6 +1784,7 @@ def prepare_visuals_for_review(data: dict, *, preserve_downstream: bool = False)
         plan = plan_content_aware_visuals(
             md,
             title=str(data.get("title") or ""),
+            topic=str((data.get("fields") or {}).get("topic") or data.get("topic") or ""),
             research=ws.get("research_payload") if isinstance(ws.get("research_payload"), dict) else None,
             include_photographs=automatic,
         )

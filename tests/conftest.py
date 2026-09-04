@@ -50,6 +50,58 @@ os.environ["FACTORY_EXPORTS_DIR"] = _FACTORY_TEST_EXPORTS
 os.environ["FLASK_EXPORTS_DIR"] = _FACTORY_TEST_EXPORTS
 
 
+# ---------------------------------------------------------------------------
+# Fail-closed production-database guard.
+#
+# Setting the variables above is a default, and a default is not a guarantee:
+# a test, a plugin, a batch runner or a stray shell export can point
+# FACTORY_DB_PATH back at the real projects.db, and the suite would then
+# create, mutate and delete real customer projects. That happened -- a focused
+# test run rolled back the finished state of a real customer's book.
+#
+# So the path is now CHECKED, not merely assigned, and the check runs before
+# database.init_db() can create a connection or a schema. Refusing to start is
+# the correct outcome: a suite that cannot prove it is isolated must not run
+# at all.
+# ---------------------------------------------------------------------------
+_PRODUCTION_DB_NAMES = ("projects.db",)
+
+
+def _looks_like_production_db(path: str) -> bool:
+    """True when this path is a real, persistent Factory database."""
+    resolved = os.path.realpath(os.path.abspath(str(path or "")))
+    if not resolved:
+        return True  # cannot tell: refuse
+    name = os.path.basename(resolved).lower()
+    if name not in _PRODUCTION_DB_NAMES:
+        return False
+    # A projects.db inside a temporary directory is the isolated one we made.
+    temp_root = os.path.realpath(os.path.abspath(tempfile.gettempdir()))
+    if resolved.startswith(temp_root + os.sep):
+        return False
+    return True
+
+
+def assert_test_database_is_isolated() -> str:
+    """Abort the session unless the database is a throwaway. Returns the path."""
+    path = os.environ.get("FACTORY_DB_PATH") or ""
+    if not path:
+        raise RuntimeError(
+            "FACTORY_DB_PATH is not set. Tests must run against a temporary "
+            "database; refusing to start."
+        )
+    if _looks_like_production_db(path):
+        raise RuntimeError(
+            "Refusing to run tests against the production database:\n"
+            f"    {path}\n"
+            "Set FACTORY_DB_PATH to a temporary file before invoking pytest."
+        )
+    return path
+
+
+assert_test_database_is_isolated()
+
+
 def _cleanup_factory_test_root() -> None:
     shutil.rmtree(_FACTORY_TEST_ROOT, ignore_errors=True)
 

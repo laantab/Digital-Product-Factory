@@ -54,6 +54,33 @@ LOCAL_INFOGRAPHIC_TYPES = {
     "workflow",
 }
 
+# ---------------------------------------------------------------------------
+# Typed stock-acquisition outcomes.
+#
+# Every failure to obtain a photograph used to look identical to the caller,
+# so "the stock photo we found is a cliché" was handled exactly like "stock
+# has nothing at all" -- both fell straight through to the paid image
+# generator. Making the matcher stricter therefore made it SPEND MORE, which
+# is the opposite of the intent.
+#
+# These outcomes let the caller route by cause. A photograph rejected because
+# it is word art, a clock matched to the word "minute", or a picture that only
+# matches the chapter heading is a SEMANTIC_REJECTION: the chapter is better
+# served by a free visual built from its own text, not by buying an image.
+# ---------------------------------------------------------------------------
+STOCK_ACCEPTED = "stock_accepted"
+SEMANTIC_REJECTION = "semantic_rejection"
+STOCK_UNAVAILABLE = "stock_unavailable"
+TECHNICAL_FAILURE = "technical_failure"
+LOCAL_VISUAL_UNSUITABLE = "local_visual_unsuitable"
+
+#: Match-report reasons that mean "wrong picture", not "no picture".
+_SEMANTIC_REASON_HINTS = (
+    "about words", "word art", "timekeeping", "cliché", "cliche",
+    "prominent text", "heading", "subject", "scene", "setting", "action",
+    "workflow", "irrelevant",
+)
+
 NEXT_CHOOSE_COVER = "Choose cover photo"
 NEXT_REVIEW_VISUALS = "Review visuals"
 NEXT_RETRY_IMAGE = "Retry missing image"
@@ -412,6 +439,10 @@ def fill_photo_aid_from_pexels(
                     filename=str(photo.get("photo_id") or ""),
                     image_bytes=raw,
                     planned_caption=str(out.get("caption") or out.get("title") or ""),
+                    # The book's subject and the chapter's own words, so a
+                    # candidate that only matches the heading cannot pass.
+                    book_topic=f"{topic} {title}".strip(),
+                    chapter_body=str(out.get("chapter_body") or ""),
                 )
                 if inspected.status == MATCH_REJECT:
                     pid = str(photo.get("photo_id") or "")
@@ -426,10 +457,16 @@ def fill_photo_aid_from_pexels(
                             rejected_ids.add(pid)
                         last_error = "Photograph is not a container-garden scene."
                         continue
-                filled = store_interior_photo(out, raw, package_id=package_id)
-                filled["_inspected"] = inspected
-                filled["_photo"] = photo
-                filled["_query"] = query
+                # Candidates arrive best-ranked first, so the first one that
+                # is not rejected is the best available. Overwriting on every
+                # iteration kept the LAST candidate inspected instead -- so
+                # when nothing scored a clean PASS the weakest of the shortlist
+                # won. Keep the best, and stop early on a genuine PASS.
+                if filled is None or inspected.status == MATCH_PASS:
+                    filled = store_interior_photo(out, raw, package_id=package_id)
+                    filled["_inspected"] = inspected
+                    filled["_photo"] = photo
+                    filled["_query"] = query
                 if inspected.status == MATCH_PASS:
                     break
             if filled is None:
@@ -457,6 +494,11 @@ def fill_photo_aid_from_pexels(
             filled["error"] = "" if filled.get("match_status") != "reject" else inspected.rejection_reason
             filled["rendered"] = True
             filled["has_file"] = True
+            filled["acquisition_outcome"] = (
+                STOCK_ACCEPTED
+                if filled.get("match_status") == MATCH_PASS
+                else SEMANTIC_REJECTION
+            )
             filled = publish_factory_photo(filled, package_id)
             local = str(filled.get("asset_path") or "")
             factory = str(filled.get("factory_asset_path") or "")
@@ -482,7 +524,9 @@ def fill_photo_aid_from_pexels(
             return filled
         out["failed_queries"] = list(dict.fromkeys(failed_queries))
         out["rejected_photo_ids"] = sorted(rejected_ids)
-        return stamp_photo_aid_metadata(out, status="missing", error=last_error)
+        missing = stamp_photo_aid_metadata(out, status="missing", error=last_error)
+        missing["acquisition_outcome"] = _classify_stock_failure(last_error)
+        return missing
     except PexelsError as exc:
         from services.ebook_pexels import customer_pexels_message
 
@@ -490,7 +534,48 @@ def fill_photo_aid_from_pexels(
         missing = stamp_photo_aid_metadata(out, status="missing", error=msg)
         missing["customer_message"] = customer_pexels_message(exc)
         missing["error_code"] = getattr(exc, "code", "request_failed")
+        missing["acquisition_outcome"] = TECHNICAL_FAILURE
         return missing
+
+
+def _local_visual_for_aid(aid: dict[str, Any], *, chapter: str = "") -> dict[str, Any] | None:
+    """A free visual built from this chapter's own approved text, or None.
+
+    None means LOCAL_VISUAL_UNSUITABLE: the chapter has no instructions and no
+    statements a card could honestly carry. Only then may a paid image be
+    considered.
+    """
+    body = str(aid.get("chapter_body") or "")
+    if not body.strip():
+        return None
+    try:
+        from services.ebook_visual_pipeline import derive_local_aid_from_prose
+    except Exception:  # noqa: BLE001
+        return None
+    title = str(chapter or aid.get("chapter") or "")
+    try:
+        index = int(aid.get("chapter_index") or 0) or 1
+    except (TypeError, ValueError):
+        index = 1
+    local = derive_local_aid_from_prose(index, title, body)
+    if not local:
+        return None
+    # Keep the slot's identity so the plan, manifest and preview still line up.
+    local["visual_id"] = str(aid.get("visual_id") or local.get("visual_id") or "")
+    local["placement"] = str(aid.get("placement") or local.get("placement") or "after_opening")
+    local["chapter"] = title or local.get("chapter")
+    local["chapter_index"] = index
+    return local
+
+
+def _classify_stock_failure(reason: str) -> str:
+    """Wrong picture, or no picture? The routing depends on the answer."""
+    text = str(reason or "").lower()
+    if not text:
+        return STOCK_UNAVAILABLE
+    if any(hint in text for hint in _SEMANTIC_REASON_HINTS):
+        return SEMANTIC_REJECTION
+    return STOCK_UNAVAILABLE
 
 
 def _photo_already_stored(aid: dict[str, Any]) -> bool:
@@ -671,6 +756,24 @@ def fill_photo_aid_automatic(
     )
     if _photo_already_stored(stock) and str(stock.get("match_status") or "") != MATCH_REJECT:
         return stock
+
+    # FREE LOCAL VISUAL FIRST.
+    #
+    # Whatever went wrong with stock, the next thing to try is a visual built
+    # from the chapter's own approved text. It costs nothing, it cannot be
+    # irrelevant because it is made of the chapter, and for an abstract or
+    # advice-led chapter it is genuinely the better illustration. Reaching for
+    # a paid generator before trying it is how a stricter matcher turned into
+    # a bigger bill.
+    local = _local_visual_for_aid(out, chapter=chapter)
+    if local is not None:
+        local["acquisition_outcome"] = str(stock.get("acquisition_outcome") or SEMANTIC_REJECTION)
+        local["replaced_stock_reason"] = str(stock.get("error") or "")
+        return local
+    stock["acquisition_outcome"] = LOCAL_VISUAL_UNSUITABLE
+
+    # Only now may a paid image be considered, and only with explicit
+    # authorization and remaining budget. Both checks are unchanged.
     if not allow_ai:
         stock["customer_message"] = unresolved_visual_customer_message(stock)
         return stock

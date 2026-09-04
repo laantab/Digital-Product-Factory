@@ -93,6 +93,9 @@
     "tests/test_ebook_fixture_dual_gate.py",
     "tests/test_ebook_resubmission_safety.py",
     "tests/test_ebook_build_browser_routing.py",
-    "tests/test_chapter_photo_queries.py"
+    "tests/test_chapter_photo_queries.py",
+    "tests/test_visual_relevance_strategy.py",
+    "tests/test_database_isolation.py",
+    "tests/test_visual_routing_outcomes.py"
   ]
 }

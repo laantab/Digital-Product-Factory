@@ -1194,6 +1194,8 @@ def score_photo_against_brief(
     user_accepted: bool = False,
     seen_full_size: bool = False,
     other_shas: list[str] | None = None,
+    book_topic: str = "",
+    chapter_body: str = "",
 ) -> MatchReport:
     appearance = appears_to_show or photo_appearance_text(
         alt=alt,
@@ -1356,6 +1358,76 @@ def score_photo_against_brief(
     if user_accepted and status != MATCH_REJECT and tech_ok and seen_full_size:
         status = MATCH_PASS
         reason = ""
+
+    # ---------------------------------------------------------------- STRICT
+    # Everything above decides from the candidate's own metadata: alt text,
+    # tags, filename, page URL. Metadata is written by whoever uploaded the
+    # image, so it cannot be trusted to say what a photograph SHOWS. Real
+    # books were assembled from chalk tally marks, a typewriter photographed
+    # with "MINDFULNESS IN EDUCATION" on the page, burnt matchsticks spelling
+    # MIND, two wall clocks matched to the word "minute", and a woman throwing
+    # a book -- every one of them marked PASS.
+    #
+    # This gate only ever makes the verdict stricter. It can turn PASS into
+    # NEEDS USER REVIEW or REJECT; it can never promote anything, and it never
+    # runs before the checks above. A photograph now reaches PASS only when
+    # the PIXELS confirm a photographed scene with no baked-in text AND the
+    # candidate shares real subject matter with the book, not merely with the
+    # chapter heading. If inspection cannot run, the answer is "not
+    # confident", so a missing OCR engine makes this stricter, never looser.
+    try:
+        from services.ebook_photo_content import (
+            cliche_rejection_reason,
+            describe_photo_content,
+            topic_supported,
+        )
+
+        cliche = cliche_rejection_reason(
+            appearance, book_topic=book_topic, chapter_body=chapter_body
+        )
+        if cliche and status != MATCH_REJECT:
+            status = MATCH_REJECT
+            reason = cliche
+            score = min(score, 0.3)
+            if "honest scene match" not in missing:
+                missing.append("honest scene match")
+
+        if status != MATCH_REJECT and (image_path or image_bytes):
+            content = describe_photo_content(image_path, image_bytes=image_bytes)
+            if content.get("inspected") and content.get("findings"):
+                status = MATCH_REJECT
+                reason = "; ".join(content["findings"])
+                score = min(score, 0.3)
+                if "honest scene match" not in missing:
+                    missing.append("honest scene match")
+            elif status == MATCH_PASS:
+                pixels_ok = bool(content.get("inspected") and content.get("ok"))
+                on_topic = topic_supported(
+                    appearance, book_topic=book_topic, chapter_body=chapter_body
+                )
+                if not pixels_ok:
+                    status = MATCH_NEEDS_REVIEW
+                    reason = "NEEDS USER REVIEW: the photograph itself was not confirmed"
+                    content_verified = False
+                elif not on_topic:
+                    status = MATCH_NEEDS_REVIEW
+                    reason = (
+                        "NEEDS USER REVIEW: the photograph matches the chapter "
+                        "heading but not the book's subject"
+                    )
+                    content_verified = False
+        elif status == MATCH_PASS and not (image_path or image_bytes):
+            # Metadata alone may never promote a photograph.
+            status = MATCH_NEEDS_REVIEW
+            reason = "NEEDS USER REVIEW: photograph file was not inspected"
+            content_verified = False
+    except Exception:  # noqa: BLE001
+        # Fail closed: if the stricter inspection cannot run at all, an
+        # un-reviewed PASS is exactly what we must not emit.
+        if status == MATCH_PASS:
+            status = MATCH_NEEDS_REVIEW
+            reason = "NEEDS USER REVIEW: photograph content could not be verified"
+            content_verified = False
 
     return MatchReport(
         status=status,
