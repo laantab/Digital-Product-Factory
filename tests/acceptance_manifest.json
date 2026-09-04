@@ -92,6 +92,7 @@
     "tests/test_ebook_customer_interface_language.py",
     "tests/test_ebook_fixture_dual_gate.py",
     "tests/test_ebook_resubmission_safety.py",
-    "tests/test_ebook_build_browser_routing.py"
+    "tests/test_ebook_build_browser_routing.py",
+    "tests/test_chapter_photo_queries.py"
   ]
 }

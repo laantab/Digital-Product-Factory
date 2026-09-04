@@ -203,6 +203,13 @@ def visual_noun_phrase(*values: Any, limit: int = 5) -> str:
     return " ".join(_query_tokens(*values, limit=limit)).strip()
 
 
+def _append_query(out: list[str], query: str) -> None:
+    """Add a de-duplicated, bounded query to the ladder."""
+    key = " ".join(str(query or "").split())
+    if key and len(key.split()) <= 8 and key not in out:
+        out.append(key)
+
+
 def is_garden_topic(*, title: str = "", topic: str = "", chapter: str = "", caption: str = "") -> bool:
     blob = " ".join(str(v or "") for v in (title, topic, chapter, caption)).lower()
     return any(
@@ -240,6 +247,7 @@ def chapter_pexels_queries(
     caption: str = "",
     keywords: Any = None,
     audience: str = "",
+    body: str = "",
 ) -> list[str]:
     """Chapter searches matching the scene, not the full topic sentence.
 
@@ -290,6 +298,31 @@ def chapter_pexels_queries(
         # keeps the defining equipment term.
         out.append(f"{equipment_term} safe training {audience_term}".strip())
         out.append(equipment_term)
+
+    # Prose chapters with no defining equipment used to be searched on the
+    # words of the chapter HEADING alone. A heading is rhetoric, not a scene:
+    # "Your First 5-Minute Practices" searched as "minute practices" and
+    # returned a pocket watch; "When It Feels Hard, You're Still Doing It
+    # Right" searched as "feels hard" and returned Scrabble tiles spelling
+    # FEEL. Both were correctly rejected by the matcher, and both burned the
+    # whole search on a heading word the book is not actually about.
+    #
+    # So for these chapters the ladder leads with the book's own subject --
+    # which a stray heading word like "minute" or "feel" must not displace --
+    # combined with the chapter's own body text, which is where the scene is
+    # actually described. The heading-only phrases stay, but last.
+    #
+    # Equipment-led books never reach here: they return above with their
+    # defining implement kept in every tier.
+    topic_anchor = visual_noun_phrase(topic, limit=2) or visual_noun_phrase(title, limit=2)
+    if topic_anchor:
+        body_scene = visual_noun_phrase(body, limit=3)
+        if body_scene:
+            _append_query(out, f"{topic_anchor} {body_scene}")
+        chapter_scene = visual_noun_phrase(clean_chapter, limit=2)
+        if chapter_scene:
+            _append_query(out, f"{topic_anchor} {chapter_scene}")
+        _append_query(out, topic_anchor)
 
     kw_phrase = visual_noun_phrase(keywords, caption, clean_chapter, limit=5)
     if kw_phrase and kw_phrase not in out:

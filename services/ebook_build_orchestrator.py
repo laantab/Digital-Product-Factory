@@ -336,7 +336,20 @@ def _run_visuals(data: dict, pid: int) -> dict:
     from services.ebook_design_workspace import approve_visuals_local, prepare_visuals_local
 
     data = prepare_visuals_local(data)
-    return approve_visuals_local(data)
+    try:
+        return approve_visuals_local(data)
+    except ValueError:
+        # Approval was refused. Return the prepared data anyway so the work is
+        # persisted: acquiring a visual plan costs real photograph downloads
+        # (a hundred megabytes for a nine-chapter book), and letting the
+        # exception escape threw all of it away on every retry, so each
+        # attempt re-downloaded everything and hit the same wall.
+        #
+        # This does not mark the stage done. stage_is_validated() reads the
+        # workspace rail, which prepare_visuals_local has just set to
+        # needs_correction, so the orchestrator still records the stage as
+        # unfinished and the real validator still decides.
+        return data
 
 
 def _run_cover(data: dict, pid: int) -> dict:

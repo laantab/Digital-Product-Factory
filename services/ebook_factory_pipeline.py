@@ -351,6 +351,9 @@ def fill_photo_aid_from_pexels(
         topic=topic,
         caption=str(out.get("caption") or out.get("title") or ""),
         keywords=out.get("keywords"),
+        audience=audience,
+        # The chapter's own text describes the scene; its heading does not.
+        body=str(out.get("chapter_body") or ""),
     )
     queries = extra + [q for q in queries if q not in extra]
     fallback = topic_pexels_query(
