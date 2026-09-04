@@ -202,6 +202,11 @@
             <p class="text-sm text-slate-500 mb-1">Your latest saved products are listed below. Download the files you want to keep.</p>
             <p class="text-xs text-slate-400 mb-4">Showing up to 10 of your saved products.</p>
 
+            <!-- Books still being built. Kept separate from finished products
+                 so an unfinished draft is never mistaken for a downloadable
+                 file, while still being easy to get back to. -->
+            <div id="ebookResumeSection" class="hidden mb-6"></div>
+
             <!-- Admin controls — hidden unless Admin/Developer mode is on -->
             <div class="admin-controls hidden flex items-center justify-between gap-3 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
               <div class="flex items-center gap-3">
@@ -602,6 +607,12 @@
             </div>
           </div>
           <div id="ebookOutput"></div>
+        </section>
+
+        <!-- One-button ebook build. The customer sees progress and finished
+             actions only: never the ten-stage rail, never internal state. -->
+        <section data-view="ebook-build" class="view hidden space-y-6">
+          <div id="ebookBuildRoot" class="space-y-4"></div>
         </section>
 
         <!-- Ebook Project workspace (stage rail) -->

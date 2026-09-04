@@ -100,7 +100,12 @@ def stage_photo_cover(data: dict, *, project_id: int | None = None) -> dict:
     invalidate_after(ws, "cover", reason="Cover photograph updated")
     _append_history(ws, "photo_cover", local=True, paid=False)
     _recompute_next_action(ws)
-    return sync_document_from_workspace(data)
+    # Cover staging owns cover fields only. Syncing the manuscript here would
+    # rebuild visual_plan from the document's slots and silently drop the
+    # resolution metadata (photographer, match_status, status, rendered,
+    # has_file) that the completed Visuals stage produced -- which made the
+    # cover unapprovable with "Visuals must have valid local assets".
+    return sync_document_from_workspace(data, sync_manuscript=False)
 
 
 def reject_cover(data: dict) -> dict:
@@ -111,7 +116,7 @@ def reject_cover(data: dict) -> dict:
     invalidate_after(ws, "cover", reason="Cover rejected")
     _append_history(ws, "reject_cover")
     _recompute_next_action(ws)
-    return sync_document_from_workspace(data)
+    return sync_document_from_workspace(data, sync_manuscript=False)
 
 
 COVER_PREVIEW_UNAVAILABLE = "Cover preview unavailable — approval blocked"
@@ -235,7 +240,7 @@ def select_and_stage_theme(data: dict, theme_id: str) -> dict:
     data = _clear_export_fields(data, cleared)
     _append_history(ws, "select_theme", theme_id=theme_id)
     _recompute_next_action(ws)
-    return sync_document_from_workspace(data)
+    return sync_document_from_workspace(data, sync_manuscript=False)
 
 
 def _clear_export_fields(data: dict, cleared: list[str]) -> dict:
@@ -442,7 +447,7 @@ def build_preview(data: dict) -> dict:
     _recompute_next_action(ws)
     data["_preview_page_count"] = bundle.get("preflight", {}).get("page_count")
     data["export_ready"] = False
-    data = sync_document_from_workspace(data)
+    data = sync_document_from_workspace(data, sync_manuscript=False)
     if isinstance(plan, dict):
         data["visual_plan"] = plan
     if isinstance(manifest, dict):
@@ -483,7 +488,7 @@ def run_preflight_stage(data: dict) -> dict:
         data["export_ready"] = False
     _append_history(ws, "preflight", status=report_dict.get("status"))
     _recompute_next_action(ws)
-    return sync_document_from_workspace(data)
+    return sync_document_from_workspace(data, sync_manuscript=False)
 
 
 def rewind_to_stage(data: dict, stage: str) -> dict:

@@ -379,12 +379,32 @@ class ChapterProductionTests(unittest.TestCase):
             run_chapter_pipeline(book, generate_fn=lambda **k: {"ebook": "nope"})
 
     def test_14_estimate_ui_copy(self):
+        """The chapter-cost estimate panel is gone; progress copy replaced it.
+
+        CONTRACT NOTE: this test used to require the developer cost rail --
+        "Maximum total:", "Per-chapter maximum:", "Accepted chapters:",
+        "Pending chapters:", "Confirmation required". Those strings were
+        deliberately removed: customers must never see the Factory's internal
+        operating costs or be asked to confirm a paid action. The budget ledger
+        itself still exists server-side and is still asserted by test_12; only
+        its customer-visible surface was withdrawn. This test now enforces the
+        replacement, so the old copy cannot quietly return.
+        """
         js = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("Maximum total:", js)
-        self.assertIn("Per-chapter maximum:", js)
-        self.assertIn("Accepted chapters:", js)
-        self.assertIn("Pending chapters:", js)
-        self.assertIn("Confirmation required", js)
+        for gone in (
+            "Maximum total:",
+            "Per-chapter maximum:",
+            "Accepted chapters:",
+            "Pending chapters:",
+            "Confirmation required",
+            "Confirm paid action",
+            "Remaining:",
+        ):
+            self.assertNotIn(gone, js, f"internal cost copy came back: {gone!r}")
+        # What the customer sees instead: plain-language build progress.
+        self.assertIn("RESUME_STAGE_LABELS", js)
+        self.assertIn("Researching your topic", js)
+        self.assertIn("Building your preview", js)
 
 
 if __name__ == "__main__":

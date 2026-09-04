@@ -205,10 +205,41 @@ class EbookCustomerPathTests(unittest.TestCase):
         self.assertIn("factory_brand", codes)
         self.assertIn("provider_url", codes)
 
-    def test_generate_product_completes_cover_and_omits_errors(self):
+    def _customer_ebook_payload(self) -> dict:
+        """The finished customer payload.
+
+        CONTRACT NOTE: POST /generate-product for product_type="ebook" no longer
+        returns a finished book. It opens an Ebook Project workspace and returns
+        a build envelope (see test_generate_product_opens_the_workspace_build).
+        The finished-product behaviour these tests protect now lives in the
+        shared pipeline, so they exercise it there. Nothing about the assertions
+        was relaxed.
+        """
+        return complete_factory_ebook(TEEN_TITLE, TEEN_MD, dict(TEEN_FIELDS))
+
+    def test_generate_product_opens_the_workspace_build(self):
+        """The customer Build button starts the workspace pipeline, not a one-shot."""
         gen = self.client.post("/generate-product", json={"product_type": "ebook", "fields": TEEN_FIELDS})
         self.assertEqual(gen.status_code, 200, gen.get_data(as_text=True))
-        payload = gen.get_json()
+        envelope = gen.get_json()
+        self.assertTrue(envelope.get("ok"))
+        self.assertEqual(envelope.get("mode"), "ebook_workspace")
+        pid = envelope.get("project_id")
+        self.assertIsNotNone(pid)
+        self._created_ids.append(int(pid))
+        stored = (database.get_project(int(pid)) or {}).get("data") or {}
+        self.assertEqual(stored.get("title"), TEEN_TITLE)
+        self.assertEqual(stored.get("author_brand"), "Lonnie Brown")
+        self.assertEqual(stored.get("artifact_state"), "DRAFT")
+        self.assertFalse(stored.get("export_ready"))
+        # Opening the workspace must not have written a book or approved a stage.
+        self.assertEqual(str(stored.get("content") or ""), "")
+        message = str(envelope.get("message") or "")
+        for leak in ("OpenAI", "Ollama", "token", "$", "Pexels", "Tavily"):
+            self.assertNotIn(leak, message)
+
+    def test_generate_product_completes_cover_and_omits_errors(self):
+        payload = self._customer_ebook_payload()
         self.assertEqual(payload.get("title"), TEEN_TITLE)
         self.assertEqual(payload.get("author_brand"), "Lonnie Brown")
         html = payload.get("preview_html") or ""
@@ -238,8 +269,7 @@ class EbookCustomerPathTests(unittest.TestCase):
         self.assertNotIn("test-pexels-key-not-live", json.dumps(health))
 
     def test_save_is_idempotent_and_reopen_does_not_generate(self):
-        gen = self.client.post("/generate-product", json={"product_type": "ebook", "fields": TEEN_FIELDS})
-        data = gen.get_json()
+        data = self._customer_ebook_payload()
         first = self.client.post("/ebook/save", json={"name": data["title"], "data": data})
         self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
         body = first.get_json()
@@ -262,8 +292,7 @@ class EbookCustomerPathTests(unittest.TestCase):
         )
 
     def test_regenerate_cover_keeps_prior_on_failure(self):
-        gen = self.client.post("/generate-product", json={"product_type": "ebook", "fields": TEEN_FIELDS})
-        data = gen.get_json()
+        data = self._customer_ebook_payload()
         saved = self.client.post("/ebook/save", json={"name": data["title"], "data": data}).get_json()
         pid = saved.get("project_id") or saved.get("id")
         self._created_ids.append(int(pid))

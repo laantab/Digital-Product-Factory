@@ -41,3 +41,22 @@ junit.xml
 # Bulk visual-swap image caches (94MB of PNGs)
 _visual_swap_4249_candidates/
 _visual_swap_4249_snapshot/
+
+# Runtime-materialized fonts. services/ebook_fonts.py copies whichever TTF the
+# host machine provides (Arial, Liberation, DejaVu, Vera) into this directory
+# so xhtml2pdf can open a .ttf path. They are generated artifacts, not sources,
+# and the upstream faces they are copied from carry their own licences which we
+# are not entitled to redistribute.
+services/fonts/*.ttf
+
+# SQLite write-ahead files
+projects.db-shm
+projects.db-wal
+*.db-shm
+*.db-wal
+
+# Local recovery / scratch output, never part of the product
+_backup_*/
+overnight_work/
+overnight_recovery_*/
+.fuse_hidden*

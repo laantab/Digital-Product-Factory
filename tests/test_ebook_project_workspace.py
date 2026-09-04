@@ -445,9 +445,8 @@ class EbookWorkspaceJsHtmlTests(unittest.TestCase):
             "data-ebook-rail",
             "estimateManuscriptInWorkspace",
             "data-ws-estimate-manuscript",
-            "Confirm paid action",
-            "Confirm and Generate Manuscript",
-            "Estimated maximum",
+            "Ready to continue",
+            "Continue Building",
             "renderEbookWorkspace",
             "generate-manuscript",
         ):

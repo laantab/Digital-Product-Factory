@@ -5,6 +5,8 @@ is made, and no ebook is exported.
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from services.ebook_manuscript_engine import (
@@ -230,6 +232,35 @@ def test_local_failure_is_repaired_within_bounds_then_marked():
     rec = pipeline["provider_payloads"][0]
     assert rec["local_repair_attempts"] == MAX_LOCAL_REPAIR_ATTEMPTS
     assert rec["needs_premium_enhancement"] is True
+
+
+def test_repaired_pipeline_result_is_json_serialisable():
+    """Regression: a repair used to make the whole project unsaveable.
+
+    Validator findings were fed back as ChapterFinding objects, which are not
+    JSON serialisable. They travelled into provider_payloads and were saved
+    with the project, so database.update_project raised TypeError after any
+    local repair -- stranding a part-written manuscript as "in progress" with
+    no way for the customer to continue.
+    """
+    state = {"n": 0}
+
+    def _fails_once(book, chapter):
+        state["n"] += 1
+        body = "too short" if state["n"] == 1 else _chapter_body(chapter.title)
+        return {"chapter": body, "ebook": body, "assigned_research": "",
+                "chapter_contract": {}, "billable_calls": 0, "provider": "local"}
+
+    pipeline = run_chapter_pipeline(_book(1), generate_chapter_fn=_fails_once)
+    assert pipeline["provider_payloads"][0]["local_repair_attempts"] >= 1
+
+    # The exact operation that failed in production.
+    json.dumps(pipeline["provider_payloads"])
+
+    findings = pipeline["provider_payloads"][0]["unresolved_findings"]
+    assert all(isinstance(f, str) for f in findings), (
+        "findings fed back to the writer must be plain strings"
+    )
 
 
 def test_local_repair_can_succeed_on_second_attempt():

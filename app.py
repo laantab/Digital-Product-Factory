@@ -137,6 +137,17 @@ _TECHNICAL_ERROR_MARKERS = (
     "llama",
     "gpt-",
     "try pulling",
+    # Internal authorization mechanics.
+    "confirmation token",
+    "token has already",
+    "token has expired",
+    "invalid or missing confirmation",
+    "confirmation does not match",
+    "idempotency",
+    "nonce",
+    "csrf",
+    "outline digest mismatch",
+    "issued for a different",
 )
 
 
@@ -637,6 +648,8 @@ def run_ebook_workspace_research_route(project_id: int):
 
 def _run_confirmed_workspace_action(project_id: int, body: dict, executor, log_label: str):
     """Shared route body for confirmed estimate-then-execute stage actions."""
+    from services.ebook_project_workspace import ConfirmationAlreadyUsed
+
     try:
         from services.ebook_project_workspace import workspace_public_view
 
@@ -663,11 +676,51 @@ def _run_confirmed_workspace_action(project_id: int, body: dict, executor, log_l
                 "workspace": workspace_public_view(project),
             }
         )
+    except ConfirmationAlreadyUsed:
+        return _resubmitted_stage_action(project_id, log_label)
     except ValueError as exc:
-        return _error(str(exc), 400)
+        return _customer_error(exc, 400, log=f"{log_label} rejected")
     except Exception as exc:  # noqa: BLE001
-        app.logger.exception("%s failed", log_label)
-        return _error(str(exc), 500)
+        return _customer_error(exc, 500, log=f"{log_label} failed")
+
+
+def _resubmitted_stage_action(project_id: int, log_label: str):
+    """The customer sent the same action twice. Show them where the project is.
+
+    A double click, a refresh, the Back button, or a retried POST after a slow
+    response must not look like a failure and must never run or charge for the
+    work a second time. The confirmation is single-use as before -- this only
+    changes what happens afterwards.
+
+    If the action completed, the current stage is returned as success. If the
+    confirmation was spent but the work did not land, the stale estimate is
+    cleared so the customer's next click starts cleanly from the saved state.
+    """
+    from services.ebook_project_workspace import clear_pending_estimate, workspace_public_view
+
+    app.logger.info("%s: confirmation already used; returning current stage", log_label)
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err[0], err[1]
+
+    data = dict(project.get("data") or {})
+    ws = data.get("ebook_workspace") or {}
+    pending = ((ws.get("paid_call_ledger") or {}).get("pending_estimate") or {})
+
+    if pending:
+        # Spent but nothing pending should remain: drop it so a fresh, valid
+        # action can be issued from the project's current saved state.
+        data = clear_pending_estimate(data)
+        project = database.update_project(project_id, None, data) or project
+
+    return jsonify(
+        {
+            "ok": True,
+            "duplicate": True,
+            "result": {},
+            "workspace": workspace_public_view(project),
+        }
+    )
 
 
 @app.post("/ebook-workspace/<int:project_id>/title-options")
@@ -853,6 +906,8 @@ def authorize_ebook_workspace_budget_route(project_id: int):
 @app.post("/ebook-workspace/<int:project_id>/generate-manuscript")
 def generate_ebook_workspace_manuscript_route(project_id: int):
     """Execute confirmed manuscript generation (server-authoritative)."""
+    from services.ebook_project_workspace import ConfirmationAlreadyUsed
+
     body = request.get_json(silent=True) or {}
     try:
         from services.ebook_project_workspace import (
@@ -894,11 +949,12 @@ def generate_ebook_workspace_manuscript_route(project_id: int):
                 "workspace": workspace_public_view(project),
             }
         )
+    except ConfirmationAlreadyUsed:
+        return _resubmitted_stage_action(project_id, "manuscript generation")
     except ValueError as exc:
-        return _error(str(exc), 400)
+        return _customer_error(exc, 400, log="ebook workspace manuscript generation rejected")
     except Exception as exc:  # noqa: BLE001
-        app.logger.exception("ebook workspace manuscript generation failed")
-        return _error(str(exc), 500)
+        return _customer_error(exc, 500, log="ebook workspace manuscript generation failed")
 
 
 @app.post("/ebook-workspace/<int:project_id>/correct-manuscript")
@@ -1095,13 +1151,45 @@ def ebook_workspace_cover_route(project_id: int):
         action = str(body.get("action") or "").strip().lower()
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
-        mutating = action in {"reject", "pexels-select", "editor", "select", "deselect"}
+        mutating = action in {"reject", "pexels-select", "editor", "select", "deselect", "fixture"}
         if mutating:
             try:
                 _require_content_mutation_allowed(data, action="update cover photograph")
             except ArtifactStateError as exc:
                 return _error(str(exc), 409)
-        if action == "reject":
+        if action == "fixture":
+            # Deterministic local cover for Safe Mode acceptance testing.
+            #
+            # Dual-gated: unreachable unless FACTORY_TEST_MODE=1 AND
+            # EBOOK_CUSTOMER_PATH_FIXTURE=1. It reuses the real production
+            # chain end to end -- source storage, activation, typography and
+            # safety QA, layout selection and digest stamping. No threshold is
+            # lowered and no validation is skipped: the fixture photograph has
+            # to earn a passing layout exactly as a stock photograph does.
+            from services.external_calls import ebook_fixture_mode
+
+            if not ebook_fixture_mode():
+                return _error("This action is not available.", 404)
+
+            from services.ebook_customer_path import _first_passing_layout, _fixture_jpeg
+            from services.ebook_photo_cover import _activate_source, _store_source_bytes
+
+            raw = _fixture_jpeg((36, 92, 48), seed=str(body.get("seed") or "cover-a"))
+            source = _store_source_bytes(
+                data,
+                raw,
+                source_type="local_licensed",
+                filename="cover-fixture.jpg",
+                license_note="Deterministic local fixture photograph. Not for sale.",
+                project_id=project_id,
+            )
+            data = _activate_source(data, source, project_id=project_id)
+            layout = _first_passing_layout(data.get("cover_design"))
+            if not layout:
+                raise PhotoCoverError("No safe cover layout passed quality checks.")
+            data = select_layout(data, layout, project_id=project_id)
+            data = stage_photo_cover(data, project_id=project_id)
+        elif action == "reject":
             data = reject_cover(data)
         elif action == "pexels-search":
             prior_cover = data.get("cover_design")
@@ -1849,6 +1937,97 @@ def market_research_route():
         ), 503
 
 
+def _start_ebook_workspace_build(fields: dict):
+    """Customer 'Build' for an ebook: open a DRAFT Ebook Project workspace.
+
+    The legacy one-shot generator writes a whole book in a single provider call
+    with no chapter quality gate, no bounded repair, no incremental persistence
+    and no recovery, so the customer-facing build uses the workspace pipeline
+    instead. This creates the project only: it makes no paid call, and it never
+    approves or locks anything.
+    """
+    from services.ebook_project_workspace import (
+        new_workspace,
+        sync_document_from_workspace,
+        workspace_public_view,
+    )
+
+    from services.ebook_contamination import normalize_author, normalize_book_title
+
+    def _f(key: str) -> str:
+        return str(fields.get(key) or "").strip()
+
+    # The customer's raw entry may carry a leading colon or a stray byline. The
+    # legacy generator normalised these before anything downstream saw them; the
+    # workspace path must do the same or the defect is stored in the project and
+    # printed on the cover.
+    # Validate what the customer actually typed, then normalise. Checking the
+    # normalised author would never fire: normalize_author substitutes a default
+    # for an empty value.
+    if not _f("ebook_title"):
+        return _error("Please enter an ebook title.", 400)
+    if not _f("author_brand"):
+        return _error("Please enter an author name.", 400)
+    title = normalize_book_title(_f("ebook_title"))
+    author = normalize_author(_f("author_brand"))
+    topic = _f("topic") or title
+    if not title:
+        return _error("Please enter an ebook title.", 400)
+    if not topic:
+        return _error("Please enter a topic or niche.", 400)
+
+    data = {
+        "product_type": "ebook",
+        "ebook_project_workspace": True,
+        "artifact_state": "DRAFT",
+        "artifact_revision": 1,
+        "title": title,
+        "subtitle": "",
+        "author_brand": author,
+        "source": topic,
+        "topic": topic,
+        "content": "",
+        "ebook": "",
+        "export_ready": False,
+        # The submitted fields are kept verbatim. This is the canonical shape
+        # the visual pipeline reads: automatic_visuals_requested() looks for
+        # include_images / visual_mode here, so the customer's own Visuals
+        # choice decides whether photographs are fetched. A customer who
+        # selected "No" must not have visuals forced on.
+        "fields": dict(fields or {}),
+        "audience": _f("audience"),
+        "tone": _f("tone"),
+        "reading_level": _f("reading_level"),
+        "include_images": _f("include_images"),
+        "include_worksheets": _f("include_worksheets"),
+        "research_notes": _f("research_notes"),
+        "use_research": _f("use_research"),
+        "requested_chapters": _f("chapters"),
+        "suggested_price": _f("price") or _f("target_price") or _f("suggested_price"),
+        "ebook_workspace": new_workspace(
+            topic=topic,
+            audience=_f("audience"),
+            outcome=_f("outcome"),
+            author=author,
+            budget_cap_usd=3.5,
+        ),
+    }
+    data = sync_document_from_workspace(data)
+    project = database.create_project(
+        title[:200], "ebook", data,
+        user_saved=True, system_test=False, temporary=False,
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "mode": "ebook_workspace",
+            "project_id": project.get("id"),
+            "workspace": workspace_public_view(project),
+            "message": "Your ebook project is ready. The Factory will research, write and check it for you.",
+        }
+    )
+
+
 @app.post("/generate-product")
 def generate_product_route():
     body = request.get_json(silent=True) or {}
@@ -1869,6 +2048,15 @@ def generate_product_route():
     _requested = (body.get("product_type", "") or "").strip()
     if _requested in _HIDDEN_PRODUCT_TYPES:
         return _error("This product type is not ready yet.", 400)
+
+    # Ebook only: the customer build enters the Ebook Project workspace
+    # pipeline, never the legacy single-call generator. Every other product
+    # type keeps its existing behaviour untouched.
+    if _requested == "ebook" and not project_id:
+        try:
+            return _start_ebook_workspace_build(fields)
+        except Exception as exc:  # noqa: BLE001
+            return _customer_error(exc, 500, log="ebook workspace build failed")
 
     from services.quality.artifact_state import ArtifactStateError
 
@@ -3413,6 +3601,59 @@ def _enrich_project_artifact_fields(
         stamp_coloring_author_fields(data)
         attach_coloring_preview_urls(data, project_id=project.get("id"))
     return project
+
+
+@app.post("/ebook/build")
+def ebook_build_start_route():
+    """BUILD MY EBOOK. Creates one DRAFT project or attaches to the running one."""
+    body = request.get_json(silent=True) or {}
+    fields = body.get("fields") if isinstance(body.get("fields"), dict) else body
+    try:
+        from services.ebook_build_orchestrator import start_build, status_payload
+
+        project, created = start_build(fields)
+        pid = project.get("id")
+        data = dict(project.get("data") or {})
+        payload = status_payload(data, pid)
+        payload["created"] = bool(created)
+        return jsonify(payload)
+    except Exception as exc:  # noqa: BLE001
+        return _customer_error(exc, 500, log="ebook build start failed")
+
+
+@app.post("/ebook/build/<int:project_id>/advance")
+def ebook_build_advance_route(project_id: int):
+    """Run the next incomplete stage. One checkpoint per call."""
+    try:
+        from services.ebook_build_orchestrator import advance_build
+
+        return jsonify(advance_build(project_id))
+    except Exception as exc:  # noqa: BLE001
+        return _customer_error(exc, 500, log="ebook build advance failed")
+
+
+@app.get("/ebook/build/<int:project_id>/status")
+def ebook_build_status_route(project_id: int):
+    """Read-only progress for the customer's screen."""
+    try:
+        from services.ebook_build_orchestrator import status_payload
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        return jsonify(status_payload(dict(project.get("data") or {}), project_id))
+    except Exception as exc:  # noqa: BLE001
+        return _customer_error(exc, 500, log="ebook build status failed")
+
+
+@app.get("/ebook-workspaces/in-progress")
+def list_unfinished_ebook_workspaces_route():
+    """Ebook projects the customer can continue. Read-only, no paid calls."""
+    try:
+        items = database.list_unfinished_ebook_workspaces()
+        return jsonify({"ok": True, "projects": items})
+    except Exception as exc:  # noqa: BLE001
+        return _customer_error(exc, 500, log="in-progress ebook listing failed")
 
 
 @app.get("/projects")

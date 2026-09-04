@@ -80,6 +80,18 @@
     "tests/test_kdp_preflight_pass2.py",
     "test_crossword_quality.py",
     "tests/test_billing.py",
-    "tests/test_customer_journey_every_product_type.py"
+    "tests/test_customer_journey_every_product_type.py",
+    "tests/test_ai_providers.py",
+    "tests/test_local_manuscript_pilot.py",
+    "tests/test_chapter_contract_alignment.py",
+    "tests/test_cover_vision_qc_regression.py",
+    "tests/test_cover_preserves_visuals.py",
+    "tests/test_ebook_export_stage.py",
+    "tests/test_ebook_one_button_path.py",
+    "tests/test_ebook_resume_surface.py",
+    "tests/test_ebook_customer_interface_language.py",
+    "tests/test_ebook_fixture_dual_gate.py",
+    "tests/test_ebook_resubmission_safety.py",
+    "tests/test_ebook_build_browser_routing.py"
   ]
 }

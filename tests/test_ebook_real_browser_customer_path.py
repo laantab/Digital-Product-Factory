@@ -184,6 +184,55 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         except Exception:
             pass
 
+    # ------------------------------------------------------------------
+    # ONE-BUTTON CUSTOMER PATH
+    #
+    # Migrated from the retired one-shot flow. Every customer guarantee the
+    # old test made is still made here -- one project, understandable
+    # progress, a real preview, a real PDF and ZIP, reopen without
+    # regeneration, no leaked internals, zero paid calls. What changed is the
+    # route the customer takes to them: one Build My Ebook click now drives
+    # the workspace orchestrator instead of a single blocking generate.
+    # ------------------------------------------------------------------
+
+    #: Anything here on the customer's screen is a leak of internal operation.
+    FORBIDDEN_SCREEN_TEXT = (
+        "Confirm paid action",
+        "Confirmation token",
+        "Maximum total",
+        "Per-chapter maximum",
+        "Remaining:",
+        "OpenAI",
+        "Ollama",
+        "Qwen",
+        "Tavily",
+        "Pexels",
+        "Traceback",
+        "ebook_workspace",
+        "project_id",
+        "approve_stage",
+        "Approve & Save",
+    )
+    #: The ten-stage operational rail must never appear on the customer screen.
+    RAIL_WORDS = ("Preflight", "Outline", "Manuscript", "Visuals", "Preview approval")
+
+    def _screen(self, page) -> str:
+        return page.locator("[data-view='ebook-build']").inner_text()
+
+    def _assert_screen_is_customer_safe(self, page, *, where: str) -> None:
+        text = self._screen(page)
+        for needle in self.FORBIDDEN_SCREEN_TEXT:
+            self.assertNotIn(needle, text, f"{where} showed internal text {needle!r}")
+        for word in self.RAIL_WORDS:
+            self.assertNotIn(word, text, f"{where} showed the operational rail ({word!r})")
+        self.assertNotIn("{", text, f"{where} showed raw JSON")
+        self.assertTrue(text.strip(), f"{where} was blank")
+
+    def _project_rows(self, page) -> list:
+        return page.evaluate(
+            "fetch('/projects?admin=1').then(r => r.json())"
+        )
+
     def test_21_step_container_gardening_customer_path(self):
         from playwright.sync_api import expect
 
@@ -191,25 +240,24 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         page = context.new_page()
         console_errors = []
         page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
-        gen_payload = {}
-        regen_payloads = []
+        build_starts = []
+        advances = []
 
         def capture(response):
-            url = response.url
             if response.request.method != "POST":
                 return
-            try:
-                data = response.json()
-            except Exception:
-                return
-            if url.endswith("/generate-product"):
-                gen_payload.update(data)
-            elif url.endswith("/ebook/regenerate-cover"):
-                regen_payloads.append(data)
+            url = response.url
+            if url.rstrip("/").endswith("/ebook/build"):
+                try:
+                    build_starts.append(response.json())
+                except Exception:
+                    build_starts.append({})
+            elif "/ebook/build/" in url and url.endswith("/advance"):
+                advances.append(url)
 
         page.on("response", capture)
 
-        # 1-2 Open Factory → Ebook
+        # 1 The customer completes the ebook form.
         page.goto(self.base + "/", wait_until="domcontentloaded")
         page.evaluate("go('factory')")
         page.wait_for_selector("#factoryTypes")
@@ -221,157 +269,112 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         form.locator("input[name='topic']").fill("container gardening")
         form.locator("input[name='audience']").fill("Beginners growing food in pots")
         form.locator("input[name='chapters']").fill("6")
-        select = form.locator("select[name='include_images']")
-        expect(select).to_have_value("Yes")
+        expect(form.locator("select[name='include_images']")).to_have_value("Yes")
 
-        # 5 Generate
+        # 2 One click. The button says what it does.
+        expect(page.locator("#factoryBtn")).to_have_text("Build My Ebook")
         page.click("#factoryBtn")
-        page.get_by_role("button", name="Approve & Save").wait_for(timeout=180000)
 
-        # 6-7 No raw error / valid cover
-        html = page.locator("#ebookPreviewFrame").get_attribute("srcdoc") or ""
-        self.assertTrue(html, "Formatted preview did not render")
-        _assert_clean_text(self, html, where="preview HTML")
-        plain = html_lib.unescape(html)
-        self.assertIn(TITLE, plain)
-        self.assertIn(AUTHOR, plain)
-        self.assertIn('id="chapter-1"', html)
-        self.assertIn('href="#chapter-1"', html)
-        self.assertIn("Why Container Gardening Works for Beginners", html)
-        self.assertTrue(gen_payload.get("ebook_ready"), gen_payload.get("next_action") or gen_payload.get("contamination"))
-        cover = gen_payload.get("cover_design") or {}
-        self.assertTrue(cover.get("selected_layout"), "Cover was not auto-selected")
-        self.assertFalse(cover.get("generic_template"))
-        first_sha = str((cover.get("source") or {}).get("sha256") or "")
-        self.assertTrue(first_sha)
+        # 4 The browser shows understandable progress on its own screen.
+        page.wait_for_selector("[data-view='ebook-build']:not(.hidden)", timeout=30000)
+        page.wait_for_selector("[data-ebook-build-bar]", timeout=30000)
+        self._assert_screen_is_customer_safe(page, where="progress screen")
+        progress_text = self._screen(page)
+        self.assertIn("Preparing your ebook", progress_text)
 
-        # 8-9 Regenerate cover → different valid candidate
-        page.locator('[data-ns="regen-cover"]').first.evaluate("el => el.click()")
-        page.wait_for_timeout(1500)
-        deadline = time.time() + 120
-        while time.time() < deadline and not regen_payloads:
-            page.wait_for_timeout(250)
-        self.assertTrue(regen_payloads, "Regenerate Cover did not return a payload")
-        first_regen = regen_payloads[-1]
-        self.assertTrue(first_regen.get("cover_regenerated"), first_regen)
-        second_sha = str(((first_regen.get("cover") or {}).get("source") or {}).get("sha256") or "")
-        self.assertTrue(second_sha)
-        self.assertNotEqual(second_sha, first_sha, "Regenerated cover reused the previous photograph")
+        # 11 Refresh mid-generation resumes the same build safely.
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_selector("[data-view='ebook-build']:not(.hidden)", timeout=30000)
+        page.wait_for_selector("[data-ebook-build-bar]", timeout=30000)
+        self._assert_screen_is_customer_safe(page, where="after refresh")
 
-        # 10 Simulate regen failure — prior cover survives
-        page.route(
-            "**/ebook/regenerate-cover",
-            lambda route: route.continue_(
-                post_data=json.dumps(
-                    {
-                        **(json.loads(route.request.post_data or "{}") or {}),
-                        "simulate_failure": True,
-                    }
-                )
-            ),
-        )
-        page.locator('[data-ns="regen-cover"]').first.evaluate("el => el.click()")
-        page.wait_for_timeout(1500)
-        fail_row = regen_payloads[-1]
-        self.assertFalse(fail_row.get("cover_regenerated"))
-        self.assertIn("kept", str(fail_row.get("message") or "").lower())
-        page.unroute("**/ebook/regenerate-cover")
+        # 5 The build reaches 100% with no further production clicks.
+        page.wait_for_selector("[data-ebook-build-done]", timeout=600000)
+        done_text = self._screen(page)
+        self.assertIn("Your ebook is ready", done_text)
+        self.assertIn("100%", done_text)
+        self._assert_screen_is_customer_safe(page, where="finished screen")
 
-        html = page.locator("#ebookPreviewFrame").get_attribute("srcdoc") or ""
-        self.assertTrue(html, "Preview missing after cover regenerate")
-        _assert_clean_text(self, html, where="preview HTML after cover")
+        # 3 No production-stage clicks were needed: the only click was Build.
+        #   Every stage after it was driven by the orchestrator poller.
+        self.assertTrue(advances, "the orchestrator was never advanced")
 
-        # 11 Approve All Visuals
-        page.locator("[data-approve-all-visuals]").first.evaluate("el => el.click()")
-        expect(page.locator("#toast")).to_contain_text("Visuals approved")
+        # 2 (cont.) Exactly one project exists, and a repeat click attaches.
+        rows = self._project_rows(page)
+        ebooks = [r for r in rows if r.get("type") == "ebook"]
+        self.assertEqual(len(ebooks), 1, f"one click must create one project, got {len(ebooks)}")
+        pid = ebooks[0]["id"]
+        first_start = build_starts[0] if build_starts else {}
+        self.assertEqual(int(first_start.get("project_id") or 0), int(pid))
+        self.assertTrue(first_start.get("created"), first_start)
 
-        # 12-14 Preview already shown; Approve & Save; visible success
-        with page.expect_response(
-            lambda r: r.url.rstrip("/").endswith("/ebook/save") and r.request.method == "POST",
-            timeout=60000,
-        ) as save_info:
-            page.locator('[data-ns="save"]').first.evaluate("el => el.click()")
-        save_resp = save_info.value
-        self.assertEqual(save_resp.status, 200, save_resp.text())
-        save_body = save_resp.json()
-        self.assertTrue(save_body.get("ok") or save_body.get("id"), save_body)
-        page.locator("#toast").filter(has_text="Project saved successfully").wait_for(timeout=15000)
+        # 7 The finished project is a DRAFT until the customer approves it.
+        opened = page.evaluate(f"fetch('/projects/{pid}').then(r => r.json())")
+        self.assertEqual((opened.get("data") or {}).get("artifact_state"), "DRAFT")
 
-        # 15-16 Navigate away and reopen Saved Projects
-        page.evaluate("typeof go === 'function' && go('dashboard')")
-        with page.expect_response(
-            lambda r: "/projects?" in r.url and r.request.method == "GET",
-            timeout=30000,
-        ) as list_info:
-            page.evaluate("typeof go === 'function' && go('saved')")
-        listed = []
-        try:
-            listed = list_info.value.json()
-        except Exception:
-            listed = []
-        self.assertTrue(
-            any("Container Gardening" in str((row or {}).get("name") or "") for row in listed),
-            listed,
-        )
-        page.wait_for_selector("#savedList")
-        expect(page.locator("#savedList")).to_contain_text("Container Gardening", timeout=30000)
-        before_reopen = _read_call_log(self.call_log)
+        # The five finished actions the customer needs are all present.
+        for selector, label in (
+            ("[data-ebook-open]", "Open Product"),
+            ("[data-ebook-dl-pdf]", "Download PDF"),
+            ("[data-ebook-dl-zip]", "Download ZIP"),
+            ("[data-ebook-changes]", "Make Changes"),
+            ("[data-ebook-approve]", "Approve Product"),
+        ):
+            expect(page.locator(selector)).to_have_text(label)
+
         before_reopen = _read_call_log(self.call_log)
 
-        # 17 Open exact artifact
-        page.locator("#savedList").get_by_role("button", name="Open").first.evaluate("el => el.click()")
-        page.locator('[data-ns="dl-pdf"]').first.wait_for(timeout=30000)
-        reopened_html = page.locator("#ebookPreviewFrame").get_attribute("srcdoc") or ""
-        self.assertEqual(
-            hashlib.sha256(html.encode("utf-8")).hexdigest(),
-            hashlib.sha256(reopened_html.encode("utf-8")).hexdigest(),
-            "Reopened preview HTML is not the same accepted artifact",
-        )
+        # 6 Preview opens, locally, and is clean.
+        #   The book's title is the one the Factory approved at the title stage,
+        #   not the raw string typed into the form, so assert against the
+        #   persisted title. What must hold either way: a real title is shown,
+        #   the leading colon the customer typed is gone, and nothing internal
+        #   leaked into the page.
+        status_now = page.evaluate(f"fetch('/ebook/build/{pid}/status').then(r => r.json())")
+        preview_url = status_now.get("preview_url")
+        book_title = (status_now.get("title") or "").strip()
+        self.assertTrue(preview_url, "finished build exposed no preview")
+        self.assertTrue(book_title, "finished build has no title")
+        self.assertFalse(book_title.startswith(":"), f"stored title kept a leading colon: {book_title!r}")
+        preview_page = context.new_page()
+        preview_resp = preview_page.goto(self.base + preview_url, wait_until="domcontentloaded")
+        self.assertEqual(preview_resp.status, 200)
+        preview_html = html_lib.unescape(preview_page.content())
+        self.assertIn(book_title, preview_html, "preview does not show the book's title")
+        _assert_clean_text(self, preview_html, where="preview HTML")
+        preview_page.close()
 
-        # 18-20 Download PDF and ZIP from the real buttons. Capture the GET
-        # bodies in Python — triggerDownload uses fetch+blob, so expect_download
-        # never fires, and page.evaluate(Array.from(Uint8Array)) times out.
-        pkg = str(
-            ((save_body.get("project") or {}).get("data") or {}).get("package_id")
-            or gen_payload.get("package_id")
-            or ""
-        )
-        self.assertTrue(pkg, "Saved ebook is missing package_id")
+        # 7-8 PDF and ZIP download from the real buttons.
         net_log = []
         page.on("request", lambda r: net_log.append(f"{r.method} {r.url}"))
 
-        def _export_get(url: str, filename: str) -> bool:
-            path = (url or "").split("?")[0]
-            return path.endswith("/" + filename) or path.endswith(filename)
-
         try:
             with page.expect_response(
-                lambda r: r.request.method == "GET" and _export_get(r.url, "ebook.pdf"),
+                lambda r: r.request.method == "GET" and r.url.split("?")[0].endswith("ebook.pdf"),
                 timeout=90000,
             ) as pdf_info:
-                page.locator('[data-ns="dl-pdf"]').first.evaluate("el => el.click()")
+                page.locator("[data-ebook-dl-pdf]").click()
         except Exception:
             raise AssertionError("PDF button did not GET ebook.pdf. requests=" + repr(net_log[-20:]))
         pdf_resp = pdf_info.value
         self.assertEqual(pdf_resp.status, 200, pdf_resp.url)
         pdf_bytes = pdf_resp.body()
-        pdf_path = self.artifacts / "ebook.pdf"
-        pdf_path.write_bytes(pdf_bytes)
         self.assertTrue(pdf_bytes.startswith(b"%PDF"), "Downloaded PDF is not a PDF")
         self.assertGreater(len(pdf_bytes), 8000)
-        self.assertIn(f"/download/{pkg}/ebook.pdf", pdf_resp.url)
+        (self.artifacts / "ebook.pdf").write_bytes(pdf_bytes)
 
         try:
             with page.expect_response(
-                lambda r: r.request.method == "GET" and _export_get(r.url, "package.zip"),
+                lambda r: r.request.method == "GET" and r.url.split("?")[0].endswith("package.zip"),
                 timeout=90000,
             ) as zip_info:
-                page.locator('[data-ns="dl-zip"]').first.evaluate("el => el.click()")
+                page.locator("[data-ebook-dl-zip]").click()
         except Exception:
             raise AssertionError("ZIP button did not GET package.zip. requests=" + repr(net_log[-20:]))
         zip_resp = zip_info.value
         self.assertEqual(zip_resp.status, 200, zip_resp.url)
         zip_bytes = zip_resp.body()
+        self.assertTrue(zip_bytes.startswith(b"PK"), "Downloaded ZIP is not a ZIP")
         zip_path = self.artifacts / "package.zip"
         zip_path.write_bytes(zip_bytes)
         with zipfile.ZipFile(zip_path, "r") as zf:
@@ -383,10 +386,11 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(pdf_bytes).hexdigest(), hashlib.sha256(zip_pdf).hexdigest())
         _assert_clean_text(self, zip_html, where="ZIP HTML")
 
+        # The book itself is real, correctly titled, and free of leaked text.
         import fitz
 
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        pdf_text = "\n".join(page.get_text("text") or "" for page in doc)
+        pdf_text = "\n".join(pg.get_text("text") or "" for pg in doc)
         for page_obj in doc:
             for link in page_obj.get_links() or []:
                 uri = str(link.get("uri") or "")
@@ -394,21 +398,137 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
                 self.assertNotIn("localhost", uri)
         doc.close()
         _assert_clean_text(self, pdf_text, where="PDF text")
-        self.assertIn("Why Container Gardening Works for Beginners", pdf_text)
         self.assertIn(AUTHOR, pdf_text)
+        self.assertIn(book_title, pdf_text, "the PDF does not carry the book's title")
         sheet = _contact_sheet(pdf_bytes, self.artifacts / "ebook_customer_path_contact_sheet.png")
         self.assertTrue(sheet.is_file())
-        # Keep a copy under flask_app/test-results for the passing report.
         public_sheet = ROOT / "test-results" / "ebook_customer_path_contact_sheet.png"
         public_sheet.parent.mkdir(parents=True, exist_ok=True)
         public_sheet.write_bytes(sheet.read_bytes())
         os.environ["EBOOK_CONTACT_SHEET"] = str(public_sheet)
 
-        # 21 Reopen/download made no provider calls
+        # 9-10 Saved Projects reopens the SAME project, and reopening changes
+        #      nothing: same manuscript, same PDF bytes, same package.
+        manuscript_before = hashlib.sha256(
+            ((opened.get("data") or {}).get("content") or "").encode("utf-8")
+        ).hexdigest()
+
+        # Approve Product is the customer's explicit acceptance and the thing
+        # that files the book under Saved Projects. It must not regenerate
+        # anything and must not promote the artifact out of DRAFT.
+        page.locator("[data-ebook-approve]").click()
+        page.wait_for_timeout(2500)
+        approved = page.evaluate(f"fetch('/projects/{pid}').then(r => r.json())")
+        approved_data = approved.get("data") or {}
+        self.assertEqual(approved_data.get("artifact_state"), "DRAFT",
+                         "approving must not promote the artifact out of DRAFT")
+        self.assertEqual(
+            hashlib.sha256((approved_data.get("content") or "").encode("utf-8")).hexdigest(),
+            manuscript_before,
+            "approving regenerated the manuscript",
+        )
+
+        page.evaluate("go('dashboard')")
+        page.evaluate("go('saved')")
+        page.wait_for_selector("#savedList", timeout=30000)
+        expect(page.locator("#savedList")).to_contain_text("Container Gardening", timeout=30000)
+        page.locator("#savedList").get_by_role("button", name="Open").first.evaluate("el => el.click()")
+        page.wait_for_selector("[data-ebook-build-done]", timeout=60000)
+        self._assert_screen_is_customer_safe(page, where="reopened screen")
+
+        reopened = page.evaluate(f"fetch('/projects/{pid}').then(r => r.json())")
+        reopened_data = reopened.get("data") or {}
+        self.assertEqual(
+            hashlib.sha256((reopened_data.get("content") or "").encode("utf-8")).hexdigest(),
+            manuscript_before,
+            "Reopening regenerated the manuscript",
+        )
+        self.assertEqual(reopened_data.get("artifact_state"), "DRAFT")
+        rows_after = self._project_rows(page)
+        self.assertEqual(
+            len([r for r in rows_after if r.get("type") == "ebook"]),
+            1,
+            "reopening created a second project",
+        )
+
+        with page.expect_response(
+            lambda r: r.request.method == "GET" and r.url.split("?")[0].endswith("ebook.pdf"),
+            timeout=90000,
+        ) as pdf2_info:
+            page.locator("[data-ebook-dl-pdf]").click()
+        self.assertEqual(
+            hashlib.sha256(pdf2_info.value.body()).hexdigest(),
+            hashlib.sha256(pdf_bytes).hexdigest(),
+            "Reopening changed the PDF bytes",
+        )
+
+        # 12 No internal cost / provider / error language anywhere on screen.
+        self._assert_screen_is_customer_safe(page, where="final screen")
+        self.assertFalse(
+            [e for e in console_errors if "favicon" not in e.lower()],
+            f"browser console errors: {console_errors[:5]}",
+        )
+
+        # 15 Zero external or paid calls, for the whole journey and for the
+        #    reopen/download half specifically.
         after = _read_call_log(self.call_log)
         self.assertEqual(after.get("paid"), before_reopen.get("paid"))
         self.assertEqual(after.get("pexels_http"), before_reopen.get("pexels_http"))
         self.assertEqual(int(after.get("paid") or 0), 0)
+        context.close()
+
+    def test_22_repeat_build_click_attaches_to_the_same_project(self):
+        """A second Build click must attach, never create a second project."""
+        context = self.browser.new_context()
+        page = context.new_page()
+        page.goto(self.base + "/", wait_until="domcontentloaded")
+
+        fields = {
+            "ebook_title": "Duplicate Protection Check",
+            "author_brand": AUTHOR,
+            "topic": "duplicate protection",
+            "audience": "testers",
+            "chapters": "2",
+            "include_images": "No",
+        }
+        script = (
+            "fetch('/ebook/build', {method:'POST',"
+            "headers:{'Content-Type':'application/json'},"
+            "body: JSON.stringify({fields: %s})}).then(r => r.json())" % json.dumps(fields)
+        )
+        first = page.evaluate(script)
+        second = page.evaluate(script)
+        self.assertTrue(first.get("created"), first)
+        self.assertFalse(second.get("created"), second)
+        self.assertEqual(first.get("project_id"), second.get("project_id"))
+        context.close()
+
+    def test_23_other_product_builders_keep_their_own_flow(self):
+        """Only ebook routes to the build screen. Other builders are untouched."""
+        from playwright.sync_api import expect
+
+        context = self.browser.new_context()
+        page = context.new_page()
+        page.goto(self.base + "/", wait_until="domcontentloaded")
+        page.evaluate("go('factory')")
+        page.wait_for_selector("#factoryTypes")
+
+        for ftype in ("word_search", "crossword", "math_worksheet", "coloring_book"):
+            button = page.locator(f"button[data-ft='{ftype}']")
+            if button.count() == 0:
+                continue
+            button.click()
+            page.wait_for_selector("#factoryForm")
+            # The shared Generate button keeps its own label and its own path.
+            expect(page.locator("#factoryBtn")).to_have_text("Generate Product")
+            self.assertTrue(
+                page.locator("[data-view='ebook-build']").get_attribute("class").find("hidden") >= 0,
+                f"{ftype} must not open the ebook build screen",
+            )
+        # And selecting ebook again restores the one-button label.
+        page.locator("button[data-ft='ebook']").click()
+        page.wait_for_selector("#factoryForm input[name='ebook_title']")
+        expect(page.locator("#factoryBtn")).to_have_text("Build My Ebook")
         context.close()
 
 

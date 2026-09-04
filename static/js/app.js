@@ -18,7 +18,7 @@ const NAV = [
   { _section: "Account" },
   { id: "subscription", label: "Subscription", icon: "M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" },
 ];
-const TITLES = { dashboard: "Dashboard", saved: "Saved Projects", market: "Factory Market Advantage", planning: "Product Planning", factory: "Product Factory", research: "Factory Market Advantage", ebook: "Ebook Builder", "ebook-workspace": "Ebook Project", visual: "Visual Review", publishing: "Publishing Studio", packages: "Platform Packages", ad: "Ad Generator", subscription: "Subscription Plans" };
+const TITLES = { dashboard: "Dashboard", saved: "Saved Projects", market: "Factory Market Advantage", planning: "Product Planning", factory: "Product Factory", research: "Factory Market Advantage", ebook: "Ebook Builder", "ebook-build": "Your Ebook", "ebook-workspace": "Ebook Project", visual: "Visual Review", publishing: "Publishing Studio", packages: "Platform Packages", ad: "Ad Generator", subscription: "Subscription Plans" };
 
 const MARKET_PRODUCT_TYPES = [
   "Ebook", "Workbook", "Checklist", "Coloring Book", "Word Search Book",
@@ -506,6 +506,9 @@ function go(view) {
   // Stale lineage must never bleed across navigations; runNextAction/sendToBuilder
   // re-set this AFTER calling go() for the step that needs it.
   pendingProductProjectId = null;
+  // Retire any in-flight ebook build poller that is not for this screen, so it
+  // cannot keep writing into a view the customer has left.
+  if (view !== "ebook-build") _ebookBuildRun += 1;
   // Consolidate Niche Research into Factory Market Advantage. Old go("research") links still work.
   if (view === "research") view = "market";
   current = view;
@@ -977,8 +980,76 @@ function applySavedSearchFilter(projects) {
   });
 }
 
+const RESUME_STAGE_LABELS = {
+  run_research: "Researching your topic",
+  approve_research: "Research ready to review",
+  generate_title_options: "Choosing a title",
+  approve_title: "Title ready to review",
+  generate_outline_options: "Planning the chapters",
+  approve_outline: "Outline ready to review",
+  generate_manuscript: "Writing the chapters",
+  approve_manuscript: "Chapters ready to review",
+  request_correction: "Improving a chapter",
+  resolve_visuals: "Preparing the pictures",
+  approve_cover: "Cover ready to review",
+  select_design: "Choosing the design",
+  preview_ebook: "Building your preview",
+  run_preflight: "Final checks",
+  export_download: "Ready to download",
+};
+
+async function loadEbookResumeList() {
+  // Books still being built. Saved Projects lists finished products only, so
+  // without this a customer who closed the tab had no way back to their work.
+  const host = document.getElementById("ebookResumeSection");
+  if (!host) return;
+  let items = [];
+  try {
+    const res = await api("/ebook-workspaces/in-progress");
+    items = (res && res.projects) || [];
+  } catch (e) {
+    /* a resume list failure must never break Saved Projects */
+  }
+  if (!items.length) {
+    host.classList.add("hidden");
+    host.innerHTML = "";
+    return;
+  }
+  const rows = items
+    .map((p) => {
+      const step = RESUME_STAGE_LABELS[p.next_action] || "In progress";
+      const done = Number(p.steps_done || 0);
+      const total = Number(p.steps_total || 0);
+      const progress = total ? `Step ${Math.min(done + 1, total)} of ${total}` : "";
+      return `
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-white px-4 py-3">
+          <div class="min-w-0">
+            <p class="font-semibold text-slate-900 truncate">${escapeHtml(p.name || "Untitled ebook")}</p>
+            <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(step)}${progress ? " · " + escapeHtml(progress) : ""}</p>
+          </div>
+          <button type="button" class="btn-primary text-sm shrink-0" data-resume-ebook="${escapeHtml(String(p.id))}">Continue</button>
+        </div>`;
+    })
+    .join("");
+  host.innerHTML = `
+    <div class="rounded-2xl border border-brand-200 bg-brand-50 p-4">
+      <h3 class="text-sm font-bold text-slate-900 mb-1">Continue where you left off</h3>
+      <p class="text-xs text-slate-600 mb-3">These books are still being built. Your finished products are listed below.</p>
+      <div class="space-y-2">${rows}</div>
+    </div>`;
+  host.classList.remove("hidden");
+  host.querySelectorAll("[data-resume-ebook]").forEach((btn) => {
+    const rid = Number(btn.getAttribute("data-resume-ebook"));
+    const row = items.find((p) => Number(p.id) === rid) || {};
+    // One-button builds continue on the customer screen; hand-driven
+    // workspace projects continue on the stage rail they were started on.
+    btn.onclick = () => (row.one_click ? openEbookBuild(rid) : openEbookWorkspace(rid));
+  });
+}
+
 async function loadProjects() {
   refreshAdminControls();
+  loadEbookResumeList();
   const showAll = isAdminMode();
   let projects = [];
   try {
@@ -1544,6 +1615,14 @@ function openProject(p) {
       renderResearch(d);
     }
   } else if (p.type === "ebook") {
+    // A one-button build reopens on the customer's own screen. Only projects
+    // driven by hand through the stage rail reopen on the rail -- showing the
+    // ten-stage rail to a one-click customer is the operational view they were
+    // never meant to see.
+    if (d.ebook_build) {
+      openEbookBuild(p.id);
+      return;
+    }
     if (d.ebook_project_workspace || d.ebook_workspace) {
       openEbookWorkspace(p.id);
       return;
@@ -1618,6 +1697,10 @@ function openProject(p) {
 // the SAME record in place rather than creating a new one.
 async function runNextAction(p) {
   const d0 = (p && p.data) || {};
+  if (_isEbookProject(p) && d0.ebook_build) {
+    await openEbookBuild(p.id);
+    return;
+  }
   if (_isEbookProject(p) && (d0.ebook_project_workspace || d0.ebook_workspace)) {
     await openEbookWorkspace(p.id);
     return;
@@ -3812,6 +3895,11 @@ function selectFactoryType(id) {
       .join("");
   document.getElementById("factoryFormWrap").classList.remove("hidden");
   document.getElementById("factoryOutput").innerHTML = "";
+  // One button, named for what it does. Other builders keep their own label.
+  const factoryBtn = document.getElementById("factoryBtn");
+  if (factoryBtn) {
+    factoryBtn.textContent = id === "ebook" ? "Build My Ebook" : "Generate Product";
+  }
 
   // ── COLORING BOOK: auto-manage pages field for Single Sheet ──────────────
   if (id === "coloring_book") {
@@ -4760,8 +4848,8 @@ function renderEbookEnhancements(out, d, beforeEl) {
     const coverHtml = coverPending
       ? card(
           `<h3 class="text-sm font-bold text-slate-900 mb-2">Choose cover photo</h3>
-           <p class="text-sm text-slate-600 mb-2">${escapeHtml(pexels.status || d.pexels_status || "Search Pexels or upload a photograph.")}</p>
-           <p class="text-xs text-slate-500 mb-3">Query: ${escapeHtml(cover.cover_search_query || pexels.query || "")}</p>
+           <p class="text-sm text-slate-600 mb-2">${escapeHtml(d.cover_photo_status || "Choose a photograph or upload your own.")}</p>
+           
            <div class="grid grid-cols-3 gap-2">${photos.slice(0, 6).map((p) =>
              `<div class="rounded border border-slate-200 overflow-hidden bg-slate-50">
                 <img src="${escapeHtml(p.preview_url || "")}" alt="" class="w-full h-24 object-cover">
@@ -4861,7 +4949,38 @@ async function _askSaveEbook(d) {
 
 function setBusyEl(btn, busy) {
   if (!btn) return;
+  // Disable on the first click and say what is happening. A second click, a
+  // double click, or an impatient click during a slow response must not send
+  // the action twice: the server treats a repeat as already-done, but the
+  // customer should never get that far.
+  if (busy) {
+    if (btn.dataset.busy === "1") return;
+    btn.dataset.busy = "1";
+    if (!btn.dataset.idleLabel) btn.dataset.idleLabel = btn.textContent;
+    btn.textContent = "Working…";
+    btn.setAttribute("aria-busy", "true");
+  } else {
+    delete btn.dataset.busy;
+    if (btn.dataset.idleLabel) {
+      btn.textContent = btn.dataset.idleLabel;
+      delete btn.dataset.idleLabel;
+    }
+    btn.removeAttribute("aria-busy");
+  }
   btn.disabled = busy;
+}
+
+function guardSingleSubmit(btn, handler) {
+  // Ignore extra clicks entirely while a request is in flight.
+  return async (...args) => {
+    if (!btn || btn.dataset.busy === "1" || btn.disabled) return;
+    setBusyEl(btn, true);
+    try {
+      return await handler(...args);
+    } finally {
+      setBusyEl(btn, false);
+    }
+  };
 }
 
 // ---------- Product "Next Steps" workflow ----------
@@ -5860,6 +5979,8 @@ async function runProduct() {
   const requiredMissing = t.fields.filter((f) => f.required && !(fields[f.name] || "").trim());
   if (requiredMissing.length) return toast(`${requiredMissing[0].label} is required`, "error");
   if (factoryType === "ebook") {
+    // The customer's Visuals choice still decides whether photographs are
+    // fetched; the orchestrator reads these from the stored fields.
     const automatic = String(fields.include_images || "Yes").toLowerCase() !== "no";
     if (automatic) {
       fields.visuals_authorized = "true";
@@ -5868,6 +5989,12 @@ async function runProduct() {
       fields.visuals_authorized = "false";
       fields.visual_budget_cap_usd = "0";
     }
+    // ONE BUTTON. The ebook build runs on the workspace orchestrator, which
+    // returns a build envelope rather than a finished product, so it must
+    // never reach renderProduct() -- that combination is what left the
+    // customer looking at a blank result. Every other product type falls
+    // through to the unchanged runProduct()/renderProduct() path below.
+    return startEbookBuild(fields);
   }
 
   // Workflow case: Market Research → Plan → Factory chain. Remember it BEFORE
@@ -6771,6 +6898,285 @@ function resolveCoverGuidedStep(photo, opts) {
   return derived;
 }
 
+// --------------------------------------------------------------------------
+// ONE-BUTTON EBOOK BUILD
+//
+// The customer clicks Build once. Everything after that is this poller talking
+// to the orchestrator, one stage per request. What the customer sees is a
+// progress bar and plain language; what they never see is the ten-stage rail,
+// stage buttons, single-use approval codes, provider names, internal costs,
+// raw payloads or a traceback. The server decides what is done -- this screen
+// only reports what the server says, so a stage cannot look finished because
+// the browser felt optimistic.
+// --------------------------------------------------------------------------
+const EBOOK_BUILD_KEY = "factory_ebook_build_project";
+//: One advance request in flight at a time, ever. Overlapping advances would
+//: race two workers onto the same stage.
+let _ebookBuildBusy = false;
+//: Incremented on every navigation away, so a poller that is mid-request
+//: retires instead of writing into a screen the customer has left.
+let _ebookBuildRun = 0;
+let _ebookBuildProjectId = null;
+//: Pause before retrying a recoverable stage, so a stuck stage is not hammered.
+const EBOOK_RETRY_WAIT_MS = 1500;
+const EBOOK_TICK_MS = 400;
+
+function _ebookBuildRemember(projectId) {
+  _ebookBuildProjectId = projectId;
+  try {
+    window.sessionStorage.setItem(EBOOK_BUILD_KEY, String(projectId));
+  } catch (e) {
+    /* private mode: the build still works, refresh just cannot resume */
+  }
+}
+
+function _ebookBuildForget() {
+  _ebookBuildProjectId = null;
+  try {
+    window.sessionStorage.removeItem(EBOOK_BUILD_KEY);
+  } catch (e) {
+    /* nothing to clean up */
+  }
+}
+
+function _ebookBuildRemembered() {
+  try {
+    const raw = window.sessionStorage.getItem(EBOOK_BUILD_KEY);
+    const id = parseInt(raw, 10);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function _ebookBuildBar(percent) {
+  const pct = Math.max(0, Math.min(100, Number(percent) || 0));
+  return `
+    <div class="w-full rounded-full bg-slate-200 h-3 overflow-hidden" role="progressbar"
+         aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" data-ebook-build-bar>
+      <div class="h-3 rounded-full bg-brand-600 transition-all duration-500" style="width:${pct}%"></div>
+    </div>
+    <p class="mt-2 text-xs font-semibold text-slate-500" data-ebook-build-percent>${pct}%</p>`;
+}
+
+function renderEbookBuild(status) {
+  const root = document.getElementById("ebookBuildRoot");
+  if (!root) return;
+  const s = status || {};
+  const pid = s.project_id || _ebookBuildProjectId;
+  const bookTitle = s.title || "Your ebook";
+
+  if (s.finished) {
+    const pdf = (s.downloads || {}).pdf || "";
+    const zip = (s.downloads || {}).zip || "";
+    const preview = s.preview_url || "";
+    root.innerHTML = card(
+      `<div data-ebook-build-done>
+         <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Finished</p>
+         <h2 class="text-xl font-bold text-slate-900 mt-1">${escapeHtml(bookTitle)}</h2>
+         <p class="text-sm text-slate-600 mt-2 mb-4" data-ebook-build-message>Your ebook is ready</p>
+         ${_ebookBuildBar(100)}
+         <div class="mt-5 flex flex-wrap gap-2">
+           ${preview ? `<button type="button" data-ebook-open class="btn-primary">Open Product</button>` : ""}
+           ${pdf ? `<button type="button" data-ebook-dl-pdf class="${NS_BTN}">Download PDF</button>` : ""}
+           ${zip ? `<button type="button" data-ebook-dl-zip class="${NS_BTN}">Download ZIP</button>` : ""}
+           <button type="button" data-ebook-changes class="${NS_BTN}">Make Changes</button>
+           <button type="button" data-ebook-approve class="${NS_BTN}">Approve Product</button>
+         </div>
+       </div>`
+    );
+    const openBtn = root.querySelector("[data-ebook-open]");
+    if (openBtn) openBtn.onclick = () => window.open(preview, "_blank", "noopener");
+    const pdfBtn = root.querySelector("[data-ebook-dl-pdf]");
+    if (pdfBtn) {
+      pdfBtn.onclick = async () => {
+        try {
+          await triggerDownload(pdf, "ebook.pdf");
+        } catch (e) {
+          toast(e.message || "Download failed.", "error");
+        }
+      };
+    }
+    const zipBtn = root.querySelector("[data-ebook-dl-zip]");
+    if (zipBtn) {
+      zipBtn.onclick = async () => {
+        try {
+          await triggerDownload(zip, "package.zip");
+        } catch (e) {
+          toast(e.message || "Download failed.", "error");
+        }
+      };
+    }
+    const changesBtn = root.querySelector("[data-ebook-changes]");
+    if (changesBtn) changesBtn.onclick = () => openEbookWorkspace(pid);
+    const approveBtn = root.querySelector("[data-ebook-approve]");
+    if (approveBtn) approveBtn.onclick = () => approveEbookProduct(pid, approveBtn);
+    return;
+  }
+
+  if (s.failed) {
+    // Neutral, final, and honest: the completed work really is saved.
+    root.innerHTML = card(
+      `<div data-ebook-build-failed>
+         <h2 class="text-xl font-bold text-slate-900">${escapeHtml(bookTitle)}</h2>
+         <p class="text-sm text-slate-700 mt-2 mb-4" data-ebook-build-message>${escapeHtml(
+           s.message || "We couldn't finish your ebook. Your completed work has been saved."
+         )}</p>
+         ${_ebookBuildBar(s.percent)}
+         <div class="mt-5 flex flex-wrap gap-2">
+           <button type="button" data-ebook-retry class="btn-primary">Try again</button>
+           <button type="button" data-ebook-changes class="${NS_BTN}">Make Changes</button>
+         </div>
+       </div>`
+    );
+    const retry = root.querySelector("[data-ebook-retry]");
+    if (retry) retry.onclick = () => openEbookBuild(pid);
+    const changes = root.querySelector("[data-ebook-changes]");
+    if (changes) changes.onclick = () => openEbookWorkspace(pid);
+    return;
+  }
+
+  root.innerHTML = card(
+    `<div data-ebook-build-progress>
+       <p class="text-xs font-semibold uppercase tracking-wide text-brand-600">Preparing your ebook</p>
+       <h2 class="text-xl font-bold text-slate-900 mt-1">${escapeHtml(bookTitle)}</h2>
+       <p class="text-sm text-slate-600 mt-2 mb-4" data-ebook-build-message>${escapeHtml(
+         s.message || "Preparing your ebook"
+       )}</p>
+       ${_ebookBuildBar(s.percent)}
+       <p class="mt-4 text-xs text-slate-500">You can leave this page. We save each finished step, and you can pick up where you left off from Saved Projects.</p>
+     </div>`
+  );
+}
+
+//: Drive the build to a conclusion. One request in flight, always.
+async function _ebookBuildLoop(projectId, runToken) {
+  if (_ebookBuildBusy) return;
+  _ebookBuildBusy = true;
+  try {
+    for (;;) {
+      if (runToken !== _ebookBuildRun) return; // customer navigated away
+      let status;
+      try {
+        status = await api(`/ebook/build/${projectId}/advance`, { method: "POST", body: "{}" });
+      } catch (e) {
+        // Network or server trouble: report plainly, never a traceback.
+        renderEbookBuild({
+          project_id: projectId,
+          failed: true,
+          percent: 0,
+          message: "We couldn't reach the Factory. Your completed work has been saved.",
+        });
+        return;
+      }
+      if (runToken !== _ebookBuildRun) return;
+      renderEbookBuild(status);
+      if (status.finished) {
+        _ebookBuildForget();
+        loadProjects();
+        return;
+      }
+      if (status.failed) {
+        _ebookBuildForget();
+        return;
+      }
+      // A recoverable wait is not progress. Pause before trying the stage again.
+      await new Promise((r) => setTimeout(r, status.retrying ? EBOOK_RETRY_WAIT_MS : EBOOK_TICK_MS));
+    }
+  } finally {
+    _ebookBuildBusy = false;
+  }
+}
+
+//: BUILD MY EBOOK. One click. A repeat click attaches to the same build --
+//: the server's idempotency key decides that, not this screen.
+async function startEbookBuild(fields) {
+  setBusy("factoryBtn", true);
+  try {
+    const started = await api("/ebook/build", {
+      method: "POST",
+      body: JSON.stringify({ fields }),
+    });
+    const pid = started.project_id;
+    if (!pid) throw new Error("We couldn't start your ebook. Please try again.");
+    _ebookBuildRemember(pid);
+    go("ebook-build");
+    renderEbookBuild(started);
+    // Release the Build button now: the customer has left the form, and a
+    // repeat click is protected by the server's idempotency key, not by a
+    // disabled control.
+    setBusy("factoryBtn", false);
+    if (!started.finished && !started.failed) {
+      await _ebookBuildLoop(pid, _ebookBuildRun);
+    }
+  } catch (e) {
+    const out = document.getElementById("factoryOutput");
+    if (out) {
+      out.innerHTML = card(
+        `<p class="text-rose-600 text-sm font-medium mb-2">${escapeHtml(e.message || String(e))}</p>
+         <p class="text-sm text-slate-600 mb-3">Check the fields above, then try again.</p>
+         <button id="factoryRetryBtn" class="btn-primary">Try again</button>`
+      );
+      const retry = document.getElementById("factoryRetryBtn");
+      if (retry) retry.onclick = () => runProduct();
+    }
+  } finally {
+    setBusy("factoryBtn", false);
+  }
+}
+
+//: Reopen a build -- from Saved Projects, or after a refresh. Never creates a
+//: project: it reads the persisted stage and continues from there.
+async function openEbookBuild(projectId) {
+  if (!projectId) return;
+  _ebookBuildRemember(projectId);
+  go("ebook-build");
+  const root = document.getElementById("ebookBuildRoot");
+  if (root) root.innerHTML = spinner("Preparing your ebook");
+  const runToken = _ebookBuildRun;
+  let status;
+  try {
+    status = await api(`/ebook/build/${projectId}/status`);
+  } catch (e) {
+    if (root) {
+      root.innerHTML = card(
+        `<p class="text-sm text-slate-700">We couldn't open this ebook right now. Your work is saved.</p>`
+      );
+    }
+    return;
+  }
+  if (runToken !== _ebookBuildRun) return;
+  renderEbookBuild(status);
+  if (!status.finished && !status.failed) {
+    await _ebookBuildLoop(projectId, runToken);
+  }
+}
+
+//: The customer's explicit acceptance. Uses the existing transactional,
+//: idempotent Save, which does not regenerate content.
+async function approveEbookProduct(projectId, btn) {
+  if (!projectId) return;
+  if (btn) btn.disabled = true;
+  try {
+    const proj = await api(`/projects/${projectId}`);
+    const data = (proj && proj.data) || {};
+    const saved = await api("/ebook/save", {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: projectId,
+        name: data.title || "Ebook",
+        data,
+      }),
+    });
+    toast(saved.message || "Project saved successfully.");
+    loadProjects();
+  } catch (e) {
+    toast(e.message || "We couldn't save that yet.", "error");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function startEbookWorkspaceFromBuilder() {
   const topic = (document.getElementById("ebookInput").value || "").trim();
   const author = (document.getElementById("ebookAuthor").value || "").trim();
@@ -6840,11 +7246,6 @@ function renderEbookWorkspace(ws) {
           <p class="text-sm text-slate-500 mt-1">Author: <b>${escapeHtml(ws.author || "—")}</b>
             · Artifact: <b>${escapeHtml(ws.artifact_state || "DRAFT")}</b>
             · Rev ${escapeHtml(String(ws.artifact_revision || 1))}</p>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-          <div>Spend: <b>$${Number(budget.spent_usd || 0).toFixed(3)}</b></div>
-          <div>Remaining: <b>$${Number(budget.remaining_usd || 0).toFixed(3)}</b></div>
-          <div class="text-xs text-slate-500">Cap $${Number(budget.cap_usd || 0).toFixed(2)} · ${Number(budget.paid_calls || 0)} paid calls</div>
         </div>
       </div>
       <div class="flex gap-2 overflow-x-auto pb-1" data-ebook-rail>${railHtml}</div>
@@ -7022,7 +7423,7 @@ function showEbookWorkspaceStage(stageId) {
       <h3 class="text-sm font-bold text-slate-900 mb-2">Manuscript · ${escapeHtml(stage.status_label || m.status_label || "")}</h3>
       ${
         m.status === "not_started"
-          ? `<p class="text-sm text-slate-600">Not started. Click <b>Generate Manuscript…</b> for a cost estimate. Nothing is spent until you click <b>Confirm and Generate Manuscript</b>.</p>`
+          ? `<p class="text-sm text-slate-600">Not started. Click <b>Generate Manuscript…</b> to continue. The Factory will write and check each chapter for you.</p>`
           : ""
       }
       ${
@@ -7048,8 +7449,7 @@ function showEbookWorkspaceStage(stageId) {
       ${
         needsCorrection
           ? `<div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-              <p class="text-sm text-amber-900">Request Correction first issues a <b>free $0 estimate</b>. Nothing is spent until you check authorization and click <b>Confirm and Correct Manuscript</b>.</p>
-              <p class="text-xs text-amber-800">Remaining project budget: <b>$${rem.toFixed(3)}</b>. Estimated maximum remaining work if confirmed: <b>$${corrEst.toFixed(3)}</b>. Correction uses the existing manuscript and the exact approved outline — it does not restart research.</p>
+              <p class="text-sm text-amber-900">The Factory will repair the chapters that need it and check them again.</p>
               <button type="button" class="btn-primary text-sm" data-ws-request-correction>Request Correction…</button>
             </div>`
           : ""
@@ -7276,7 +7676,7 @@ function showEbookWorkspaceStage(stageId) {
       </button>`).join("");
     body = `
       <h3 class="text-sm font-bold text-slate-900 mb-2">Design · ${escapeHtml(stage.status_label || "")}</h3>
-      <p class="text-sm text-slate-600 mb-3">Preview and select a professional theme. Theme changes do not rewrite the manuscript. No paid calls.</p>
+      <p class="text-sm text-slate-600 mb-3">Preview and select a professional theme. Theme changes do not rewrite the manuscript.</p>
       <div class="grid gap-2 sm:grid-cols-3 mb-3">${themes || "<p class='text-sm text-slate-500'>Themes unlock after cover approval.</p>"}</div>
       <p class="text-xs text-slate-500 mb-3">Selected: ${escapeHtml(d.selected_theme || "—")} · Design digest: ${escapeHtml((d.design_digest || "").slice(0, 16) || "—")}</p>
       ${d.selected_theme && stage.status !== "approved" ? `<button type="button" class="btn-primary text-sm" data-ws-approve-design>Approve design</button>` : ""}
@@ -7669,7 +8069,7 @@ async function estimateCorrectionInWorkspace(projectId) {
   const confirmEl = document.querySelector("[data-ws-confirm]");
   if (!confirmEl) return;
   confirmEl.classList.remove("hidden");
-  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing correction cost estimate…</p>`;
+  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing the next step…</p>`;
   try {
     const res = await api(`/ebook-workspace/${projectId}/estimate-cost`, {
       method: "POST",
@@ -7681,21 +8081,15 @@ async function estimateCorrectionInWorkspace(projectId) {
     const idempotencyKey =
       "corr-" + String(projectId) + "-" + String(est.confirmation_token || "").slice(0, 12) + "-" + Date.now();
     confirmEl.innerHTML = `
-      <h4 class="text-sm font-bold text-amber-900">Correction estimate (free)</h4>
-      <p class="text-sm text-emerald-800">This estimate cost <b>$0.000</b>. No provider was called.</p>
-      <p class="text-sm text-amber-900">${escapeHtml(est.label || "Request Correction")}</p>
-      <p class="text-sm">Maximum remaining work if you confirm: <b>$${Number(est.max_total_usd != null ? est.max_total_usd : est.estimated_max_usd || 0).toFixed(3)}</b></p>
-      <p class="text-sm">Per-chapter maximum: <b>$${Number(est.per_chapter_max_usd || 0.15).toFixed(3)}</b></p>
-      <p class="text-sm">Accepted chapters: <b>${Number(est.accepted_chapter_count || 0)}</b> · Pending chapters: <b>${Number(est.pending_chapter_count || 0)}</b></p>
-      <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
-      <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "This estimate costs $0. Confirmation required before any paid call.")}</p>
+      <h4 class="text-sm font-bold text-slate-900">Ready to continue</h4>
+      <p class="text-sm text-slate-700">${escapeHtml(est.label || "Request Correction")}</p>
       <label class="flex items-start gap-2 text-sm text-slate-800">
         <input type="checkbox" data-ws-authorize-paid class="mt-1">
-        <span>I authorize a paid correction. Charge $0.15 per attempted chapter, up to the maximum above. Resume starts at the failed chapter only.</span>
+        <span>Repair the chapters that need it. Finished chapters are kept and are not rewritten.</span>
       </label>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
-        <button type="button" class="btn-primary text-sm" data-ws-confirm-correct disabled>Confirm and Correct Manuscript</button>
+        <button type="button" class="btn-primary text-sm" data-ws-confirm-correct disabled>Continue Building</button>
       </div>
     `;
     const authorizeBox = confirmEl.querySelector("[data-ws-authorize-paid]");
@@ -7764,7 +8158,7 @@ async function estimateResearchInWorkspace(projectId) {
   const confirmEl = document.querySelector("[data-ws-confirm]");
   if (!confirmEl) return;
   confirmEl.classList.remove("hidden");
-  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing cost estimate…</p>`;
+  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing the next step…</p>`;
   try {
     const res = await api(`/ebook-workspace/${projectId}/estimate-cost`, {
       method: "POST",
@@ -7776,15 +8170,12 @@ async function estimateResearchInWorkspace(projectId) {
     const idempotencyKey =
       "rr-" + String(projectId) + "-" + String(est.confirmation_token || "").slice(0, 12) + "-" + Date.now();
     confirmEl.innerHTML = `
-      <h4 class="text-sm font-bold text-amber-900">Confirm paid action</h4>
-      <p class="text-sm text-amber-900">${escapeHtml(est.label || "Run research")}</p>
+      <h4 class="text-sm font-bold text-slate-900">Ready to continue</h4>
+      <p class="text-sm text-slate-700">${escapeHtml(est.label || "Run research")}</p>
       <p class="text-sm">One web search plus one AI summary of your book topic.</p>
-      <p class="text-sm">Maximum total: <b>$${Number(est.max_total_usd != null ? est.max_total_usd : est.estimated_max_usd || 0).toFixed(3)}</b></p>
-      <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
-      <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "Confirmation required before any paid call. Opening this page does not spend.")}</p>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
-        <button type="button" class="btn-primary text-sm" data-ws-confirm-research>Confirm and Run Research</button>
+        <button type="button" class="btn-primary text-sm" data-ws-confirm-research>Prepare My Ebook</button>
       </div>
     `;
     confirmEl.querySelector("[data-ws-cancel-confirm]").onclick = async () => {
@@ -7859,7 +8250,7 @@ async function estimateOptionGenerationInWorkspace(projectId, kind) {
   const confirmEl = document.querySelector("[data-ws-confirm]");
   if (!confirmEl) return;
   confirmEl.classList.remove("hidden");
-  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing cost estimate…</p>`;
+  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing the next step…</p>`;
   try {
     const res = await api(`/ebook-workspace/${projectId}/estimate-cost`, {
       method: "POST",
@@ -7871,12 +8262,9 @@ async function estimateOptionGenerationInWorkspace(projectId, kind) {
     const idempotencyKey =
       cfg.idPrefix + "-" + String(projectId) + "-" + String(est.confirmation_token || "").slice(0, 12) + "-" + Date.now();
     confirmEl.innerHTML = `
-      <h4 class="text-sm font-bold text-amber-900">Confirm paid action</h4>
-      <p class="text-sm text-amber-900">${escapeHtml(est.label || cfg.label)}</p>
+      <h4 class="text-sm font-bold text-slate-900">Ready to continue</h4>
+      <p class="text-sm text-slate-700">${escapeHtml(est.label || cfg.label)}</p>
       <p class="text-sm">${escapeHtml(cfg.description)}</p>
-      <p class="text-sm">Maximum total: <b>$${Number(est.max_total_usd != null ? est.max_total_usd : est.estimated_max_usd || 0).toFixed(3)}</b></p>
-      <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
-      <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "Confirmation required before any paid call. Opening this page does not spend.")}</p>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
         <button type="button" class="btn-primary text-sm" data-ws-confirm-options>${escapeHtml(cfg.confirmText)}</button>
@@ -7933,7 +8321,7 @@ async function estimateManuscriptInWorkspace(projectId) {
   const confirmEl = document.querySelector("[data-ws-confirm]");
   if (!confirmEl) return;
   confirmEl.classList.remove("hidden");
-  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing cost estimate…</p>`;
+  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing the next step…</p>`;
   try {
     const res = await api(`/ebook-workspace/${projectId}/estimate-cost`, {
       method: "POST",
@@ -7945,16 +8333,11 @@ async function estimateManuscriptInWorkspace(projectId) {
     const idempotencyKey =
       "ms-" + String(projectId) + "-" + String(est.confirmation_token || "").slice(0, 12) + "-" + Date.now();
     confirmEl.innerHTML = `
-      <h4 class="text-sm font-bold text-amber-900">Confirm paid action</h4>
-      <p class="text-sm text-amber-900">${escapeHtml(est.label || "Generate Manuscript")}</p>
-      <p class="text-sm">Maximum total: <b>$${Number(est.max_total_usd != null ? est.max_total_usd : est.estimated_max_usd || 0).toFixed(3)}</b></p>
-      <p class="text-sm">Per-chapter maximum: <b>$${Number(est.per_chapter_max_usd || 0.15).toFixed(3)}</b></p>
-      <p class="text-sm">Accepted chapters: <b>${Number(est.accepted_chapter_count || 0)}</b> · Pending chapters: <b>${Number(est.pending_chapter_count || 0)}</b></p>
-      <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(est.budget_cap_usd || 0).toFixed(2)}</p>
-      <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "Confirmation required before any paid call. Opening this page does not spend.")}</p>
+      <h4 class="text-sm font-bold text-slate-900">Ready to continue</h4>
+      <p class="text-sm text-slate-700">${escapeHtml(est.label || "Generate Manuscript")}</p>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
-        <button type="button" class="btn-primary text-sm" data-ws-confirm-generate>Confirm and Generate Manuscript</button>
+        <button type="button" class="btn-primary text-sm" data-ws-confirm-generate>Continue Building</button>
       </div>
     `;
     confirmEl.querySelector("[data-ws-cancel-confirm]").onclick = async () => {
@@ -9707,6 +10090,18 @@ buildNav();
     const params = new URLSearchParams(window.location.search || "");
     const view = (params.get("view") || "").trim();
     const pid = params.get("project_id");
+    // A refresh during generation must land back on the same build and pick up
+    // from the stage the server has already persisted -- never restart it, and
+    // never create a second project.
+    const resumeBuild = _ebookBuildRemembered();
+    if (!view && !pid && resumeBuild) {
+      await openEbookBuild(resumeBuild);
+      return;
+    }
+    if (view === "ebook-build" && pid) {
+      await openEbookBuild(parseInt(pid, 10));
+      return;
+    }
     if (!view && !pid) {
       go("dashboard");
       return;

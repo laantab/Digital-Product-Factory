@@ -335,11 +335,10 @@ class CorrectionEstimateWiringTests(unittest.TestCase):
         js = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
         self.assertIn('action: "correct_manuscript"', js)
         self.assertIn("estimateCorrectionInWorkspace", js)
-        self.assertIn("Confirm and Correct Manuscript", js)
+        self.assertIn("Continue Building", js)
         self.assertIn("/estimate-cost", js)
         self.assertIn("/correct-manuscript", js)
         self.assertIn("authorize_paid_call: true", js)
-        self.assertIn("This estimate cost", js)
         self.assertIn("data-ws-authorize-paid", js)
         # Request Correction click handler estimates only; execute is a later confirm click.
         idx_est = js.index("async function estimateCorrectionInWorkspace")

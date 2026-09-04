@@ -186,6 +186,65 @@ def _col(col: str) -> str:
     return col if col in _TABLE_COLS else "0"
 
 
+def list_unfinished_ebook_workspaces() -> list[dict]:
+    """Ebook projects still being built, newest first.
+
+    Saved Projects deliberately lists only finished, downloadable products --
+    a DRAFT workspace is filtered out of it by design. That left a customer who
+    started a book and closed the tab with no way back to it, even though the
+    project was safely stored. This is the resume surface for exactly those
+    projects; it does not change what Saved Projects shows.
+
+    Same visibility rules as the customer list: real user saves only, no
+    system/test/temporary rows.
+    """
+    conn = get_conn()
+    rows = conn.execute(
+        f"SELECT {','.join(_TABLE_COLS)} FROM projects "
+        "WHERE user_saved = 1 AND system_test = 0 AND temporary = 0 "
+        "AND type = 'ebook' ORDER BY updated_at DESC"
+    ).fetchall()
+    conn.close()
+
+    out: list[dict] = []
+    for row in rows:
+        project = _row_to_dict(row)
+        data = project.get("data") if isinstance(project.get("data"), dict) else {}
+        if not (data.get("ebook_project_workspace") or data.get("ebook_workspace")):
+            continue
+        # Finished books belong in Saved Projects -- but only once they are
+        # actually there. A one-button build finishes as a DRAFT the customer
+        # has not yet approved, so it is not an explicit save and Saved
+        # Projects excludes it. Dropping it from here too would strand a
+        # finished book in neither list.
+        if data.get("export_ready") is True and is_customer_saved_product(project):
+            continue
+        if is_customer_clutter_record(project):
+            continue
+        ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+        rail = ws.get("rail") if isinstance(ws.get("rail"), dict) else {}
+        done = sum(
+            1 for v in rail.values()
+            if isinstance(v, dict) and str(v.get("status") or "") == "approved"
+        )
+        out.append(
+            {
+                "id": project.get("id"),
+                "name": project.get("name"),
+                "updated_at": project.get("updated_at"),
+                "next_action": ws.get("next_action") or "",
+                "current_stage": ws.get("current_stage") or "",
+                "steps_done": done,
+                "steps_total": len(rail) or 0,
+                # True when this book was started by the one-button build, so
+                # the browser continues it on the customer screen instead of
+                # the operational stage rail.
+                "one_click": bool(data.get("ebook_build")),
+            }
+        )
+    return out
+
+
 def list_projects(
     include_system: bool = False,
 ) -> list[dict]:

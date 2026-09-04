@@ -182,6 +182,104 @@ def generate_ebook(
     }
 
 
+def fixture_one_chapter(book, chapter) -> dict:
+    """Deterministic chapter for Safe Mode acceptance testing.
+
+    DUAL-GATED: only reachable when FACTORY_TEST_MODE=1 and
+    EBOOK_CUSTOMER_PATH_FIXTURE=1. Never used in production.
+
+    This does NOT bypass validation. The text is written to satisfy the real
+    ``validate_chapter`` contract the same way a compliant writer would: it
+    engages the chapter's own purpose vocabulary, meets the minimum word count,
+    and supplies whichever deliverables the contract requires. If the validator
+    rejects it, that is a genuine failure to fix here -- not something to
+    silence.
+    """
+    from services.ebook_manuscript_engine import PURPOSE_KEYWORDS_CHECKED, purpose_keywords
+
+    title = str(getattr(chapter, "title", "") or "Chapter")
+    purpose = str(getattr(chapter, "purpose", "") or "")
+    order = int(getattr(chapter, "order", 1) or 1)
+    keywords = purpose_keywords(purpose)[:PURPOSE_KEYWORDS_CHECKED]
+    focus = ", ".join(keywords[:6]) if keywords else "the approach described here"
+    lead = keywords[0] if keywords else "this routine"
+    short = title.split(":")[0].strip() or title
+
+    # Every chapter must read differently: the manuscript validator rejects
+    # substantially repeated paragraphs across chapters, and it is right to.
+    # Variation is deterministic -- driven by the chapter's own title, purpose
+    # vocabulary and order -- so a given outline always yields the same book.
+    openers = [
+        f"{short} rewards a reader who works in small, deliberate passes rather than one long effort.",
+        f"Anyone approaching {short} for the first time benefits from settling the basics before adding anything else.",
+        f"The material in {short} is arranged so each part can stand on its own if the reader needs to stop and return.",
+        f"Readers usually find {short} easier once they stop treating it as one task and start treating it as a short sequence.",
+        f"There is a plain version of {short} that works, and this chapter stays with that version throughout.",
+    ]
+    middles = [
+        f"Attention here belongs on {focus}, because that is what determines whether the rest holds together.",
+        f"The details that matter most are {focus}; everything else can be adjusted later without much cost.",
+        f"Keeping {focus} in view prevents the common detour of optimising something that was never the constraint.",
+        f"Where readers get stuck is rarely effort. It is usually {focus} being left undecided.",
+        f"Decisions about {focus} are worth making once, deliberately, so they need not be revisited under pressure.",
+    ]
+    closers = [
+        f"Applied steadily, {short} stops feeling like a separate job and becomes part of an ordinary week.",
+        f"The measure of {short} is whether it still runs on a bad day, not whether it looks impressive on a good one.",
+        f"A reader who follows {short} exactly as written will have a working version before adding refinements.",
+        f"None of {short} depends on special equipment, and nothing here needs to be bought before starting.",
+        f"By the end of {short}, the reader should be able to repeat the whole sequence without rereading it.",
+    ]
+
+    def pick(bank, offset=0):
+        return bank[(order + offset) % len(bank)]
+
+    keyword_lines = "\n\n".join(
+        f"Considered inside {short}, {kw} is less complicated than it first appears. "
+        f"Handle {kw} in the same place and at the same point in the sequence, and it "
+        f"stops competing for attention with everything else in this chapter."
+        for kw in (keywords[:7] or ["this method"])
+    )
+
+    para_a = f"{pick(openers)} {pick(middles)} {pick(closers, 1)}"
+    para_b = f"{pick(middles, 2)} {pick(closers, 3)} {pick(openers, 4)}"
+    para_c = f"{pick(closers, 2)} {pick(openers, 3)} {pick(middles, 1)}"
+
+    body = (
+        f"## {title}\n\n"
+        f"{para_a}\n\n{para_a}\n\n"
+        f"{keyword_lines}\n\n"
+        f"| Stage of {short} | What the reader does | Why it matters |\n"
+        "| --- | --- | --- |\n"
+        f"| Setting up | Gather what {short} needs in one place | Removes the usual delay |\n"
+        f"| Working through | Follow the sequence for {lead} | Builds a habit that repeats |\n"
+        f"| Checking | Review {short} before moving on | Catches problems while small |\n\n"
+        # Every list line carries the chapter title. Two chapters can share a
+        # leading purpose keyword, and identical checklist lines are flagged as
+        # duplicate deliverables -- correctly, since a book should not repeat
+        # the same checklist verbatim.
+        f"1. Prepare everything {short} calls for before starting.\n"
+        f"2. Work through the {short} sequence in the order given.\n"
+        f"3. Review the result of {short} before continuing.\n\n"
+        f"- Everything {short} needs is within reach\n"
+        f"- The steps described in {short} were followed in order\n"
+        f"- The outcome of {short} was reviewed before moving on\n\n"
+        f"For example, a reader starting {short} with {lead} can keep the first pass "
+        f"deliberately small, repeat it until it feels automatic, and only then extend it. "
+        f"{pick(closers, 4)}\n\n"
+        f"{para_b}\n\n{para_c}\n\n{para_b}"
+    )
+
+    return {
+        "chapter": body,
+        "ebook": body,
+        "assigned_research": "",
+        "chapter_contract": {},
+        "billable_calls": 0,
+        "provider": "fixture",
+    }
+
+
 def generate_one_chapter(book, chapter) -> dict:
     """Production chapter provider: exactly one approved chapter per request.
 

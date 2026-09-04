@@ -163,7 +163,7 @@ class ManuscriptExecutionTests(unittest.TestCase):
 
     def test_04_confirm_button_targets_server_endpoint_only(self):
         js = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("Confirm and Generate Manuscript", js)
+        self.assertIn("Continue Building", js)
         self.assertIn("/ebook-workspace/${projectId}/generate-manuscript", js)
         self.assertNotIn("I understand — do not run yet", js)
         self.assertNotIn("intentionally not started from this integration step", js)

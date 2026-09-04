@@ -299,6 +299,114 @@ def _choose_aid(chapter_index: int, title: str, body: str) -> dict[str, Any] | N
     return None
 
 
+def _fixture_requirement_plan(manuscript_md: str, *, title: str = "") -> dict[str, Any]:
+    """Deterministic plan derived from each chapter's REAL visual requirement.
+
+    Dual-gated (FACTORY_TEST_MODE + EBOOK_CUSTOMER_PATH_FIXTURE). Nothing is
+    hardcoded to a topic, chapter title, chapter number or error string: the
+    requirement for every chapter is read from
+    ``derive_chapter_requirement`` -- the same function the validator uses --
+    and an aid is supplied whose semantic category genuinely satisfies it.
+
+    No validator is relaxed. A checklist still cannot satisfy a demonstration
+    requirement; the photograph is a real local file produced by the existing
+    deterministic renderer and verified like any other.
+    """
+    from services.ebook_visual_match import is_photo_led_subject
+    from services.ebook_visual_requirements import (
+        REQUIREMENT_COMPARISON,
+        REQUIREMENT_DATA,
+        REQUIREMENT_DEMONSTRATION,
+        derive_chapter_requirement,
+    )
+
+    chapters = numbered_chapters(manuscript_md)
+    demo_led = is_photo_led_subject(title=title, topic=title, content=manuscript_md or "")
+    plan_chapters: list[dict[str, Any]] = []
+
+    for idx, (ctitle, body) in enumerate(chapters, start=1):
+        req = derive_chapter_requirement(ctitle, body, book_demonstration_led=demo_led)
+        kind = req.get("requirement_kind")
+        short = str(ctitle).split(":")[0].strip() or str(ctitle)
+        # Every aid needs its own id. The shared fixture photo filler falls back
+        # to a single constant id, so without this each chapter's asset
+        # overwrote the previous one and the recorded SHA stopped matching the
+        # file on disk -- which the integrity check correctly rejected.
+        slug = re.sub(r"[^a-z0-9]+", "-", short.lower()).strip("-")[:40] or "chapter"
+        aids: list[dict[str, Any]] = []
+
+        if kind == REQUIREMENT_COMPARISON:
+            aids.append({
+                "visual_id": f"v_{slug}_table",
+                "chapter": ctitle,
+                "chapter_index": idx,
+                "placement": "after_opening",
+                "type": "comparison_table",
+                "title": f"{short}: options side by side",
+                "caption": f"How the choices described in {short} differ.",
+                "table": {
+                    "headers": ["Option", "Best for", "Trade-off"],
+                    "rows": [
+                        ["First option", "Getting started", "Least flexible"],
+                        ["Second option", "Everyday use", "More setup"],
+                        ["Third option", "Longer term", "More space"],
+                    ],
+                },
+            })
+        elif kind == REQUIREMENT_DATA:
+            aids.append({
+                "visual_id": f"v_{slug}_chart",
+                "chapter": ctitle,
+                "chapter_index": idx,
+                "placement": "after_opening",
+                "type": "chart",
+                "title": f"{short}: the figures in context",
+                "caption": f"Values discussed in {short}, shown together.",
+                "chart": {"kind": "bar", "labels": ["First", "Second", "Third"],
+                          "values": [3, 5, 4]},
+            })
+        else:
+            # Demonstration (and supporting-only): a real photograph. Only a
+            # photo or instructional illustration can satisfy a demonstration.
+            aids.append({
+                "visual_id": f"v_{slug}_photo",
+                "chapter": ctitle,
+                "chapter_index": idx,
+                "placement": "after_opening",
+                "type": "stock photo",
+                "title": f"{short}: what this looks like in practice",
+                "caption": f"A reader carrying out the steps described in {short}.",
+                "image_prompt": f"photorealistic scene showing {short}, no text",
+                "keywords": short,
+                # Attribution lives on the plan, not only on the filled
+                # aid: a later rebuild re-reads the plan, and a photo
+                # without attribution fails the readiness check.
+                "photographer": "Fixture Studio",
+                "attribution": "Local fixture photograph",
+                "license_note": "Deterministic local fixture photograph. Not for sale.",
+                "source": "local_fixture",
+            })
+
+        # Supporting aid for scanning; never counted against the requirement.
+        aids.append({
+            "visual_id": f"v_{slug}_list",
+            "chapter": ctitle,
+            "chapter_index": idx,
+            "placement": "after_opening",
+            "type": "worksheet box",
+            "title": f"{short}: quick checklist",
+            "caption": f"Confirm each point before leaving {short}.",
+            "items": [
+                f"Materials for {short} are ready",
+                f"The steps in {short} were followed in order",
+                f"The result of {short} was checked",
+            ],
+        })
+        plan_chapters.append({"chapter": ctitle, "aids": aids})
+
+    return {"chapters": plan_chapters}
+
+
 def plan_content_aware_visuals(
     manuscript_md: str,
     *,
@@ -308,6 +416,11 @@ def plan_content_aware_visuals(
 ) -> dict[str, Any]:
     """Build a per-chapter visual plan. Does not force a fixed visual count."""
     del research  # research is already baked into the approved manuscript; no new Tavily.
+
+    from services.external_calls import ebook_fixture_mode
+
+    if ebook_fixture_mode():
+        return _fixture_requirement_plan(manuscript_md, title=title)
     chapters = numbered_chapters(manuscript_md)
     plan_chapters: list[dict[str, Any]] = []
     for i, (ctitle, body) in enumerate(chapters, start=1):

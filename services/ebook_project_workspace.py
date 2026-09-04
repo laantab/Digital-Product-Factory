@@ -69,6 +69,15 @@ STATUS_APPROVED = "approved"
 STATUS_NEEDS_CORRECTION = "needs_correction"
 STATUS_BLOCKED = "blocked"
 
+# Stages at or after "visuals" consume the manuscript; they never author it.
+# Re-syncing the manuscript on these stages rebuilds ``visual_plan`` from the
+# document's slots, which is lossy by design (see
+# ``services.ebook_document.attach_document_to_data``) and silently discards the
+# resolved asset fields -- photographer, match_status, status, rendered,
+# has_file -- that ``validate_visual_readiness`` requires. Packaging stages must
+# therefore sync with ``sync_manuscript=False``.
+PACKAGING_STAGES = ("visuals", "cover", "design", "preview", "preflight", "export")
+
 STATUS_LABELS = {
     STATUS_NOT_STARTED: "Not started",
     STATUS_IN_PROGRESS: "In progress",
@@ -414,7 +423,8 @@ def record_preview_opened(data: dict) -> dict:
     ws["preview_opened"] = {"digest": digest, "opened_at": _now()}
     _append_history(ws, "preview_opened", digest=digest)
     _recompute_next_action(ws)
-    return sync_document_from_workspace(data)
+    # Preview is a packaging stage: never rebuild the manuscript-owned plan.
+    return sync_document_from_workspace(data, sync_manuscript=False)
 
 
 def revoke_unviewed_preview_approval(data: dict) -> dict:
@@ -439,7 +449,8 @@ def revoke_unviewed_preview_approval(data: dict) -> dict:
         data["release_status"] = ""
     _append_history(ws, "revoke_preview_approval", reason="no_preview_opened")
     _recompute_next_action(ws)
-    return sync_document_from_workspace(data)
+    # Preview is a packaging stage: never rebuild the manuscript-owned plan.
+    return sync_document_from_workspace(data, sync_manuscript=False)
 
 
 def structural_findings_digest(data: dict | None) -> str:
@@ -992,8 +1003,17 @@ def build_manuscript_contract(data: dict):
     return contract
 
 
-def sync_document_from_workspace(data: dict) -> dict:
-    """Push approved workspace fields into EbookDocument + project blob."""
+def sync_document_from_workspace(data: dict, *, sync_manuscript: bool = True) -> dict:
+    """Push approved workspace fields into EbookDocument + project blob.
+
+    ``sync_manuscript=True`` also rebuilds ``visual_plan`` from the document's
+    visual slots. That rebuild is lossy by design -- it keeps only the
+    customer-safe descriptive fields -- so it is correct for a manuscript
+    mutation and wrong for anything else. ``attach_document_to_data`` already
+    documents that packaging must pass False; a cover update is in the same
+    category, because it owns cover fields and must not rewrite the resolved
+    visual assets a completed Visuals stage produced.
+    """
     data = ensure_workspace(data)
     ws = data["ebook_workspace"]
     doc = build_ebook_document_from_project(data=data)
@@ -1041,7 +1061,7 @@ def sync_document_from_workspace(data: dict) -> dict:
     elif not is_approved(ws, "research"):
         set_workflow_stage(doc, "research")
 
-    data = attach_document_to_data(data, doc, sync_manuscript=True)
+    data = attach_document_to_data(data, doc, sync_manuscript=sync_manuscript)
     data["ebook_workspace"] = ws
     data["ebook_project_workspace"] = True
     data["product_type"] = "ebook"
@@ -1577,7 +1597,10 @@ def approve_stage(
         raise ValueError(f"Stage '{stage}' cannot be approved through this endpoint yet.")
 
     _recompute_next_action(ws)
-    return sync_document_from_workspace(data)
+    # Packaging approvals must not rebuild the manuscript-owned visual plan.
+    return sync_document_from_workspace(
+        data, sync_manuscript=stage not in PACKAGING_STAGES
+    )
 
 
 def edit_title(data: dict, *, title: str, subtitle: str, options: list | None = None) -> dict:
@@ -1869,6 +1892,17 @@ def estimate_paid_action(data: dict, action: str) -> dict:
     }
 
 
+class ConfirmationAlreadyUsed(ValueError):
+    """The confirmation for this action was already spent.
+
+    Typed so the route can tell an accidental re-submission -- double click,
+    refresh, Back button, a retried POST after a slow response -- apart from a
+    genuine failure. A re-submission must never charge twice, never regenerate
+    accepted work, and never show the customer internal token wording. The
+    security check itself is unchanged: the token is still single-use.
+    """
+
+
 def consume_confirmation(data: dict, action: str, confirmation_token: str) -> dict:
     """Validate confirmation without executing a paid call (does not mark used)."""
     data = ensure_workspace(data)
@@ -1878,7 +1912,7 @@ def consume_confirmation(data: dict, action: str, confirmation_token: str) -> di
     if not pending:
         raise ValueError("No pending cost estimate. Request an estimate first.")
     if pending.get("used") is True:
-        raise ValueError("Confirmation token has already been used.")
+        raise ConfirmationAlreadyUsed("Confirmation token has already been used.")
     if str(pending.get("action")) != str(action):
         raise ValueError("Confirmation does not match the pending paid action.")
     if not confirmation_token or str(pending.get("confirmation_token")) != str(confirmation_token):
@@ -2475,7 +2509,14 @@ def execute_generate_manuscript(
     if generate_fn is not None and generate_chapter_fn is None:
         raise ValueError(ONESHOT_WORKSPACE_BLOCKED)
     if generate_chapter_fn is None:
-        from services.ebook import generate_one_chapter as generate_chapter_fn
+        # Dual-gated fixture chapters for Safe Mode acceptance testing. Every
+        # validator still runs against them exactly as it does in production.
+        from services.external_calls import ebook_fixture_mode
+
+        if ebook_fixture_mode():
+            from services.ebook import fixture_one_chapter as generate_chapter_fn
+        else:
+            from services.ebook import generate_one_chapter as generate_chapter_fn
 
     research_notes = build_research_notes_for_manuscript(data)
     contract = build_manuscript_contract(data)

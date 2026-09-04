@@ -1694,8 +1694,16 @@ def run_chapter_pipeline(
             repair_attempts += 1
             # Feed the specific validator findings back in so the next attempt
             # repairs rather than rewrites from scratch.
+            #
+            # These MUST be plain strings. ChapterFinding objects are not JSON
+            # serialisable, and this list is carried into provider_payloads and
+            # saved with the project -- passing objects here made the whole
+            # save fail after any local repair, which stranded a part-written
+            # manuscript as permanently "in progress".
             work = copy.copy(contract)
-            work.unresolved_findings = list(findings)
+            work.unresolved_findings = [
+                f"{getattr(f, 'code', '')}: {getattr(f, 'message', str(f))}" for f in findings
+            ]
             work.prior_chapter_body = parsed.body or ""
 
         parsed.accepted = chapter_pass
