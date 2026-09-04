@@ -961,6 +961,9 @@
     .billing-period-tab.active { background:#fff; color:#4338ca; box-shadow:0 1px 2px rgba(0,0,0,.08); }
   </style>
   <script>window.FACTORY_ADMIN_MODE = {{ 'true' if factory_admin_mode|default(false) else 'false' }};</script>
-  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <!-- The asset version is the file's own modification time, so a changed
+       app.js always gets a new URL and the browser cannot serve a stale copy
+       from cache. Nobody should ever have to clear their cache to see a fix. -->
+  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ asset_version }}"></script>
 </body>
 </html>

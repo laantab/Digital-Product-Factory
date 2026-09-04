@@ -2,8 +2,13 @@
 import os
 import re
 
-# Bump this by hand with each release commit/tag (see git tags for history).
-APP_VERSION = "1.3.0"
+# The version is NOT written here. It lives in the plain-text VERSION file at
+# the repository root and is read through one shared helper, so the footer, the
+# health response, the logs and the release check can never disagree. A literal
+# in this file was a number that went stale the moment someone forgot it.
+from services.factory_version import get_version as _get_factory_version
+
+APP_VERSION = _get_factory_version()
 
 from dotenv import load_dotenv
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +28,7 @@ _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _FACTORY_TEST_MODE = str(os.environ.get("FACTORY_TEST_MODE") or "") == "1"
 load_dotenv(os.path.join(_APP_DIR, ".env"), override=not _FACTORY_TEST_MODE)
 
-from flask import Flask, jsonify, make_response, render_template, request, send_file, send_from_directory
+from flask import Flask, Response, jsonify, make_response, render_template, request, send_file, send_from_directory
 import base64
 from io import BytesIO
 
@@ -206,7 +211,20 @@ def pexels_status_route():
 @app.route("/")
 def index():
     admin_on = os.environ.get("ADMIN_MODE", "").strip().lower() in {"1", "true", "yes"}
-    return render_template("index.html", factory_admin_mode=admin_on, app_version=APP_VERSION)
+    # Cache-bust the browser bundle on its own modification time. Without this
+    # a customer can keep running yesterday's JavaScript against today's
+    # server, and the only cure is asking them to clear their cache.
+    try:
+        _js = os.path.join(_APP_DIR, "static", "js", "app.js")
+        asset_version = str(int(os.path.getmtime(_js)))
+    except OSError:
+        asset_version = str(APP_VERSION)
+    return render_template(
+        "index.html",
+        factory_admin_mode=admin_on,
+        app_version=APP_VERSION,
+        asset_version=asset_version,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -3646,6 +3664,116 @@ def ebook_build_status_route(project_id: int):
         return _customer_error(exc, 500, log="ebook build status failed")
 
 
+@app.get("/ebook-workspace/<int:project_id>/manuscript")
+def ebook_workspace_manuscript_route(project_id: int):
+    """Read the finished manuscript. Read-only; generates nothing.
+
+    The customer's book exists as words long before it exists as a PDF, and
+    until now there was no way to read it without the ten-stage workspace.
+    This renders the approved chapters locally so the manuscript can be read
+    the moment it passes its quality gate.
+    """
+    try:
+        from services.ebook_project_workspace import assert_no_paid_side_effects_on_read
+
+        assert_no_paid_side_effects_on_read()
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0], err[1]
+        data = dict(project.get("data") or {})
+        markdown = str(data.get("content") or data.get("ebook") or "")
+        if not markdown.strip():
+            return _error("This ebook has no manuscript yet.", 404)
+
+        import html as _html
+        import re as _re
+
+        title = str(data.get("title") or "Your ebook")
+        subtitle = str(data.get("subtitle") or "")
+        author = str(data.get("author_brand") or data.get("author") or "")
+
+        def _inline(text: str) -> str:
+            """Escape, then honour bold/italic. Raw ** and * never reach the page."""
+            out = _html.escape(text)
+            out = _re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
+            out = _re.sub(r"(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)", r"<em>\1</em>", out)
+            return out
+
+        blocks: list[str] = []
+        seen_title = False
+        for raw in markdown.split("\n"):
+            line = raw.rstrip()
+            if not line.strip():
+                continue
+            heading = _re.match(r"^(#{1,4})\s+(.*)$", line)
+            if heading:
+                text = heading.group(2).strip()
+                # The manuscript opens with its own title and subtitle; the
+                # page header already shows both, so don't print them twice.
+                if len(heading.group(1)) == 1 and not seen_title:
+                    seen_title = True
+                    continue
+                level = min(len(heading.group(1)) + 1, 6)
+                blocks.append(f"<h{level}>{_inline(text)}</h{level}>")
+                continue
+            stripped = line.strip()
+            if (
+                not blocks
+                and stripped.startswith("*")
+                and stripped.endswith("*")
+                and subtitle
+                and stripped.strip("*").strip()[:40] == subtitle[:40]
+            ):
+                continue
+            bullet = _re.match(r"^\s*[-*]\s+(.*)$", line)
+            if bullet:
+                blocks.append(f"<li>{_inline(bullet.group(1).strip())}</li>")
+                continue
+            if stripped.startswith("|"):
+                cells = [c.strip() for c in stripped.strip("|").split("|")]
+                if all(_re.fullmatch(r":?-{2,}:?", c or "") for c in cells):
+                    continue
+                row = "".join(f"<td>{_inline(c)}</td>" for c in cells)
+                blocks.append(f"<table><tr>{row}</tr></table>")
+                continue
+            blocks.append(f"<p>{_inline(stripped)}</p>")
+
+        body = "\n".join(blocks)
+        body = _re.sub(r"(?:<li>.*?</li>\n?)+", lambda m: f"<ul>{m.group(0)}</ul>", body)
+        words = len(markdown.split())
+        chapters = len(_re.findall(r"^##\s+", markdown, flags=_re.M))
+        page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{_html.escape(title)}</title>
+<style>
+ body {{ margin:0; background:#f8fafc; color:#0f172a;
+   font:16px/1.7 Georgia,'Times New Roman',serif; }}
+ .wrap {{ max-width:44rem; margin:0 auto; padding:3rem 1.5rem 6rem; }}
+ header {{ border-bottom:2px solid #0f766e; padding-bottom:1.5rem; margin-bottom:2rem; }}
+ h1 {{ font-size:2rem; line-height:1.25; margin:0 0 .5rem; }}
+ .sub {{ color:#475569; font-size:1.05rem; margin:0 0 .75rem; }}
+ .by {{ color:#0f766e; font-weight:700; font-size:.95rem; letter-spacing:.02em; }}
+ .meta {{ color:#64748b; font-size:.85rem; margin-top:.75rem;
+   font-family:system-ui,sans-serif; }}
+ h2 {{ font-size:1.5rem; margin:2.5rem 0 .75rem; color:#0f172a;
+   border-top:1px solid #cbd5e1; padding-top:1.5rem; }}
+ h3 {{ font-size:1.15rem; margin:1.75rem 0 .5rem; color:#0f766e; }}
+ p {{ margin:0 0 1rem; }}
+ ul {{ margin:0 0 1rem 1.25rem; }} li {{ margin:.25rem 0; }}
+ table {{ border-collapse:collapse; margin:.15rem 0; width:100%;
+   font-family:system-ui,sans-serif; font-size:.9rem; }}
+ td {{ border:1px solid #cbd5e1; padding:.4rem .6rem; }}
+</style></head><body><div class="wrap"><header>
+<h1>{_html.escape(title)}</h1>
+{f'<p class="sub">{_html.escape(subtitle)}</p>' if subtitle else ''}
+{f'<p class="by">{_html.escape(author)}</p>' if author else ''}
+<p class="meta">{chapters} chapters &middot; {words:,} words</p>
+</header>{body}</div></body></html>"""
+        return Response(page, mimetype="text/html")
+    except Exception as exc:  # noqa: BLE001
+        return _customer_error(exc, 500, log="manuscript read failed")
+
+
 @app.get("/ebook-workspaces/in-progress")
 def list_unfinished_ebook_workspaces_route():
     """Ebook projects the customer can continue. Read-only, no paid calls."""
@@ -4563,4 +4691,7 @@ def cover_upload_image_route():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+    # One private line naming the running version, so a log can always be tied
+    # back to the code that produced it.
+    app.logger.info("Digital Product Factory v%s starting on port %s", APP_VERSION, port)
     app.run(host="0.0.0.0", port=port, debug=True)

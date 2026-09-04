@@ -91,6 +91,17 @@ MSG_READY = "Your ebook is ready"
 MSG_RESUMED = "We're continuing from your last completed step."
 MSG_RETRY = "We couldn't complete this step yet. The Factory saved your progress and will try again."
 MSG_FINAL = "We couldn't finish your ebook. Your completed work has been saved."
+MSG_MANUSCRIPT_READY = "Your manuscript is written and ready to read."
+
+
+def _held_after_manuscript(data: dict, state: dict) -> bool:
+    """True when the build is deliberately holding at the finished manuscript."""
+    if str(state.get("paused_after") or "") != "manuscript":
+        return False
+    from services.ebook_project_workspace import is_approved
+
+    ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+    return is_approved(ws, "manuscript")
 
 #: A stage held RUNNING longer than this lost its worker and may be reclaimed.
 STALE_RUNNING_SECONDS = 900
@@ -709,6 +720,17 @@ def advance_build(project_id: int) -> dict:
         database.update_project(project_id, None, data)
         return status_payload(data, project_id)
 
+    # A build can be deliberately held after a stage so the customer can read
+    # what has been produced before more work runs. Reporting progress is
+    # always allowed; running the next stage is not.
+    paused_after = str(state.get("paused_after") or "")
+    if paused_after:
+        from services.ebook_project_workspace import is_approved
+
+        ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+        if is_approved(ws, paused_after):
+            return status_payload(data, project_id)
+
     rec = _stage_record(state, stage)
     if int(rec.get("attempts") or 0) >= MAX_STAGE_ATTEMPTS and rec.get("status") != COMPLETE:
         _release_stage(state, stage, FAILED_FINAL, rec.get("error") or "attempt ceiling reached")
@@ -790,7 +812,11 @@ def status_payload(data: dict, project_id: int) -> dict:
         "retrying": bool(retrying),
         "attempts_left": int(attempts_left),
         "percent": progress_percent(data),
-        "message": MSG_READY if finished else state.get("customer_message") or MSG_WORKING,
+        "message": (
+            MSG_READY if finished
+            else (MSG_MANUSCRIPT_READY if _held_after_manuscript(data, state)
+                  else (state.get("customer_message") or MSG_WORKING))
+        ),
         "artifact_state": str(data.get("artifact_state") or "DRAFT"),
         "downloads": {
             "pdf": (files.get("pdf") or {}).get("url") if isinstance(files.get("pdf"), dict) else None,
@@ -804,4 +830,27 @@ def status_payload(data: dict, project_id: int) -> dict:
             else None
         ),
         "title": str(data.get("title") or ""),
+        "subtitle": str(data.get("subtitle") or ""),
+        # The manuscript is the book. It exists, and is worth showing, long
+        # before the PDF does -- so report it as its own milestone rather than
+        # leaving the customer with only a percentage.
+        "manuscript": _manuscript_milestone(data, project_id),
+        # A build may be deliberately held after a stage so the customer can
+        # read what has been produced before more work runs.
+        "paused_after": str(state.get("paused_after") or ""),
+    }
+
+
+def _manuscript_milestone(data: dict, project_id: int) -> dict:
+    """Chapter count, word count and a link, once the manuscript is approved."""
+    from services.ebook_project_workspace import is_approved
+
+    ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+    text = str(data.get("content") or data.get("ebook") or "")
+    ready = bool(text.strip()) and is_approved(ws, "manuscript")
+    return {
+        "ready": ready,
+        "chapters": len(re.findall(r"^##\s+", text, flags=re.M)) if text else 0,
+        "words": len(text.split()) if text else 0,
+        "url": f"/ebook-workspace/{project_id}/manuscript" if ready else None,
     }

@@ -7036,17 +7036,36 @@ function renderEbookBuild(status) {
     return;
   }
 
+  // The manuscript is the book. Once it has passed its quality check it is
+  // worth reading, whether or not the cover and PDF exist yet -- so show it
+  // as a milestone in its own right instead of only a percentage.
+  const ms = s.manuscript || {};
+  const msPanel = ms.ready
+    ? `<div class="mt-5 rounded-xl border border-emerald-300 bg-emerald-50 p-4" data-ebook-manuscript-ready>
+         <p class="text-sm font-bold text-emerald-900">Manuscript complete</p>
+         <p class="text-sm text-slate-700 mt-1">
+           <span data-ebook-ms-chapters>${escapeHtml(String(ms.chapters || 0))}</span> chapters ·
+           <span data-ebook-ms-words>${escapeHtml(Number(ms.words || 0).toLocaleString())}</span> words
+         </p>
+         <button type="button" data-ebook-open-manuscript class="btn-primary mt-3">Open Manuscript</button>
+       </div>`
+    : "";
+
   root.innerHTML = card(
     `<div data-ebook-build-progress>
        <p class="text-xs font-semibold uppercase tracking-wide text-brand-600">Preparing your ebook</p>
        <h2 class="text-xl font-bold text-slate-900 mt-1">${escapeHtml(bookTitle)}</h2>
+       ${s.subtitle ? `<p class="text-sm text-slate-500 mt-1">${escapeHtml(s.subtitle)}</p>` : ""}
        <p class="text-sm text-slate-600 mt-2 mb-4" data-ebook-build-message>${escapeHtml(
          s.message || "Preparing your ebook"
        )}</p>
        ${_ebookBuildBar(s.percent)}
+       ${msPanel}
        <p class="mt-4 text-xs text-slate-500">You can leave this page. We save each finished step, and you can pick up where you left off from Saved Projects.</p>
      </div>`
   );
+  const msBtn = root.querySelector("[data-ebook-open-manuscript]");
+  if (msBtn && ms.url) msBtn.onclick = () => window.open(ms.url, "_blank", "noopener");
 }
 
 //: Drive the build to a conclusion. One request in flight, always.
@@ -7078,6 +7097,11 @@ async function _ebookBuildLoop(projectId, runToken) {
       }
       if (status.failed) {
         _ebookBuildForget();
+        return;
+      }
+      if (status.paused_after) {
+        // The build is deliberately held so the customer can read what has
+        // been produced. Reporting continues; nothing more is run.
         return;
       }
       // A recoverable wait is not progress. Pause before trying the stage again.
