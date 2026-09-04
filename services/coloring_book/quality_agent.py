@@ -247,6 +247,17 @@ def _analyze_line_art_image(image_b64: str) -> dict[str, Any]:
     ]
 
     try:
+        # This block imported a name that did not exist until the provider-
+        # boundary work added it, so it has never actually run. Repairing the
+        # import must not by itself switch on a paid vision call per generated
+        # page -- that is a deliberate, separately enabled decision. Raising
+        # here (inside the try) keeps the existing behaviour exactly: the
+        # handler below falls through to the deterministic PIL checks.
+        if str(os.environ.get("FACTORY_TEST_MODE") or "") == "1" or str(
+            os.environ.get("FACTORY_VISION_QC") or ""
+        ).strip().lower() not in ("1", "true", "yes"):
+            raise RuntimeError("line-art vision QC disabled (FACTORY_VISION_QC not set)")
+
         from ai_client import get_client, get_model
 
         client = get_client()

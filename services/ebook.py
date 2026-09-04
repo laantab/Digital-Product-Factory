@@ -205,29 +205,55 @@ def generate_one_chapter(book, chapter) -> dict:
         )
     contract_json = json.dumps(contract_payload, ensure_ascii=False)
     prompt = chapter_contract_prompt(book, chapter)
-    text = chat(
-        system=(
-            "You are a professional non-fiction author. Write exactly one chapter. "
-            "Do not write any other chapter. Do not add Disclaimer or Sources as H2 headings. "
-            "Follow the chapter contract exactly. Every named mandatory deliverable is required. "
-            "Repair unresolved defects; never copy finding codes, finding messages, or "
-            "production labels into the chapter. Preserve valid existing chapter material when a "
-            "prior draft is supplied. Paraphrase research; never copy sentences. "
-            "Do not invent statistics, testimonials, guaranteed income, or current market prices."
-        ),
-        user=(
-            f"Write EXACTLY one chapter as Markdown starting with ## {chapter.title}\n"
-            "Do not write any other chapter.\n\n"
-            f"{prompt}\n\n"
-            f"AUTHORITATIVE CHAPTER CONTRACT (do not alter):\n{contract_json}\n\n"
-            f"ASSIGNED RESEARCH (use only this slice):\n{research}\n"
-        ),
+
+    system_prompt = (
+        "You are a professional non-fiction author. Write exactly one chapter. "
+        "Do not write any other chapter. Do not add Disclaimer or Sources as H2 headings. "
+        "Follow the chapter contract exactly. Every named mandatory deliverable is required. "
+        "Repair unresolved defects; never copy finding codes, finding messages, or "
+        "production labels into the chapter. Preserve valid existing chapter material when a "
+        "prior draft is supplied. Paraphrase research; never copy sentences. "
+        "Do not invent statistics, testimonials, guaranteed income, or current market prices."
     )
+    user_prompt = (
+        f"Write EXACTLY one chapter as Markdown starting with ## {chapter.title}\n"
+        "Do not write any other chapter.\n\n"
+        f"{prompt}\n\n"
+        f"AUTHORITATIVE CHAPTER CONTRACT (do not alter):\n{contract_json}\n\n"
+        f"ASSIGNED RESEARCH (use only this slice):\n{research}\n"
+    )
+
+    # The two tasks the Local Manuscript Pilot may route to Factory AI. A chapter
+    # carrying unresolved findings is a repair pass, not a fresh write. No other
+    # Factory AI task is tagged, so nothing else changes provider.
+    from services.ai_providers import routes_local
+
+    task = "chapter_repair" if contract_payload.get("unresolved_findings") else "chapter"
+
+    if routes_local(task):
+        from ai_client import chat_with_meta
+
+        generated = chat_with_meta(task=task, system=system_prompt, user=user_prompt)
+        text = generated.text
+        billable_calls = int(generated.billable_calls)
+        provider = generated.provider
+    else:
+        # Paid path, deliberately untouched: still the module-level ``chat``
+        # name, so every existing caller, mock and patch behaves exactly as it
+        # did before the provider boundary existed.
+        text = chat(system=system_prompt, user=user_prompt)
+        billable_calls = 1
+        provider = "openai"
+
     return {
         "chapter": text,
         "ebook": text,
         "assigned_research": research,
         "chapter_contract": contract_payload,
+        # 0 for a local generation, 1 for OpenAI. Drives the Factory's meter so
+        # a locally written chapter is not charged.
+        "billable_calls": billable_calls,
+        "provider": provider,
     }
 
 

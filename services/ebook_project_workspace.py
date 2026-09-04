@@ -2347,12 +2347,18 @@ def execute_generate_manuscript(
     idempotency_key: str,
     generate_fn=None,
     generate_chapter_fn=None,
+    persist_progress=None,
 ) -> dict:
     """Server-authoritative manuscript generation after explicit cost confirmation.
 
     Production uses the chapter pipeline (one approved chapter per provider
     request). ``generate_chapter_fn`` is injectable for tests (zero paid calls).
     One-shot ``generate_fn`` is blocked and cannot create Export Ready workspace ebooks.
+
+    ``persist_progress`` is an optional callable taking the working ``data``
+    dict. When supplied it is invoked after every chapter that passes
+    validation, so completed chapters survive an interruption mid-generation.
+    Callers that do not pass it keep the previous behaviour exactly.
     """
     if generate_fn is not None and generate_chapter_fn is None:
         raise ValueError(ONESHOT_WORKSPACE_BLOCKED)
@@ -2516,12 +2522,36 @@ def execute_generate_manuscript(
             )
         )
     max_calls = max(1, int(auth_max / CHAPTER_UNIT_USD + 1e-9))
+
+    def _persist_accepted(accepted_now) -> None:
+        """Save each chapter the moment it passes validation.
+
+        Generation runs inside one request. Without this, an interruption --
+        browser refresh, Flask error, provider failure, the customer closing the
+        app -- discarded every chapter produced in the call, because the project
+        was only written after the whole loop returned. Chapters that already
+        passed the quality gate are customer work and must survive.
+
+        Writes through the existing project store. No second persistence system.
+        """
+        ws["accepted_chapters"] = [
+            {"order": c.order, "title": c.title, "body": c.body} for c in accepted_now
+        ]
+        ws["chapter_progress"] = {
+            "accepted_count": len(accepted_now),
+            "total_chapters": len(book_contract.chapters),
+            "updated_at": _now(),
+        }
+        if persist_progress is not None:
+            persist_progress(data)
+
     pipeline = run_chapter_pipeline(
         book_contract,
         generate_chapter_fn=generate_chapter_fn,
         accepted_chapters=stored_accepted,
         stop_on_failure=True,
         max_chapter_calls=max_calls,
+        on_chapter_accepted=_persist_accepted,
     )
     manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
     ws["accepted_chapters"] = [
@@ -2530,6 +2560,8 @@ def execute_generate_manuscript(
     ]
     ws["chapter_pipeline"] = {
         "chapter_calls": pipeline.get("chapter_calls"),
+        "billable_chapter_calls": pipeline.get("billable_chapter_calls"),
+        "providers_used": pipeline.get("providers_used"),
         "failed_orders": pipeline.get("failed_orders"),
         "skipped_ungenerated": pipeline.get("skipped_ungenerated"),
         "assembled_complete": pipeline.get("assembled_complete"),
@@ -2555,8 +2587,17 @@ def execute_generate_manuscript(
 
     # Charge only the chapter provider requests that ran. Later chapters after
     # a failure are not generated and not charged.
+    #
+    # Two distinct numbers, kept separate on purpose:
+    #   chapter_calls          - generation attempts made (telemetry)
+    #   billable_chapter_calls - attempts the Factory's meter charges for
+    # A chapter written by local Factory AI reports 0 billable calls, so it
+    # costs the customer $0.00. This is the Factory's administered price, not a
+    # measurement of the provider's real cost. Falls back to chapter_calls when
+    # the key is absent, so existing callers charge exactly as before.
     chapter_calls = int(pipeline.get("chapter_calls") or 0)
-    charge = round(min(chapter_calls * CHAPTER_UNIT_USD, auth_max, remaining), 4)
+    billable_calls = int(pipeline.get("billable_chapter_calls", chapter_calls) or 0)
+    charge = round(min(billable_calls * CHAPTER_UNIT_USD, auth_max, remaining), 4)
     ledger["spent_usd"] = round(spent + charge, 4)
     ledger["remaining_usd"] = round(cap - float(ledger["spent_usd"]), 4)
     ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + chapter_calls

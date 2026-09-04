@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -97,6 +98,41 @@ def _title_in_html(cover: dict) -> bool:
         return False
     html = (cover.get("preview_html") or "").lower()
     return _norm(title)[:24] in _norm(html) or title.lower() in html
+
+
+def _vision_qc_enabled() -> bool:
+    """Whether the paid vision QC call may run.
+
+    Off by default and never in test mode. This check was dead for a long time
+    (it imported a name that did not exist), so switching it on is a real
+    change in spend: one image-model call per cover attempt. Turning it on is a
+    deliberate decision, made with FACTORY_VISION_QC=1, not a side effect of
+    repairing the import.
+    """
+    if str(os.environ.get("FACTORY_TEST_MODE") or "") == "1":
+        return False
+    return str(os.environ.get("FACTORY_VISION_QC") or "").strip().lower() in ("1", "true", "yes")
+
+
+def _vision_qc_unavailable(reason: str) -> dict[str, Any]:
+    """Result for a QC that could not run.
+
+    Critically this is NOT a pass. A quality check that did not happen must
+    never be recorded as a check that succeeded -- that is what previously let
+    every cover claim an affirmative vision PASS it had never earned.
+
+    ``skipped`` stays True so the surrounding retry/regeneration control flow is
+    byte-for-byte identical to before: callers still stop retrying rather than
+    looping on a check that cannot run. What changes is only the claim being
+    made -- unavailable and needing review, instead of passed.
+    """
+    return {
+        "passed": False,
+        "skipped": True,
+        "available": False,
+        "review_required": True,
+        "reason": reason,
+    }
 
 
 def evaluate_cover_image_vision_qc(cover: dict) -> dict[str, Any] | None:
@@ -248,6 +284,9 @@ def evaluate_cover_image_vision_qc(cover: dict) -> dict[str, Any] | None:
             ]
         )
 
+    if not _vision_qc_enabled():
+        return _vision_qc_unavailable("Cover image vision QC is turned off")
+
     try:
         from ai_client import get_client, get_model
 
@@ -357,8 +396,8 @@ def evaluate_cover_image_vision_qc(cover: dict) -> dict[str, Any] | None:
                 and result["matches_word_search_book"]
             )
         return result
-    except Exception:
-        return {"passed": True, "skipped": True, "reason": "Cover image vision QC unavailable"}
+    except Exception as exc:  # noqa: BLE001
+        return _vision_qc_unavailable(f"Cover image vision QC unavailable: {exc}")
 
 
 def evaluate_black_history_cover_image(cover: dict) -> dict[str, Any] | None:

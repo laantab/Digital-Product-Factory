@@ -24,6 +24,17 @@ load_dotenv(override=str(os.environ.get("FACTORY_TEST_MODE") or "") != "1")
 # `max_completion_tokens` is used instead of `max_tokens`.
 MODEL = "gpt-5.4"
 
+
+def get_model() -> str:
+    """Active OpenAI model id.
+
+    Exists because two vision-QC modules already import this name. Without it
+    they raised ImportError, which their broad ``except Exception`` swallowed --
+    and in the cover case that turned a dead quality check into an automatic
+    PASS. See services/cover_quality_agent.py.
+    """
+    return MODEL
+
 # Placeholder patterns that indicate a non-functional key
 _PLACEHOLDER_PREFIXES = (
     "your_", "paste_your", "replace_this", "placeholder",
@@ -87,8 +98,26 @@ def get_client() -> OpenAI:
     return _client
 
 
-def chat(system: str, user: str, max_completion_tokens: int = 8192) -> str:
-    """Run a single-turn chat completion and return the text content."""
+def chat(system: str, user: str, max_completion_tokens: int = 8192,
+         task: str | None = None) -> str:
+    """Run a single-turn chat completion and return the text content.
+
+    ``task`` is optional and backward compatible. When it is omitted -- which is
+    every pre-existing call site in the Factory -- this function does not even
+    import the provider layer, and behaves exactly as it always has: OpenAI.
+
+    Only tasks the Local Manuscript Pilot has explicitly opted in
+    (``chapter``, ``chapter_repair``) can route elsewhere. If a routed local
+    generation fails, the error propagates. It is never silently retried
+    against a paid provider.
+    """
+    if task:
+        from services.ai_providers import generate, routes_local
+
+        if routes_local(task):
+            return generate(system, user, max_completion_tokens, task=task).text
+
+    # ---- legacy path: unchanged from before the provider boundary existed ----
     client = get_client()
     resp = client.chat.completions.create(
         model=MODEL,
@@ -99,6 +128,22 @@ def chat(system: str, user: str, max_completion_tokens: int = 8192) -> str:
         ],
     )
     return (resp.choices[0].message.content or "").strip()
+
+
+def chat_with_meta(system: str, user: str, max_completion_tokens: int = 8192,
+                   task: str | None = None):
+    """Like :func:`chat` but returns a ProviderResult.
+
+    Used by the manuscript pipeline, which needs ``billable_calls`` so a local
+    chapter is charged $0 by the Factory meter while an OpenAI chapter is
+    charged as before.
+    """
+    from services.ai_providers import ProviderResult, generate, routes_local
+
+    if routes_local(task):
+        return generate(system, user, max_completion_tokens, task=task)
+    text = chat(system, user, max_completion_tokens)
+    return ProviderResult(text=text, provider="openai", model=MODEL, billable_calls=1)
 
 
 def _parse_json(text: str) -> dict:

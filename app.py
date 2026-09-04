@@ -803,6 +803,16 @@ def generate_ebook_workspace_manuscript_route(project_id: int):
         if err:
             return err[0], err[1]
         data = dict(project.get("data") or {})
+
+        def _persist_progress(partial: dict) -> None:
+            """Save after every chapter that passes validation.
+
+            Generation is a single long request. Previously the project was
+            written only after the whole chapter loop returned, so an
+            interruption part way through threw away every finished chapter.
+            """
+            database.update_project(project_id, None, partial)
+
         out = execute_generate_manuscript(
             data,
             confirmation_token=str(body.get("confirmation_token") or ""),
@@ -811,6 +821,7 @@ def generate_ebook_workspace_manuscript_route(project_id: int):
             outline_digest_expected=str(body.get("outline_digest") or ""),
             max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
             idempotency_key=str(body.get("idempotency_key") or ""),
+            persist_progress=_persist_progress,
         )
         data = out["data"]
         project = database.update_project(project_id, None, data) or project

@@ -73,6 +73,10 @@ class ChapterContract:
     required_workflow: str = ""
     required_checklist: str = ""
     min_useful_words: int = 600
+    #: Substantive-depth target for this chapter, derived from the book's own
+    #: word range and chapter count (see chapter_target_words). 0 means "no
+    #: target supplied" and the writer sees only the minimum, as before.
+    target_words: int = 0
     prohibited_repetition: list[str] = field(default_factory=list)
     prohibited_claims: list[str] = field(default_factory=list)
     acceptance_criteria: list[str] = field(default_factory=list)
@@ -170,6 +174,72 @@ class ParsedChapter:
     examples: list[str] = field(default_factory=list)
     citations: list[str] = field(default_factory=list)
     accepted: bool = False
+    #: Set when bounded local repair was exhausted and the chapter still failed
+    #: the quality gate. The Factory does NOT escalate to a paid provider on its
+    #: own -- this flags the chapter for the customer to decide about.
+    needs_premium_enhancement: bool = False
+
+
+#: Bounded local repair: initial generation, then at most two repair passes.
+#: Local retries are free, but they must still terminate.
+MAX_LOCAL_REPAIR_ATTEMPTS = 2
+
+#: Half-width of the target band shown to the writer, in words. The target is
+#: guidance, never an exact quota, so chapters may vary by purpose.
+CHAPTER_TARGET_BAND = 50
+
+#: How many purpose keywords the validator examines. Shared with the writer so
+#: both sides of the contract describe the same requirement.
+PURPOSE_KEYWORDS_CHECKED = 12
+
+_PURPOSE_STOPWORDS = frozenset({
+    "about", "their", "there", "which", "where", "these", "those", "should", "would",
+})
+
+
+def purpose_keywords(purpose: str) -> list[str]:
+    """Significant words of a chapter purpose.
+
+    Single source of truth. The validator requires the chapter body to engage
+    these; the writer prompt now lists the same words. Previously the writer was
+    shown only the purpose prose and had to guess which vocabulary mattered,
+    while the validator silently scored lexical overlap -- writer and validator
+    were enforcing the same rule from different information.
+    """
+    return [
+        t for t in re.findall(r"[A-Za-z]{5,}", (purpose or "").lower())
+        if t not in _PURPOSE_STOPWORDS
+    ]
+
+
+def purpose_hit_threshold(tokens: list[str]) -> int:
+    """How many purpose keywords must appear. Unchanged from the original rule."""
+    return max(2, min(4, len(tokens) // 4))
+
+
+def chapter_target_words(book_word_min: int, book_word_max: int, chapter_count: int) -> int:
+    """Per-chapter depth target derived from the book's own contract.
+
+    The writer previously received only ``MINIMUM USEFUL DEPTH``. A model that
+    follows instructions well therefore wrote to the floor, landing the finished
+    book at the very bottom of its permitted range, while a model that ignored
+    the instruction happened to land near the top. Neither was aiming at the
+    product the contract describes.
+
+    The midpoint of the allowed range is used rather than the maximum, so the
+    target describes a solid book rather than the largest one the contract
+    tolerates. Returns 0 when the contract has no usable range.
+    """
+    if chapter_count <= 0:
+        return 0
+    lo = max(0, int(book_word_min or 0))
+    hi = max(0, int(book_word_max or 0))
+    if hi <= 0 and lo <= 0:
+        return 0
+    if hi < lo:
+        lo, hi = hi, lo
+    midpoint = (lo + hi) / 2 if hi else lo
+    return int(round(midpoint / chapter_count / 10.0) * 10)
 
 
 # ---------------------------------------------------------------------------
@@ -605,6 +675,13 @@ def build_book_contract(data: dict | None) -> BookContract:
     titles = [c["title"] for c in remapped]
     catalog = event_photo_catalog_by_title()
     use_catalog = uses_event_photo_catalog(titles)
+
+    # Derive the per-chapter depth target from the same word range this book
+    # contract will carry, so writer and validator describe one product.
+    _book_min = 12000 if use_catalog else 4000
+    _book_max = 16000 if use_catalog else 12000
+    _chapter_target = chapter_target_words(_book_min, _book_max, len(remapped))
+
     chapters: list[ChapterContract] = []
     for item in remapped:
         spec = catalog.get(normalize_chapter_title(item["title"])) if use_catalog else None
@@ -622,6 +699,7 @@ def build_book_contract(data: dict | None) -> BookContract:
                     required_workflow=spec.required_workflow,
                     required_checklist=spec.required_checklist,
                     min_useful_words=spec.min_useful_words,
+                    target_words=_chapter_target,
                     prohibited_repetition=list(spec.prohibited_repetition),
                     prohibited_claims=list(spec.prohibited_claims),
                     acceptance_criteria=list(spec.acceptance_criteria),
@@ -644,6 +722,7 @@ def build_book_contract(data: dict | None) -> BookContract:
                     required_workflow="chapter-workflow" if need_flow else "",
                     required_checklist="chapter-checklist" if need_check else "",
                     min_useful_words=500,
+                    target_words=_chapter_target,
                     acceptance_criteria=["Cover the approved purpose with usable steps"],
                 )
             )
@@ -699,6 +778,53 @@ def format_unresolved_findings_for_prompt(findings: list[str]) -> list[str]:
                 "Do not copy the defect code or defect message into the chapter. "
                 "Keep the surrounding operational prose."
             )
+        elif code == "MISSING_REQUIRED_TABLE":
+            # Name the defect AND the exact accepted format. "Fix the chapter"
+            # is not actionable when the failure is a format the model may
+            # believe it already satisfied in prose.
+            instruction = (
+                "ADD the required Markdown table. The chapter currently has no "
+                "real Markdown table, and prose describing a comparison does not "
+                "satisfy the requirement. Insert a pipe table with a header row "
+                "and a separator row, shaped like:\n"
+                "    | Column A | Column B |\n"
+                "    | --- | --- |\n"
+                "    | Value | Value |\n"
+                "  Use headings and rows that serve this chapter's required table "
+                "spec named in the contract above. Do not copy the illustration. "
+                "Do not quote this finding as a heading or bold label."
+            )
+        elif code == "THIN_CHAPTER":
+            instruction = (
+                "EXPAND this chapter with additional useful material until it is "
+                "comfortably above the stated minimum and near the target depth. "
+                "Add concrete examples, specific explanations, actionable steps or "
+                "supporting evidence. Do NOT pad with restatement, filler "
+                "sentences, or a summary of what was already said."
+            )
+        elif code == "PURPOSE_MISALIGN":
+            # Pass the specific unaddressed keywords straight through, so the
+            # repair pass knows exactly what to write about rather than being
+            # told only that something was wrong.
+            missing = ""
+            marker = "not addressed:"
+            if marker in text.lower():
+                idx = text.lower().rindex(marker) + len(marker)
+                missing = text[idx:].strip().rstrip(".")
+            instruction = (
+                "REFOCUS the chapter on the approved CHAPTER PURPOSE stated in the "
+                "contract above. Keep valid existing material, and add substantive "
+                "content that directly engages the purpose."
+            )
+            if missing:
+                instruction += (
+                    f" The chapter does not yet address these required purpose "
+                    f"concepts: {missing}. Write real content about each of them, "
+                    "using those words, rather than paraphrasing around them. Do "
+                    "not simply insert the words into existing sentences."
+                )
+            else:
+                instruction += " Use the purpose's own vocabulary."
         elif code.startswith("MISSING_") or text.upper().startswith("MISSING_"):
             instruction = (
                 "ADD the missing required deliverable named in the contract above. "
@@ -725,8 +851,19 @@ def chapter_contract_prompt(book: BookContract, chapter: ChapterContract) -> str
         f"WRITE ONLY CHAPTER {chapter.order}: {chapter.title}",
         "Use that exact string as the ## heading. Do not write other chapters.",
         f"PURPOSE:\n{chapter.purpose}",
-        "READER QUESTIONS TO ANSWER:",
     ]
+    _pk = purpose_keywords(chapter.purpose)
+    if _pk:
+        _checked = _pk[:PURPOSE_KEYWORDS_CHECKED]
+        lines.append(
+            "PURPOSE CONCEPTS THIS CHAPTER MUST ENGAGE (mandatory): "
+            + ", ".join(_checked)
+            + f"\n  At least {purpose_hit_threshold(_pk)} of these must be genuinely "
+            "addressed in the chapter body, using this vocabulary rather than "
+            "generic paraphrase. Write about THIS chapter's specific subject; do "
+            "not open with generic scene-setting about the audience's day."
+        )
+    lines.append("READER QUESTIONS TO ANSWER:")
     for q in chapter.reader_questions:
         lines.append(f"- {q}")
     if chapter.required_facts:
@@ -738,7 +875,18 @@ def chapter_contract_prompt(book: BookContract, chapter: ChapterContract) -> str
         for c in chapter.required_citations:
             lines.append(f"- {c}")
     if chapter.required_table:
-        lines.append(f"REQUIRED MARKDOWN TABLE: {chapter.required_table}")
+        lines.append(
+            f"REQUIRED MARKDOWN TABLE (mandatory deliverable): {chapter.required_table}\n"
+            "  This must be a real Markdown pipe table with a header row and a "
+            "separator row, shaped like:\n"
+            "    | Column A | Column B |\n"
+            "    | --- | --- |\n"
+            "    | Value | Value |\n"
+            "  Use column headings and rows that genuinely serve this chapter's "
+            "purpose; do not copy the illustration above. Prose that merely "
+            "describes a comparison does NOT satisfy this requirement -- the "
+            "table must be present as Markdown."
+        )
     if chapter.required_workflow:
         lines.append(f"REQUIRED NUMBERED WORKFLOW: {chapter.required_workflow}")
     if chapter.required_checklist:
@@ -782,6 +930,18 @@ def chapter_contract_prompt(book: BookContract, chapter: ChapterContract) -> str
             + chapter.prior_chapter_body.strip()[:12000]
         )
     lines.append(f"MINIMUM USEFUL DEPTH: {chapter.min_useful_words} words of specific, usable content.")
+    if chapter.target_words:
+        _lo = max(chapter.min_useful_words, chapter.target_words - CHAPTER_TARGET_BAND)
+        _hi = chapter.target_words + CHAPTER_TARGET_BAND
+        lines.append(
+            f"TARGET DEPTH: approximately {_lo}-{_hi} words. This is guidance, not "
+            "an exact quota -- a chapter may run shorter or longer where its "
+            "purpose genuinely warrants it, but stay above the minimum.\n"
+            "  Do NOT add filler, restatement, or padding to reach the target. "
+            "Reach it with useful material: concrete examples, specific "
+            "explanations, actionable steps, and supporting evidence. A shorter "
+            "chapter of substance is better than a longer chapter of padding."
+        )
     lines.append("Do not pad with repeated hedges. Do not add Conclusion/Disclaimer/Sources as H2.")
     if book.editorial_rules:
         lines.append("LOCKED EDITORIAL RULES:")
@@ -828,6 +988,33 @@ def extract_list_blocks(text: str) -> list[str]:
     return blocks
 
 
+def _chapter_features(body: str) -> dict[str, list[str]]:
+    """Structured deliverables detected in a chapter body.
+
+    Single source of truth so that a chapter parsed WITH a '## ' heading and the
+    same chapter parsed WITHOUT one yield identical structure. Previously the
+    no-heading fallback returned a body with no tables at all, which made a
+    valid Markdown table invisible to the validator and produced a permanent
+    MISSING_REQUIRED_TABLE regardless of content.
+    """
+    lists = extract_list_blocks(body)
+    numbered = [b for b in lists if re.search(r"^\s*\d+\.", b, re.M)]
+    bullets = [b for b in lists if not re.search(r"^\s*\d+\.", b, re.M)]
+    examples = []
+    for label in ("hypothetical", "example scenario", "planning scenario", "sample", "example"):
+        if re.search(label, body, re.I):
+            examples.append(label)
+    citations = re.findall(r"https?://[^\s)]+", body)
+    citations += re.findall(r"(?i)(?:source|according to)[:\s]+([A-Za-z0-9 ./-]{3,80})", body)
+    return {
+        "tables": extract_markdown_tables(body),
+        "checklists": bullets,
+        "workflows": numbered,
+        "examples": examples,
+        "citations": citations,
+    }
+
+
 def split_front_chapters_back(md_text: str) -> tuple[str, list[ParsedChapter], str]:
     text = md_text or ""
     matches = list(_H2_RE.finditer(text))
@@ -840,25 +1027,17 @@ def split_front_chapters_back(md_text: str) -> tuple[str, list[ParsedChapter], s
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = text[start:end].strip()
         title = m.group(1).strip()
-        lists = extract_list_blocks(body)
-        numbered = [b for b in lists if re.search(r"^\s*\d+\.", b, re.M)]
-        bullets = [b for b in lists if not re.search(r"^\s*\d+\.", b, re.M)]
-        examples = []
-        for label in ("hypothetical", "example scenario", "planning scenario", "sample", "example"):
-            if re.search(label, body, re.I):
-                examples.append(label)
-        citations = re.findall(r"https?://[^\s)]+", body)
-        citations += re.findall(r"(?i)(?:source|according to)[:\s]+([A-Za-z0-9 ./-]{3,80})", body)
+        feats = _chapter_features(body)
         chapters.append(
             ParsedChapter(
                 order=i + 1,
                 title=title,
                 body=body,
-                tables=extract_markdown_tables(body),
-                checklists=bullets,
-                workflows=numbered,
-                examples=examples,
-                citations=citations,
+                tables=feats["tables"],
+                checklists=feats["checklists"],
+                workflows=feats["workflows"],
+                examples=feats["examples"],
+                citations=feats["citations"],
             )
         )
     back = ""
@@ -977,7 +1156,20 @@ def parse_chapter_response(raw: Any, expected: ChapterContract) -> ParsedChapter
     if not chapters:
         body = re.sub(r"^#\s+.*\n", "", text).strip()
         body, _removed = sanitize_leaked_production_labels(body)
-        return ParsedChapter(order=expected.order, title=expected.title, body=body)
+        # Extract the same structured deliverables the heading path extracts. A
+        # valid Markdown table must not vanish just because the model omitted a
+        # '## ' heading -- that made MISSING_REQUIRED_TABLE unsatisfiable.
+        feats = _chapter_features(body)
+        return ParsedChapter(
+            order=expected.order,
+            title=expected.title,
+            body=body,
+            tables=feats["tables"],
+            checklists=feats["checklists"],
+            workflows=feats["workflows"],
+            examples=feats["examples"],
+            citations=feats["citations"],
+        )
     # Prefer the chapter whose title matches; else the first H2 body.
     for ch in chapters:
         if normalize_chapter_title(ch.title) == normalize_chapter_title(expected.title):
@@ -1125,12 +1317,19 @@ def validate_chapter(
             "THIN_CHAPTER",
             f"{wc} useful words; minimum {contract.min_useful_words} with required deliverables",
         )
-    purpose_tokens = [t for t in re.findall(r"[A-Za-z]{5,}", contract.purpose.lower()) if t not in {
-        "about", "their", "there", "which", "where", "these", "those", "should", "would",
-    }]
-    hits = sum(1 for t in purpose_tokens[:12] if t in body.lower())
-    if purpose_tokens and hits < max(2, min(4, len(purpose_tokens) // 4)):
-        add("PURPOSE_MISALIGN", "Chapter body does not cover the approved purpose for this title")
+    purpose_tokens = purpose_keywords(contract.purpose)
+    checked = purpose_tokens[:PURPOSE_KEYWORDS_CHECKED]
+    hits = sum(1 for t in checked if t in body.lower())
+    if purpose_tokens and hits < purpose_hit_threshold(purpose_tokens):
+        # Name the specific keywords that are absent. The pass/fail rule is
+        # unchanged; the message is actionable so automatic repair can fix the
+        # chapter without a human reading validator output.
+        missing = [t for t in checked if t not in body.lower()]
+        add(
+            "PURPOSE_MISALIGN",
+            "Chapter body does not cover the approved purpose for this title. "
+            f"Purpose keywords not addressed: {', '.join(missing)}",
+        )
     for fact in contract.required_facts:
         if not _fact_present(fact, body):
             add("MISSING_REQUIRED_FACT", f"Missing required fact or term: {fact}")
@@ -1401,12 +1600,20 @@ def run_chapter_pipeline(
     max_chapter_calls: int | None = None,
     prior_manuscript_md: str = "",
     findings_by_order: dict[int, list[str]] | None = None,
+    on_chapter_accepted: Callable[[list[ParsedChapter]], None] | None = None,
 ) -> dict[str, Any]:
     """Generate or repair chapters independently. Never silently rewrite accepted chapters.
 
     Production validates each chapter before accepting it, stops immediately on
     the first non-PASS chapter, and assembles Disclaimer/Sources only after
     every numbered chapter PASSes.
+
+    ``on_chapter_accepted`` is called with the accepted-chapter list immediately
+    after each chapter PASSes validation, so the caller can persist progress
+    before the next generation starts. Without it, a crash or interruption part
+    way through loses every chapter produced in this call. The callback is
+    deliberately best-effort: a persistence failure must not destroy a chapter
+    that was just successfully written.
     """
     if generate_chapter_fn is None:
         raise ValueError(
@@ -1423,6 +1630,11 @@ def run_chapter_pipeline(
     repair = set(repair_orders or [])
     produced: list[ParsedChapter] = []
     chapter_calls = 0
+    # Provider calls the Factory meter should charge for. A locally generated
+    # chapter reports 0; an OpenAI chapter reports 1. Counted separately from
+    # chapter_calls, which stays a count of generation attempts.
+    billable_chapter_calls = 0
+    providers_used: set[str] = set()
     failed_orders: list[int] = []
     skipped_ungenerated: list[int] = []
     provider_payloads: list[dict[str, Any]] = []
@@ -1438,19 +1650,54 @@ def run_chapter_pipeline(
             kept.accepted = True
             produced.append(kept)
             continue
-        if max_chapter_calls is not None and chapter_calls >= max_chapter_calls:
+        # The cap is a spending bound, so it counts BILLABLE calls. Local
+        # generation is free and therefore not limited by a dollar budget it
+        # never consumes. For a paid provider the two counters are identical,
+        # so this is unchanged behaviour there.
+        if max_chapter_calls is not None and billable_chapter_calls >= max_chapter_calls:
             skipped_ungenerated.append(contract.order)
             continue
         work = copy.copy(contract)
         work.unresolved_findings = list(findings_map.get(contract.order) or [])
         work.prior_chapter_body = str(prior_bodies.get(contract.order) or "")
-        raw = generate_chapter_fn(book, work)
-        chapter_calls += 1
-        parsed = parse_chapter_response(raw, contract)
-        parsed.order = contract.order
-        parsed.title = contract.title
-        findings = validate_chapter(parsed, contract, book=book)
-        chapter_pass = not findings
+
+        # Initial generation, then bounded local repair. The repair loop only
+        # runs for locally generated chapters: it is free, so retrying costs the
+        # customer nothing. A paid provider keeps its existing single-attempt
+        # behaviour, and a failed local chapter is NEVER escalated to a paid
+        # provider automatically -- it is marked for premium enhancement and the
+        # decision is left to the customer.
+        repair_attempts = 0
+        while True:
+            raw = generate_chapter_fn(book, work)
+            chapter_calls += 1
+            if isinstance(raw, dict):
+                billable_chapter_calls += int(raw.get("billable_calls", 1) or 0)
+                provider_name = str(raw.get("provider") or "openai")
+            else:
+                billable_chapter_calls += 1
+                provider_name = "openai"
+            providers_used.add(provider_name)
+
+            parsed = parse_chapter_response(raw, contract)
+            parsed.order = contract.order
+            parsed.title = contract.title
+            findings = validate_chapter(parsed, contract, book=book)
+            chapter_pass = not findings
+
+            if chapter_pass or provider_name != "local":
+                break
+            if repair_attempts >= MAX_LOCAL_REPAIR_ATTEMPTS:
+                # Stop. No infinite loop, and no silent paid fallback.
+                parsed.needs_premium_enhancement = True
+                break
+            repair_attempts += 1
+            # Feed the specific validator findings back in so the next attempt
+            # repairs rather than rewrites from scratch.
+            work = copy.copy(contract)
+            work.unresolved_findings = list(findings)
+            work.prior_chapter_body = parsed.body or ""
+
         parsed.accepted = chapter_pass
         produced.append(parsed)
         rec = {
@@ -1459,11 +1706,24 @@ def run_chapter_pipeline(
             "contract_digest": contract.digest(),
             "assigned_research": assigned_research_for_chapter(book, work),
             "unresolved_findings": list(work.unresolved_findings),
+            "local_repair_attempts": repair_attempts,
+            "needs_premium_enhancement": bool(
+                getattr(parsed, "needs_premium_enhancement", False)
+            ),
         }
         if isinstance(raw, dict):
             rec["provider_assigned_research"] = raw.get("assigned_research")
             rec["provider_contract"] = raw.get("chapter_contract")
         provider_payloads.append(rec)
+        if chapter_pass and on_chapter_accepted is not None:
+            # Persist immediately: this chapter passed the quality gate, so it
+            # must survive an interruption before the next one is generated.
+            try:
+                on_chapter_accepted([c for c in produced if getattr(c, "accepted", False)])
+            except Exception:  # noqa: BLE001
+                # A failed save must not discard work that already passed. The
+                # chapter stays in `produced` and is returned to the caller.
+                pass
         if not chapter_pass:
             failed_orders.append(contract.order)
             if stop_on_failure:
@@ -1543,6 +1803,8 @@ def run_chapter_pipeline(
         "assembled_complete": all_accepted,
         "quality": quality,
         "chapter_calls": chapter_calls,
+        "billable_chapter_calls": billable_chapter_calls,
+        "providers_used": sorted(providers_used),
         "provider_payloads": provider_payloads,
     }
 
