@@ -109,6 +109,67 @@ def _error(message: str, status: int = 400):
     return jsonify({"error": message}), status
 
 
+# Internal wording that must never reach a customer's screen. Matching text is
+# replaced with a plain-language message and the real detail goes to the log.
+_TECHNICAL_ERROR_MARKERS = (
+    "api key",
+    "env var",
+    "environment variable",
+    "placeholder",
+    "traceback",
+    "openai",
+    "tavily",
+    "pexels",
+    "ollama",
+    "localhost",
+    "127.0.0.1",
+    "connectionerror",
+    "httpconnectionpool",
+    "factory_test_mode",
+    "factory_local_ai",
+    "ai_integrations",
+    "modulenotfound",
+    "attributeerror",
+    "keyerror",
+    "typeerror",
+    # Model identifiers must never be shown to a customer either.
+    "qwen",
+    "llama",
+    "gpt-",
+    "try pulling",
+)
+
+
+def customer_safe_message(exc: Exception, fallback: str = "") -> str:
+    """Plain-language text for a customer, with the technical detail stripped.
+
+    A customer must never see API keys, environment-variable names, provider or
+    model names, routing details, tracebacks or raw exception text. Previously a
+    provider misconfiguration surfaced verbatim as "AI is not configured. The
+    API key env var is missing or contains a placeholder."
+    """
+    from services.external_calls import CUSTOMER_MESSAGE
+
+    # Errors that already carry a curated customer message use it as-is.
+    supplied = getattr(exc, "customer_message", "")
+    if isinstance(supplied, str) and supplied.strip():
+        return supplied.strip()
+
+    raw = str(exc or "").strip()
+    if not raw:
+        return fallback or CUSTOMER_MESSAGE
+    low = raw.lower()
+    if any(marker in low for marker in _TECHNICAL_ERROR_MARKERS):
+        return fallback or CUSTOMER_MESSAGE
+    return raw
+
+
+def _customer_error(exc: Exception, status: int = 500, *, log: str = "", fallback: str = ""):
+    """Log the full technical error privately; return a safe message publicly."""
+    app.logger.exception(log or "request failed")
+    return _error(customer_safe_message(exc, fallback), status)
+
+
 # Shown when research dies outright. Deliberately says nothing about which
 # provider failed or why -- that goes to the log, not the customer's page.
 RESEARCH_FAILURE_MESSAGE = (
@@ -1808,6 +1869,7 @@ def generate_product_route():
     _requested = (body.get("product_type", "") or "").strip()
     if _requested in _HIDDEN_PRODUCT_TYPES:
         return _error("This product type is not ready yet.", 400)
+
     from services.quality.artifact_state import ArtifactStateError
 
     # Existing project: enforce write policy before any generation work.
@@ -1894,8 +1956,8 @@ def generate_product_route():
     except ValueError as exc:
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
-        app.logger.exception("product generation failed")
-        return _error(str(exc), 500)
+        # Full technical detail to the log; plain language to the customer.
+        return _customer_error(exc, 500, log="product generation failed")
 
 
 @app.post("/enhance-ebook")

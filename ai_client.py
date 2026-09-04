@@ -84,6 +84,13 @@ def get_base_url_source() -> str:
 
 def get_client() -> OpenAI:
     global _client, _key_source, _base_url_source
+    # Central spend guard. This is the single chokepoint for every OpenAI text
+    # and image call, so refusing here makes Safe Mode genuinely unable to spend
+    # money even when real keys are loaded.
+    from services.external_calls import assert_external_call_allowed
+
+    assert_external_call_allowed("openai")
+
     if _client is None:
         api_key, _key_source = _get_key_and_source()
         base_url, _base_url_source = _get_base_url_and_source()

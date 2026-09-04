@@ -76,6 +76,12 @@ def _tavily_topic_search(topic: str, audience: str) -> tuple[bool, str, list[str
     key = os.environ.get("TAVILY_API_KEY")
     if not key:
         return False, "", []
+    # Defence in depth: the caller already returns an offline payload in test
+    # mode, but this function must not reach the network on its own either.
+    from services.external_calls import external_calls_blocked
+
+    if external_calls_blocked():
+        return False, "", []
     try:
         from tavily import TavilyClient
 
