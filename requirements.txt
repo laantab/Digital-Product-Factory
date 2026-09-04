@@ -1,5 +1,6 @@
 # Production runtime — update deliberately and run preflight_check.py afterward.
 Flask==3.1.1
+gunicorn==23.0.0
 Markdown==3.8.2
 Pillow==12.2.0
 PyMuPDF==1.26.6
