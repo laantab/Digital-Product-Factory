@@ -51,7 +51,15 @@ SAVE_SUCCESS = "Project saved successfully"
 
 
 def fixture_mode() -> bool:
-    return str(os.environ.get(FIXTURE_ENV) or "").strip() in {"1", "true", "yes"}
+    """Deterministic test content is allowed only under BOTH safety switches.
+
+    Previously this checked EBOOK_CUSTOMER_PATH_FIXTURE alone, so one stray
+    environment variable could have served fixture content to a real customer.
+    It now delegates to the shared dual gate. See services/external_calls.py.
+    """
+    from services.external_calls import ebook_fixture_mode
+
+    return ebook_fixture_mode()
 
 
 def container_gardening_manuscript() -> str:

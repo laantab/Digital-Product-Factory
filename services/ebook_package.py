@@ -691,11 +691,9 @@ def generate_visual_plan(title: str, content_md: str, fields: dict) -> dict:
     """Ask the AI for a per-chapter visual plan with real renderable content."""
     _, chapters = _split_chapters(content_md)
     chapter_titles = [c[0] for c in chapters] or [title or "Chapter 1"]
-    if str(os.environ.get("EBOOK_CUSTOMER_PATH_FIXTURE") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }:
+    from services.external_calls import ebook_fixture_mode
+
+    if ebook_fixture_mode():
         from services.ebook_customer_path import fixture_visual_plan
 
         return _coerce_plan(fixture_visual_plan(title, content_md), chapter_titles, title)

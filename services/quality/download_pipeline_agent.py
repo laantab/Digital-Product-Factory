@@ -805,11 +805,9 @@ def validate_download(context: DownloadContext) -> DownloadResult:
             message="Non-PDF file served.",
         )
 
-    fixture = str(os.environ.get("EBOOK_CUSTOMER_PATH_FIXTURE") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
+    from services.external_calls import ebook_fixture_mode
+
+    fixture = ebook_fixture_mode()
     if fixture and filename_lower in {"ebook.pdf", "package.zip"}:
         return DownloadResult(
             status="passed",

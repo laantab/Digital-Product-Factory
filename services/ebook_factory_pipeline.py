@@ -370,11 +370,9 @@ def fill_photo_aid_from_pexels(
     out["visual_brief"] = brief.as_dict()
     out["type"] = str(out.get("type") or "stock photo")
     out["pexels_query"] = queries[0] if queries else fallback
-    if str(os.environ.get("EBOOK_CUSTOMER_PATH_FIXTURE") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }:
+    from services.external_calls import ebook_fixture_mode
+
+    if ebook_fixture_mode():
         return _fill_photo_aid_fixture(out, package_id=package_id, chapter=chapter)
     last_error = "No matching photograph was found."
     try:

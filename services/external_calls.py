@@ -54,3 +54,37 @@ def assert_external_call_allowed(service: str) -> None:
     """
     if external_calls_blocked():
         raise ExternalCallBlocked(service)
+
+
+# ---------------------------------------------------------------------------
+# Ebook fixture mode (test-only deterministic content)
+# ---------------------------------------------------------------------------
+
+_TRUE_VALUES = frozenset({"1", "true", "yes"})
+
+
+def _is_true(raw: object) -> bool:
+    """Strictly true. Anything absent, blank, malformed or unexpected is false."""
+    return str(raw or "").strip().lower() in _TRUE_VALUES
+
+
+def ebook_fixture_mode() -> bool:
+    """Whether the Ebook path may serve deterministic test fixture content.
+
+    DUAL-GATED ON PURPOSE. Fixture content is not a product; a customer must
+    never receive it. Requiring two independent switches means a single stray
+    environment variable -- one leftover export, one mis-set service config --
+    cannot put fixture content in front of a paying customer:
+
+        FACTORY_TEST_MODE=1             the process is a test/Safe Mode process
+        EBOOK_CUSTOMER_PATH_FIXTURE=1   this run wants fixture content
+
+    Fail-closed: if either value is missing, blank, "0", "false", or anything
+    unrecognised, the normal production path is used. There is deliberately no
+    silent fallback to fixture content.
+
+    Scope: the Ebook workspace only. No other product builder consults this.
+    """
+    return _is_true(os.environ.get("FACTORY_TEST_MODE")) and _is_true(
+        os.environ.get("EBOOK_CUSTOMER_PATH_FIXTURE")
+    )
