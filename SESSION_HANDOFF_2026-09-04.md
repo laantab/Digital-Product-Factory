@@ -1,10 +1,54 @@
-# Session Handoff — 2026-09-04 (supersedes 2026-08-31)
+# Session Handoff — 2026-09-04, updated 2026-09-05 (supersedes 2026-08-31)
 
 **Start a new session with:** "Read SESSION_HANDOFF_2026-09-04.md and continue."
 
 ---
 
-## Start here: one action is outstanding
+## 2026-09-05 update — read this first
+
+Two of the three outstanding jobs are **done**. One remains, and only the owner
+can do it.
+
+### Done on 05 Sep
+
+1. **Project 351 was applied to the live database.** The Factory was closed, the
+   guard passed, a fresh backup was taken, and only project 351 was written.
+   Verified against the live database afterwards: 9,506 words, 9 chapters,
+   DRAFT, `export_ready` true, PDF hash `6202e3a5…` matches, all 115 projects
+   still present. The pre-apply backup is at
+   `Desktop\Factory Backup\projects_live_backup_before_351_apply_20260905.db`.
+   **Open the Factory and look at project 351 to confirm it reads correctly.**
+
+2. **The font sweep is finished** (commit `1a045c0`). Crossword and maths
+   worksheet were both embedding Windows Arial into products that are sold;
+   both now use the shared Liberation Sans. Every builder was surveyed rather
+   than assumed — word search, coloring book and spelling worksheet use base-14
+   Helvetica/Courier and embed no file, so they were never exposed; planner
+   makes no font calls. The licensing test now scans every font module under
+   `services/`, so a new builder cannot reintroduce the pattern.
+
+### Still outstanding: the push
+
+`main` is **9 commits ahead of `origin/main`**. Nothing since the one-button
+ebook work is backed up off this machine. I cannot push — there are no git
+credentials in the environment I run in.
+
+From a terminal in `C:\Users\user\Documents\Product-Pipeline\Factory-v1.3`:
+
+```
+git push origin main
+```
+
+**Do not use `Desktop\Factory Backup\BACKUP-FACTORY-TO-GITHUB.bat` for this.**
+That script uploads a zip to
+`https://github.com/laantab/The-Digital-Product-Factory.git`, which is a
+*different repository* from this working copy's remote,
+`https://github.com/laantab/Digital-Product-Factory.git`. It will not push these
+commits. Worth deciding which of the two repositories is the real one.
+
+---
+
+## Start here: one action is outstanding (as written on 04 Sep — now done, see above)
 
 **The live `projects.db` still holds the OLD version of project 351.** Everything
 was built and verified against a temporary copy. Nothing was written to the live
