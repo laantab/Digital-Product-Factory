@@ -3277,6 +3277,13 @@ def export_product_route():
                     data["stage"] = data.get("stage") or "product_generated"
             else:
                 data["stage"] = "export_ready"
+            # This rail already recorded a status token, but never the save
+            # marker that _is_explicit_user_save() reads, so a manually
+            # exported ebook stayed out of Saved Projects too. Same evidence
+            # test as the one-click path, so the two rails agree (v1.4.1).
+            from services.ebook_customer_path import mark_ebook_customer_saved
+
+            data = mark_ebook_customer_saved(data)
 
         # Planner release gate: the same rule as the ebook path — an automated
         # editorial pass over the real rendered PDF decides Export Ready. The

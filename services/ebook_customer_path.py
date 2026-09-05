@@ -919,3 +919,106 @@ def save_factory_ebook(
         "id": saved.get("id") if saved else None,
         "project_id": saved.get("id") if saved else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Customer library visibility for workspace-built ebooks (v1.4.1)
+#
+# The one-click workspace pipeline never routed through the legacy save path
+# above, so it never recorded the customer-facing lifecycle tokens that
+# database.get_customer_saved_products() requires. Every ebook the workspace
+# produced was therefore invisible in Saved Projects, however complete it was:
+# 12 of 12 on the owner's machine, including finished, exported, sellable books.
+#
+# The fix records the same tokens the legacy path already sets, at the moment
+# the book genuinely becomes export-ready. It deliberately does NOT touch
+# artifact_state: DRAFT / APPROVED / LOCKED remain the write-policy lifecycle
+# and are unaffected. A DRAFT book that built and exported successfully is a
+# finished product the customer should be able to find.
+# ---------------------------------------------------------------------------
+
+CUSTOMER_STAGE_GENERATED = "product_generated"
+CUSTOMER_STATUS_EXPORT_READY = "export_ready"
+
+
+def _existing_file(*candidates: object) -> bool:
+    for candidate in candidates:
+        path = str(candidate or "").strip()
+        if path and os.path.isfile(path):
+            return True
+    return False
+
+
+def ebook_is_customer_complete(data: dict) -> bool:
+    """True only when the stored evidence proves a finished, exported ebook.
+
+    Every condition is read from what the project already recorded. Nothing is
+    inferred from the mere existence of an ebook workspace, and nothing is
+    regenerated to answer the question. This is the single qualification used
+    both by the live pipeline and by the backfill of existing projects, so the
+    two can never disagree about what "finished" means.
+    """
+    if not isinstance(data, dict):
+        return False
+    if data.get("export_ready") is not True:
+        return False
+    if str(data.get("release_status") or "").upper() != "PASS":
+        return False
+
+    preflight = data.get("ebook_design_preflight")
+    if not isinstance(preflight, dict):
+        return False
+    if str(preflight.get("status") or "").upper() != "PASS":
+        return False
+
+    # The customer must be able to download something that exists on disk.
+    export_files = data.get("export_files") if isinstance(data.get("export_files"), dict) else {}
+    if not _existing_file(data.get("pdf_path"), export_files.get("ebook.pdf")):
+        return False
+    if not _existing_file(export_files.get("package.zip")):
+        return False
+
+    # A book with no words is not a product, whatever the flags say.
+    if len(str(data.get("content") or data.get("ebook") or "").split()) < 500:
+        return False
+    document = data.get("ebook_document") if isinstance(data.get("ebook_document"), dict) else {}
+    if not (document.get("chapters") or []):
+        return False
+    return True
+
+
+def mark_ebook_customer_saved(data: dict) -> dict:
+    """Record (or withdraw) the customer library tokens for an ebook.
+
+    Called wherever the pipeline decides export readiness. Stamping is driven
+    by ebook_is_customer_complete, so an incomplete or failed book is never
+    marked generated, and a book that regresses is withdrawn from the library
+    rather than left advertising a product that no longer verifies.
+
+    artifact_state is never read or written here.
+    """
+    if not isinstance(data, dict):
+        return data
+    if ebook_is_customer_complete(data):
+        data["stage"] = data.get("stage") or CUSTOMER_STAGE_GENERATED
+        data["status"] = data.get("status") or CUSTOMER_STATUS_EXPORT_READY
+        data["quality_blocking"] = False
+        data["hidden_from_customer"] = False
+        # _is_explicit_user_save() accepts either marker. The customer asked for
+        # this book and the Factory finished it, so the moment it became
+        # downloadable is a real save; _saved_at records when, without claiming
+        # the customer clicked a confirmation dialog they were never shown.
+        if not str(data.get("_saved_at") or "").strip():
+            data["_saved_at"] = _now_iso()
+    elif data.get("stage") == CUSTOMER_STAGE_GENERATED:
+        # It was listed and no longer qualifies. Withdraw the tokens only.
+        data.pop("stage", None)
+        if data.get("status") == CUSTOMER_STATUS_EXPORT_READY:
+            data.pop("status", None)
+    return data
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()

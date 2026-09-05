@@ -596,6 +596,17 @@ def _run_export(data: dict, pid: int) -> dict:
     else:
         data["export_ready"] = False
         data["release_status"] = pre_status
+
+    # This is the moment a workspace-built ebook becomes a finished product the
+    # customer can download, so it is the moment it must become findable in
+    # Saved Projects. The workspace pipeline never recorded the customer
+    # lifecycle tokens the saved-products filter reads, so every ebook it built
+    # stayed invisible however complete it was. Judged on stored evidence, not
+    # on having reached this line: see ebook_is_customer_complete. Does not
+    # touch artifact_state (v1.4.1).
+    from services.ebook_customer_path import mark_ebook_customer_saved
+
+    data = mark_ebook_customer_saved(data)
     return data
 
 
