@@ -78,12 +78,35 @@ def _sha_bytes(payload: bytes) -> str:
 
 
 def _package_id(data: dict) -> str:
-    return str(
+    """The folder this book's assets live in. Must be unique per book.
+
+    The fallback used to be the shared literal "ebook-visuals-local", so every
+    ebook that reached this point without an id wrote its visuals, cover, PDF
+    and ZIP into the SAME folder -- silently overwriting the previous book's
+    finished files. Two real customer projects were found sharing it. The
+    fallback is now derived from the project, and only a genuinely anonymous
+    payload gets a random one.
+    """
+    existing = str(
         data.get("package_id")
         or data.get("artifact_id")
         or data.get("export_package_id")
-        or "ebook-visuals-local"
-    )
+        or ""
+    ).strip()
+    if existing and existing != "ebook-visuals-local":
+        return existing
+
+    project_id = str(data.get("_project_id") or data.get("project_id") or "").strip()
+    if project_id.isdigit():
+        return f"ebook-{project_id}"
+    import hashlib
+
+    seed = f"{data.get('title') or ''}|{data.get('subtitle') or ''}|{data.get('source') or ''}"
+    if seed.strip("|"):
+        return "ebook-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
+    import uuid
+
+    return "ebook-" + uuid.uuid4().hex[:12]
 
 
 def visuals_dir(package_id: str) -> Path:
@@ -720,12 +743,19 @@ def _render_chart(aid: dict[str, Any]) -> Image.Image:
     return img
 
 
+#: A card holds two wrapped lines; this is the character budget that fits.
+#: It must not be tighter than _LABEL_LIMIT, or a label already trimmed to a
+#: word boundary gets cut a second time and the reader sees "helps you buil".
+_CARD_LABEL_LIMIT = 110
+
+
 def _short_items(items: list[str], limit: int = 6) -> list[str]:
+    """Card labels, trimmed on a word boundary — never in the middle of a word."""
     out: list[str] = []
     for raw in items[:limit]:
         text = re.sub(r"\*\*", "", str(raw or "")).strip()
         text = re.sub(r"\s+", " ", text)
-        out.append(text[:72])
+        out.append(_clean_sentence(text, limit=_CARD_LABEL_LIMIT))
     return out
 
 
@@ -958,8 +988,26 @@ def _render_timeline_roadmap(aid: dict[str, Any], items: list[str]) -> Image.Ima
     return img
 
 
+def _draw_tick(draw: ImageDraw.ImageDraw, centre: tuple[int, int], *, fill) -> None:
+    """A check mark drawn as two strokes.
+
+    The obvious way to put a tick in a badge is to draw the character "☐" or
+    "✓". Whether that works depends on the font the machine happens to supply,
+    and on the machine that produced a real cookbook it did not: every badge on
+    two chapter graphics printed an empty box where the mark should be. Drawing
+    the strokes needs no glyph, so it cannot fail that way again.
+    """
+    cx, cy = centre
+    draw.line(
+        [(cx - 9, cy), (cx - 3, cy + 7), (cx + 9, cy - 8)],
+        fill=fill,
+        width=3,
+        joint="curve",
+    )
+
+
 def _render_steps(aid: dict[str, Any], *, kind: str) -> Image.Image:
-    items = _short_items([str(x) for x in (aid.get("items") or [])], 8)
+    items = _short_items([_plain_cell(x) for x in (aid.get("items") or [])], 8)
     n = len(items) or 1
     height = min(900, 140 + n * 86)
     img, draw = _new_canvas(1400, height)
@@ -971,7 +1019,7 @@ def _render_steps(aid: dict[str, Any], *, kind: str) -> Image.Image:
         draw.rounded_rectangle((40, y, 1360, y + 72), 10, fill=(255, 255, 255), outline=accent, width=2)
         draw.ellipse((58, y + 14, 106, y + 62), fill=accent)
         if kind == "checklist":
-            draw.text((70, y + 22), "☐", font=_font(22, bold=True), fill=(255, 255, 255))
+            _draw_tick(draw, (82, y + 38), fill=(255, 255, 255))
         else:
             draw.text((74, y + 24), str(i), font=_font(18, bold=True), fill=(255, 255, 255))
         for j, line in enumerate(_wrap(draw, item, body, 1180)[:2]):
@@ -982,10 +1030,36 @@ def _render_steps(aid: dict[str, Any], *, kind: str) -> Image.Image:
     return img
 
 
+def _plain_cell(value: Any) -> str:
+    """Cell text without Markdown emphasis.
+
+    Table cells arrive straight from the manuscript, where a totals row is
+    written as **Total**. Drawing that verbatim printed the asterisks into the
+    finished book -- "**Total**", "**3,000**" -- on a page a customer sees.
+    """
+    text = str(value if value is not None else "")
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)", r"\1", text)
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    return text.strip().strip("*_`").strip()
+
+
+#: A comparison graphic stays readable to about six columns; beyond that the
+#: cells are too narrow to read. Four was too few: a five-column nutrition
+#: table silently lost its last column ("Total Fat") in a real book.
+_COMPARISON_MAX_COLS = 6
+_COMPARISON_MAX_ROWS = 8
+
+
 def _render_comparison(aid: dict[str, Any]) -> Image.Image:
     table = aid.get("table") or {}
-    headers = [str(h) for h in (table.get("headers") or [])][:4]
-    rows = [[str(c) for c in r[:4]] for r in (table.get("rows") or [])][:6]
+    headers = [_plain_cell(h) for h in (table.get("headers") or [])][:_COMPARISON_MAX_COLS]
+    rows = [
+        [_plain_cell(c) for c in r[:_COMPARISON_MAX_COLS]]
+        for r in (table.get("rows") or [])
+    ][:_COMPARISON_MAX_ROWS]
+    # Pad short rows so every column keeps its cell.
+    rows = [r + [""] * (len(headers) - len(r)) for r in rows]
     img, draw = _new_canvas(1500, 980)
     _draw_title(draw, str(aid.get("title") or "Comparison"), 1500)
     if not headers:
@@ -1022,7 +1096,7 @@ def render_aid_png(aid: dict[str, Any]) -> Image.Image:
     if kind == "photo":
         raise ValueError("Photograph aids must use a stored image file; they are not locally invented.")
     if kind == "workflow":
-        raw_items = [str(x) for x in (aid.get("items") or [])]
+        raw_items = [_plain_cell(x) for x in (aid.get("items") or [])]
         if _station_map_layout(aid):
             return _render_station_map(aid, _short_items(raw_items, 7))
         items = _short_items(raw_items, 6)
@@ -1030,7 +1104,7 @@ def render_aid_png(aid: dict[str, Any]) -> Image.Image:
             return _render_horizontal_steps(aid, items, kind="workflow")
         return _render_steps({**aid, "items": items}, kind="workflow")
     if kind == "timeline":
-        items = _short_items([str(x) for x in (aid.get("items") or [])], 6)
+        items = _short_items([_plain_cell(x) for x in (aid.get("items") or [])], 6)
         if items and all(len(x) <= 48 for x in items):
             return _render_timeline_roadmap(aid, items)
         return _render_steps({**aid, "items": items}, kind="timeline")

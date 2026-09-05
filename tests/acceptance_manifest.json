@@ -97,6 +97,8 @@
     "tests/test_visual_relevance_strategy.py",
     "tests/test_database_isolation.py",
     "tests/test_visual_routing_outcomes.py",
-    "tests/test_version_management.py"
+    "tests/test_version_management.py",
+    "tests/test_unique_chapter_photographs.py",
+    "tests/test_printable_source_urls.py"
   ]
 }

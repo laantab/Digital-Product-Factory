@@ -663,6 +663,62 @@ def _strip_identity_preamble(fragment: str, *, title: str, subtitle: str, author
     return str(soup)
 
 
+#: How many characters of a source URL fit on one line of the Sources page.
+#: A URL is a single unbreakable token to this renderer, so anything longer
+#: runs off the edge and fails print preflight.
+_URL_TEXT_BUDGET = 78
+
+
+def printable_source_url(url: str) -> str:
+    """A source URL that fits on the page.
+
+    Three problems, each of which reached a real finished book:
+
+      * Tracking query strings. An Amazon link carried 300 characters of
+        pd_rd_* parameters. They are noise, they date instantly, and they are
+        not part of the citation, so everything from "?" is dropped.
+      * No break opportunities. A URL is one unbreakable token and the
+        renderer honours no CSS rule that would split it, so a long one ran
+        past the page edge and failed preflight with "text extends outside
+        the page box".
+      * The fix for that was worse than the fault. Zero-width spaces were
+        inserted at each separator to create break points. They are invisible
+        in a browser, but the PDF font has no glyph for them, so every link on
+        the Sources page printed as a row of black boxes.
+
+    So nothing invisible is added. The address is shortened instead: the site
+    is always kept whole, the path is trimmed at a separator, and an ellipsis
+    marks the trim. The anchor still carries the full address, so the link
+    works; only the printed label is short.
+    """
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    base = text.split("?", 1)[0].split("#", 1)[0].rstrip("&")
+    if len(base) <= _URL_TEXT_BUDGET:
+        return base
+
+    scheme, sep, rest = base.partition("://")
+    head = f"{scheme}{sep}" if sep else ""
+    domain, slash, path = rest.partition("/")
+    head += domain
+    path = path.strip("/")
+    if not path:
+        return head
+
+    room = _URL_TEXT_BUDGET - len(head) - 2  # the "/" and the ellipsis
+    if room <= 4:
+        return f"{head}/…"
+
+    trimmed = path[:room]
+    for separator in ("/", "-", "_"):
+        cut = trimmed.rfind(separator)
+        if cut > room // 2:
+            trimmed = trimmed[:cut]
+            break
+    return f"{head}/{trimmed.rstrip('/-_')}…"
+
+
 def _linkify_sources(fragment: str) -> str:
     from services.ebook_customer_facing import source_url_is_displayable, unescape_source_url
 
@@ -674,12 +730,13 @@ def _linkify_sources(fragment: str) -> str:
             continue
         if source_url_is_displayable(url):
             li.clear()
-            anchor = soup.new_tag("a", href=url)
-            anchor.string = url
+            # href keeps the real link; the visible text is the printable form.
+            anchor = soup.new_tag("a", href=url.split("?", 1)[0])
+            anchor.string = printable_source_url(url)
             li.append(anchor)
         elif raw != url:
             li.clear()
-            li.string = url
+            li.string = printable_source_url(url)
     ul = soup.find("ul")
     if ul:
         classes = ul.get("class") or []

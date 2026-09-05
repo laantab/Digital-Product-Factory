@@ -815,6 +815,22 @@ def fill_plan_photos_automatic(
     chapters = list(plan.get("chapters") or [])
     unresolved: list[dict[str, Any]] = []
     budget_block = False
+
+    # Every chapter needs its OWN photograph. Neighbouring chapters of a book
+    # have near-identical briefs, so the same top Pexels result was chosen for
+    # several of them -- one real cookbook shipped with chapters 5, 6 and 7
+    # carrying the same image byte for byte. Rejecting duplicates afterwards
+    # only moves the problem: the retry picks the same top result again. So the
+    # images already used are carried forward and excluded from each
+    # subsequent search.
+    used_photo_ids: set[str] = set()
+
+    def _remember(aid: dict[str, Any]) -> None:
+        rec = aid.get("pexels") if isinstance(aid.get("pexels"), dict) else {}
+        photo_id = str(rec.get("photo_id") or aid.get("photo_id") or "").strip()
+        if photo_id:
+            used_photo_ids.add(photo_id)
+
     for ch in chapters:
         if not isinstance(ch, dict):
             continue
@@ -826,7 +842,12 @@ def fill_plan_photos_automatic(
             if prefers_local_medium(aid):
                 continue
             if _photo_already_stored(aid) and str(aid.get("match_status") or "") == MATCH_PASS:
+                _remember(aid)
                 continue
+            if used_photo_ids:
+                already = [str(x) for x in (aid.get("rejected_photo_ids") or []) if str(x)]
+                aid = dict(aid)
+                aid["rejected_photo_ids"] = sorted(set(already) | used_photo_ids)
             filled = fill_photo_aid_automatic(
                 aid,
                 package_id=package_id,
@@ -839,6 +860,7 @@ def fill_plan_photos_automatic(
                 allow_ai=allow_ai,
             )
             aids[i] = filled
+            _remember(filled)
             if not _photo_already_stored(filled) or str(filled.get("match_status") or "") == MATCH_REJECT:
                 unresolved.append(filled)
                 if filled.get("budget_message"):

@@ -1501,6 +1501,75 @@ def apply_match_report(aid: dict[str, Any], report: MatchReport) -> dict[str, An
     return out
 
 
+def enforce_unique_photographs(visual_plan: dict | None) -> dict:
+    """No two chapters may share a photograph. Keeps the first, rejects the rest.
+
+    The previous duplicate check lived inside the per-photo scorer and only
+    fired when re-hashing the file on disk agreed with the stored hash. That is
+    a lot of conditions for a rule this simple, and it failed: a real book
+    shipped with chapters 5, 6 and 7 all carrying the same image, byte for
+    byte, all three marked PASS.
+
+    This pass is deterministic and runs over the whole book. A photograph is
+    the same photograph if it shares a content hash, a provider asset id, or a
+    source URL with one already used. Identity is judged on the stored record,
+    so it holds whether or not the file can be re-read.
+    """
+    plan = visual_plan if isinstance(visual_plan, dict) else {"chapters": []}
+    seen_sha: dict[str, str] = {}
+    seen_id: dict[str, str] = {}
+    seen_url: dict[str, str] = {}
+
+    for chapter in list(plan.get("chapters") or []):
+        if not isinstance(chapter, dict):
+            continue
+        title = str(chapter.get("chapter") or "")
+        for aid in list(chapter.get("aids") or []):
+            if not isinstance(aid, dict):
+                continue
+            if str(aid.get("type") or "").lower() not in {"photo", "stock photo"}:
+                continue
+            rec = aid.get("pexels") if isinstance(aid.get("pexels"), dict) else {}
+            sha = str(aid.get("sha256") or "").strip().lower()
+            photo_id = str(rec.get("photo_id") or aid.get("photo_id") or "").strip()
+            url = str(rec.get("page_url") or aid.get("page_url") or "").strip().lower()
+
+            first_used = ""
+            if sha and sha in seen_sha:
+                first_used = seen_sha[sha]
+            elif photo_id and photo_id in seen_id:
+                first_used = seen_id[photo_id]
+            elif url and url in seen_url:
+                first_used = seen_url[url]
+
+            if first_used:
+                aid["match_status"] = MATCH_REJECT
+                aid["review_status"] = "REJECTED"
+                aid["approved"] = False
+                aid["internally_ready"] = False
+                aid["user_accepted"] = False
+                aid["duplicate_of"] = first_used
+                aid["rejection_reason"] = (
+                    "This photograph is already used for "
+                    f"{first_used or 'another chapter'}. Every chapter needs its own image."
+                )
+                aid["retryable"] = True
+                # Never offer the same picture again on a retry.
+                rejected = [str(x) for x in (aid.get("rejected_photo_ids") or []) if str(x)]
+                if photo_id and photo_id not in rejected:
+                    rejected.append(photo_id)
+                aid["rejected_photo_ids"] = rejected
+                continue
+
+            if sha:
+                seen_sha[sha] = title
+            if photo_id:
+                seen_id[photo_id] = title
+            if url:
+                seen_url[url] = title
+    return plan
+
+
 def stamp_plan_photo_matches(visual_plan: dict | None) -> dict:
     plan = visual_plan if isinstance(visual_plan, dict) else {"chapters": []}
     shas: list[str] = []
@@ -1533,7 +1602,9 @@ def stamp_plan_photo_matches(visual_plan: dict | None) -> dict:
             report = evaluate_photo_aid(snapshot, chapter=chapter, other_shas=others)
             aids[i] = apply_match_report(aid, report)
         ch["aids"] = aids
-    return plan
+    # Uniqueness is decided last, over the whole book, so a duplicate cannot
+    # slip through on a per-photo verdict.
+    return enforce_unique_photographs(plan)
 
 
 def photo_blocks_approval(aid: dict[str, Any] | None) -> str:

@@ -419,8 +419,25 @@ ol.workflow li, .workflow li {{
   font-size: 9.5pt;
   color: {t.color_muted};
 }}
-.sources-list li {{ margin: 4pt 0; }}
-.sources-list a {{ color: {t.color_primary}; text-decoration: underline; }}
+/* A source URL is one long unbreakable token. These rules break it in the
+   HTML preview, which a browser renders. They do NOT help in the PDF: the
+   print renderer honours neither word-break nor overflow-wrap, so a long URL
+   ran off the page there and failed a real book's preflight as clipped text.
+   That is fixed where it has to be, in the text itself -- see
+   printable_source_url() in services/ebook_book_layout.py. */
+.sources-list li, .source-ref {{
+  margin: 4pt 0;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+}}
+.sources-list a, .source-ref a {{
+  color: {t.color_primary};
+  text-decoration: underline;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+}}
 .page-foot, .running-footer {{
   color: {t.color_muted};
   font-size: 9pt;

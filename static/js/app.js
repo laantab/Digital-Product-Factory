@@ -1619,7 +1619,15 @@ function openProject(p) {
     // driven by hand through the stage rail reopen on the rail -- showing the
     // ten-stage rail to a one-click customer is the operational view they were
     // never meant to see.
-    if (d.ebook_build) {
+    //
+    // A chapter that fails its quality check is NOT a reason to hand the
+    // customer the operational rail. The workspace sets next_action to
+    // "request_correction", which used to drop them onto a screen full of QA
+    // codes, keyword lists and a Request Correction button. Repairing a
+    // chapter is the Factory's job, not theirs: any workspace ebook whose
+    // manuscript is unfinished belongs on the progress screen, where the
+    // orchestrator repairs and revalidates on its own.
+    if (d.ebook_build || _ebookNeedsAutomaticRepair(d)) {
       openEbookBuild(p.id);
       return;
     }
@@ -1695,9 +1703,26 @@ function openProject(p) {
 
 // Route a project to the correct next step based on its workflow stage, advancing
 // the SAME record in place rather than creating a new one.
+//: A workspace ebook whose manuscript still needs work. The Factory repairs
+//: it automatically, so the customer belongs on the progress screen and never
+//: on the correction rail.
+function _ebookNeedsAutomaticRepair(d) {
+  if (!d || !(d.ebook_project_workspace || d.ebook_workspace)) return false;
+  const ws = d.ebook_workspace || {};
+  const rail = ws.rail || {};
+  const manuscript = (rail.manuscript || {}).status || "";
+  const next = ws.next_action || "";
+  return (
+    manuscript === "needs_correction" ||
+    manuscript === "in_progress" ||
+    next === "request_correction" ||
+    next === "generate_manuscript"
+  );
+}
+
 async function runNextAction(p) {
   const d0 = (p && p.data) || {};
-  if (_isEbookProject(p) && d0.ebook_build) {
+  if (_isEbookProject(p) && (d0.ebook_build || _ebookNeedsAutomaticRepair(d0))) {
     await openEbookBuild(p.id);
     return;
   }

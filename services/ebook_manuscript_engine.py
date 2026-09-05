@@ -782,17 +782,36 @@ def format_unresolved_findings_for_prompt(findings: list[str]) -> list[str]:
             # Name the defect AND the exact accepted format. "Fix the chapter"
             # is not actionable when the failure is a format the model may
             # believe it already satisfied in prose.
+            # The illustration used to spell out "| Column A | Column B |".
+            # Telling a model "do not copy the illustration" does not stop it
+            # copying the illustration: six of eight chapters in a real
+            # customer's cookbook shipped with Column A / Column B as their
+            # table headers. The only literal shown now is the separator row,
+            # which carries no header names to copy and which models get wrong
+            # when it is described in prose. Header naming stays in words.
             instruction = (
                 "ADD the required Markdown table. The chapter currently has no "
                 "real Markdown table, and prose describing a comparison does not "
-                "satisfy the requirement. Insert a pipe table with a header row "
-                "and a separator row, shaped like:\n"
-                "    | Column A | Column B |\n"
-                "    | --- | --- |\n"
-                "    | Value | Value |\n"
-                "  Use headings and rows that serve this chapter's required table "
-                "spec named in the contract above. Do not copy the illustration. "
+                "satisfy the requirement. Write a pipe table: a header row naming "
+                "each column, then a separator row written exactly as "
+                "| --- | --- | with one --- per column, then one row per "
+                "item. Every header must name what that column actually holds in "
+                "THIS chapter -- for a meal table that might be Meal, Calories, "
+                "Protein; for a cost table it might be Option, Up-front cost, "
+                "Monthly cost. Never label a column 'Column A', 'Column B', "
+                "'Row 1' or anything else generic: a table with placeholder "
+                "headers is treated as an unfinished chapter and rejected. "
                 "Do not quote this finding as a heading or bold label."
+            )
+        elif code == "TEMPLATE_RESIDUE":
+            instruction = (
+                "REPLACE the unfinished template text named in the finding with "
+                "real content written for this chapter. Table headers must name "
+                "what the column holds. Headings copied from the writing "
+                "instructions must be deleted or replaced with a heading that "
+                "belongs in the book. Leave no placeholder, TODO, bracketed "
+                "slot or generic label anywhere in the chapter. Keep all the "
+                "surrounding prose that is already good."
             )
         elif code == "THIN_CHAPTER":
             instruction = (
@@ -876,15 +895,22 @@ def chapter_contract_prompt(book: BookContract, chapter: ChapterContract) -> str
             lines.append(f"- {c}")
     if chapter.required_table:
         lines.append(
+            # This prompt used to print a literal "| Column A | Column B |"
+            # example and ask the model not to copy it. It copied it anyway,
+            # into six of eight chapters of a real customer's cookbook. An
+            # example a model must not reproduce does not belong in a prompt.
+            # The separator row is the exception: it has no header names to
+            # copy, and describing it in prose gets it written wrongly.
             f"REQUIRED MARKDOWN TABLE (mandatory deliverable): {chapter.required_table}\n"
-            "  This must be a real Markdown pipe table with a header row and a "
-            "separator row, shaped like:\n"
-            "    | Column A | Column B |\n"
-            "    | --- | --- |\n"
-            "    | Value | Value |\n"
-            "  Use column headings and rows that genuinely serve this chapter's "
-            "purpose; do not copy the illustration above. Prose that merely "
-            "describes a comparison does NOT satisfy this requirement -- the "
+            "  Write a real Markdown pipe table: a header row naming each "
+            "column, then a separator row written exactly as | --- | --- | "
+            "with one --- per column, then one row per "
+            "item. Every header must name what that column actually holds in "
+            "this chapter, such as Meal / Calories / Protein, or Option / "
+            "Up-front cost / Monthly cost. Never use a generic label like "
+            "'Column A', 'Column B' or 'Row 1' -- a table with placeholder "
+            "headers is rejected as an unfinished chapter. Prose that merely "
+            "describes a comparison does NOT satisfy this requirement: the "
             "table must be present as Markdown."
         )
     if chapter.required_workflow:
@@ -1296,6 +1322,54 @@ def _padding_without_substance(body: str, contract: ChapterContract, parsed: Par
     return missing or unique_ratio < 0.18
 
 
+#: Text a reader would instantly recognise as unfinished. The generator's own
+#: prompt template supplies example scaffolding -- "| Column A | Column B |",
+#: a "Concrete Example or Scenario" heading -- and a model that runs short of
+#: material sometimes copies the scaffold instead of filling it in. Every gate
+#: passed such a chapter, because a table with placeholder headers is still a
+#: well-formed table and a scaffold heading is still a heading. Six of eight
+#: chapters in a real customer's cookbook shipped "Column A | Column B".
+#:
+#: Each entry is (pattern, what to tell the repair prompt).
+_TEMPLATE_RESIDUE = (
+    (re.compile(r"\|\s*Column\s+[A-Z]\s*\|", re.I),
+     "a table whose headers are still 'Column A' / 'Column B' instead of naming "
+     "what the columns actually contain"),
+    # "Concrete Example or Scenario" is deliberately NOT listed. It reads like
+    # scaffolding, but it is the heading that satisfies the contract's
+    # required_examples deliverable -- deleting it turned a cosmetic complaint
+    # into a MISSING_REQUIRED_EXAMPLE failure.
+    (re.compile(r"^\s*#{2,4}\s*(?:Purpose|Key Concepts|Required Table|"
+                r"Chapter Goal|Instructions|Output Format|Word Count)\s*$", re.I | re.M),
+     "a heading copied from the writing instructions rather than the book"),
+    (re.compile(r"\blorem ipsum\b", re.I), "lorem ipsum filler text"),
+    (re.compile(r"\[\s*(?:insert|your|add|todo)[^\]]*\]", re.I),
+     "an unfilled [insert ...] placeholder"),
+    (re.compile(r"\b(?:TBD|TBA|TODO|FIXME)\b"), "a TBD/TODO marker"),
+    (re.compile(r"\bRow\s+\d+\b\s*\|"), "generic 'Row 1' table labels"),
+    (re.compile(r"\b(?:Text|Description)\s+here\b", re.I), "a 'text here' stub"),
+    # The contract names its deliverables internally ("chapter-comparison
+    # table", "required table"). Those names are specification language, not
+    # headings a reader should ever see -- and using the same one in two
+    # chapters also trips the print preflight's duplicate-heading check.
+    (re.compile(r"^\s*#{2,4}\s*(?:Chapter[-\s]?Comparison\s+Table|Required\s+\w+|"
+                r"Deliverable|Mandatory\s+\w+)\s*$", re.I | re.M),
+     "a heading that is the contract's internal name for a deliverable rather "
+     "than a heading written for the reader"),
+    (re.compile(r"\{\{.+?\}\}"), "an unrendered {{template}} token"),
+    (re.compile(r"\bChapter\s+[XN]\b"), "an unfilled chapter number"),
+)
+
+
+def template_residue(body: str) -> list[str]:
+    """Descriptions of any unfinished template scaffolding left in a chapter."""
+    found: list[str] = []
+    for pattern, description in _TEMPLATE_RESIDUE:
+        if pattern.search(str(body or "")) and description not in found:
+            found.append(description)
+    return found
+
+
 def validate_chapter(
     parsed: ParsedChapter,
     contract: ChapterContract,
@@ -1337,6 +1411,15 @@ def validate_chapter(
         blob = body.lower() + " " + " ".join(parsed.citations).lower()
         if cite.lower() not in blob:
             add("MISSING_CITATION", f"Missing required citation/attribution: {cite}")
+    # Unfinished scaffolding is not a stylistic nit: it is the one defect a
+    # buyer notices on the first page. Report each instance with the wording
+    # the repair prompt needs to actually fix it.
+    for residue in template_residue(body):
+        add(
+            "TEMPLATE_RESIDUE",
+            f"Unfinished template text left in the chapter: {residue}. Replace it "
+            "with real content written for this chapter.",
+        )
     if contract.required_table and not _has_table_for(contract.required_table, parsed.tables, body):
         add("MISSING_REQUIRED_TABLE", f"Missing required table: {contract.required_table}")
     if contract.required_workflow and not _has_workflow(contract.required_workflow, parsed.workflows, body):
@@ -1536,7 +1619,8 @@ def validate_manuscript_quality(
 
     # Word count is never sufficient for PASS.
     if result.word_count >= book.target_word_min and not any(
-        f.code in {"MISSING_REQUIRED_TABLE", "MISSING_REQUIRED_WORKFLOW", "MISSING_REQUIRED_CHECKLIST", "THIN_CHAPTER"}
+        f.code in {"MISSING_REQUIRED_TABLE", "MISSING_REQUIRED_WORKFLOW",
+                   "MISSING_REQUIRED_CHECKLIST", "THIN_CHAPTER", "TEMPLATE_RESIDUE"}
         for f in result.findings
     ):
         pass  # depth already enforced per chapter

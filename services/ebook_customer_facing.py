@@ -32,6 +32,14 @@ _FACTORY_BUDGET_RE = re.compile(
     re.I,
 )
 _ESCAPED_URL_RE = re.compile(r"https?\\://|www\\.")
+
+#: Zero-width characters used only as line-break hints inside long URLs.
+_ZERO_WIDTH_RE = re.compile(r"[​‌‍⁠﻿­]")
+
+
+def _strip_zero_width(text: str) -> str:
+    """Remove invisible break hints so a URL can be judged on its real text."""
+    return _ZERO_WIDTH_RE.sub("", str(text or ""))
 _LOCAL_HOST_RE = re.compile(
     r"127\.0\.0\.1|localhost|/ebook-workspace/|full-preview\?digest=|about:srcdoc",
     re.I,
@@ -608,7 +616,13 @@ def inspect_customer_facing_output(*, manuscript_md: str = "", html: str = "", p
             if _LOCAL_HOST_RE.search(href):
                 _add([{"code": "local_preview_url", "message": href[:120]}])
         for li in soup.select(".sources-list li, #sources li"):
-            raw = li.get_text(" ", strip=True)
+            # Zero-width spaces are typographic hints, not part of the URL.
+            # The PDF renderer honours no CSS rule that would wrap a long link,
+            # so break opportunities are inserted into the visible text; they
+            # are invisible on the page and vanish when a reader copies the
+            # link. Strip them before judging whether the URL is well formed,
+            # or every wrapped source reads as malformed.
+            raw = _strip_zero_width(li.get_text(" ", strip=True))
             if _ESCAPED_URL_RE.search(raw):
                 _add([{"code": "escaped_source_url", "message": raw[:120]}])
             url = unescape_source_url(raw)

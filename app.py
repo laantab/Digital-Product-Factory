@@ -3717,6 +3717,10 @@ def ebook_workspace_manuscript_route(project_id: int):
                 blocks.append(f"<h{level}>{_inline(text)}</h{level}>")
                 continue
             stripped = line.strip()
+            # A markdown horizontal rule is a section break, not the text "---".
+            if _re.fullmatch(r"(?:-{3,}|\*{3,}|_{3,})", stripped):
+                blocks.append("<hr>")
+                continue
             if (
                 not blocks
                 and stripped.startswith("*")
@@ -3731,15 +3735,31 @@ def ebook_workspace_manuscript_route(project_id: int):
                 continue
             if stripped.startswith("|"):
                 cells = [c.strip() for c in stripped.strip("|").split("|")]
+                # The separator row marks the row above it as the header.
                 if all(_re.fullmatch(r":?-{2,}:?", c or "") for c in cells):
+                    if blocks and blocks[-1].startswith("<tr><td>"):
+                        blocks[-1] = (
+                            blocks[-1]
+                            .replace("<tr><td>", "<tr><th>", 1)
+                            .replace("</td>", "</th>")
+                        )
                     continue
                 row = "".join(f"<td>{_inline(c)}</td>" for c in cells)
-                blocks.append(f"<table><tr>{row}</tr></table>")
+                # Consecutive rows belong to ONE table. Emitting a separate
+                # one-row <table> per line drew every row as its own floating
+                # box instead of a grid.
+                blocks.append(f"<tr>{row}</tr>")
                 continue
             blocks.append(f"<p>{_inline(stripped)}</p>")
 
         body = "\n".join(blocks)
         body = _re.sub(r"(?:<li>.*?</li>\n?)+", lambda m: f"<ul>{m.group(0)}</ul>", body)
+        # Wrap each run of adjacent rows in a single table.
+        body = _re.sub(
+            r"(?:<tr>.*?</tr>\n?)+",
+            lambda m: f"<table>{m.group(0)}</table>",
+            body,
+        )
         words = len(markdown.split())
         chapters = len(_re.findall(r"^##\s+", markdown, flags=_re.M))
         page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -3760,9 +3780,13 @@ def ebook_workspace_manuscript_route(project_id: int):
  h3 {{ font-size:1.15rem; margin:1.75rem 0 .5rem; color:#0f766e; }}
  p {{ margin:0 0 1rem; }}
  ul {{ margin:0 0 1rem 1.25rem; }} li {{ margin:.25rem 0; }}
- table {{ border-collapse:collapse; margin:.15rem 0; width:100%;
+ table {{ border-collapse:collapse; margin:1.25rem 0; width:100%;
    font-family:system-ui,sans-serif; font-size:.9rem; }}
- td {{ border:1px solid #cbd5e1; padding:.4rem .6rem; }}
+ td, th {{ border:1px solid #cbd5e1; padding:.45rem .65rem; text-align:left;
+   vertical-align:top; }}
+ th {{ background:#f1f5f9; font-weight:700; }}
+ tr:nth-child(even) td {{ background:#fbfcfd; }}
+ hr {{ border:0; border-top:1px solid #cbd5e1; margin:1.75rem 0; }}
 </style></head><body><div class="wrap"><header>
 <h1>{_html.escape(title)}</h1>
 {f'<p class="sub">{_html.escape(subtitle)}</p>' if subtitle else ''}

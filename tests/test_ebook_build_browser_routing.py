@@ -149,8 +149,27 @@ class EbookBuildRoutingTests(unittest.TestCase):
         self.assertIn("Preparing your ebook", render)
 
     def test_reopening_a_one_click_build_avoids_the_stage_rail(self):
-        self.assertIn("if (d.ebook_build) {\n      openEbookBuild(p.id);", APP_JS)
-        self.assertIn("if (_isEbookProject(p) && d0.ebook_build) {", APP_JS)
+        """Both reopen paths must reach the progress screen before the rail.
+
+        This used to pin the exact source line, which broke the moment the
+        condition legitimately grew to cover manuscripts awaiting automatic
+        repair. What matters is the order: the build screen is chosen first,
+        and the workspace stage rail is only reachable after it.
+        """
+        for opener, build_key in (
+            ("function openProject", "d.ebook_build"),
+            ("function runNextAction", "d0.ebook_build"),
+        ):
+            body = _function_body(APP_JS, opener)
+            self.assertIn("openEbookBuild(", body, f"{opener} never opens the build screen")
+            self.assertIn(build_key, body)
+            build_at = body.index("openEbookBuild(")
+            rail = re.search(r"ebook_project_workspace|ebook_workspace", body)
+            self.assertIsNotNone(rail, f"{opener} has no stage-rail branch to order against")
+            self.assertLess(
+                build_at, rail.start(),
+                f"{opener} can reach the stage rail before the progress screen",
+            )
 
     def test_ebook_button_is_named_for_what_it_does(self):
         self.assertIn('id === "ebook" ? "Build My Ebook" : "Generate Product"', APP_JS)
