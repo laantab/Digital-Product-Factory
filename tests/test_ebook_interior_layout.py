@@ -108,9 +108,15 @@ class EbookInteriorLayoutTests(unittest.TestCase):
     def test_toc_items_on_separate_lines(self):
         html = self._html()
         soup = BeautifulSoup(html, "html.parser")
-        rows = soup.select("ol.toc-list li")
+        # v1.4.1: the contents page is divs, not a list. Each row already carries
+        # its own number, and a list element stacked a second marker in front of
+        # it — an <ol> printed "1. 1 Chapter", a <ul> printed a bullet, because
+        # xhtml2pdf ignores list-style:none. The intent of this test is unchanged:
+        # every entry on its own line.
+        rows = soup.select(".toc-list .toc-row")
         self.assertGreaterEqual(len(rows), 2)
-        titles = [li.get_text(" ", strip=True) for li in rows]
+        self.assertEqual(soup.select("ol.toc-list li"), [], "contents is a list again")
+        titles = [row.get_text(" ", strip=True) for row in rows]
         self.assertTrue(any("What This Business Actually Looks Like" in t for t in titles))
         self.assertTrue(any("Startup Reality Check" in t for t in titles))
         pdf_text = _pdf_text(html)

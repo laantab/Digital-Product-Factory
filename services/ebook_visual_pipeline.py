@@ -205,6 +205,24 @@ def _parse_checklist(md: str) -> list[str]:
     return bullets[:8] if len(bullets) >= 4 else []
 
 
+def _parse_checkbox_items(md: str) -> list[str]:
+    """Only true '- [ ]' checkboxes — things the reader is meant to tick.
+
+    _parse_checklist falls back to any bullet list of four or more, which means
+    an ordinary prose bullet list can outrank a rich comparison table. A real
+    checkbox list is a deliberate authoring signal; a bullet list is not.
+    """
+    items = [
+        m.group(1).strip()
+        for m in (
+            re.match(r"^\s*[-*]\s*\[\s*[xX ]?\s*\]\s*(.+)$", ln)
+            for ln in str(md or "").splitlines()
+        )
+        if m
+    ]
+    return items[:8] if len(items) >= 3 else []
+
+
 def _parse_workflow(md: str) -> list[str]:
     steps: list[str] = []
     for line in str(md or "").splitlines():
@@ -310,8 +328,11 @@ def _key_point_items(body: str, *, chapter_title: str = "") -> list[str]:
     anchors = {w for w in re.findall(r"[a-z]{5,}", str(chapter_title or "").lower())}
     scored: list[tuple[int, str]] = []
     for sentence in _prose_sentences(body):
-        # Short enough to survive the card without being chopped mid-word.
-        if not (40 <= len(sentence) <= 150):
+        # Must survive _clean_sentence WHOLE. This bound used to be 150 while
+        # _clean_sentence truncates at _LABEL_LIMIT (78), so every sentence in
+        # between shipped onto the card ending in an ellipsis — the "clipped
+        # visual text" defect. A half-sentence is worse than no card (v1.4.1).
+        if not (40 <= len(sentence) <= _LABEL_LIMIT):
             continue
         if sentence.endswith("?") or _is_narrative(sentence):
             continue
@@ -329,6 +350,10 @@ def _key_point_items(body: str, *, chapter_title: str = "") -> list[str]:
     scored.sort(key=lambda row: row[0], reverse=True)
     items: list[str] = []
     for _score, text in scored:
+        # Belt and braces: never let a truncated fragment onto a card, whatever
+        # future edits do to the length bound above.
+        if "…" in text or text.endswith(("...", ",", ";")):
+            continue
         if text and text not in items:
             items.append(text)
         if len(items) >= 6:
@@ -383,9 +408,80 @@ def derive_local_aid_from_prose(
     return None
 
 
+#: First-column headers that mean "this table is ordered", not "compare these".
+_SEQUENCE_HEADERS = ("day", "week", "step", "stage", "when", "time", "phase", "order", "#")
+
+
+def _table_is_sequential(table: dict[str, Any]) -> bool:
+    """True when the table's first column is a day/step/time sequence."""
+    headers = [str(h or "").strip().lower() for h in (table.get("headers") or [])]
+    rows = table.get("rows") or []
+    if len(rows) < 3:
+        return False
+    if headers and headers[0] in _SEQUENCE_HEADERS:
+        return True
+    firsts = [str(r[0]).strip().lower() for r in rows if r and str(r[0]).strip()]
+    if len(firsts) < 3:
+        return False
+    # Plain 1,2,3… or "Day 1"/"Week 2"/"Step 3" down the first column.
+    if all(re.fullmatch(r"\d{1,3}", f) for f in firsts):
+        return True
+    lead = tuple(w for w in _SEQUENCE_HEADERS if w not in ("#", "order"))
+    return all(f.startswith(lead) for f in firsts)
+
+
+def _table_is_printed_in_chapter(body: str) -> bool:
+    """True when the chapter body contains a markdown table the interior renders.
+
+    The designed interior typesets pipe tables directly, so any such table is
+    already on the page as real, selectable text.
+    """
+    return bool(re.search(r"^\s*\|.*\|\s*$", str(body or ""), re.M)) and bool(
+        re.search(r"^\s*\|[\s:-]*-{2,}[\s:|-]*\|?\s*$", str(body or ""), re.M)
+    )
+
+
+def _aid_content_weight(aid: dict[str, Any] | None) -> int:
+    """How much the reader actually gets from this visual: items, or table rows."""
+    if not aid:
+        return 0
+    items = aid.get("items")
+    if isinstance(items, list) and items:
+        return len(items)
+    table = aid.get("table")
+    if isinstance(table, dict):
+        return len(table.get("rows") or [])
+    chart = aid.get("chart_data") or aid.get("chart")
+    if isinstance(chart, dict):
+        return len(chart.get("labels") or [])
+    return 0
+
+
+def _merge_like_tables(tables: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Join consecutive tables that share a header row.
+
+    A long sequence is often authored as two tables ("Week one", "Week two").
+    Treating only the first one as the chapter's table produced a graphic that
+    showed half a plan under a title promising all of it (v1.4.1).
+    """
+    merged: list[dict[str, Any]] = []
+    for table in tables:
+        headers = [str(h or "").strip().lower() for h in (table.get("headers") or [])]
+        if merged:
+            prev = [str(h or "").strip().lower() for h in (merged[-1].get("headers") or [])]
+            if headers and headers == prev:
+                merged[-1] = {
+                    "headers": merged[-1].get("headers"),
+                    "rows": list(merged[-1].get("rows") or []) + list(table.get("rows") or []),
+                }
+                continue
+        merged.append(dict(table))
+    return merged
+
+
 def _choose_aid(chapter_index: int, title: str, body: str) -> dict[str, Any] | None:
     """Pick at most one visual that adds instructional value. Omit when none."""
-    tables = _parse_tables(body)
+    tables = _merge_like_tables(_parse_tables(body))
     workflow = _parse_workflow(body)
     checklist = _parse_checklist(body)
     blob = f"{title}\n{body}".lower()
@@ -407,7 +503,70 @@ def _choose_aid(chapter_index: int, title: str, body: str) -> dict[str, Any] | N
                 "source": "local_manuscript_chart",
             }
         headers = tables[0].get("headers") or []
-        if len(headers) >= 3:
+        # A table whose first column is a day, week, step or time is a sequence,
+        # not a comparison. Drawing it as a comparison grid loses the one thing
+        # the reader needs from it: the order (v1.4.1).
+        if _table_is_sequential(tables[0]) and len(tables[0].get("rows") or []) <= 10:
+            rows = tables[0].get("rows") or []
+            items = []
+            for r in rows:
+                if len(r) < 2 or not str(r[0]).strip():
+                    continue
+                # First sentence of the cell, never a mid-sentence cut. If the
+                # pair still will not fit the card whole, drop the row rather
+                # than ship an ellipsis.
+                detail = re.split(r"(?<=[.!?])\s+", str(r[1]).strip())[0].rstrip(".")
+                lead = str(r[0]).strip()
+                # The renderer already numbers each step. Repeating a bare
+                # number from the first column prints "1  1 — Feet on the floor".
+                label = detail if re.fullmatch(r"\d{1,3}", lead) else f"{lead} — {detail}"
+                label = re.sub(r"[*_`#>]+", "", label)
+                label = re.sub(r"\s+", " ", label).strip()
+                if len(label) <= _LABEL_LIMIT:
+                    items.append(label)
+            items = items[:10]
+            if len(items) >= 3:
+                return {
+                    "type": "timeline",
+                    "visual_id": visual_id,
+                    "title": f"{title}: in order",
+                    "caption": f"The sequence {title} sets out, in order. The chapter table carries the full detail.",
+                    "items": items,
+                    "chapter": title,
+                    "chapter_index": chapter_index,
+                    "placement": "after_opening",
+                    "required": True,
+                    "source": "local_manuscript_sequence_table",
+                }
+        # A real checkbox list beats redrawing a reference table: the reader is
+        # meant to tick it. A plain bullet list does not — it would displace a
+        # far more useful table (v1.4.1).
+        checkboxes = _parse_checkbox_items(body)
+        if checkboxes and len(checkboxes) >= 4:
+            return {
+                "type": "checklist",
+                "visual_id": visual_id,
+                "title": f"{title}: checklist",
+                "caption": f"The checklist from {title}, laid out to work through.",
+                "items": checkboxes,
+                "chapter": title,
+                "chapter_index": chapter_index,
+                "placement": "after_opening",
+                "required": True,
+                "source": "local_manuscript_checklist",
+            }
+        # Two columns is the classic instructional comparison — myth vs reality,
+        # is vs is not, problem vs fix, cue vs practice. Requiring three sent
+        # every such chapter down to a truncated "key points" card instead of
+        # drawing the table it already had (v1.4.1).
+        #
+        # But only when the chapter does NOT already print that table. The
+        # designed interior typesets markdown tables itself, so drawing this one
+        # as a PNG put the identical table on the page twice — once as small,
+        # unselectable image text and again as the real thing directly below.
+        # The typeset table is better on every count, so the chapter falls
+        # through to a visual that adds something instead (v1.4.1).
+        if len(headers) >= 2 and not _table_is_printed_in_chapter(body):
             return {
                 "type": "comparison",
                 "visual_id": visual_id,
@@ -594,8 +753,26 @@ def plan_content_aware_visuals(
 
     chapters = numbered_chapters(manuscript_md)
     plan_chapters: list[dict[str, Any]] = []
+    recent_types: list[str] = []
     for i, (ctitle, body) in enumerate(chapters, start=1):
         aid = _choose_aid(i, ctitle, body)
+        # Every chapter carrying the identical layout reads as a template, not a
+        # designed book. When the last two chapters already used this type and
+        # the chapter offers a genuine alternative built from its own text,
+        # prefer the alternative. Never swap in something the chapter does not
+        # actually contain (v1.4.1).
+        if aid and len(recent_types) >= 2 and recent_types[-2:] == [aid.get("type")] * 2:
+            alternate = derive_local_aid_from_prose(i, ctitle, body)
+            if alternate and alternate.get("type") != aid.get("type"):
+                # Variety must never cost the reader content. A four-step card
+                # is not an acceptable substitute for a complete fourteen-day
+                # plan, so only take the alternative when it carries comparable
+                # substance.
+                weight = _aid_content_weight(aid)
+                if _aid_content_weight(alternate) >= max(4, int(weight * 0.6)):
+                    aid = alternate
+        if aid:
+            recent_types.append(str(aid.get("type") or ""))
         if aid is None:
             # A photograph is the right answer for concrete people, actions,
             # environments, equipment and physical demonstrations. It is the

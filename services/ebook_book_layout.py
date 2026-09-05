@@ -52,8 +52,11 @@ _DISCLAIMER_SPLIT = re.compile(
     r"(?:^|\n)(?:##\s+)?\*{0,2}Disclaimer\b\*{0,2}\s*",
     re.I,
 )
+# "References" and "Bibliography" are the headings a book actually uses; only
+# accepting "Sources" left the reference list glued onto the end of the
+# disclaimer, where it rendered as legal text instead of back matter (v1.4.1).
 _SOURCES_SPLIT = re.compile(
-    r"(?:^|\n)(?:##\s+)?\*{0,2}Sources\b\*{0,2}\s*",
+    r"(?:^|\n)(?:##\s+)?\*{0,2}(?:Sources|References|Bibliography|Further reading)\b\*{0,2}\s*",
     re.I,
 )
 
@@ -352,8 +355,31 @@ def extract_ebook_table_model(table) -> dict[str, list] | None:
     return {"headers": headers, "rows": body}
 
 
+#: Headers that name nothing. A table headed with these is an unfinished
+#: template, not a finished table — "Column A | Column B" reached a real book.
+PLACEHOLDER_TABLE_HEADERS = (
+    "column a", "column b", "column c", "column 1", "column 2", "column 3",
+    "row 1", "row 2", "header 1", "header 2", "field 1", "field 2",
+    "item 1", "item 2", "value 1", "value 2", "tbd", "todo", "lorem ipsum",
+    "placeholder", "text here", "your text",
+)
+
+
+def has_placeholder_headers(headers: list[str]) -> bool:
+    """True when any column header is generic template residue rather than a name."""
+    for header in headers or []:
+        norm = " ".join(str(header or "").strip().lower().split())
+        if norm in PLACEHOLDER_TABLE_HEADERS:
+            return True
+    return False
+
+
 def portrait_table_is_readable(headers: list[str], rows: list[list[str]] | None = None) -> bool:
     """Keep grid tables only when every column stays at or above the design minimum."""
+    # A placeholder-headed table is never readable, at any width: the header row
+    # tells the reader nothing about what the column holds (v1.4.1).
+    if has_placeholder_headers(headers):
+        return False
     n = len(headers or [])
     if n <= 3:
         return True
@@ -818,6 +844,20 @@ def render_designed_ebook_html(
         f"<title>{_e(title)}</title>",
         f"<style>{css}</style></head><body>",
     ]
+    # Static frame content for the running footer: book title on the left, page
+    # number on the right. xhtml2pdf pulls this into the @frame declared in the
+    # theme CSS and repeats it on every page (v1.4.1).
+    # One line, one frame. xhtml2pdf renders only the first static frame per
+    # page, ignores float/text-align inside it, and drops a <table> placed in
+    # one — so a separator, not layout, is what keeps the running title and the
+    # page number apart ("Beginners12" was the alternative).
+    parts.append(
+        '<div id="page-footer">'
+        f'<span class="foot-title">{_e(title)}</span>'
+        '<span class="foot-sep"> &#183; </span>'
+        '<span class="foot-num"><pdf:pagenumber /></span>'
+        "</div>"
+    )
     if include_title_page:
         parts.append('<section class="title-page" id="title-page">')
         parts.append(f'<h1 class="book-title">{_e(title)}</h1>')
@@ -848,9 +888,12 @@ def render_designed_ebook_html(
             )
             if BeautifulSoup(stripped, "html.parser").get_text(" ", strip=True):
                 parts.append(stripped)
+    # The previous line here explained the Factory's own back-matter convention
+    # to the customer ("They are not numbered chapters"), which is production
+    # language, not book copy (v1.4.1).
     parts.append(
-        '<p class="caption">The full disclaimer and source list appear as unnumbered back matter. '
-        "They are not numbered chapters.</p>"
+        '<p class="caption">No part of this publication may be reproduced or distributed '
+        "without the written permission of the author.</p>"
     )
     parts.append("</section>")
     parts.append("<pdf:nextpage />")
@@ -858,7 +901,11 @@ def render_designed_ebook_html(
     if chapters:
         parts.append('<section class="toc-page" id="toc">')
         parts.append("<h2>Contents</h2>")
-        parts.append('<ol class="toc-list">')
+        # Plain divs, not <ol>/<ul>. The entry already carries its own number
+        # in .toc-num, and xhtml2pdf ignores "list-style: none", so a list
+        # element stacks a second marker in front of it: an <ol> rendered
+        # "1. 1", "2. 2" and a <ul> rendered a bullet (v1.4.1 fix).
+        parts.append('<div class="toc-list">')
         for i, (ctitle, _cmd) in enumerate(chapters, start=1):
             page = ""
             if toc_page_numbers:
@@ -869,13 +916,13 @@ def render_designed_ebook_html(
                 else ""
             )
             parts.append(
-                "<li>"
+                '<div class="toc-row">'
                 f'<span class="toc-num">{i}</span> '
                 f'<a href="#chapter-{i}">{_e(ctitle)}</a>'
                 f"{page_span}"
-                "</li>"
+                "</div>"
             )
-        parts.append("</ol></section>")
+        parts.append("</div></section>")
 
     for i, (ctitle, cmd) in enumerate(chapters, start=1):
         body = _strip_leading_heading(_md_fragment(cmd), ctitle)

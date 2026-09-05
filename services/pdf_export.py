@@ -259,8 +259,8 @@ def _reset_pdf_image_dedupe() -> None:
 
 _PDF_CSS = """
 @page { size: letter; margin: 1.05in 0.75in 1.05in 0.75in; }
-/* EbookSans is registered via @font-face + reportlab TTFont. Do not set glyph tracking. */
-body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-serif; color: #111827;
+/* LiberationSans (SIL OFL) is registered via @font-face + reportlab TTFont. Do not set glyph tracking. */
+body { margin: 0; padding: 0; font-family: LiberationSans, Helvetica, sans-serif; color: #111827;
   font-size: 12pt; line-height: 1.55; }
 .pdf-page { display: block; }
 
@@ -304,7 +304,7 @@ body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-ser
 .toc-page { page-break-after: always; padding-top: 0.15in; }
 .toc-page h2 { font-size: 22pt; color: #134e4a; margin: 0 0 16pt; border: none; padding: 0; }
 .toc-list { list-style: none; margin: 0; padding: 0; }
-.toc-list li { padding: 7pt 0; border-bottom: 1pt solid #e2e8f0; font-size: 11pt; color: #334155; }
+.toc-list .toc-row { padding: 7pt 0; border-bottom: 1pt solid #e2e8f0; font-size: 11pt; color: #334155; }
 .toc-list a { color: #0f766e; text-decoration: none; font-weight: bold; }
 .toc-page-num { float: right; color: #64748b; font-weight: normal; }
 
@@ -313,7 +313,7 @@ body { margin: 0; padding: 0; font-family: EbookSans, Helvetica, Arial, sans-ser
 h1, h2, h3, .chapter-title, .chapter-page > h2:first-of-type, .title-page .title-main,
 .legal-page h2, .toc-page h2, .summary-page h2, .action-page h2, .resources-page h2,
 .chapter-num, td.pdf-h3-cell {
-  font-family: EbookSans-Bold, EbookSans, Helvetica, Arial, sans-serif;
+  font-family: LiberationSans-Bold, LiberationSans, Helvetica, sans-serif;
   font-weight: bold;
 }
 .chapter-num { display: block; font-size: 9pt; font-weight: bold; text-transform: uppercase; color: #0f766e; margin-bottom: 6pt; }
@@ -1539,7 +1539,7 @@ def _extract_structured_visual_pages(
             continue
         if "toc" in classes:
             toc_entries: list[tuple[str, str]] = []
-            for li in sheet.select(".toc-list li"):
+            for li in sheet.select(".toc-list .toc-row, .toc-list li"):
                 link = li.find("a")
                 text = link.get_text(strip=True) if link else li.get_text(" ", strip=True)
                 if text and _norm_heading(text) not in _SKIP_SECTION_HEADINGS:
@@ -1943,23 +1943,40 @@ def _sanitize_pdf_local_link_uris(pdf_bytes: bytes) -> bytes:
 def _html_to_pdf_xhtml2pdf(html_doc: str) -> bytes:
     from xhtml2pdf import pisa
 
-    from services.ebook_fonts import EBOOK_FONT, ebook_font_face_css, ensure_ebook_fonts, patch_xhtml2pdf_local_ttf
+    from services.ebook_fonts import (
+        EBOOK_FONT,
+        EBOOK_SERIF,
+        ebook_font_face_css,
+        ebook_serif_face_css,
+        ensure_ebook_fonts,
+        ensure_ebook_serif,
+        patch_xhtml2pdf_local_ttf,
+    )
 
     ensure_ebook_fonts()
     patch_xhtml2pdf_local_ttf()
     html_doc = _strip_letter_spacing_css(html_doc)
     uses_ebook_sans = EBOOK_FONT in html_doc
-    face_css = ebook_font_face_css() if uses_ebook_sans else ""
+    uses_ebook_serif = EBOOK_SERIF in html_doc
+    # A designed theme asks for the serif family. Injecting only the sans rules
+    # left the serif unembedded, so xhtml2pdf fell back to base-14 Times for the
+    # entire book (v1.4.1).
+    face_css = ""
+    if uses_ebook_sans:
+        face_css += ebook_font_face_css()
+    if uses_ebook_serif:
+        ensure_ebook_serif()
+        face_css += ("\n" if face_css else "") + ebook_serif_face_css()
     if face_css and "<style" in html_doc:
         html_doc = html_doc.replace("<style", f"<style>{face_css}</style><style", 1)
     elif face_css and "<head>" in html_doc:
         html_doc = html_doc.replace("<head>", f"<head><style>{face_css}</style>", 1)
 
     buf = io.BytesIO()
-    # Do not force EbookSans onto designed-path HTML (Georgia/Calibri). That
+    # Do not force the ebook face onto designed-path HTML (Georgia/Calibri). That
     # substitution wrapped tables and clipped the fixture's last pages.
     default_css = (
-        f"body {{ font-family: {EBOOK_FONT}, Helvetica, Arial, sans-serif; }}"
+        f"body {{ font-family: {EBOOK_FONT}, Helvetica, sans-serif; }}"
         if uses_ebook_sans
         else None
     )

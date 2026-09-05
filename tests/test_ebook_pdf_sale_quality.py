@@ -56,7 +56,7 @@ class EbookPdfSaleQualityTests(unittest.TestCase):
         self.assertTrue(
             any(
                 token in joined
-                for token in ("EbookSans", "Arial", "DejaVu", "Vera", "Bitstream")
+                for token in ("Liberation", "DejaVu", "Vera", "Bitstream")
             ),
             f"expected embedded TTF, got {fonts}",
         )
@@ -211,7 +211,7 @@ class EbookPdfSaleQualityTests(unittest.TestCase):
         self.assertIn("2", text)
         joined = " ".join(fonts)
         self.assertTrue(
-            any(token in joined for token in ("EbookSans", "Arial", "DejaVu", "Vera", "Bitstream")),
+            any(token in joined for token in ("Liberation", "DejaVu", "Vera", "Bitstream")),
             f"running header should use embedded body font, got {fonts}",
         )
 
@@ -330,7 +330,7 @@ class EbookPdfSaleQualityTests(unittest.TestCase):
     def test_20_heading_css_requests_bold_family(self):
         from services import pdf_export
 
-        self.assertIn("EbookSans-Bold", pdf_export._PDF_CSS)
+        self.assertIn("LiberationSans-Bold", pdf_export._PDF_CSS)
         self.assertRegex(
             pdf_export._PDF_CSS,
             r"\.chapter-title[^}]*font-weight:\s*bold",
@@ -384,7 +384,7 @@ class EbookPdfSaleQualityTests(unittest.TestCase):
         self.assertTrue(heading_fonts, "no heading spans")
         joined = " ".join(heading_fonts)
         self.assertTrue(
-            any(token in joined for token in ("Bold", "EbookSans-Bold")),
+            any(token in joined for token in ("Bold", "LiberationSans-Bold")),
             f"expected bold heading face, got {heading_fonts}",
         )
 

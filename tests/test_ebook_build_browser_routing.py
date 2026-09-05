@@ -243,13 +243,21 @@ class RuntimeFontProvenanceTests(unittest.TestCase):
         ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
         self.assertIn("services/fonts/*.ttf", ignore)
 
-    def test_bundled_fonts_are_only_a_last_resort(self):
+    def test_bundled_liberation_is_the_first_choice(self):
+        """v1.4.1: the shipped OFL face leads; the host's own fonts are not consulted.
+
+        This previously asserted the opposite (Arial from C:\\Windows\\Fonts first),
+        which is what put Monotype Arial inside sold PDFs. Licensing detail lives
+        in tests/test_ebook_font_licensing.py.
+        """
         src = (ROOT / "services" / "ebook_fonts.py").read_text(encoding="utf-8")
         block = src[src.index('"regular": _first_existing') :]
         block = block[: block.index("]")]
-        # EbookSans is the copy target, so it must rank last among candidates.
-        self.assertIn("EbookSans-regular.ttf", block)
-        self.assertLess(block.index("arial.ttf"), block.index("EbookSans-regular.ttf"))
+        self.assertIn("LiberationSans-Regular.ttf", block)
+        self.assertNotIn("arial", block.lower())
+        self.assertLess(
+            block.index("LiberationSans-Regular.ttf"), block.index("Vera.ttf")
+        )
 
 
 if __name__ == "__main__":

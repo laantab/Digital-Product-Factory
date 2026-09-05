@@ -33,6 +33,7 @@ class EbookTheme:
     table_header_bg: str
     callout_bg: str
     min_font_pt: float = 9.0
+    footer_size_pt: float = 9.0
     page_bg: str = "#ffffff"
     summary: str = ""
 
@@ -95,8 +96,8 @@ THEMES: dict[str, EbookTheme] = {
         theme_id="studio_clean",
         version="studio-v2",
         display_name="Studio Clean",
-        font_body="Georgia, 'Times New Roman', serif",
-        font_heading="Georgia, 'Times New Roman', serif",
+        font_body="LiberationSerif, Georgia, serif",
+        font_heading="LiberationSerif, Georgia, serif",
         color_primary="#0f766e",
         color_accent="#0d9488",
         color_text="#1e293b",
@@ -118,8 +119,8 @@ THEMES: dict[str, EbookTheme] = {
         theme_id="editorial_professional",
         version="editorial-v1",
         display_name="Editorial Professional",
-        font_body="Georgia, 'Times New Roman', serif",
-        font_heading="Georgia, 'Times New Roman', serif",
+        font_body="LiberationSerif, Georgia, serif",
+        font_heading="LiberationSerif, Georgia, serif",
         color_primary="#1e3a5f",
         color_accent="#b45309",
         color_text="#1c1917",
@@ -141,8 +142,8 @@ THEMES: dict[str, EbookTheme] = {
         theme_id="modern_practical",
         version="practical-v1",
         display_name="Modern Practical Guide",
-        font_body="Calibri, Arial, Helvetica, sans-serif",
-        font_heading="Calibri, Arial, Helvetica, sans-serif",
+        font_body="LiberationSans, Helvetica, sans-serif",
+        font_heading="LiberationSans, Helvetica, sans-serif",
         color_primary="#1d4ed8",
         color_accent="#0369a1",
         color_text="#0f172a",
@@ -193,9 +194,32 @@ def _shared_book_css(t: EbookTheme) -> str:
     para_gap = max(float(t.paragraph_spacing_em), 1.15)
     line_h = max(float(t.line_height), 1.64)
     return f"""
+/* The design spec has always declared footer_mode "page_number" and
+   header_mode "running_title", but nothing rendered them, so every designed
+   ebook shipped with no page numbers at all while its own contents page quoted
+   them. The static frame below is what makes the footer real (v1.4.1).
+   Keep comments OUTSIDE the @page block: xhtml2pdf's at-rule parser drops the
+   whole rule, frame included, if it meets one inside. */
 @page {{
   size: letter;
   margin: {t.margin_in}in;
+  @frame footer_frame {{
+    -pdf-frame-content: page-footer;
+    left: {t.margin_in}in;
+    top: 10.05in;
+    width: {8.5 - 2 * float(t.margin_in)}in;
+    height: 0.35in;
+  }}
+}}
+#page-footer {{
+  font-family: {t.font_body};
+  font-size: {t.footer_size_pt}pt;
+  color: {t.color_muted};
+  border-top: 0.5pt solid {t.color_rule};
+  padding-top: 4pt;
+}}
+#page-footer .foot-title, #page-footer .foot-sep, #page-footer .foot-num {{
+  font-size: {t.footer_size_pt}pt; color: {t.color_muted};
 }}
 /* xhtml2pdf treats unspecified display as inline; force real book blocks. */
 section, article, header, footer, nav, div, p, h1, h2, h3, h4, h5, h6,

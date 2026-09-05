@@ -7,15 +7,69 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ## 1.4.1 — 2026-09-04
 
-**Every chapter gets its own picture, and finished books reach 100%.**
+**Books now carry page numbers, a matching contents page, a disclaimer about
+the right subject, and a typeface we are allowed to sell.**
 
-A bug-fix release. One-click builds could stall at 80% or produce a book with
-the same photograph on several chapters. Both are fixed.
+A quality release. One-click builds could stall at 80% or repeat a photograph;
+both are fixed. Beyond that, a full editorial and design review of a finished
+book found a set of faults that had been shipping in every ebook, and those are
+fixed too.
 
 ### What changed
 Nothing new to learn — the corrections listed below happen on their own during
-a normal one-click build. The visible difference is that a book now reaches
-100% without stopping, and every chapter carries its own picture.
+a normal one-click build. The visible differences: a book reaches 100% without
+stopping, every chapter carries its own picture, every page after the cover
+shows a page number, the contents page agrees with those numbers, and the
+disclaimer talks about the book's actual subject.
+
+### Reading and navigation
+- **Books had no page numbers at all.** The design settings asked for a running
+  footer, but nothing drew one. Meanwhile the contents page quoted page numbers
+  the pages themselves never showed.
+- **The contents page numbered every line twice** — "1. 1 Why Five Minutes
+  Counts". The list added its own number in front of the one already there.
+- **The contents page pointed to the wrong pages.** Its numbers counted the
+  cover; the printed page numbers did not. Every entry was out by one, so
+  turning to "page 4" landed you on the wrong chapter.
+- **The copyright page explained the Factory's own filing rules to the reader**
+  ("They are not numbered chapters"). Replaced with a normal reservation notice.
+
+### Wording and sources
+- **Every book carried the same disclaimer, whatever it was about.** A
+  mindfulness guide warned readers about business registration, insurance,
+  profit margins and printer specifications. The disclaimer is now built from
+  the book's own subject: health books get a health notice, food books a
+  nutrition notice, business books the business one, and a book that raises no
+  special risk gets a short plain notice.
+- **Weak sources were only checked for one kind of book.** Quora, Goodreads,
+  Reddit, social sites and retail listings are now rejected as authorities for
+  any book.
+- **A reference list headed "References" was treated as missing** and glued onto
+  the end of the disclaimer, where it printed as legal text.
+- **Chapters were judged on whether they used the word "example"** rather than
+  on whether they contained one. A chapter with a full worked scenario failed;
+  one that said "for example, you might…" passed.
+
+### Pictures
+- **Cards were built by cutting sentences in half.** Text was accepted up to 150
+  characters and then trimmed at 78, so cards printed lines ending in "…".
+- **Two-column tables were skipped.** Myth-versus-reality, is-versus-is-not and
+  problem-versus-fix tables were passed over for a cut-up summary card instead.
+- **The same table was printed twice** — once as a small picture and again as
+  the real table just below it. The book keeps the real table.
+- **A day-by-day plan was drawn as a comparison grid**, losing the order, and a
+  plan written as two tables was drawn showing only half of it.
+- **Numbers were doubled** on step cards: "1  1 — Feet on the floor".
+
+### Typeface
+- **The typeface in every book was Monotype Arial, copied from Windows and
+  renamed "EbookSans".** A Windows licence does not cover putting that font
+  inside a book you sell. Books now use Liberation Sans and Liberation Serif,
+  which are free to redistribute and to sell with, and which match the old
+  metrics closely enough that page breaks did not move.
+- **The designed page layouts asked for Georgia and Calibri**, neither of which
+  was actually included, so every designed book quietly printed in Times
+  instead of the typeface it was meant to use.
 
 ### What was fixed
 - **The same photograph could appear on several chapters.** Neighbouring
@@ -49,6 +103,9 @@ a normal one-click build. The visible difference is that a book now reaches
 No. Build as before; the corrections happen automatically.
 
 ### Release gate
+New generic regression tests cover every fault listed above, so none of them
+can return unnoticed.
+
 Run once before release with a temporary database; results recorded with the
 release commit.
 

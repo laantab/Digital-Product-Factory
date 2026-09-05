@@ -140,8 +140,8 @@ def _stamp_fontname(page, fontfile: str | None) -> str:
     if not fontfile or not os.path.isfile(fontfile):
         return "helv"
     try:
-        page.insert_font(fontname="EbookSans", fontfile=fontfile)
-        return "EbookSans"
+        page.insert_font(fontname="LiberationSans", fontfile=fontfile)
+        return "LiberationSans"
     except Exception:
         return "helv"
 

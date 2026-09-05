@@ -353,7 +353,10 @@ class ChapterProductionTests(unittest.TestCase):
         texts = [(p.extract_text() or "") for p in reader.pages]
         seen_on = {}
         for i, text in enumerate(texts):
-            m = re.match(r"\s*Chapter\s+(\d+)", text or "")
+            # The chapter label is its own line, but it is no longer the FIRST
+            # line: v1.4.1 added the running footer, whose static frame extracts
+            # ahead of the page body. Matching only at position 0 found nothing.
+            m = re.search(r"(?m)^\s*Chapter\s+(\d+)\s*$", text or "")
             if m:
                 n = int(m.group(1))
                 self.assertNotIn(n, seen_on, f"Chapter {n} opener repeated")

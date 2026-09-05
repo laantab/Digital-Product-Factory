@@ -272,6 +272,88 @@ def canonical_example_id(raw: str) -> str:
     return text
 
 
+#: Words that merely announce an example.
+_EXAMPLE_CUES = (
+    "example", "hypothetical", "for instance", "case study", "scenario",
+    "suppose ", "imagine ", "picture this",
+)
+#: Past-tense narrative, which is how a worked example actually reads.
+_NARRATIVE_MARKERS = (
+    " she ", " he ", " they ", " her ", " his ", " their ",
+    " was ", " were ", " did ", " tried ", " told ", " decided ", " chose ",
+    " noticed ", " started ", " stopped ", " found ",
+)
+_NAME_STOPWORDS = {
+    "the", "this", "that", "then", "there", "these", "those", "what", "when",
+    "where", "which", "who", "why", "how", "and", "but", "for", "not", "you",
+    "your", "it", "its", "if", "so", "do", "does", "did", "a", "an", "in", "on",
+    "at", "by", "to", "of", "is", "are", "be", "chapter", "day", "week",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "mindfulness", "nhs", "one", "two", "three", "most", "many", "some", "every",
+}
+
+
+#: Domains that are not authorities for a factual claim. User-generated Q&A,
+#: book-listing and social sites carry no editorial review; vendor blogs are
+#: marketing for a competing product. A health guide shipped citing Quora and
+#: Goodreads alongside two meditation apps it was competing with (v1.4.1).
+NON_AUTHORITATIVE_SOURCE_DOMAINS = (
+    "quora.com",
+    "goodreads.com",
+    "reddit.com",
+    "answers.yahoo.com",
+    "ehow.com",
+    "wikihow.com",
+    "buzzfeed.com",
+    "pinterest.com",
+    "facebook.com",
+    "x.com",
+    "twitter.com",
+    "tiktok.com",
+    "instagram.com",
+    "amazon.com",
+    "etsy.com",
+)
+
+
+def _non_authoritative_sources(back_matter: str) -> set[str]:
+    """Domains cited in back matter that cannot support a factual claim."""
+    text = str(back_matter or "").lower()
+    return {domain for domain in NON_AUTHORITATIVE_SOURCE_DOMAINS if domain in text}
+
+
+def has_worked_example(body: str) -> bool:
+    """True when the chapter actually contains a concrete example.
+
+    The original check accepted any chapter containing the word "example" and
+    rejected every chapter without it, so a chapter carrying a full worked
+    scenario failed while one that merely said "for example, you might..."
+    passed. It tested vocabulary, not content.
+
+    A chapter now qualifies either by announcing an example with the usual
+    cues, or by demonstrating one: a recurring named person carried through
+    past-tense specifics (v1.4.1).
+    """
+    text = str(body or "")
+    low = text.lower()
+    if any(cue in low for cue in _EXAMPLE_CUES):
+        return True
+    # A named person, mentioned more than once, who does things.
+    candidates: dict[str, int] = {}
+    # Sentence-initial words are included: a worked example usually opens a
+    # paragraph with the person's name ("Tom believed..."), and excluding that
+    # position missed the very sentence that introduces them. Ordinary
+    # sentence-openers are handled by the stopword list instead.
+    for match in re.finditer(r"\b([A-Z][a-z]{2,11})\b", text):
+        word = match.group(1)
+        if word.lower() in _NAME_STOPWORDS:
+            continue
+        candidates[word] = candidates.get(word, 0) + 1
+    if not any(count >= 2 for count in candidates.values()):
+        return False
+    return sum(1 for marker in _NARRATIVE_MARKERS if marker in low) >= 3
+
+
 def _has_buy_vs_rent_vs_used_example(body: str) -> bool:
     """Require a labeled three-way comparison, not a passing mention of buying or renting."""
     text = body or ""
@@ -1109,15 +1191,73 @@ def assigned_research_for_chapter(book: BookContract, chapter: ChapterContract) 
     return "\n\n".join(parts)
 
 
+#: Topic-specific disclaimer clauses. Each is added only when the book's own
+#: subject actually raises that risk. Before v1.4.1 the business/printing text
+#: below was hardcoded for EVERY book, so a mindfulness guide shipped with a
+#: disclaimer about business registration, insurance, margins and printer
+#: specifications. A disclaimer that discusses the wrong subject is worse than
+#: none: it tells the reader nobody checked the book.
+_DISCLAIMER_BASE = (
+    "This guide provides general educational information. "
+    "It is not professional advice for your individual situation."
+)
+_DISCLAIMER_TOPICS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (
+        ("mindful", "meditat", "anxiet", "depress", "mental health", "wellbeing",
+         "well-being", "stress", "therapy", "sleep", "burnout", "self-care"),
+        "It is not medical or mental-health advice, diagnosis, or treatment, and it is "
+        "not a substitute for care from a qualified professional. If you are being "
+        "treated for a physical or mental health condition, speak with your doctor or "
+        "therapist before starting a new practice. If a practice brings up distressing "
+        "thoughts or feelings, stop and seek support from a health professional. If you "
+        "are in crisis or thinking about harming yourself, contact your local emergency "
+        "services or a crisis line immediately.",
+    ),
+    (
+        ("diet", "nutrition", "weight", "calorie", "macro", "recipe", "meal plan",
+         "fitness", "exercise", "workout"),
+        "It is not medical or nutritional advice. Talk to a doctor or registered "
+        "dietitian before changing how you eat or exercise, particularly if you are "
+        "pregnant, managing a health condition, or taking medication.",
+    ),
+    (
+        ("business", "pricing", "margin", "invoice", "client", "freelance", "startup",
+         "revenue", "profit", "tax", "insurance", "contract"),
+        "It does not provide legal, tax, insurance, or financial advice. Use qualified "
+        "local professionals for business registration, contract review, insurance "
+        "selection, and tax decisions. Any pricing, margin, or income examples are "
+        "hypothetical planning scenarios, not market-price claims or income promises.",
+    ),
+    (
+        ("print", "printer", "supplier", "manufactur", "material", "shipping"),
+        "Printer and supplier specifications must be verified against current "
+        "manufacturer documentation before you order.",
+    ),
+)
+
+
+def build_topic_disclaimer(*parts: str) -> str:
+    """A disclaimer that matches what the book is actually about.
+
+    Every clause is earned by the book's own subject matter. A book that raises
+    no specialist risk gets the neutral base sentence and nothing more.
+    """
+    blob = " ".join(str(p or "") for p in parts).lower()
+    clauses = [_DISCLAIMER_BASE]
+    for cues, clause in _DISCLAIMER_TOPICS:
+        if any(cue in blob for cue in cues):
+            clauses.append(clause)
+    return " ".join(clauses)
+
+
 def assemble_back_matter(book: BookContract) -> tuple[str, str]:
     """Unnumbered Disclaimer and Sources. Never numbered chapters."""
-    disclaimer = (
-        "This guide is for practical planning and general educational use. "
-        "It does not provide legal, tax, insurance, or financial advice. "
-        "Use qualified local professionals for business registration, contract review, "
-        "insurance selection, and tax decisions. Any pricing, margin, or media examples "
-        "are hypothetical planning scenarios only, not current market-price claims or income promises. "
-        "Printer specifications must be verified against current manufacturer documentation and suppliers."
+    disclaimer = build_topic_disclaimer(
+        getattr(book, "title", ""),
+        getattr(book, "subtitle", ""),
+        getattr(book, "topic", ""),
+        getattr(book, "audience", ""),
+        " ".join(str(getattr(c, "title", "")) for c in (getattr(book, "chapters", None) or [])),
     )
     if book.citations:
         sources = "\n".join(f"- {u}" for u in book.citations)
@@ -1437,7 +1577,7 @@ def validate_chapter(
                         f"Missing required example: {EXAMPLE_BUY_VS_RENT_VS_USED}",
                     )
                 continue
-            if not parsed.examples and "hypothetical" not in blob and "example" not in blob:
+            if not parsed.examples and not has_worked_example(body):
                 add("MISSING_REQUIRED_EXAMPLE", f"Missing required example: {raw}")
                 break
     if contract.required_table == "package-and-margin" and not _MONEY_RE.search(body):
@@ -1589,11 +1729,31 @@ def validate_manuscript_quality(
         result.findings.append(
             ChapterFinding(0, "", "MISSING_DISCLAIMER", "Disclaimer must appear as unnumbered back matter", QUALITY_NEEDS_CORRECTION)
         )
-    if "source" not in back_l and "**sources**" not in (md or "").lower():
+    # "References" and "Bibliography" are the headings a finished book uses.
+    # Only accepting "Sources" flagged a correctly-formed reference list as
+    # missing (v1.4.1).
+    _ref_words = ("source", "reference", "bibliography", "further reading")
+    _md_l = (md or "").lower()
+    if not any(w in back_l for w in _ref_words) and not any(
+        f"**{w}s**" in _md_l or f"## {w}s" in _md_l for w in ("source", "reference")
+    ):
         result.findings.append(
             ChapterFinding(0, "", "MISSING_SOURCES", "Sources must appear as unnumbered back matter", QUALITY_NEEDS_CORRECTION)
         )
-    elif book.citations and back:
+    else:
+        cited = _non_authoritative_sources(back)
+        if cited:
+            result.findings.append(
+                ChapterFinding(
+                    0,
+                    "",
+                    "WEAK_SOURCES",
+                    "Back matter cites sources that are not authorities: "
+                    + ", ".join(sorted(cited)),
+                    QUALITY_NEEDS_CORRECTION,
+                )
+            )
+    if book.citations and back:
         missing_src = [c for c in book.citations[:6] if c.lower() not in (back + md).lower()]
         # Require at least one research URL in sources for catalog books.
         if book.catalog_id == "event_photo_v1" and missing_src and not re.search(r"https?://", back):

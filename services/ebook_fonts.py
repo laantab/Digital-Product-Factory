@@ -14,10 +14,37 @@ import reportlab
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-EBOOK_FONT = "EbookSans"
-EBOOK_FONT_BOLD = "EbookSans-Bold"
-EBOOK_FONT_ITALIC = "EbookSans-Italic"
-EBOOK_FONT_BOLD_ITALIC = "EbookSans-BoldItalic"
+EBOOK_FONT = "LiberationSans"
+EBOOK_FONT_BOLD = "LiberationSans-Bold"
+EBOOK_FONT_ITALIC = "LiberationSans-Italic"
+EBOOK_FONT_BOLD_ITALIC = "LiberationSans-BoldItalic"
+
+# Serif companion. Design themes that ask for a serif previously named Georgia
+# and Times New Roman, neither of which is embedded, so xhtml2pdf silently fell
+# back to base-14 Times for the whole book — every designed ebook shipped in a
+# typeface nobody chose. Liberation Serif ships under the same OFL and is
+# metric-compatible with Times New Roman, so the themes keep their intended
+# look and now genuinely embed it (v1.4.1).
+EBOOK_SERIF = "LiberationSerif"
+EBOOK_SERIF_BOLD = "LiberationSerif-Bold"
+EBOOK_SERIF_ITALIC = "LiberationSerif-Italic"
+EBOOK_SERIF_BOLD_ITALIC = "LiberationSerif-BoldItalic"
+
+# Faces we must never embed in a product we sell. Redistributing these files, or
+# baking them into a customer PDF, needs a licence the Factory does not hold.
+# See services/fonts/FONT-PROVENANCE.md.
+PROPRIETARY_FONT_MARKERS = (
+    "arial",
+    "calibri",
+    "helvetica neue",
+    "times new roman",
+    "georgia",
+    "verdana",
+    "tahoma",
+    "segoe",
+    "cambria",
+    "ebooksans",
+)
 
 
 def _first_existing(paths: list[str]) -> str | None:
@@ -28,68 +55,63 @@ def _first_existing(paths: list[str]) -> str | None:
 
 
 def ebook_font_paths() -> dict[str, str | None]:
-    windir = os.environ.get("WINDIR", r"C:\Windows")
-    fonts_dir = os.path.join(windir, "Fonts")
+    """Resolve the four ebook faces.
+
+    Only fonts we may redistribute and embed in a sold PDF are eligible, so this
+    deliberately does NOT look in the operating system font directory. Liberation
+    Sans (SIL OFL 1.1) is metric-compatible with Arial, which is why swapping to
+    it left pagination intact. See services/fonts/FONT-PROVENANCE.md.
+    """
     here = os.path.dirname(os.path.abspath(__file__))
     bundled = os.path.join(here, "fonts")
     reportlab_fonts = os.path.join(os.path.dirname(reportlab.__file__), "fonts")
-    # Prefer Arial (Helvetica-compatible metrics) over ReportLab Vera, which is
-    # wider and wraps designed-path tables / last pages. Materialized EbookSans-*.ttf
-    # is a destination, not a preferred source.
     return {
         "regular": _first_existing([
-            os.path.join(fonts_dir, "arial.ttf"),
-            os.path.join(fonts_dir, "Arial.ttf"),
             os.path.join(bundled, "LiberationSans-Regular.ttf"),
             os.path.join(bundled, "DejaVuSans.ttf"),
             os.path.join(reportlab_fonts, "Vera.ttf"),
-            os.path.join(fonts_dir, "calibri.ttf"),
-            os.path.join(bundled, "EbookSans-regular.ttf"),
         ]),
         "bold": _first_existing([
-            os.path.join(fonts_dir, "arialbd.ttf"),
-            os.path.join(fonts_dir, "Arialbd.ttf"),
             os.path.join(bundled, "LiberationSans-Bold.ttf"),
             os.path.join(bundled, "DejaVuSans-Bold.ttf"),
             os.path.join(reportlab_fonts, "VeraBd.ttf"),
-            os.path.join(fonts_dir, "calibrib.ttf"),
-            os.path.join(bundled, "EbookSans-bold.ttf"),
         ]),
         "italic": _first_existing([
-            os.path.join(fonts_dir, "ariali.ttf"),
-            os.path.join(fonts_dir, "Ariali.ttf"),
             os.path.join(bundled, "LiberationSans-Italic.ttf"),
             os.path.join(bundled, "DejaVuSans-Oblique.ttf"),
             os.path.join(reportlab_fonts, "VeraIt.ttf"),
-            os.path.join(fonts_dir, "calibrii.ttf"),
-            os.path.join(bundled, "EbookSans-italic.ttf"),
         ]),
         "bold_italic": _first_existing([
-            os.path.join(fonts_dir, "arialbi.ttf"),
-            os.path.join(fonts_dir, "Arialbi.ttf"),
             os.path.join(bundled, "LiberationSans-BoldItalic.ttf"),
             os.path.join(bundled, "DejaVuSans-BoldOblique.ttf"),
             os.path.join(reportlab_fonts, "VeraBI.ttf"),
-            os.path.join(fonts_dir, "calibriz.ttf"),
-            os.path.join(bundled, "EbookSans-bold_italic.ttf"),
         ]),
     }
 
 
 def materialize_ebook_font_files() -> dict[str, str]:
-    """Copy discovered TTFs into services/fonts so xhtml2pdf can open a .ttf path."""
+    """Return a local .ttf path per face for xhtml2pdf to open.
+
+    The shipped faces already live in services/fonts, so the common path is a
+    straight passthrough. Only a face resolved from outside that directory (the
+    ReportLab fallbacks) is copied in, and it keeps its real filename — we never
+    rename a font, because a renamed file hides whose font it actually is. That
+    is exactly how proprietary Arial ended up shipping as "EbookSans".
+    """
     dest_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
     os.makedirs(dest_dir, exist_ok=True)
     out: dict[str, str] = {}
     for face, src in ebook_font_paths().items():
         if not src:
             continue
-        dest = os.path.join(dest_dir, f"EbookSans-{face}.ttf")
-        if os.path.abspath(src) != os.path.abspath(dest):
-            src_size = os.path.getsize(src)
-            dest_size = os.path.getsize(dest) if os.path.isfile(dest) else 0
-            if dest_size != src_size:
-                shutil.copyfile(src, dest)
+        if os.path.dirname(os.path.abspath(src)) == os.path.abspath(dest_dir):
+            out[face] = src
+            continue
+        dest = os.path.join(dest_dir, os.path.basename(src))
+        src_size = os.path.getsize(src)
+        dest_size = os.path.getsize(dest) if os.path.isfile(dest) else 0
+        if dest_size != src_size:
+            shutil.copyfile(src, dest)
         if os.path.isfile(dest):
             out[face] = dest
     return out
@@ -120,7 +142,7 @@ def patch_xhtml2pdf_local_ttf() -> None:
 
 @lru_cache(maxsize=1)
 def ensure_ebook_fonts() -> tuple[str, str, str, str]:
-    """Register EbookSans faces; return (regular, bold, italic, bold_italic)."""
+    """Register the ebook faces; return (regular, bold, italic, bold_italic)."""
     patch_xhtml2pdf_local_ttf()
     registered = set(pdfmetrics.getRegisteredFontNames())
     local = materialize_ebook_font_files()
@@ -194,3 +216,69 @@ def ebook_stamp_fontfile() -> str | None:
     """TrueType path for running headers/footers (same face as body, not Helvetica)."""
     local = materialize_ebook_font_files()
     return local.get("regular") or ebook_font_paths()["regular"]
+
+
+def ebook_serif_paths() -> dict[str, str | None]:
+    """Resolve the four serif faces from the bundled OFL family."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    bundled = os.path.join(here, "fonts")
+    return {
+        "regular": _first_existing([os.path.join(bundled, "LiberationSerif-Regular.ttf")]),
+        "bold": _first_existing([os.path.join(bundled, "LiberationSerif-Bold.ttf")]),
+        "italic": _first_existing([os.path.join(bundled, "LiberationSerif-Italic.ttf")]),
+        "bold_italic": _first_existing([os.path.join(bundled, "LiberationSerif-BoldItalic.ttf")]),
+    }
+
+
+@lru_cache(maxsize=1)
+def ensure_ebook_serif() -> tuple[str, str, str, str]:
+    """Register the serif faces; return (regular, bold, italic, bold_italic)."""
+    patch_xhtml2pdf_local_ttf()
+    paths = ebook_serif_paths()
+    if not paths.get("regular"):
+        return ("Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic")
+    registered = set(pdfmetrics.getRegisteredFontNames())
+    mapping = [
+        (EBOOK_SERIF, paths["regular"]),
+        (EBOOK_SERIF_BOLD, paths.get("bold") or paths["regular"]),
+        (EBOOK_SERIF_ITALIC, paths.get("italic") or paths["regular"]),
+        (EBOOK_SERIF_BOLD_ITALIC, paths.get("bold_italic") or paths.get("bold") or paths["regular"]),
+    ]
+    for name, path in mapping:
+        if name not in registered and path:
+            pdfmetrics.registerFont(TTFont(name, path))
+            registered.add(name)
+    return (EBOOK_SERIF, EBOOK_SERIF_BOLD, EBOOK_SERIF_ITALIC, EBOOK_SERIF_BOLD_ITALIC)
+
+
+@lru_cache(maxsize=1)
+def ebook_serif_face_css() -> str:
+    """@font-face rules for the serif family."""
+    ensure_ebook_serif()
+    paths = ebook_serif_paths()
+    if not paths.get("regular"):
+        return ""
+    parts: list[str] = []
+    faces = [
+        (paths.get("regular"), "normal", "normal"),
+        (paths.get("bold") or paths.get("regular"), "bold", "normal"),
+        (paths.get("italic") or paths.get("regular"), "normal", "italic"),
+        (paths.get("bold_italic") or paths.get("bold") or paths.get("regular"), "bold", "italic"),
+    ]
+    for path, weight, style in faces:
+        if not path:
+            continue
+        url = str(path).replace("\\", "/")
+        parts.append(
+            f"@font-face {{ font-family: '{EBOOK_SERIF}'; src: url('{url}'); "
+            f"font-weight: {weight}; font-style: {style}; }}"
+        )
+    bold_path = paths.get("bold") or paths.get("regular")
+    if bold_path:
+        url = str(bold_path).replace("\\", "/")
+        for weight in ("normal", "bold"):
+            parts.append(
+                f"@font-face {{ font-family: '{EBOOK_SERIF_BOLD}'; src: url('{url}'); "
+                f"font-weight: {weight}; font-style: normal; }}"
+            )
+    return "\n".join(parts)

@@ -1,6 +1,7 @@
 """Design-bound preview/PDF/ZIP export. No manuscript rewrite. No paid calls."""
 from __future__ import annotations
 
+import io as _io
 import hashlib
 import json
 import os
@@ -224,6 +225,28 @@ def render_designed_bundle(data: dict, *, output_dir: str | Path | None = None) 
     pdf_bytes = _merge(html_doc)
     chapter_titles = [ctitle for ctitle, _body in numbered_chapters(md)]
     toc_pages = find_designed_chapter_pages(pdf_bytes, chapter_titles)
+    # find_designed_chapter_pages counts the MERGED document, so its numbers
+    # include the prepended cover. The running footer is stamped by the interior
+    # render, which starts its own count at 1. Left uncorrected the contents
+    # page and the printed page numbers disagree by exactly the cover length,
+    # and a reader who turns to "page 4" lands on chapter 2 (v1.4.1).
+    cover_offset = 0
+    if cover_pdf:
+        from pypdf import PdfReader
+        from pypdf.errors import PdfReadError
+
+        try:
+            # _io, not io: this function later does its own "import io", which
+            # makes the name local for the whole body and leaves it unbound
+            # here. Catch only a genuine parse failure, so a mistake like that
+            # surfaces instead of silently zeroing the offset.
+            cover_offset = len(PdfReader(_io.BytesIO(cover_pdf)).pages)
+        except (PdfReadError, OSError, ValueError):
+            cover_offset = 0
+    if cover_offset and toc_pages:
+        toc_pages = {
+            title_key: max(1, int(page) - cover_offset) for title_key, page in toc_pages.items()
+        }
     if toc_pages:
         numbered_html = render_designed_ebook_html(
             title=title,

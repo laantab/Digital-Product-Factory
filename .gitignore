@@ -42,12 +42,20 @@ junit.xml
 _visual_swap_4249_candidates/
 _visual_swap_4249_snapshot/
 
-# Runtime-materialized fonts. services/ebook_fonts.py copies whichever TTF the
-# host machine provides (Arial, Liberation, DejaVu, Vera) into this directory
-# so xhtml2pdf can open a .ttf path. They are generated artifacts, not sources,
-# and the upstream faces they are copied from carry their own licences which we
-# are not entitled to redistribute.
+# Fonts. Anything copied in at runtime is a generated artifact and stays out of
+# the repo, because we are not entitled to redistribute an arbitrary host face.
 services/fonts/*.ttf
+# Liberation Sans is the exception and MUST ship: it is the family embedded in
+# every customer PDF, it is SIL OFL 1.1 licensed, and we are entitled to
+# redistribute it. See services/fonts/FONT-PROVENANCE.md.
+!services/fonts/LiberationSans-Regular.ttf
+!services/fonts/LiberationSans-Bold.ttf
+!services/fonts/LiberationSans-Italic.ttf
+!services/fonts/LiberationSans-BoldItalic.ttf
+!services/fonts/LiberationSerif-Regular.ttf
+!services/fonts/LiberationSerif-Bold.ttf
+!services/fonts/LiberationSerif-Italic.ttf
+!services/fonts/LiberationSerif-BoldItalic.ttf
 
 # SQLite write-ahead files
 projects.db-shm
