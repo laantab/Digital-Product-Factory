@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 
+import reportlab
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
@@ -26,36 +27,35 @@ def _first_existing(paths: list[str]) -> str | None:
 
 
 def _font_candidates() -> tuple[str | None, str | None, str | None]:
-    here = os.path.dirname(os.path.abspath(__file__))
-    # Prefer crossword-bundled faces when present; otherwise system fonts.
-    crossword_fonts = os.path.join(os.path.dirname(here), "crossword", "fonts")
-    windir = os.environ.get("WINDIR", r"C:\Windows")
-    fonts_dir = os.path.join(windir, "Fonts")
+    """Resolve the three faces from the shared redistributable family.
+
+    This deliberately does NOT look in the operating system font directory. The
+    crossword fonts directory it used to prefer has never existed, so every
+    candidate fell through to C:\\Windows\\Fonts\\arial.ttf and Monotype Arial was
+    embedded into every worksheet offered for sale. A Windows licence covers
+    using Arial on that machine; it does not cover shipping it in a product.
+
+    Liberation Sans (SIL OFL 1.1) is metric-compatible with Arial, so this swap
+    does not move a single line of any existing worksheet layout.
+    See services/fonts/FONT-PROVENANCE.md (v1.4.1).
+    """
+    shared = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts"
+    )
+    reportlab_fonts = os.path.join(os.path.dirname(reportlab.__file__), "fonts")
 
     regular = _first_existing([
-        os.path.join(crossword_fonts, "DejaVuSans.ttf"),
-        os.path.join(crossword_fonts, "LiberationSans-Regular.ttf"),
-        os.path.join(fonts_dir, "arial.ttf"),
-        os.path.join(fonts_dir, "Arial.ttf"),
-        os.path.join(fonts_dir, "calibri.ttf"),
-        os.path.join(fonts_dir, "segoeui.ttf"),
+        os.path.join(shared, "LiberationSans-Regular.ttf"),
+        os.path.join(reportlab_fonts, "Vera.ttf"),
     ])
     bold = _first_existing([
-        os.path.join(crossword_fonts, "DejaVuSans-Bold.ttf"),
-        os.path.join(crossword_fonts, "LiberationSans-Bold.ttf"),
-        os.path.join(fonts_dir, "arialbd.ttf"),
-        os.path.join(fonts_dir, "Arialbd.ttf"),
-        os.path.join(fonts_dir, "calibrib.ttf"),
-        os.path.join(fonts_dir, "segoeuib.ttf"),
+        os.path.join(shared, "LiberationSans-Bold.ttf"),
+        os.path.join(reportlab_fonts, "VeraBd.ttf"),
         regular,
     ])
     italic = _first_existing([
-        os.path.join(crossword_fonts, "DejaVuSans-Oblique.ttf"),
-        os.path.join(crossword_fonts, "LiberationSans-Italic.ttf"),
-        os.path.join(fonts_dir, "ariali.ttf"),
-        os.path.join(fonts_dir, "Ariali.ttf"),
-        os.path.join(fonts_dir, "calibrii.ttf"),
-        os.path.join(fonts_dir, "segoeuii.ttf"),
+        os.path.join(shared, "LiberationSans-Italic.ttf"),
+        os.path.join(reportlab_fonts, "VeraIt.ttf"),
         regular,
     ])
     return regular, bold, italic

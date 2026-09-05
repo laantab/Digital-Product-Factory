@@ -163,5 +163,118 @@ class FontResolutionTests(unittest.TestCase):
             self.assertIn(f"!services/fonts/LiberationSans-{face}.ttf", ignore)
 
 
+class EveryBuilderEmbedsOnlyLicensedFontsTests(unittest.TestCase):
+    """The ebook was not the only product embedding a proprietary face.
+
+    Crossword and math-worksheet PDFs resolved their TrueType face by looking in
+    C:\\Windows\\Fonts. Neither had a bundled fonts directory, so both fell
+    through to Monotype Arial and embedded it into products that are sold.
+
+    This is deliberately a scan of every font resolver in services/, not a list
+    of the two that were wrong, so a new product builder cannot quietly
+    reintroduce the same pattern.
+    """
+
+    #: Substrings that mean "read a font from wherever this machine keeps them".
+    OS_FONT_LOOKUPS = (
+        "windir",
+        "c:\\windows",
+        "/system/library/fonts",
+        "/usr/share/fonts",
+        "~/library/fonts",
+    )
+    #: Proprietary faces by filename stem.
+    PROPRIETARY_FILES = (
+        "arial", "calibri", "segoeui", "tahoma", "verdana",
+        "cambria", "georgia", "times.ttf", "timesbd", "comic", "impact",
+    )
+
+    def _font_modules(self) -> list[pathlib.Path]:
+        found = [p for p in (ROOT / "services").rglob("*.py") if "font" in p.name.lower()]
+        self.assertTrue(found, "no font modules found — has the layout changed?")
+        return found
+
+    @staticmethod
+    def _executable_code(path: pathlib.Path) -> str:
+        """Source with docstrings and comments removed.
+
+        These modules describe in prose exactly which proprietary faces they
+        used to reach for, so a naive text scan flags the explanation as if it
+        were the offence. Only real code is checked.
+        """
+        import ast as _ast
+
+        source = path.read_text(encoding="utf-8", errors="replace")
+        lines = source.splitlines()
+        blanked: set[int] = set()
+        try:
+            tree = _ast.parse(source)
+        except SyntaxError:
+            return source.lower()
+        for node in _ast.walk(tree):
+            if isinstance(node, _ast.Expr) and isinstance(node.value, _ast.Constant):
+                if isinstance(node.value.value, str):
+                    end = node.value.end_lineno or node.value.lineno
+                    blanked.update(range(node.value.lineno, end + 1))
+        kept = [
+            line.split("#", 1)[0]
+            for i, line in enumerate(lines, start=1)
+            if i not in blanked
+        ]
+        return "\n".join(kept).lower()
+
+    def test_no_builder_reads_the_os_font_directory(self):
+        offenders = []
+        for path in self._font_modules():
+            code = self._executable_code(path)
+            for token in self.OS_FONT_LOOKUPS:
+                if token in code:
+                    offenders.append(f"{path.relative_to(ROOT)} -> {token!r}")
+        self.assertEqual(
+            offenders, [],
+            "a product builder resolves fonts from this machine, which embeds "
+            "whatever face happens to be installed: " + "; ".join(offenders),
+        )
+
+    def test_no_builder_names_a_proprietary_font_file(self):
+        offenders = []
+        # A deny-list of family names is legitimate and looks identical to a
+        # lookup unless the surrounding context is considered. Only flag a
+        # proprietary name that is being used to BUILD A PATH to a font file.
+        path_context = ("os.path.join", ".ttf", "fonts_dir", "\\fonts", "/fonts")
+        for path in self._font_modules():
+            for line in self._executable_code(path).splitlines():
+                if not any(marker in line for marker in path_context):
+                    continue
+                for stem in self.PROPRIETARY_FILES:
+                    if stem in line:
+                        offenders.append(f"{path.relative_to(ROOT)} -> {stem}: {line.strip()[:60]}")
+        self.assertEqual(
+            offenders, [],
+            "a builder resolves a path to a proprietary font file: " + "; ".join(offenders),
+        )
+
+    def test_crossword_and_math_resolve_to_the_shared_licensed_family(self):
+        from services.crossword.pdf_fonts import _font_candidates as crossword_faces
+        from services.math_worksheet.pdf_fonts import _font_candidates as math_faces
+
+        for label, faces in (("crossword", crossword_faces()), ("math worksheet", math_faces())):
+            for path in faces:
+                self.assertIsNotNone(path, f"{label} face did not resolve")
+                self.assertIn(
+                    "Liberation", os.path.basename(str(path)),
+                    f"{label} resolved to {path}, which is not the licensed family",
+                )
+
+    def test_one_shared_family_serves_every_builder(self):
+        """A second copy of the fonts is a second thing to get wrong."""
+        copies = [p for p in (ROOT / "services").rglob("Liberation*.ttf")]
+        dirs = {p.parent for p in copies}
+        self.assertEqual(
+            len(dirs), 1,
+            f"the licensed family is duplicated across {len(dirs)} directories: {sorted(map(str, dirs))}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

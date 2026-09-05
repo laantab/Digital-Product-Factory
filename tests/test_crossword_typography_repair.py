@@ -129,11 +129,19 @@ class TestCrosswordTypographyContracts(unittest.TestCase):
                         fonts.add(span.get("font") or "")
         # Must not rely solely on Helvetica Type1 for body text.
         joined = " ".join(fonts).lower()
+        # v1.4.1: the face is Liberation Sans (SIL OFL), shipped in
+        # services/fonts. It used to be Arial read from C:\\Windows\\Fonts and
+        # embedded into crosswords that are sold. PyMuPDF reports the embedded
+        # file's own name, not the ReportLab alias.
         self.assertTrue(
             CROSSWORD_FONT.lower() in joined
-            or "arial" in joined
-            or CROSSWORD_FONT_BOLD.lower() in joined,
+            or CROSSWORD_FONT_BOLD.lower() in joined
+            or "liberation" in joined,
             f"Expected embedded crossword fonts, found {fonts}",
+        )
+        self.assertFalse(
+            fonts <= {"Helvetica", "Helvetica-Bold", "Helvetica-Oblique"},
+            f"no TrueType face embedded, only base-14: {fonts}",
         )
 
     def test_heading_and_clue_minimum_sizes(self):

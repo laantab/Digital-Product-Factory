@@ -241,11 +241,21 @@ class MathWorksheetPdfVisualQaTests(unittest.TestCase):
                         )
 
         joined = " ".join(fonts).lower()
+        # v1.4.1: the face is Liberation Sans (SIL OFL), shipped in
+        # services/fonts. It used to be Arial read from C:\\Windows\\Fonts and
+        # embedded into worksheets that are sold. PyMuPDF reports the embedded
+        # file's own name, which is why "Liberation" appears rather than the
+        # ReportLab alias. Helvetica alone still fails: that means no TTF was
+        # embedded at all.
         self.assertTrue(
             MATH_FONT.lower() in joined
-            or "arial" in joined
-            or MATH_FONT_BOLD.lower() in joined,
+            or MATH_FONT_BOLD.lower() in joined
+            or "liberation" in joined,
             f"Expected embedded math fonts, found {fonts}",
+        )
+        self.assertFalse(
+            fonts <= {"Helvetica", "Helvetica-Bold", "Helvetica-Oblique"},
+            f"no TrueType face embedded, only base-14: {fonts}",
         )
 
     def test_answers_remain_mathematically_correct(self):
