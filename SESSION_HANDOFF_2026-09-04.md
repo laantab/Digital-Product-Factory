@@ -21,16 +21,20 @@ To apply it:
    python "C:\Users\user\Desktop\Handoff 2026-09-04\recovery-scripts\apply_to_live_db.py" --repo . --from-db C:\path\to\projects_test.db
    ```
 
-   **Note:** the temporary database lived at `/tmp/f351/projects_test.db` inside
-   the previous session's sandbox and is **gone**. See "If the temp database is
-   missing" below — you must rebuild it first.
 4. Then re-run with `--commit`.
+
+**Correction (checked 2026-09-05):** the staged database at
+`/tmp/f351/projects_test.db` **survived** the session and still holds the
+rebuilt project — 9,506 words, 9 chapters, DRAFT, and its PDF on disk matches
+`6202e3a5…`. So while the original session remains open, the apply is a single
+command and no rebuild is needed. The rebuild instructions below apply only to a
+genuinely fresh session, where that sandbox path will be gone.
 
 The script refuses to run if the database is locked or the write-ahead files are
 non-empty, takes its own timestamped backup first, verifies the PDF/ZIP/manifest
 hashes, writes project 351 only, and leaves the project DRAFT.
 
-### If the temp database is missing (it will be)
+### If the temp database is missing (only in a fresh session)
 
 Rebuild it from the live database in three commands. This makes no paid calls
 and does not touch the live database:
@@ -122,7 +126,21 @@ regex that assumed no footer).
 5. Retire `Update_API_Key_Anywhere.bat`.
 6. Long-standing: plan limits in `/generate-product`; rotate Tavily + Pexels keys;
    real user accounts before live payments; 1.5 GB DB purge; repo visibility.
-7. Push `8ab30d8` and `8e724ea` to origin/main from the owner's PC.
+7. Push to origin/main from the owner's PC. **`main` is 7 commits ahead of
+   `origin/main`, not 3.** Four of them predate this session and have been
+   sitting unpushed since the one-button ebook work:
+
+   ```
+   2187faa Add 2026-09-04 session handoff
+   8e724ea Release v1.4.1 - Raise ebook editorial and design quality
+   8ab30d8 Release v1.4.1 - Complete one-click ebook production
+   26280ed Release v1.4.0 - Add one-click ebook builds and version management
+   0edb996 Improve automatic ebook visual relevance and fallback strategy
+   317eab9 Preserve ebook visual progress and improve photo queries
+   796ae28 Migrate one-button ebook builds to the workspace pipeline
+   ```
+
+   Nothing is backed up off this machine until these are pushed.
 
 ### New, raised this session
 8. **Apply project 351 to the live database** — see the top of this file.
