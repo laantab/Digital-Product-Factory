@@ -40,6 +40,7 @@
     "tests/test_ebook_correction_estimate.py",
     "tests/test_ebook_manuscript_quality.py",
     "tests/test_ebook_design_export.py",
+    "tests/test_ebook_customer_package.py",
     "tests/test_ebook_visual_pipeline.py",
     "tests/test_ebook_visual_match.py",
     "tests/test_ebook_automatic_visuals.py",
