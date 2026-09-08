@@ -10,6 +10,7 @@ Exports reuse the ebook export plumbing (``_write_package`` + the
 whitelisted filenames (ebook.html / ebook.txt / package.zip) so they pass
 ``is_allowed_download`` for any product type, not just ebooks.
 """
+import hashlib
 import html
 import json
 import os
@@ -331,28 +332,64 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
         from services.ebook_design_export import is_ebook_workspace
 
         if is_ebook_workspace(data):
+            from services.ebook_customer_package import (
+                apply_promoted_identity,
+                certified_pdf_sha256,
+                load_reusable_workspace_export,
+                promote_zip_to_customer_final,
+            )
             from services.ebook_design_export import apply_workspace_design_to_export
 
-            project = apply_workspace_design_to_export(project)
-            data = project.get("data") or {}
-            pdf_bytes = project.get("_design_export_pdf") or b""
-            zip_bytes = project.get("_design_export_zip") or b""
-            html_doc = str(data.get("ebook_preview_html") or data.get("preview_html") or "")
-            if not pdf_bytes.startswith(b"%PDF"):
-                raise ValueError("Designed ebook PDF is missing after preflight.")
-            package_id = str(data.get("package_id") or uuid.uuid4().hex)
+            reused = load_reusable_workspace_export(data, EXPORTS_DIR)
+            if reused is not None:
+                pdf_bytes = reused["pdf_bytes"]
+                zip_bytes = reused["zip_bytes"]
+                html_doc = reused.get("html") or str(
+                    data.get("ebook_preview_html") or data.get("preview_html") or ""
+                )
+                package_id = reused["package_id"]
+            else:
+                project = apply_workspace_design_to_export(project)
+                data = project.get("data") or {}
+                pdf_bytes = project.get("_design_export_pdf") or b""
+                zip_bytes = project.get("_design_export_zip") or b""
+                html_doc = str(data.get("ebook_preview_html") or data.get("preview_html") or "")
+                if not pdf_bytes.startswith(b"%PDF"):
+                    raise ValueError("Designed ebook PDF is missing after preflight.")
+                package_id = str(
+                    data.get("export_package_id")
+                    or data.get("package_id")
+                    or uuid.uuid4().hex
+                )
+
+            expected_pdf = certified_pdf_sha256(data) or hashlib.sha256(pdf_bytes).hexdigest()
+            promoted = promote_zip_to_customer_final(
+                zip_bytes,
+                expected_pdf_sha256=expected_pdf,
+            )
+            zip_bytes = promoted["zip_bytes"]
+            apply_promoted_identity(data, promoted)
+            project["data"] = data
+
             pkg_dir = os.path.join(EXPORTS_DIR, package_id)
             os.makedirs(pkg_dir, exist_ok=True)
+            sidecar = dict(promoted.get("sidecar_manifest") or {})
+            identity = data.get("ebook_export_identity")
+            if isinstance(identity, dict):
+                sidecar.update(identity)
+                sidecar["verification_copy"] = False
+                sidecar["package_status"] = "customer_final"
+                sidecar["pdf_sha256"] = promoted["pdf_sha256"]
+                sidecar["zip_sha256"] = promoted["zip_sha256"]
             files = {
                 "ebook.html": html_doc,
                 "ebook.pdf": pdf_bytes,
-                "manifest.json": json.dumps(data.get("ebook_export_identity") or {}, indent=2),
+                "manifest.json": json.dumps(sidecar, indent=2),
             }
             _write_package(package_id, files)
-            if zip_bytes:
-                zip_path = os.path.join(pkg_dir, "package.zip")
-                with open(zip_path, "wb") as fh:
-                    fh.write(zip_bytes)
+            zip_path = os.path.join(pkg_dir, "package.zip")
+            with open(zip_path, "wb") as fh:
+                fh.write(zip_bytes)
             exports_files = {
                 "html": {"name": "product.html", "url": _download_url(package_id, "ebook.html")},
                 "pdf": {"name": "product.pdf", "url": _download_url(package_id, "ebook.pdf")},
