@@ -478,6 +478,18 @@ def _repeated_heading_bodies_alike(text: str, heading: str) -> bool:
     return False
 
 
+def _chapter_sections(text: str) -> list[str]:
+    """Split a manuscript into its chapter bodies (whole text when unchaptered)."""
+    marks = list(_H2_RE.finditer(text or ""))
+    if not marks:
+        return [text or ""]
+    sections = []
+    for i, m in enumerate(marks):
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
+        sections.append(text[m.end():end])
+    return sections
+
+
 def find_customer_content_defects(md_text: str) -> list[str]:
     """Return defect codes for leaked / placeholder / generic content."""
     defects: list[str] = []
@@ -522,15 +534,24 @@ def find_customer_content_defects(md_text: str) -> list[str]:
     for p, n in pcounts.items():
         if n >= 3:
             defects.append(f"duplicate_paragraph:{p[:60]}")
-    # Checklist duplicates — 3+ identical items (Average Joe pattern)
-    items = re.findall(r"^\s*[-*]\s+(.+)$", text, re.M)
-    icounts: dict[str, int] = {}
-    for it in items:
-        key = it.strip().lower()
-        icounts[key] = icounts.get(key, 0) + 1
-    for it, n in icounts.items():
-        if n >= 3 and len(it) > 12:
-            defects.append(f"duplicate_checklist:{it[:60]}")
+    # Checklist duplicates — 3+ identical items INSIDE ONE CHAPTER (the padded
+    # "Average Joe" checklist). Counting book-wide punished legitimate
+    # recurrence: a meal-prep guide lists "frozen vegetables" once in the
+    # starter list, once in the weekly plan and once in the 30-day plan, and an
+    # 11,000-word manuscript that passed every quality check was demoted to
+    # Needs correction over two grocery items. Same reasoning as the recurring
+    # heading rule above — repetition across chapters is book structure,
+    # repetition inside one chapter is padding.
+    for section in _chapter_sections(text):
+        icounts: dict[str, int] = {}
+        for it in re.findall(r"^\s*[-*]\s+(.+)$", section, re.M):
+            key = it.strip().lower()
+            icounts[key] = icounts.get(key, 0) + 1
+        for it, n in icounts.items():
+            if n >= 3 and len(it) > 12:
+                code = f"duplicate_checklist:{it[:60]}"
+                if code not in defects:
+                    defects.append(code)
     return defects
 
 

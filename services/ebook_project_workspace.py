@@ -9,6 +9,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -68,6 +69,23 @@ STATUS_AWAITING = "awaiting_approval"
 STATUS_APPROVED = "approved"
 STATUS_NEEDS_CORRECTION = "needs_correction"
 STATUS_BLOCKED = "blocked"
+
+# What the customer is told the next step is. Internal action names leak
+# production vocabulary ("Request Correction", "Generate Outline Options") into
+# a screen a first-time author reads, so the ribbon uses plain wording while the
+# action name underneath is unchanged.
+CUSTOMER_ACTION_LABELS = {
+    "run_research": "Research this idea",
+    "approve_research": "Review the research",
+    "save_title": "Set your title",
+    "approve_title": "Approve your title",
+    "generate_outline_options": "Plan your chapters",
+    "approve_outline": "Approve your chapter plan",
+    "generate_manuscript": "Write your chapters",
+    "approve_manuscript": "Review and approve your draft",
+    "request_correction": "Fix one chapter",
+    "correct_manuscript": "Fix one chapter",
+}
 
 STATUS_LABELS = {
     STATUS_NOT_STARTED: "Not started",
@@ -1133,12 +1151,8 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
         "current_stage": ws.get("current_stage"),
         "next_action": ws.get("next_action"),
         "next_action_label": (
-            PAID_ACTIONS.get(str(ws.get("next_action") or ""), {}).get("label")
-            or (
-                "Request Correction"
-                if ws.get("next_action") == "request_correction"
-                else None
-            )
+            CUSTOMER_ACTION_LABELS.get(str(ws.get("next_action") or ""))
+            or PAID_ACTIONS.get(str(ws.get("next_action") or ""), {}).get("label")
             or str(ws.get("next_action") or "").replace("_", " ").title()
         ),
         "budget": {
@@ -1160,6 +1174,20 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
         "ebook_workflow_stage": data.get("ebook_workflow_stage") or "",
         "fine_stage_labels": FINE_STAGE_LABELS,
         "gates": {
+            "run_research_enabled": not is_approved(ws, "research")
+            and stage_status(ws, "research") in {STATUS_NOT_STARTED, STATUS_BLOCKED},
+            "approve_research_enabled": not is_approved(ws, "research")
+            and bool((ws.get("research_payload") or {}).get("summary")),
+            "approve_title_enabled": is_approved(ws, "research")
+            and not is_approved(ws, "title")
+            and bool(data.get("title") and data.get("subtitle")),
+            "draft_outline_enabled": is_approved(ws, "title")
+            and not is_approved(ws, "outline")
+            and stage_status(ws, "outline") == STATUS_NOT_STARTED
+            and bool(data.get("title") and data.get("subtitle")),
+            "approve_outline_enabled": is_approved(ws, "title")
+            and not is_approved(ws, "outline")
+            and bool(ws.get("outline_options")),
             "manuscript_enabled": is_approved(ws, "outline")
             and stage_status(ws, "manuscript")
             in {STATUS_NOT_STARTED, STATUS_IN_PROGRESS}
@@ -1909,6 +1937,142 @@ def cancel_paid_estimate(data: dict) -> dict:
     return data
 
 
+def chapter_progress_reporter(progress_key: str, action_label: str):
+    """Turn chapter-pipeline events into published progress.
+
+    Returns None when no key was supplied, so the pipeline runs exactly as
+    before in tests and in any caller that does not want progress. Reporting is
+    best-effort by construction: the tracker swallows its own errors, and the
+    pipeline guards the callback, so nothing here can fail a paid generation
+    that is already in flight.
+    """
+    if not progress_key:
+        return None
+
+    from services import progress_tracker
+
+    def report(event: dict) -> None:
+        total = int(event.get("total") or 0)
+        done = int(event.get("done") or 0)
+        order = event.get("order")
+        title = str(event.get("title") or "").strip()
+        if event.get("phase") == "chapter_start":
+            step = f"Writing chapter {order} of {total}"
+            if title:
+                step += f" — {title}"
+            progress_tracker.advance(progress_key, done=done, total=total, step_label=step)
+        else:
+            progress_tracker.advance(
+                progress_key,
+                done=done,
+                total=total,
+                step_label=f"Reviewing chapter {order} of {total}",
+            )
+
+    del action_label  # kept for call-site readability
+    return report
+
+
+def recheck_manuscript_quality(data: dict) -> dict:
+    """Re-run every free validator against the manuscript already on disk.
+
+    Zero provider calls, zero spend, no ledger movement — it only re-reads the
+    preserved draft and re-applies outline fidelity, the manuscript quality
+    engine, and the customer content checks.
+
+    This exists because a manuscript the customer already paid for could get
+    stranded: a validator that later turns out to be wrong (or is corrected)
+    leaves a stale ``needs_correction`` on the stage, and the only control on
+    offer is a *paid* correction. Re-checking is free, so a corrected rule can
+    release work that was never actually defective.
+
+    It can only ever move the manuscript between ``needs_correction`` and
+    ``awaiting_approval``. It never approves, never edits the manuscript, and
+    never touches an approved or locked stage.
+    """
+    from services.ebook_document import find_customer_content_defects
+    from services.ebook_manuscript_engine import (
+        QUALITY_FAIL,
+        QUALITY_PASS,
+        apply_quality_to_workspace,
+        build_book_contract,
+        validate_manuscript_quality,
+    )
+    from services.ebook_outline_fidelity import validate_manuscript_outline_fidelity
+
+    data = ensure_workspace(data)
+    ws = data["ebook_workspace"]
+
+    md = str(data.get("content") or data.get("ebook") or "").strip()
+    if not md:
+        raise ValueError("There is no manuscript to re-check yet.")
+    status_before = stage_status(ws, "manuscript")
+    if status_before == STATUS_APPROVED:
+        raise ValueError("This manuscript is already approved — nothing to re-check.")
+
+    ledger = ws.setdefault("paid_call_ledger", empty_ledger())
+    spent_before = round(float(ledger.get("spent_usd") or 0), 4)
+    paid_calls_before = int(ledger.get("paid_calls") or 0)
+
+    current_od = outline_digest(data)
+    fidelity = validate_manuscript_outline_fidelity(
+        approved_outline=authoritative_approved_outline(data),
+        manuscript_md=md,
+        current_outline_digest=current_od,
+        token_outline_digest=current_od,
+    )
+    quality = validate_manuscript_quality(data, manuscript_md=md, book_contract=build_book_contract(data))
+    apply_quality_to_workspace(data, quality)
+    content_defects = list(find_customer_content_defects(md))
+    structure_findings = list(fidelity.get("findings") or [])
+    defects = structure_findings + content_defects + list(quality.finding_messages)
+
+    ws["manuscript_qa"] = defects
+    ws["manuscript_structure_findings"] = structure_findings
+    blocked = bool(content_defects) or not fidelity.get("ok") or quality.status != QUALITY_PASS
+    if blocked:
+        data["release_status"] = (
+            "FAIL" if (not fidelity.get("ok") or quality.status == QUALITY_FAIL) else ""
+        )
+        data["release_messages"] = list(defects)
+        set_stage_status(
+            ws, "manuscript", STATUS_NEEDS_CORRECTION, note="Manuscript quality needs correction"
+        )
+    else:
+        data["release_status"] = ""
+        data["release_messages"] = []
+        set_stage_status(ws, "manuscript", STATUS_AWAITING, note="Awaiting human approval")
+
+    _recompute_next_action(ws)
+    _append_history(
+        ws,
+        "recheck_manuscript",
+        status_before=status_before,
+        status_after=stage_status(ws, "manuscript"),
+        finding_count=len(defects),
+        cost_usd=0.0,
+    )
+    data["ebook_workspace"] = ws
+
+    if (
+        round(float(ledger.get("spent_usd") or 0), 4) != spent_before
+        or int(ledger.get("paid_calls") or 0) != paid_calls_before
+    ):
+        raise ValueError("Re-checking quality must never charge.")
+
+    return {
+        "ok": True,
+        "data": data,
+        "result": {
+            "manuscript_status": stage_status(ws, "manuscript"),
+            "status_before": status_before,
+            "findings": defects,
+            "cleared": bool(status_before == STATUS_NEEDS_CORRECTION and not blocked),
+            "cost_usd": 0.0,
+        },
+    }
+
+
 def execute_generate_manuscript(
     data: dict,
     *,
@@ -1920,6 +2084,8 @@ def execute_generate_manuscript(
     idempotency_key: str,
     generate_fn=None,
     generate_chapter_fn=None,
+    progress_key: str = "",
+    complete_all_chapters: bool = False,
 ) -> dict:
     """Server-authoritative manuscript generation after explicit cost confirmation.
 
@@ -2093,8 +2259,14 @@ def execute_generate_manuscript(
         book_contract,
         generate_chapter_fn=generate_chapter_fn,
         accepted_chapters=stored_accepted,
-        stop_on_failure=True,
+        # One weak chapter used to abandon the whole book: generation stopped
+        # at the first failure, correction then retried only that chapter and
+        # stopped again, so chapters after it were never written and the book
+        # could never complete. The one-click build asks for every chapter to
+        # be written first; the weak ones are corrected afterwards.
+        stop_on_failure=not complete_all_chapters,
         max_chapter_calls=max_calls,
+        on_progress=chapter_progress_reporter(progress_key, "Generate Manuscript"),
     )
     manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
     ws["accepted_chapters"] = [
@@ -2246,6 +2418,637 @@ def execute_generate_manuscript(
     return {"ok": True, "duplicate": False, "data": data, "result": result}
 
 
+# ---------------------------------------------------------------------------
+# Phase A: unblock the workspace start.
+# Seed the research Build This Product already has, run research on a blank
+# workspace, and derive a free DRAFT outline so every fresh workspace can reach
+# the working Generate Manuscript path. All free except execute_run_research,
+# which mirrors the estimate -> confirm -> execute ledger discipline.
+# ---------------------------------------------------------------------------
+
+# Fixed authorized maximum for one run_research paid call (matches
+# PAID_ACTIONS["run_research"]["default_estimate_usd"]).
+RUN_RESEARCH_STANDARD_AUTH_USD = 0.50
+
+
+def _first_text(*values: Any) -> str:
+    """Return the first non-empty, cleaned text value."""
+    for v in values:
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
+
+
+def _clean_label(value: Any) -> str:
+    """Best human label for a competitor/related-opportunity row."""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        return _first_text(value.get("name"), value.get("marketplace"), value.get("title"))
+    return ""
+
+
+def _source_urls(research: dict) -> list[str]:
+    urls: list[str] = []
+
+    def _add(url: Any) -> None:
+        u = _first_text(url)
+        if u and (u.startswith("http://") or u.startswith("https://")) and u not in urls:
+            urls.append(u)
+
+    for src in research.get("sources") or []:
+        if isinstance(src, dict):
+            _add(src.get("url"))
+        elif isinstance(src, str):
+            _add(src)
+    reco = research.get("recommendation")
+    if isinstance(reco, dict):
+        for src in reco.get("sources") or []:
+            if isinstance(src, dict):
+                _add(src.get("url"))
+    evidence = research.get("evidence")
+    if isinstance(evidence, dict):
+        for src in evidence.get("sources") or []:
+            if isinstance(src, dict):
+                _add(src.get("url"))
+    in_factory = research.get("in_factory_report")
+    if isinstance(in_factory, dict):
+        for src in in_factory.get("sources") or []:
+            if isinstance(src, dict):
+                _add(src.get("url"))
+    return urls[:30]
+
+
+def map_fma_research_to_payload(
+    research: dict | None = None,
+    opportunity: dict | None = None,
+) -> dict[str, Any]:
+    """Map Factory Market Advantage research into the Ebook workspace payload.
+
+    Handles the saved discovery shape (advantage_report / in_factory_report /
+    decision_panel) and the plain-text degradation shape. Pure mapping — never
+    calls a provider.
+    """
+    research = dict(research or {})
+    op = dict(opportunity or {})
+    if not op and research.get("opportunity") and isinstance(research.get("opportunity"), dict):
+        op = dict(research["opportunity"])
+    if not op and research.get("opportunities"):
+        first = research["opportunities"]
+        if isinstance(first, list) and first and isinstance(first[0], dict):
+            op = dict(first[0])
+    reco = dict(research.get("recommendation") or {}) if isinstance(research.get("recommendation"), dict) else {}
+    inputs = dict(research.get("inputs") or {})
+    report = dict(research.get("advantage_report") or {})
+    in_factory = dict(research.get("in_factory_report") or {})
+    panel = dict(research.get("decision_panel") or {})
+    score_wrapper = dict(in_factory.get("factory_advantage_score") or {})
+    front = dict(report.get("A_opportunity_summary") or {})
+
+    topic = _first_text(
+        inputs.get("topic"),
+        inputs.get("niche"),
+        research.get("keyword"),
+        front.get("topic"),
+        op.get("niche"),
+        op.get("product_idea"),
+        research.get("topic"),
+    )
+    audience = _first_text(
+        inputs.get("audience"),
+        op.get("target_audience"),
+        research.get("audience"),
+    )
+    outcome = _first_text(
+        inputs.get("customer_problem"),
+        op.get("main_transformation"),
+        op.get("product_promise"),
+        research.get("outcome"),
+        front.get("what_to_build"),
+    )
+    product_title = _first_text(
+        op.get("product_idea"),
+        inputs.get("topic"),
+        front.get("what_to_build"),
+        research.get("title"),
+    )
+    reco_text = _first_text(
+        panel.get("recommendation"),
+        score_wrapper.get("recommendation"),
+        report.get("recommendation"),
+        op.get("decision"),
+    ) or "Review the evidence below before building."
+    why = _first_text(
+        reco.get("why_selected"),
+        op.get("why_opportunity"),
+        front.get("why"),
+        panel.get("next_action"),
+    )
+    what_to_build = _first_text(
+        reco.get("best_product"),
+        front.get("what_to_build"),
+        op.get("product_idea"),
+    ) or topic
+    product_type = _first_text(
+        inputs.get("product_type"),
+        op.get("product_type"),
+        report.get("product_type"),
+    )
+
+    summary_lines = []
+    if topic:
+        summary_lines.append(f"Topic: {topic}")
+    if audience:
+        summary_lines.append(f"Audience: {audience}")
+    if what_to_build:
+        summary_lines.append(f"Best opportunity: {what_to_build}")
+    if why:
+        summary_lines.append(f"Why: {why}")
+    elif reco_text:
+        summary_lines.append(f"Factory recommendation: {reco_text}")
+    summary = "\n".join(summary_lines)
+
+    key_findings: list[str] = []
+
+    def _add_finding(*vals: Any) -> None:
+        for v in vals:
+            t = _first_text(v) if isinstance(v, str) else ""
+            if t and t not in key_findings:
+                key_findings.append(t)
+
+    demand = dict(report.get("B_demand_signals") or {})
+    signals = [s for s in (demand.get("signals") or []) if isinstance(s, str) and s.strip()]
+    for s in signals[:6]:
+        _add_finding(s)
+    comp_section = dict(report.get("C_competition") or {})
+    for c in (comp_section.get("competitors") or [])[:4]:
+        _add_finding(_clean_label(c))
+    lang_section = dict(report.get("D_customer_language") or {})
+    _add_finding(lang_section.get("problem"), inputs.get("customer_problem"))
+    _add_finding(reco.get("why_selected"), op.get("why_opportunity"))
+    for msg in (
+        (in_factory.get("decision") or {}).get("reasons")
+        or panel.get("user_decision_reasons")
+        or []
+    )[:6]:
+        if isinstance(msg, str) and msg.strip():
+            _add_finding(msg)
+    if not key_findings:
+        _add_finding(summary)
+
+    pricing = dict(report.get("E_pricing_scenarios") or {})
+    diff_section = dict(report.get("G_differentiation_plan") or {})
+    diffs = diff_section.get("opportunities") or []
+    related = dict(report.get("H_related_product_opportunities") or {})
+    decision_view = dict(in_factory.get("decision") or {})
+
+    notes_sections: dict[str, Any] = {
+        "opportunity_summary": {
+            "topic": topic,
+            "audience": audience,
+            "product_type": product_type or "ebook",
+            "what_to_build": what_to_build,
+            "why": why or reco_text,
+            "score_total": score_wrapper.get("total"),
+            "score_max": score_wrapper.get("max") or 100,
+            "recommendation": reco_text,
+        },
+        "demand_signals": signals,
+        "competition": {
+            "competitors": [_clean_label(c) for c in (comp_section.get("competitors") or [])][:10],
+            "note": comp_section.get("note") or "",
+        },
+        "customer_language": {
+            "problem": lang_section.get("problem") or inputs.get("customer_problem") or "",
+            "phrases": [p for p in (lang_section.get("phrases") or []) if isinstance(p, str) and p.strip()][:10],
+            "keywords": lang_section.get("keywords_input") or inputs.get("keywords") or "",
+        },
+        "pricing_scenarios": {k: v for k, v in list(pricing.items())[:8] if not isinstance(v, (dict, list))},
+        "differentiation_plan": [
+            {
+                "label": d.get("label") if isinstance(d, dict) else "",
+                "why_it_works": d.get("why_it_works") if isinstance(d, dict) else "",
+            }
+            for d in diffs[:3]
+        ],
+        "related_opportunities": [_clean_label(r) for r in (related.get("items") or related.get("related") or [])][:5],
+        "decision_panel": {
+            "recommendation": reco_text,
+            "next_action": decision_view.get("next_action") or panel.get("next_action") or "",
+            "user_decision": decision_view.get("user_decision") or panel.get("user_decision") or "",
+            "reasons": decision_view.get("reasons") or panel.get("user_decision_reasons") or [],
+            "missing_evidence": panel.get("missing_evidence") or [],
+        },
+        "inputs": {
+            k: inputs.get(k)
+            for k in (
+                "topic", "audience", "product_type", "customer_problem", "goal",
+                "niche", "sales_platform", "expertise", "target_price", "keywords",
+                "depth", "difficulty",
+            )
+            if inputs.get(k) not in (None, "")
+        },
+        "sales_estimate": (research.get("sales_estimate") or {}) if isinstance(research.get("sales_estimate") or {}, dict) else {},
+        "keyword": research.get("keyword") or "",
+        "mode": research.get("mode") or "",
+    }
+
+    return {
+        "topic": topic,
+        "audience": audience,
+        "outcome": outcome,
+        "product_title": product_title,
+        "summary": summary,
+        "key_findings": key_findings,
+        "notes_sections": notes_sections,
+        "source_urls": _source_urls(research),
+        "printing_research": {},
+        "opportunity": op,
+        "recommendation": reco,
+    }
+
+
+def seed_research_from_build(
+    data: dict,
+    *,
+    research: dict | None = None,
+    opportunity: dict | None = None,
+    title: str = "",
+    subtitle: str = "",
+) -> dict:
+    """Seed a new Ebook workspace with research the customer already approved.
+
+    Build This Product means the customer explicitly chose this opportunity, so
+    the research is recorded and approved here (research approval is a
+    precondition for editing the title), and a pre-filled title is staged as
+    AWAITING so the next visible action is Approve Title. When no subtitle is
+    provided a sensible one is derived from the research so the title can be
+    approved. Pure workspace-state work — never calls a provider.
+    """
+    data = ensure_workspace(data)
+    ws = data["ebook_workspace"]
+    payload = map_fma_research_to_payload(research, opportunity)
+    if payload.get("topic"):
+        ws["topic"] = _first_text(payload["topic"])
+    if payload.get("audience"):
+        ws["audience"] = _first_text(payload["audience"])
+    if payload.get("outcome"):
+        ws["outcome"] = _first_text(payload["outcome"])
+    if not ws.get("outcome") and payload.get("product_title"):
+        ws["outcome"] = payload["product_title"]
+
+    title = _first_text(title)
+    if not title:
+        title = _first_text(
+            payload.get("product_title"),
+            payload.get("topic"),
+            ws.get("topic"),
+        )
+    subtitle = _first_text(subtitle)
+    if not subtitle:
+        subtitle = _first_text(
+            payload.get("outcome"),
+            (payload.get("notes_sections") or {}).get("opportunity_summary", {}).get("why"),
+        )
+        if not subtitle:
+            subtitle = "A practical guide" if not payload.get("audience") else f"A practical guide for {payload['audience']}"
+
+    data = save_research(data, payload, mark_awaiting=True)
+    data = approve_stage(data, "research")
+    if title:
+        data = edit_title(
+            data,
+            title=title,
+            subtitle=subtitle,
+            options=[{"id": "seeded", "title": title, "subtitle": subtitle, "source": "research"}],
+        )
+    _append_history(data["ebook_workspace"], "seed", stage="research")
+    return sync_document_from_workspace(data)
+
+
+_TITLE_LEAD_BODY = (
+    r"(?:they|you|we|the reader|readers|users|customers|people|buyers)\s+"
+    r"(?:need|needs|want|wants|require|requires|are looking for|is looking for)\s+"
+)
+# Anchored: strip the subject-verb opener off a research sentence.
+_TITLE_LEAD_RE = re.compile(r"^" + _TITLE_LEAD_BODY, re.I)
+# Unanchored: find a research sentence pasted into the middle of a title.
+_TITLE_LEAD_ANYWHERE_RE = re.compile(r"\b" + _TITLE_LEAD_BODY, re.I)
+# Function words a trimmed phrase must never end on.
+_TITLE_DANGLING_TAIL = {
+    "a", "an", "the", "and", "or", "but", "with", "without", "for", "of", "to",
+    "in", "on", "at", "by", "from", "into", "over", "under", "as", "that",
+    "this", "your", "their", "its", "so", "then", "plus",
+}
+# Where a long free-text answer stops being a title and starts being a sentence.
+_TITLE_CLAUSE_RE = re.compile(
+    r"\s*[,;:]\s*|\s+(?:tailored|designed|that|which|because|so that|in order|when|while)\b",
+    re.I,
+)
+
+
+def _title_phrase(text: Any, max_words: int = 6) -> str:
+    """Reduce a free-text research answer to something usable inside a title.
+
+    The research fields are sentences ("They need practical meal-planning help
+    tailored to long shifts and limited time."). Dropping one whole into a
+    title slot produced "The Core Method: Steps to They need practical
+    meal-planning help tailored to long shifts and limited time." — and that
+    title then went into the paid manuscript prompt. Deterministic and free:
+    strip the leading subject-verb, cut at the first clause boundary, cap the
+    length, and never end mid-punctuation.
+    """
+    raw = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not raw:
+        return ""
+    raw = raw.strip(" .;:,!?-–—")
+    raw = _TITLE_LEAD_RE.sub("", raw)
+    raw = _TITLE_CLAUSE_RE.split(raw, maxsplit=1)[0].strip()
+    words = raw.split()
+    if len(words) > max_words:
+        raw = " ".join(words[:max_words])
+    # Never end on a dangling function word. Cutting "…printable shopping and
+    # prep pages" at six words left "…guide with printable", which reads as an
+    # unfinished thought both to the reader and to the model that is handed it.
+    words = raw.split()
+    while words and words[-1].lower() in _TITLE_DANGLING_TAIL:
+        words.pop()
+    raw = " ".join(words).strip(" .;:,!?-–—")
+    if not raw:
+        return ""
+    return raw[0].upper() + raw[1:]
+
+
+def _clean_outline_title(title: Any) -> str:
+    """Repair a chapter title that has a research sentence inside it.
+
+    Applies to titles from any source -- the derived template *and* titles
+    staged earlier in the research notes, because a title written before this
+    repair existed is still sitting in saved projects and would otherwise be
+    handed straight to the paid manuscript prompt.
+    """
+    raw = re.sub(r"\s+", " ", str(title or "")).strip().rstrip(" .")
+    if not raw:
+        return ""
+    match = _TITLE_LEAD_ANYWHERE_RE.search(raw)
+    if match:
+        head = raw[: match.start()].strip(" -–—:;,")
+        tail = _title_phrase(raw[match.start():], 6)
+        if head and tail:
+            raw = f"{head} {tail[0].lower()}{tail[1:]}"
+        else:
+            raw = tail or head
+    return raw
+
+
+def derive_draft_outline(data: dict) -> dict:
+    """Deterministic DRAFT outline built from retained research (free, no provider).
+
+    Prefers chapter titles already staged in the research notes; otherwise it
+    derives a practical-guide chapter arc from the topic, audience, and outcome
+    stored in the workspace.
+    """
+    ws = (data or {}).get("ebook_workspace") or {}
+    topic = _first_text(ws.get("topic"), data.get("title"))
+    audience = _first_text(ws.get("audience"))
+    outcome = _first_text(ws.get("outcome"))
+    # Title slots take a short phrase, never a raw research sentence, and an
+    # optional clause is only added when it still reads like a chapter title.
+    topic_phrase = _title_phrase(topic, 5)
+    audience_phrase = _title_phrase(audience, 5)
+    promise_phrase = _title_phrase(outcome or topic, 6)
+    who = f" for {audience_phrase}" if 0 < len(audience_phrase.split()) <= 4 else ""
+    with_topic = f" with {topic_phrase}" if 0 < len(topic_phrase.split()) <= 4 else ""
+
+    # Prefer chapter titles the research already approved/staged.
+    try:
+        research_notes = build_research_notes_for_manuscript(data)
+        staged_titles = prompt_outline_titles_from_notes(research_notes)
+    except Exception:
+        staged_titles = []
+    staged_titles = [t for t in staged_titles if isinstance(t, str) and t.strip()]
+
+    if len(staged_titles) >= 3:
+        titles = staged_titles
+    else:
+        titles = [
+            "Welcome: What This Guide Covers",
+            f"Getting Oriented: Your Starting Point{with_topic}",
+            f"The Core Method: {promise_phrase}" if promise_phrase else "The Core Method",
+            "Working It Step by Step: Your First Practical Plan",
+            "Making It Work: Adjusting for Real Situations",
+            "Common Pitfalls and How to Avoid Them",
+            "Tools, Templates, and Checklists You Can Use",
+            f"Your 30-Day Action Plan{who}",
+        ]
+
+    titles = [_clean_outline_title(t) for t in titles]
+    titles = [t for t in titles if t]
+    chapters = [
+        {
+            "order": i + 1,
+            "title": t,
+            "purpose": _chapter_purpose(i + 1, t, topic, audience, outcome),
+        }
+        for i, t in enumerate(titles)
+    ]
+    option_id = "draft-v1"
+    return {
+        "id": option_id,
+        "label": "Draft outline (auto-generated)",
+        "source": "derived",
+        "chapters": chapters,
+    }
+
+
+def _chapter_purpose(order: int, title: str, topic: str, audience: str, outcome: str) -> str:
+    """One-sentence purpose for a draft outline chapter (deterministic).
+
+    The subject leads, deliberately. ``validate_chapter`` checks purpose
+    alignment by taking the first twelve 5+ letter words of the purpose and
+    requiring some of them to appear in the chapter body. The earlier wording
+    opened with editorial meta-language ("Give the reader the background and
+    framing they need before taking action") and appended the topic at the end,
+    so words like *reader*, *background* and *framing* filled the twelve-word
+    window while the actual subject fell outside it. A real chapter about
+    zero-waste meal planning contains none of those words, so a perfectly good
+    1,764-word chapter was failed for PURPOSE_MISALIGN — and because generation
+    stops at the first failing chapter, the whole book dead-ended there.
+    Leading with the topic and audience puts words the chapter will really use
+    inside the window.
+    """
+    subject = _title_phrase(topic, 6) or "the topic"
+    who = _title_phrase(audience, 4)
+    goal = _title_phrase(outcome, 6)
+    lead = f"{subject}" + (f" for {who}" if who else "")
+    tail = f" so they reach {goal}" if goal else ""
+    role = {
+        1: "set expectations and map what this guide covers",
+        2: "give the background needed before taking action",
+        3: "teach the one clear method this guide is built around",
+        4: "walk through the concrete steps in order",
+        5: "adapt the method to real situations and limits",
+        6: "name the most common mistakes and how to avoid each one",
+        7: "provide tools, templates and checklists that can be used directly",
+        8: "close with a simple dated action plan to start today",
+    }.get(order, "move forward with a concrete next step")
+    return f"Cover {lead}: {role}{tail}."
+
+
+def apply_draft_outline(data: dict) -> dict:
+    """Apply the free DRAFT outline and stage it as AWAITING for approval."""
+    data = ensure_workspace(data)
+    ws = data["ebook_workspace"]
+    if not (is_approved(ws, "research") and is_approved(ws, "title")):
+        raise ValueError("Approve research and title before generating a draft outline.")
+    if is_approved(ws, "outline"):
+        raise ValueError("Outline already approved.")
+    if not (data.get("title") and data.get("subtitle")):
+        raise ValueError("Set the title before generating a draft outline.")
+    option = derive_draft_outline(data)
+    ws.setdefault("outline_options", [])
+    for existing in list(ws["outline_options"]):
+        if str(existing.get("id")) == option["id"]:
+            return sync_document_from_workspace(data)
+    ws["outline_options"].append(option)
+    data = edit_outline(data, chapters=option["chapters"], option_id=option["id"])
+    _append_history(data["ebook_workspace"], "draft_outline", option_id=option["id"], charges=0)
+    return sync_document_from_workspace(data)
+
+
+def execute_run_research(
+    data: dict,
+    *,
+    confirmation_token: str,
+    expected_artifact_id: str,
+    expected_revision: int,
+    max_authorized_usd: float,
+    idempotency_key: str,
+    research_fn=None,
+    research_kwargs: dict | None = None,
+) -> dict:
+    """Server-authoritative research run after explicit cost confirmation.
+
+    Mirrors ``execute_generate_manuscript``: consumes one confirmation token,
+    verifies the artifact, charges the ledger, and only then runs the shared
+    ``services.research.research`` provider call (``research_fn`` injectable for
+    zero-paid-call tests). Never runs when research is already approved.
+    """
+    data = ensure_workspace(data)
+    ws = data["ebook_workspace"]
+    ledger = ws.setdefault("paid_call_ledger", empty_ledger())
+    idem_store = ledger.setdefault("idempotency_keys", {})
+    key = str(idempotency_key or "").strip()
+    if not key:
+        raise ValueError("Idempotency key is required.")
+    if key in idem_store:
+        prior = idem_store[key]
+        return {
+            "ok": True,
+            "duplicate": True,
+            "data": data,
+            "result": prior.get("result") or {},
+            "workspace_note": "Idempotent replay — no additional paid call.",
+        }
+    if is_approved(ws, "research"):
+        raise ValueError("Research is already approved. Start from Title or later.")
+
+    pending = consume_confirmation(data, "run_research", confirmation_token)
+
+    artifact_id = str(data.get("artifact_id") or data.get("package_id") or "")
+    revision = int(data.get("artifact_revision") or 1)
+    if str(expected_artifact_id or "") != artifact_id:
+        raise ValueError("Stale artifact ID — reopen the project and try again.")
+    if int(expected_revision) != revision:
+        raise ValueError("Stale artifact revision — reopen the project and try again.")
+    if str(pending.get("artifact_id") or "") != artifact_id:
+        raise ValueError("Confirmation token was issued for a different artifact.")
+    if int(pending.get("artifact_revision") or 0) != revision:
+        raise ValueError("Confirmation token was issued for a different revision.")
+
+    auth_max = round(float(max_authorized_usd), 4)
+    pending_max = round(float(pending.get("max_authorized_usd") or pending.get("estimated_max_usd") or 0), 4)
+    if auth_max <= 0:
+        raise ValueError("Maximum authorized charge must be positive.")
+    if abs(auth_max - pending_max) > 1e-9:
+        raise ValueError("Authorized charge does not match the pending estimate.")
+    if auth_max > RUN_RESEARCH_STANDARD_AUTH_USD + 1e-9:
+        raise ValueError(f"Research authorization exceeds ${RUN_RESEARCH_STANDARD_AUTH_USD:.2f} maximum.")
+
+    spent = round(float(ledger.get("spent_usd") or 0), 4)
+    remaining = round(float(ledger.get("remaining_usd") or 0), 4)
+    cap = round(float(ledger.get("budget_cap_usd") or DEFAULT_BUDGET_CAP_USD), 4)
+    if auth_max > remaining + 1e-9 or spent + auth_max > cap + 1e-9:
+        raise ValueError("Insufficient remaining budget for research.")
+
+    pending["used"] = True
+    ledger["pending_estimate"] = pending
+    used_tokens = ledger.setdefault("consumed_tokens", [])
+    used_tokens.append(
+        {
+            "token": str(pending.get("confirmation_token")),
+            "action": "run_research",
+            "ts": _now(),
+            "idempotency_key": key,
+        }
+    )
+
+    if research_fn is None:
+        from services.research import research as research_fn
+
+    keyword = _first_text(ws.get("topic"), data.get("title"))
+    if not keyword:
+        raise ValueError("Enter a topic before running research.")
+    kwargs = dict(research_kwargs or {})
+    kwargs.setdefault("audience", ws.get("audience") or "")
+    kwargs.setdefault("product_type", "ebook")
+
+    result_payload = research_fn(keyword, **kwargs)
+    if not isinstance(result_payload, dict):
+        result_payload = {}
+
+    charge = round(min(auth_max, remaining), 4)
+    ledger["spent_usd"] = round(spent + charge, 4)
+    ledger["remaining_usd"] = round(cap - float(ledger["spent_usd"]), 4)
+    ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + 1
+    call_rec = {
+        "ts": _now(),
+        "provider": "tavily",
+        "purpose": "run_research",
+        "estimated_cost_usd": charge,
+        "idempotency_key": key,
+        "meta": {"topic": keyword, "audience": ws.get("audience") or ""},
+    }
+    ledger.setdefault("calls", []).append(call_rec)
+    ledger["pending_estimate"] = None
+
+    mapped = map_fma_research_to_payload(result_payload, result_payload.get("opportunity"))
+    if mapped.get("topic"):
+        ws["topic"] = mapped["topic"]
+    if mapped.get("audience"):
+        ws["audience"] = mapped["audience"]
+    if mapped.get("outcome"):
+        ws["outcome"] = mapped["outcome"]
+    data = save_research(data, mapped, mark_awaiting=True)
+    ws = data["ebook_workspace"]
+
+    result = {
+        "ok": True,
+        "research_status": stage_status(ws, "research"),
+        "next_action": ws.get("next_action"),
+        "summary": str((ws.get("research_payload") or {}).get("summary") or ""),
+        "charge_usd": charge,
+        "paid_calls": ledger.get("paid_calls"),
+        "spent_usd": ledger.get("spent_usd"),
+        "remaining_usd": ledger.get("remaining_usd"),
+    }
+    idem_store[key] = {"result": result, "ts": _now(), "charge_usd": charge}
+    ledger["idempotency_keys"] = idem_store
+    _append_history(ws, "run_research", charge_usd=charge, status=stage_status(ws, "research"))
+    data = sync_document_from_workspace(data)
+    return {"ok": True, "duplicate": False, "data": data, "result": result}
+
+
 def execute_correct_manuscript(
     data: dict,
     *,
@@ -2257,6 +3060,8 @@ def execute_correct_manuscript(
     idempotency_key: str,
     correct_fn=None,
     correct_chapter_fn=None,
+    progress_key: str = "",
+    complete_all_chapters: bool = False,
 ) -> dict:
     """Correct an existing manuscript against the token-bound approved outline.
 
@@ -2440,10 +3245,11 @@ def execute_correct_manuscript(
         generate_chapter_fn=correct_chapter_fn,
         accepted_chapters=accepted_keep,
         repair_orders=failed_orders,
-        stop_on_failure=True,
+        stop_on_failure=not complete_all_chapters,
         max_chapter_calls=max_calls,
         prior_manuscript_md=existing,
         findings_by_order=findings_map,
+        on_progress=chapter_progress_reporter(progress_key, "Request Correction"),
     )
     manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
     ws["accepted_chapters"] = [

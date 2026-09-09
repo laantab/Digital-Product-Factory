@@ -1401,6 +1401,7 @@ def run_chapter_pipeline(
     max_chapter_calls: int | None = None,
     prior_manuscript_md: str = "",
     findings_by_order: dict[int, list[str]] | None = None,
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Generate or repair chapters independently. Never silently rewrite accepted chapters.
 
@@ -1418,6 +1419,15 @@ def run_chapter_pipeline(
             "One-shot generate_fn cannot bypass the chapter engine. "
             "Pass generate_chapter_fn only."
         )
+
+    def _report(**event: Any) -> None:
+        """Publish progress. Reporting must never break generation."""
+        if on_progress is None:
+            return
+        try:
+            on_progress(dict(event))
+        except Exception:  # noqa: BLE001
+            pass
 
     accepted = {c.order: c for c in (accepted_chapters or [])}
     repair = set(repair_orders or [])
@@ -1444,6 +1454,13 @@ def run_chapter_pipeline(
         work = copy.copy(contract)
         work.unresolved_findings = list(findings_map.get(contract.order) or [])
         work.prior_chapter_body = str(prior_bodies.get(contract.order) or "")
+        _report(
+            phase="chapter_start",
+            order=contract.order,
+            title=contract.title,
+            total=len(book.chapters),
+            done=len(produced),
+        )
         raw = generate_chapter_fn(book, work)
         chapter_calls += 1
         parsed = parse_chapter_response(raw, contract)
@@ -1464,6 +1481,14 @@ def run_chapter_pipeline(
             rec["provider_assigned_research"] = raw.get("assigned_research")
             rec["provider_contract"] = raw.get("chapter_contract")
         provider_payloads.append(rec)
+        _report(
+            phase="chapter_done",
+            order=contract.order,
+            title=contract.title,
+            total=len(book.chapters),
+            done=len(produced),
+            accepted=bool(chapter_pass),
+        )
         if not chapter_pass:
             failed_orders.append(contract.order)
             if stop_on_failure:

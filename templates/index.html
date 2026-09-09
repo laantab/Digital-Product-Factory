@@ -62,11 +62,13 @@
   <div class="flex h-full min-h-screen">
     <!-- Sidebar -->
     <aside class="hidden md:flex w-64 shrink-0 flex-col bg-brand-950 text-brand-100">
-      <div class="flex items-center gap-3 px-6 py-6 border-b border-white/10">
-        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500 font-extrabold text-white">DP</div>
-        <div>
-          <div class="text-sm font-bold text-white leading-tight">Digital Product</div>
-          <div class="text-xs text-brand-300 tracking-wide">FACTORY</div>
+      <div class="px-5 py-5 border-b border-white/10">
+        <div class="rounded-xl bg-white px-3 py-1 shadow-sm">
+          <img
+            src="{{ url_for('static', filename='images/branding/digital_product_factory_logo.png') }}"
+            alt="Digital Product Factory."
+            class="block w-full h-auto"
+            decoding="async" />
         </div>
       </div>
       <nav id="nav" class="flex-1 px-3 py-5 space-y-1"></nav>
@@ -79,6 +81,11 @@
     <div class="flex-1 flex flex-col min-w-0">
       <header class="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-5 py-3 backdrop-blur shadow-sm">
         <div class="flex items-center gap-3">
+          <img
+            src="{{ url_for('static', filename='images/branding/digital_product_factory_logo.png') }}"
+            alt="Digital Product Factory."
+            class="md:hidden h-10 w-auto max-w-[9rem] object-contain shrink-0"
+            decoding="async" />
           <select id="mobileNav" class="md:hidden rounded-lg border border-slate-300 px-2 py-1.5 text-sm"></select>
           <h1 id="pageTitle" class="text-lg font-bold text-slate-900">Dashboard</h1>
         </div>
@@ -228,6 +235,14 @@
               </div>
             </div>
 
+            <!-- Books still being written. Hidden when there are none. -->
+            <div id="inProgressWrap" class="hidden mb-6">
+              <h3 class="text-base font-bold text-slate-900 mb-1">Still working on these</h3>
+              <p class="text-sm text-slate-500 mb-3">Pick up where you left off. Nothing here is finished yet.</p>
+              <div id="inProgressList" class="space-y-2"></div>
+            </div>
+
+            <h3 class="text-base font-bold text-slate-900 mb-2">Finished products</h3>
             <div id="savedList" class="space-y-2"></div>
             <p id="savedOlderWrap" class="hidden pt-3">
               <button type="button" id="viewOlderBtn" class="text-sm font-medium text-brand-600 hover:text-brand-800">View older projects</button>

@@ -371,7 +371,9 @@ class EbookWorkspaceIntegrationTests(unittest.TestCase):
         self.assertEqual(rail["manuscript"], "not_started")
         self.assertEqual(rail["visuals"], "not_started")
         self.assertEqual(ws["next_action"], "generate_manuscript")
-        self.assertEqual(ws["next_action_label"], "Generate Manuscript")
+        # The action name is unchanged; only what the customer is shown is now
+        # plain language (CUSTOMER_ACTION_LABELS).
+        self.assertEqual(ws["next_action_label"], "Write your chapters")
         self.assertEqual(ws["artifact_state"], "DRAFT")
         self.assertEqual(ws["author"], "Lonnie Brown")
         self.assertEqual(ws["title"], "From First Booking to On-Site Prints")
@@ -447,7 +449,11 @@ class EbookWorkspaceJsHtmlTests(unittest.TestCase):
             "data-ws-estimate-manuscript",
             "Confirm paid action",
             "Confirm and Generate Manuscript",
-            "Estimated maximum",
+            # The dialog must still state a spending ceiling before any paid
+            # call. The wording moved from "Estimated maximum" to "Maximum
+            # total" when the manuscript panel was rewritten in plain language;
+            # the guarantee under test is unchanged.
+            "Maximum total",
             "renderEbookWorkspace",
             "generate-manuscript",
         ):
@@ -651,6 +657,218 @@ class EbookCoverPreviewTests(unittest.TestCase):
             (before.get("ebook_workspace") or {}).get("paid_call_ledger"),
         )
         self.assertEqual(after.get("cover_design"), before.get("cover_design"))
+
+
+# --- Phase A: seed research into a new workspace + run-research + draft outline ---
+# Zero paid/external calls. The research provider is mocked below; the executor
+# imports `services.research.research` at call time, so patching that attribute
+# intercepts the call without touching the network.
+FAKE_FMA_RESEARCH = {
+    "inputs": {
+        "topic": "Budget meal planning",
+        "audience": "Busy families",
+        "customer_problem": "Plan healthy meals on a tight budget",
+    },
+    "opportunity": {
+        "product_idea": "The 20-Minute Budget Meal Planner",
+        "target_audience": "Busy families",
+        "main_transformation": "Plan meals fast and stay on budget",
+        "why_opportunity": "High search demand; low competition",
+    },
+    "recommendation": {
+        "best_product": "The 20-Minute Budget Meal Planner",
+        "why_selected": "High search demand; low competition",
+    },
+    "sources": ["https://example.com/budget-meals"],
+    "mode": "ai_estimated",
+}
+
+
+class EbookWorkspacePhaseASeedTests(unittest.TestCase):
+    def setUp(self):
+        self.client = app.test_client()
+        app.config["TESTING"] = True
+
+    def _create_workspace(self, **kwargs):
+        payload = {
+            "topic": kwargs.get("topic", "Starter Event Photo Topic"),
+            "audience": kwargs.get("audience", "Beginner photographers"),
+            "outcome": kwargs.get("outcome", "Run a first paid event"),
+            "author": kwargs.get("author", "Test Author"),
+            "name": kwargs.get("name", "Workspace Test Ebook"),
+        }
+        r = self.client.post("/ebook-workspace", json=payload)
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        body = r.get_json()
+        self.assertTrue(body.get("ok"))
+        return body["project"], body["workspace"]
+
+    def test_phaseA_seed_research_lands_at_title_approval(self):
+        r = self.client.post(
+            "/ebook-workspace",
+            json={
+                "topic": "Budget meal planning",
+                "audience": "Busy families",
+                "outcome": "Plan meals fast and stay on budget",
+                "author": "Test Author",
+                "name": "Seeded Budget Meal Ebook",
+                "title": "The 20-Minute Budget Meal Planner",
+                "subtitle": "Simple meals for busy families",
+                "research": FAKE_FMA_RESEARCH,
+                "opportunity": FAKE_FMA_RESEARCH["opportunity"],
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        body = r.get_json()
+        self.assertTrue(body.get("ok"))
+        self.assertTrue(body.get("seeded"))
+        ws = body["workspace"]
+        rail = {s["id"]: s["status"] for s in ws["rail"]}
+        # Research was explicitly chosen via Build This Product -> recorded + approved.
+        self.assertEqual(rail["research"], "approved")
+        self.assertNotEqual(rail["title"], "approved")  # title is AWAITING, next approval
+        self.assertEqual(ws["title"], "The 20-Minute Budget Meal Planner")
+        self.assertTrue(ws.get("subtitle"))
+        self.assertEqual(ws["next_action"], "approve_title")
+        self.assertTrue(ws["gates"]["approve_title_enabled"])
+        # Summary present so Approve Research is not needed (already approved).
+        self.assertTrue((ws["research"] or {}).get("summary"))
+
+    def test_phaseA_blank_workspace_starts_run_research(self):
+        project, ws = self._create_workspace(name="Blank Run Research Ebook")
+        self.assertNotEqual(project["data"].get("title"), "")
+        self.assertEqual(ws["next_action"], "run_research")
+        self.assertTrue(ws["gates"]["run_research_enabled"])
+        self.assertFalse(ws["gates"]["approve_research_enabled"])
+
+    def test_phaseA_run_research_charges_after_confirm_no_paid_network(self):
+        project, _ = self._create_workspace(name="Run Research Confirmed Ebook")
+        pid = project["id"]
+        est = self.client.post(
+            f"/ebook-workspace/{pid}/estimate-cost",
+            json={"action": "run_research"},
+        )
+        self.assertEqual(est.status_code, 200, est.get_data(as_text=True))
+        estimate = est.get_json()["estimate"]
+        token = estimate["confirmation_token"]
+
+        with patch("services.research.research", return_value=FAKE_FMA_RESEARCH) as mocked:
+            run = self.client.post(
+                f"/ebook-workspace/{pid}/run-research",
+                json={
+                    "confirmation_token": token,
+                    "expected_artifact_id": estimate["artifact_id"],
+                    "expected_revision": estimate["artifact_revision"],
+                    "max_authorized_usd": estimate["max_authorized_usd"],
+                    "idempotency_key": f"rs-test-{pid}-{uuid.uuid4().hex}",
+                },
+            )
+        self.assertEqual(run.status_code, 200, run.get_data(as_text=True))
+        body = run.get_json()
+        self.assertTrue(body.get("ok"))
+        mocked.assert_called_once()
+        ws = body["workspace"]
+        rail = {s["id"]: s["status"] for s in ws["rail"]}
+        self.assertEqual(rail["research"], "awaiting_approval")
+        self.assertEqual(ws["next_action"], "approve_research")
+        self.assertTrue(ws["gates"]["approve_research_enabled"])
+        self.assertGreaterEqual(ws["budget"]["spent_usd"], 0.0)
+        self.assertEqual(ws["budget"]["paid_calls"], 1)
+
+    def test_phaseA_run_research_requires_token_and_idempotency(self):
+        project, _ = self._create_workspace(name="Run Research NoToken Ebook")
+        pid = project["id"]
+        with patch("services.research.research", side_effect=AssertionError("must not call")) as mocked:
+            run = self.client.post(
+                f"/ebook-workspace/{pid}/run-research",
+                json={"max_authorized_usd": 0.5},
+            )
+        self.assertEqual(run.status_code, 400)
+        mocked.assert_not_called()
+
+    def test_phaseA_run_research_refuses_when_already_approved(self):
+        # Seeded workspace already has research approved -> run-research must refuse.
+        r = self.client.post(
+            "/ebook-workspace",
+            json={
+                "topic": "Budget meal planning",
+                "research": FAKE_FMA_RESEARCH,
+                "opportunity": FAKE_FMA_RESEARCH["opportunity"],
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        pid = r.get_json()["project"]["id"]
+        ws0 = r.get_json()["workspace"]
+        rail0 = {s["id"]: s["status"] for s in ws0["rail"]}
+        self.assertEqual(rail0["research"], "approved")
+        est = self.client.post(
+            f"/ebook-workspace/{pid}/estimate-cost", json={"action": "run_research"}
+        )
+        self.assertEqual(est.status_code, 200, est.get_data(as_text=True))
+        estimate = est.get_json()["estimate"]
+        with patch("services.research.research", side_effect=AssertionError("must not call")) as mocked:
+            run = self.client.post(
+                f"/ebook-workspace/{pid}/run-research",
+                json={
+                    "confirmation_token": estimate["confirmation_token"],
+                    "expected_artifact_id": estimate["artifact_id"],
+                    "expected_revision": estimate["artifact_revision"],
+                    "max_authorized_usd": estimate["max_authorized_usd"],
+                    "idempotency_key": f"rs-refuse-{pid}-{uuid.uuid4().hex}",
+                },
+            )
+        self.assertEqual(run.status_code, 400)
+        self.assertIn("already approved", run.get_json()["error"].lower())
+        mocked.assert_not_called()
+
+    def test_phaseA_draft_outline_is_free_and_approvable(self):
+        # Seed research (auto-approves it), approve title, then draft + approve outline.
+        r = self.client.post(
+            "/ebook-workspace",
+            json={
+                "topic": "Budget meal planning",
+                "audience": "Busy families",
+                "outcome": "Plan meals fast and stay on budget",
+                "author": "Test Author",
+                "name": "Draft Outline Ebook",
+                "title": "The 20-Minute Budget Meal Planner",
+                "subtitle": "Simple meals for busy families",
+                "research": FAKE_FMA_RESEARCH,
+                "opportunity": FAKE_FMA_RESEARCH["opportunity"],
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        pid = r.get_json()["project"]["id"]
+        at = self.client.post(f"/ebook-workspace/{pid}/approve", json={"stage": "title"})
+        self.assertEqual(at.status_code, 200, at.get_data(as_text=True))
+
+        draft = self.client.post(f"/ebook-workspace/{pid}/draft-outline", json={})
+        self.assertEqual(draft.status_code, 200, draft.get_data(as_text=True))
+        ws = draft.get_json()["workspace"]
+        self.assertFalse(ws["gates"]["draft_outline_enabled"])  # already drafted
+        self.assertTrue(ws["gates"]["approve_outline_enabled"])
+        self.assertTrue(ws["outline_options"])
+        self.assertGreaterEqual(len(ws["outline"]), 3)
+
+        ao = self.client.post(f"/ebook-workspace/{pid}/approve", json={"stage": "outline"})
+        self.assertEqual(ao.status_code, 200, ao.get_data(as_text=True))
+        ws2 = ao.get_json()["workspace"]
+        rail = {s["id"]: s["status"] for s in ws2["rail"]}
+        self.assertEqual(rail["outline"], "approved")
+        self.assertEqual(ws2["next_action"], "generate_manuscript")
+        self.assertTrue(ws2["gates"]["manuscript_enabled"])
+
+    def test_phaseA_ui_wires_run_and_approve_controls(self):
+        js = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("estimateRunResearchInWorkspace", js)
+        self.assertIn("approveEbookStage", js)
+        self.assertIn("generateEbookDraftOutline", js)
+        self.assertIn("data-ws-estimate-research", js)
+        self.assertIn("data-ws-approve-research", js)
+        self.assertIn("data-ws-approve-title", js)
+        self.assertIn("data-ws-draft-outline", js)
+        self.assertIn("data-ws-approve-outline", js)
+        self.assertIn("data-ws-save-title", js)
 
 
 if __name__ == "__main__":

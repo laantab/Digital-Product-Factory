@@ -776,6 +776,78 @@ def resolve_factory_builder(product_type: str) -> dict:
     return {"status": "unknown", "factory_id": None, "label": product_type}
 
 
+# One neutral, non-alarming label for a researched product type the Factory
+# cannot build yet. It is a small status word, never a warning.
+COMING_SOON_LABEL = "Coming soon"
+
+
+def build_readiness(product_type: str) -> dict:
+    """Can the Factory build this researched product type right now?
+
+    `/research-to-builder` refuses anything that is not an *active* builder, so
+    the research page has to be able to ask the same question BEFORE it offers
+    a Build action. Without this it offered Build on every opportunity, the
+    server refused each click, and the customer collected one more full-size
+    red refusal per click.
+
+    Nothing here is specific to a product, a title, or a project: it reads the
+    same builder registry `resolve_factory_builder` reads, so a builder that is
+    unhidden later becomes buildable everywhere at once.
+    """
+    builder = resolve_factory_builder(product_type)
+    ready = builder.get("status") == "active"
+    return {
+        "status": "ready" if ready else "coming_soon",
+        "ready": ready,
+        "factory_id": builder.get("factory_id"),
+        "builder_status": builder.get("status"),
+        "builder_label": builder.get("label") or normalize_product_type(product_type),
+        "label": "" if ready else COMING_SOON_LABEL,
+    }
+
+
+def annotate_build_readiness(opportunities: list[dict]) -> list[dict]:
+    """Tag every researched opportunity with its build readiness.
+
+    Purely additive: the research itself is never dropped, reordered, or
+    rewritten, so an opportunity the Factory cannot build yet still shows all
+    of its evidence and can still be saved and reopened.
+    """
+    rows = []
+    for item in opportunities or []:
+        if not isinstance(item, dict):
+            rows.append(item)
+            continue
+        row = dict(item)
+        row["build_readiness"] = build_readiness(row.get("product_type") or "")
+        rows.append(row)
+    return rows
+
+
+def preferred_opportunity(opportunities: list[dict], recommendation: dict | None = None) -> dict:
+    """The opportunity to headline as Best Opportunity.
+
+    Scoring and ranking are untouched, and the normal top pick is returned
+    unchanged. The single exception is the case this exists for: the top pick's
+    product type is one the Factory cannot build yet AND a researched
+    alternative can be built -- then the buildable one is headlined, so the
+    recommendation is never a product whose only Build action is a refusal.
+    When nothing researched is buildable, the normal top pick is kept and the
+    page explains that once.
+    """
+    rows = [row for row in (opportunities or []) if isinstance(row, dict)]
+    if not rows:
+        return {}
+    top = rows[0]
+    top_type = _clean((recommendation or {}).get("best_product_type")) or _clean(top.get("product_type"))
+    if build_readiness(top_type)["ready"]:
+        return top
+    return next(
+        (row for row in rows if build_readiness(row.get("product_type") or "")["ready"]),
+        top,
+    )
+
+
 def coerce_selected_product_type(opportunities: list[dict], product_type: str) -> list[dict]:
     """Keep the user-selected Factory product type on every opportunity."""
     selected = normalize_product_type(product_type)
@@ -1848,8 +1920,14 @@ def build_recommendation_summary(
     decision: dict | None = None,
 ) -> dict:
     """Customer Recommendation Summary. Maps existing scores; does not rescore."""
-    top = opportunities[0] if opportunities else {}
     reco = recommendation or {}
+    # Headline something the customer can actually build. Ranking is unchanged;
+    # `swapped` is True only when the top pick is a type the Factory cannot
+    # build yet and a researched alternative can be built.
+    rows = [row for row in (opportunities or []) if isinstance(row, dict)]
+    legacy_top = rows[0] if rows else {}
+    top = preferred_opportunity(rows, reco)
+    swapped = top is not legacy_top
     panel = decision or {}
     internal = (
         score.get("recommendation")
@@ -1859,13 +1937,15 @@ def build_recommendation_summary(
     )
     user_decision = panel.get("user_decision") or map_user_decision(internal)
     product_name = (
-        _clean(reco.get("best_product"))
+        (_clean(top.get("product_idea")) if swapped else "")
+        or _clean(reco.get("best_product"))
         or _clean(top.get("product_idea"))
         or _clean(inputs.get("topic") or inputs.get("idea"))
         or "This idea"
     )
     product_type = normalize_product_type(
-        reco.get("best_product_type")
+        (top.get("product_type") if swapped else "")
+        or reco.get("best_product_type")
         or top.get("product_type")
         or inputs.get("product_type")
         or ""
@@ -1902,6 +1982,7 @@ def build_recommendation_summary(
             differentiator=differentiator,
         ),
         "component_signals": signals,
+        "build_readiness": build_readiness(product_type),
         "how_determined": HOW_DETERMINED_PLAIN,
         "disclaimer": DISCLAIMER,
         "missing_evidence": list(panel.get("missing_evidence") or [])[:8],
@@ -2040,6 +2121,11 @@ def attach_advantage(
         if isinstance(opp, dict) and not opp.get("factory_advantage"):
             opp["opportunity_score"] = score["total"]
             opp["factory_advantage_total"] = score["total"]
+    # Tell the page, per opportunity, whether the Factory can build that type
+    # today. Additive only: the research is unchanged. Without it the page has
+    # to offer Build on everything and let the server refuse, which is what
+    # produced a stack of repeated red refusals.
+    payload["opportunities"] = annotate_build_readiness(payload["opportunities"])
     return payload
 
 

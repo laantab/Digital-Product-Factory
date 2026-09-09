@@ -648,6 +648,64 @@ def list_factory_source_projects() -> list[dict]:
     return _dedupe_customer_projects(projects)
 
 
+def list_in_progress_workspaces(limit: int = 12) -> list[dict]:
+    """Ebook Projects that are started but not finished.
+
+    Saved Projects deliberately shows only completed products with usable
+    output, which is right for a shelf of finished work — but it meant a book
+    still being written had **no route back to it at all**. A customer who
+    started a project, navigated away, and came back could not reopen their own
+    half-written book, even though it was saved and had already been paid for.
+
+    Query-time filter only: nothing is deleted, mutated, or reclassified.
+    """
+    try:
+        limit = max(1, int(limit))
+    except (TypeError, ValueError):
+        limit = 12
+    conn = get_conn()
+    rows = conn.execute(
+        f"SELECT {','.join(_TABLE_COLS)} FROM projects "
+        "WHERE system_test = 0 AND temporary = 0 "
+        "ORDER BY updated_at DESC, created_at DESC, id DESC LIMIT 400"
+    ).fetchall()
+    conn.close()
+
+    out: list[dict] = []
+    for row in rows:
+        project = _row_to_dict(row)
+        data = project.get("data") if isinstance(project.get("data"), dict) else {}
+        ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else None
+        if not ws:
+            continue
+        if data.get("hidden_from_customer") or data.get("internal_record"):
+            continue
+        rail = ws.get("rail") if isinstance(ws.get("rail"), dict) else {}
+        # Finished books belong on the Saved Projects shelf, not here.
+        if str((rail.get("export") or {}).get("status") or "") == "approved":
+            continue
+        done = sum(
+            1
+            for stage in rail.values()
+            if isinstance(stage, dict) and stage.get("status") == "approved"
+        )
+        out.append(
+            {
+                "id": project.get("id"),
+                "name": project.get("name"),
+                "type": project.get("type"),
+                "updated_at": project.get("updated_at"),
+                "current_stage": ws.get("current_stage"),
+                "next_action": ws.get("next_action"),
+                "stages_done": done,
+                "stages_total": len(rail) or 10,
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
 def get_project(project_id: int) -> dict | None:
     conn = get_conn()
     row = conn.execute(

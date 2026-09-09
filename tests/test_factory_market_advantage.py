@@ -6,6 +6,7 @@ product, touch project #4249, or weaken the network guard.
 from __future__ import annotations
 
 import copy
+import json
 import os
 import re
 import sys
@@ -23,6 +24,7 @@ import database  # noqa: E402
 import services.market_research as MR  # noqa: E402
 from services.book_sales_estimate import estimate_book_sales  # noqa: E402
 from services.factory_advantage import (  # noqa: E402
+    COMING_SOON_LABEL,
     DISCLAIMER,
     HOW_DETERMINED_PLAIN,
     INSUFFICIENT_EVIDENCE,
@@ -30,13 +32,16 @@ from services.factory_advantage import (  # noqa: E402
     USER_DECISION_AVOID,
     USER_DECISION_BUILD,
     USER_DECISION_IMPROVE,
+    annotate_build_readiness,
     builder_prefill_from_plan,
+    build_readiness,
     build_recommendation_summary,
     compute_factory_advantage,
     draft_handoff_payload,
     map_user_decision,
     plain_component_signal,
     plain_opportunity_label,
+    preferred_opportunity,
     reject_unsupported_trend_language,
     resolve_factory_builder,
 )
@@ -1989,6 +1994,313 @@ class DegradedModePresentationTests(unittest.TestCase):
         self.assertIn("escapeHtml(headings.headline)", card)
         self.assertIn("escapeHtml(headings.why)", card)
         self.assertIn("escapeHtml(headings.build)", card)
+
+
+
+class ComingSoonProductTypeTests(unittest.TestCase):
+    """A researched product type with no builder yet must not shout, repeatedly.
+
+    Reported symptom: the research page filled up with large red
+    "This product type is not ready in the public builder yet" warnings -- one
+    more on every Build This Product click.
+
+    Root cause: the Best Opportunity was headlined regardless of whether the
+    Factory can build that type, Build This Product was offered anyway,
+    /research-to-builder refused it with 409, and the browser appended a fresh
+    full-width red card to the top of the results for every refusal
+    (`out.insertAdjacentHTML("afterbegin", ...)`).
+
+    The correction is generic -- it reads the shared builder registry, so it
+    holds for any product type and any project, and a builder that ships later
+    becomes buildable everywhere at once.
+    """
+
+    PLANNER = {
+        "product_idea": "Undated weekly reset planner",
+        "product_type": "Planner",
+        "target_audience": "Busy parents",
+        "customer_problem": "Weeks get away from them",
+        "why_opportunity": "Planner buyers restock every year.",
+        "sales_angle": "Undated so it never expires",
+    }
+    EBOOK = {
+        "product_idea": "The Weekly Reset Guide",
+        "product_type": "Ebook",
+        "target_audience": "Busy parents",
+        "customer_problem": "Weeks get away from them",
+        "why_opportunity": "Guides sell alongside planners.",
+        "sales_angle": "One habit per chapter",
+    }
+
+    def _js(self) -> str:
+        return APP_JS.read_text(encoding="utf-8")
+
+    def _fn(self, js: str, start: str, end: str) -> str:
+        return js.split(start, 1)[1].split(end, 1)[0]
+
+    def _research(self, payload):
+        client = app.test_client()
+        resp = client.post("/discover-products", json={**payload, "audience": "Parents"})
+        self.assertEqual(resp.status_code, 200, resp.data)
+        return resp.get_json()
+
+    # ---- readiness is one shared answer, not a per-page guess --------------
+
+    def test_readiness_follows_the_shared_builder_registry(self):
+        for product_type in ("Ebook", "Coloring Book", "Crossword Puzzle Book", "Budget Planner"):
+            with self.subTest(product_type=product_type):
+                row = build_readiness(product_type)
+                self.assertTrue(row["ready"])
+                self.assertEqual(row["status"], "ready")
+                self.assertEqual(row["label"], "")
+        for product_type in ("Planner", "Flip Book", "Spelling Worksheet", "Cover Design"):
+            with self.subTest(product_type=product_type):
+                row = build_readiness(product_type)
+                self.assertFalse(row["ready"])
+                self.assertEqual(row["status"], "coming_soon")
+                self.assertEqual(row["label"], COMING_SOON_LABEL)
+
+    def test_readiness_agrees_with_what_the_build_handoff_will_accept(self):
+        for product_type in (
+            "Ebook",
+            "Planner",
+            "Coloring Book",
+            "Flip Book",
+            "Printable inventory and meal planning workbook",
+            "Spelling Worksheet",
+        ):
+            with self.subTest(product_type=product_type):
+                self.assertEqual(
+                    build_readiness(product_type)["ready"],
+                    resolve_factory_builder(product_type)["status"] == "active",
+                )
+
+    def test_every_opportunity_is_tagged_without_losing_any_research(self):
+        rows = annotate_build_readiness([self.PLANNER, self.EBOOK])
+        self.assertEqual(len(rows), 2)
+        self.assertFalse(rows[0]["build_readiness"]["ready"])
+        self.assertTrue(rows[1]["build_readiness"]["ready"])
+        for before, after in zip((self.PLANNER, self.EBOOK), rows):
+            for key, value in before.items():
+                self.assertEqual(after[key], value, f"research field {key} was altered")
+
+    # ---- the Best Opportunity prefers something buildable ------------------
+
+    def test_best_opportunity_prefers_a_type_the_factory_can_build(self):
+        chosen = preferred_opportunity([self.PLANNER, self.EBOOK], {})
+        self.assertEqual(chosen["product_idea"], self.EBOOK["product_idea"])
+
+    def test_a_buildable_top_pick_is_left_exactly_where_it_was(self):
+        chosen = preferred_opportunity([self.EBOOK, self.PLANNER], {})
+        self.assertIs(chosen, self.EBOOK)
+        self.assertEqual(
+            preferred_opportunity([COLORING], {"best_product_type": "Coloring Book"}),
+            COLORING,
+        )
+
+    def test_nothing_buildable_keeps_the_top_pick_instead_of_inventing_one(self):
+        chosen = preferred_opportunity([self.PLANNER, dict(self.PLANNER)], {})
+        self.assertIs(chosen, self.PLANNER)
+
+    def test_the_summary_headlines_the_buildable_opportunity(self):
+        score = compute_factory_advantage(RICH_INPUTS, RICH_EVIDENCE)
+        summary = build_recommendation_summary(
+            RICH_INPUTS,
+            score=score,
+            opportunities=[self.PLANNER, self.EBOOK],
+            evidence=RICH_EVIDENCE,
+            recommendation={
+                "best_product": self.PLANNER["product_idea"],
+                "best_product_type": "Planner",
+            },
+        )
+        self.assertEqual(summary["product_name"], self.EBOOK["product_idea"])
+        self.assertEqual(summary["product_type"], "Ebook")
+        self.assertTrue(summary["build_readiness"]["ready"])
+
+    def test_the_summary_says_coming_soon_when_nothing_is_buildable(self):
+        score = compute_factory_advantage(RICH_INPUTS, RICH_EVIDENCE)
+        summary = build_recommendation_summary(
+            RICH_INPUTS,
+            score=score,
+            opportunities=[self.PLANNER],
+            evidence=RICH_EVIDENCE,
+            recommendation={
+                "best_product": self.PLANNER["product_idea"],
+                "best_product_type": "Planner",
+            },
+        )
+        self.assertEqual(summary["product_name"], self.PLANNER["product_idea"])
+        self.assertFalse(summary["build_readiness"]["ready"])
+        self.assertEqual(summary["build_readiness"]["label"], COMING_SOON_LABEL)
+
+    # ---- the research payload the browser actually receives ----------------
+
+    def test_the_research_route_tags_readiness_and_keeps_the_research(self):
+        tavily, chat = _patch_live_discovery()
+        with tavily, chat:
+            body = self._research({"topic": "kids coloring", "product_type": "Coloring Book"})
+        self.assertTrue(body["opportunities"])
+        for opp in body["opportunities"]:
+            self.assertIn("build_readiness", opp)
+            self.assertTrue(opp["build_readiness"]["ready"])
+            self.assertTrue(opp["why_opportunity"])
+        self.assertTrue(body["recommendation_summary"]["build_readiness"]["ready"])
+
+    def test_an_unbuildable_type_is_tagged_and_the_handoff_still_refuses_it(self):
+        tavily, chat = _patch_live_discovery()
+        with tavily, chat:
+            body = self._research({"topic": "weekly reset", "product_type": "Planner"})
+        self.assertTrue(body["opportunities"])
+        for opp in body["opportunities"]:
+            self.assertEqual(opp["build_readiness"]["status"], "coming_soon")
+            self.assertEqual(opp["build_readiness"]["label"], COMING_SOON_LABEL)
+            self.assertTrue(opp["why_opportunity"], "the research itself is preserved")
+        self.assertFalse(body["recommendation_summary"]["build_readiness"]["ready"])
+        # The server-side refusal is unchanged -- the page simply stops asking.
+        handoff = app.test_client().post(
+            "/research-to-builder",
+            json={
+                "opportunity": body["opportunities"][0],
+                "research": body,
+                "inputs": body["inputs"],
+            },
+        )
+        self.assertEqual(handoff.status_code, 409)
+
+    # ---- the browser never stacks a full-size warning ----------------------
+
+    def test_build_this_product_replaces_one_notice_instead_of_stacking(self):
+        js = self._js()
+        fn = self._fn(js, "async function buildThisProduct(", "async function runFactoryMarketAdvantage(")
+        self.assertNotIn("insertAdjacentHTML", fn)
+        self.assertIn("setFmaNotice(", fn)
+        notice = self._fn(js, "function setFmaNotice(", "function opportunityCardsHtml(")
+        self.assertIn('getElementById("fmaNotice")', notice)
+        self.assertNotIn("insertAdjacentHTML", notice)
+        self.assertEqual(js.count('id="fmaNotice"'), 1, "the notice must live in exactly one slot")
+
+    def test_no_build_action_is_offered_for_a_type_with_no_builder(self):
+        card = self._fn(
+            self._js(), "function recommendationSummaryHtml(", "function renderDiscovery("
+        )
+        self.assertIn("isBuildableOpportunity(chosen)", card)
+        self.assertIn('buildable ? `<button id="buildThisProductBtn"', card)
+        self.assertIn("comingSoonNoticeHtml(chosen, summary,", card)
+        self.assertEqual(card.count("comingSoonNoticeHtml("), 1, "one notice, not several")
+
+    def test_the_coming_soon_label_is_small_and_neutral_not_a_red_warning(self):
+        js = self._js()
+        chip = self._fn(js, "function comingSoonChipHtml(", "// Every research-page notice")
+        self.assertIn(COMING_SOON_LABEL, js)
+        notice = self._fn(js, "function comingSoonNoticeHtml(", "function comingSoonChipHtml(")
+        for alarm in ("rose", "red", "amber"):
+            self.assertNotIn(alarm, chip)
+            self.assertNotIn(alarm, notice)
+        cards = self._fn(js, "function opportunityCardsHtml(", "function recommendationCardHtml(")
+        self.assertIn("comingSoonChipHtml()", cards)
+
+    def test_the_page_picks_a_buildable_best_opportunity_by_default(self):
+        js = self._js()
+        render = self._fn(js, "function renderDiscovery(", "async function saveResearchOnly(")
+        self.assertIn("pickBestOpportunity(ops, reco)", render)
+        picker = self._fn(js, "function pickBestOpportunity(", "// The one plain sentence")
+        self.assertIn("isBuildableOpportunity(top)", picker)
+        self.assertIn("rows.find(isBuildableOpportunity)", picker)
+
+    def test_the_headline_and_the_build_action_name_one_product(self):
+        """A stored summary must not headline a product the page will not build.
+
+        Research saved before build readiness existed can name an unbuildable
+        product; the page has since moved the selection to a buildable one, so
+        the summary is recomposed from that selection instead of reused.
+        """
+        fn = self._fn(
+            self._js(), "function recommendationSummaryFrom(", "function explainerVideoHtml("
+        )
+        self.assertIn("existing.product_name === picked.product_idea", fn)
+        self.assertIn("top.product_idea || reco.best_product", fn)
+
+    def test_the_browser_trusts_the_servers_readiness_answer_first(self):
+        fn = self._fn(self._js(), "function opportunityReadiness(", "function isBuildableOpportunity(")
+        self.assertIn("op.build_readiness", fn)
+        # ...and still works for research saved before the field existed.
+        self.assertIn("resolveFactoryTypeFromPlan(", fn)
+
+    def test_the_product_type_menu_marks_types_with_no_builder(self):
+        js = self._js()
+        fill = self._fn(js, "function fillTypeSelect(", "let fmaStartMode")
+        self.assertIn("productTypeIsComingSoon(t)", fill)
+        self.assertIn('value="${escapeHtml(t)}"', fill, "the submitted value must not change")
+        guard = self._fn(js, "function productTypeIsComingSoon(", "function pickBestOpportunity(")
+        self.assertIn('"not sure yet"', guard)
+
+
+class ComingSoonEbookHandoffTests(unittest.TestCase):
+    """An Ebook opportunity is buildable, so it must still reach the workspace.
+
+    The repeated-warning fix must not cost the working path anything: choosing
+    an active Ebook opportunity has to open the repaired Ebook Project
+    workspace with the research it was built from already in it.
+    """
+
+    def setUp(self):
+        self.client = app.test_client()
+
+    def test_an_active_ebook_opportunity_opens_a_seeded_ebook_workspace(self):
+        opportunity = {
+            "product_idea": "The Weekly Reset Guide",
+            "product_type": "Ebook",
+            "target_audience": "Busy parents",
+            "customer_problem": "Weeks get away from them",
+            "why_opportunity": "Guides sell alongside planners.",
+            "sales_angle": "One habit per chapter",
+        }
+        self.assertTrue(build_readiness(opportunity["product_type"])["ready"])
+        research = {
+            "opportunities": annotate_build_readiness([opportunity]),
+            "selected_opportunity": opportunity,
+            "sources": [{"title": "Parent planning survey", "url": "https://example.org/a"}],
+            "inputs": {
+                "topic": "weekly reset",
+                "audience": "Busy parents",
+                "product_type": "Ebook",
+                "customer_problem": "Weeks get away from them",
+            },
+        }
+        handoff = self.client.post(
+            "/research-to-builder",
+            json={"opportunity": opportunity, "research": research, "inputs": research["inputs"]},
+        )
+        self.assertEqual(handoff.status_code, 201, handoff.data)
+        self.assertEqual(handoff.get_json()["factory_id"], "ebook")
+
+        created = self.client.post(
+            "/ebook-workspace",
+            json={
+                "topic": opportunity["product_idea"],
+                "audience": opportunity["target_audience"],
+                "name": opportunity["product_idea"],
+                "title": opportunity["product_idea"],
+                "research": research,
+                "opportunity": opportunity,
+            },
+        )
+        self.assertEqual(created.status_code, 200, created.data)
+        body = created.get_json()
+        self.assertTrue(body["seeded"], "the research the customer already did must be seeded")
+        ws = body["workspace"]
+        research_stage = next(s for s in ws["rail"] if s["id"] == "research")
+        self.assertEqual(research_stage["status"], "approved")
+        self.assertNotEqual(ws["next_action"], "run_research")
+        # The research itself survived the handoff into the workspace.
+        saved = self.client.get(f"/projects/{body['project']['id']}").get_json()["data"]
+        blob = json.dumps(saved)
+        self.assertIn(opportunity["customer_problem"], blob)
+        self.assertIn(opportunity["why_opportunity"], blob)
+        self.assertIn("https://example.org/a", blob)
+        self.assertIn("weekly reset", blob)
+        self.assertIn("Busy parents", blob)
 
 
 if __name__ == "__main__":

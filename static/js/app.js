@@ -977,6 +977,67 @@ function applySavedSearchFilter(projects) {
   });
 }
 
+// Books that are started but not finished.
+//
+// Saved Projects lists only completed products with usable output, which is
+// right for a shelf of finished work — but it meant a half-written book had no
+// route back to it at all. A customer who started a project, navigated away and
+// came back could not reopen their own paid-for draft. This puts them one click
+// away, above the finished shelf.
+async function renderInProgressProjects() {
+  const host = document.getElementById("inProgressList");
+  const wrap = document.getElementById("inProgressWrap");
+  if (!host || !wrap) return;
+  let rows = [];
+  try {
+    rows = await api("/projects/in-progress?limit=12");
+  } catch (e) {
+    rows = [];
+  }
+  if (!Array.isArray(rows) || !rows.length) {
+    wrap.classList.add("hidden");
+    host.innerHTML = "";
+    return;
+  }
+  wrap.classList.remove("hidden");
+  host.innerHTML = rows
+    .map((p) => {
+      const done = Number(p.stages_done || 0);
+      const total = Number(p.stages_total || 10) || 10;
+      const pct = Math.max(4, Math.min(100, Math.round((done / total) * 100)));
+      return `<div class="rounded-xl border border-slate-200 bg-white p-4 flex flex-wrap items-center gap-3">
+        <div class="min-w-0 flex-1">
+          <div class="font-semibold text-slate-900 truncate">${escapeHtml(p.name || "Untitled book")}</div>
+          <div class="text-xs text-slate-500 mt-0.5">${done} of ${total} steps done · next: ${escapeHtml(
+            CUSTOMER_STEP_LABELS[p.next_action] || String(p.next_action || "").replace(/_/g, " ") || "continue"
+          )}</div>
+          <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+            <div class="h-full rounded-full bg-brand-600" style="width:${pct}%"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-primary text-sm shrink-0" data-open-workspace="${escapeHtml(String(p.id))}">Continue</button>
+      </div>`;
+    })
+    .join("");
+  host.querySelectorAll("[data-open-workspace]").forEach((btn) => {
+    btn.onclick = () => openEbookWorkspace(Number(btn.dataset.openWorkspace));
+  });
+}
+
+// Plain wording for the next step, matching CUSTOMER_ACTION_LABELS server-side.
+const CUSTOMER_STEP_LABELS = {
+  run_research: "Research this idea",
+  approve_research: "Review the research",
+  save_title: "Set your title",
+  approve_title: "Approve your title",
+  generate_outline_options: "Plan your chapters",
+  approve_outline: "Approve your chapter plan",
+  generate_manuscript: "Write your chapters",
+  approve_manuscript: "Review and approve your draft",
+  request_correction: "Fix one chapter",
+  correct_manuscript: "Fix one chapter",
+};
+
 async function loadProjects() {
   refreshAdminControls();
   const showAll = isAdminMode();
@@ -1030,6 +1091,7 @@ async function loadProjects() {
       visible.forEach((p) => saved.appendChild(projectRow(p, { showMeta: showAll })));
     }
   }
+  renderInProgressProjects();
   const olderWrap = document.getElementById("savedOlderWrap");
   if (olderWrap) {
     olderWrap.classList.toggle("hidden", showAll || visible.length < 10);
@@ -1753,7 +1815,13 @@ function fillTypeSelect(id, anyLabel) {
   if (!sel) return;
   const hasValue = Array.from(sel.options).some((o) => String(o.value || "").trim());
   if (hasValue) return;
-  let opts = MARKET_PRODUCT_TYPES.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+  // The option value never changes (validation and the research payload still
+  // use the plain type); only the visible label gains a small neutral marker
+  // so nobody researches a type whose Build action cannot exist yet.
+  let opts = MARKET_PRODUCT_TYPES.map((t) => {
+    const label = productTypeIsComingSoon(t) ? `${t} (${COMING_SOON_LABEL.toLowerCase()})` : t;
+    return `<option value="${escapeHtml(t)}">${escapeHtml(label)}</option>`;
+  }).join("");
   if (anyLabel) opts = `<option value="">${escapeHtml(anyLabel)}</option>` + opts;
   sel.innerHTML = opts;
 }
@@ -2126,6 +2194,100 @@ function modeBadgeHtml(mode) {
     : '<span class="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 text-xs font-medium px-3 py-1">AI-estimated research (no live web data)</span>';
 }
 
+// ---------- build readiness ----------
+// One question, asked one way, everywhere: can the Factory build this
+// researched product type today? The server answers it on every opportunity
+// (`build_readiness`, services/factory_advantage.py) using the same builder
+// registry `/research-to-builder` enforces; research saved before that field
+// existed falls back to the browser's own copy of the routing. Nothing here
+// names a product, a title, or a project.
+const COMING_SOON_LABEL = "Coming soon";
+
+function opportunityReadiness(op) {
+  const server = op && op.build_readiness;
+  if (server && typeof server.ready === "boolean") {
+    return { ready: !!server.ready, factoryId: server.factory_id || null };
+  }
+  const res = resolveFactoryTypeFromPlan({ product_type: (op && op.product_type) || "" });
+  return { ready: res.status === "active", factoryId: res.factoryId || null };
+}
+
+function isBuildableOpportunity(op) {
+  return opportunityReadiness(op).ready;
+}
+
+// "Not Sure Yet" is not a product type the Factory has to have a builder for —
+// it means the Factory chooses one — so it is never labelled Coming soon.
+function productTypeIsComingSoon(productType) {
+  const pt = String(productType || "").trim().toLowerCase();
+  if (!pt || pt === "not sure yet") return false;
+  return resolveFactoryTypeFromPlan({ product_type: productType }).status !== "active";
+}
+
+// Mirrors preferred_opportunity() in services/factory_advantage.py so the
+// headline card and the Build action always name the same opportunity: the
+// normal top pick, unless that type has no builder yet and a researched
+// alternative does.
+function pickBestOpportunity(ops, reco) {
+  const rows = (ops || []).filter(Boolean);
+  if (!rows.length) return null;
+  const named = rows.find((o) => o.product_idea === ((reco && reco.best_product) || ""));
+  const top = named || rows[0];
+  if (isBuildableOpportunity(top)) return top;
+  return rows.find(isBuildableOpportunity) || top;
+}
+
+// The one plain sentence a customer sees when the researched product type has
+// no builder yet. Stated once, never repeated, never a red alarm. The second
+// half only points at other opportunities when there actually is one to point
+// at — otherwise it names the next useful step instead.
+function comingSoonNoticeText(op, summary, ops) {
+  const type =
+    (op && op.product_type) ||
+    (summary && summary.product_type) ||
+    "this product type";
+  const alternative = (ops || []).some(isBuildableOpportunity);
+  return (
+    "Coming soon: the Factory does not build " + type + " yet, so there is no " +
+    "Build action for it. Your research is saved" +
+    (alternative
+      ? " — choose an opportunity below without a Coming soon label to build one now."
+      : ". Research again with a product type the Factory builds today, or come back to this when it is ready.")
+  );
+}
+
+function comingSoonNoticeHtml(op, summary, ops) {
+  return `<div data-fma-coming-soon class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+    <p class="text-sm text-slate-700">${escapeHtml(comingSoonNoticeText(op, summary, ops))}</p>
+  </div>`;
+}
+
+function comingSoonChipHtml() {
+  return `<span data-coming-soon class="inline-flex items-center rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 text-[11px] font-medium">${COMING_SOON_LABEL}</span>`;
+}
+
+// Every research-page notice shares ONE slot, so repeating an action replaces
+// the previous message instead of stacking another full-size warning.
+function setFmaNotice(message, tone) {
+  const out = selectionOutEl() || document.getElementById("marketOutput");
+  let el = document.getElementById("fmaNotice");
+  if (!el) {
+    if (!out) return;
+    el = document.createElement("div");
+    el.id = "fmaNotice";
+    out.insertBefore(el, out.firstChild);
+  }
+  if (!message) {
+    el.innerHTML = "";
+    el.className = "hidden";
+    return;
+  }
+  el.className =
+    "rounded-xl border p-3 " +
+    (tone === "error" ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-slate-50");
+  el.innerHTML = `<p class="text-sm ${tone === "error" ? "text-rose-700" : "text-slate-700"}">${escapeHtml(message)}</p>`;
+}
+
 function opportunityCardsHtml(ops, selected) {
   return ops
     .map((o, i) => {
@@ -2137,7 +2299,10 @@ function opportunityCardsHtml(ops, selected) {
             <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white text-sm font-bold">${o.rank || i + 1}</span>
             <div class="min-w-0">
               <div class="font-bold text-slate-900 truncate">${escapeHtml(o.product_idea)}</div>
-              <div class="text-xs text-slate-500">${escapeHtml(o.product_type)}</div>
+              <div class="text-xs text-slate-500 flex flex-wrap items-center gap-2">
+                <span>${escapeHtml(o.product_type)}</span>
+                ${isBuildableOpportunity(o) ? "" : comingSoonChipHtml()}
+              </div>
             </div>
           </div>
           <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${scoreColor(sc)} text-white font-bold">${sc || "?"}</span>
@@ -2441,7 +2606,18 @@ function signalDotClass(signal) {
 
 function recommendationSummaryFrom(d) {
   const existing = d && d.recommendation_summary;
-  if (existing && existing.product_name) return existing;
+  const picked = (d && (d.selected_opportunity || d.selectedOpportunity)) || null;
+  // A stored summary is reused only while it still names the opportunity the
+  // page has selected. Research saved before build readiness existed can name a
+  // product the Factory cannot build while the page has already moved to one it
+  // can — recomposing keeps the headline, the reasons and the Build action all
+  // describing the same product.
+  if (
+    existing && existing.product_name &&
+    (!picked || !picked.product_idea || existing.product_name === picked.product_idea)
+  ) {
+    return existing;
+  }
   const score = (d && d.factory_advantage) || {};
   const reco = (d && d.recommendation) || {};
   const panel = (d && d.decision_panel) || {};
@@ -2451,8 +2627,8 @@ function recommendationSummaryFrom(d) {
   const comps = score.components || {};
   const internal = score.recommendation || panel.internal_recommendation || "Insufficient Evidence";
   const userDecision = panel.user_decision || mapUserDecision(internal);
-  const productName = reco.best_product || top.product_idea || inputs.topic || "This idea";
-  const productType = reco.best_product_type || top.product_type || inputs.product_type || "";
+  const productName = top.product_idea || reco.best_product || inputs.topic || "This idea";
+  const productType = top.product_type || reco.best_product_type || inputs.product_type || "";
   const audience = top.target_audience || inputs.audience || "the stated audience";
   const problem = top.customer_problem || inputs.customer_problem || "the stated customer problem";
   const why = firstSentence(
@@ -2551,6 +2727,17 @@ function recommendationHeadings(summary) {
 
 function recommendationSummaryHtml(d, summary) {
   const headings = recommendationHeadings(summary);
+  // A Build action is only offered for a type the Factory can actually build.
+  // Anything else gets one small neutral notice instead of a Build button the
+  // server would refuse — the refusals were what stacked up as repeated
+  // full-size red warnings.
+  const chosen = (d && (d.selected_opportunity || d.selectedOpportunity)) || null;
+  const readiness = summary && summary.build_readiness;
+  const buildable = chosen
+    ? isBuildableOpportunity(chosen)
+    : (readiness && typeof readiness.ready === "boolean"
+        ? !!readiness.ready
+        : !productTypeIsComingSoon(summary && summary.product_type));
   return `<div id="fmaRecommendationSummary" data-fma-view="recommendation-summary" class="rounded-2xl border-2 border-brand-500 bg-white p-6">
     <div class="text-xs font-semibold uppercase tracking-widest text-brand-600">Factory Market Advantage</div>
     <h3 class="text-lg font-bold text-slate-900 mt-1">${escapeHtml(headings.headline)}</h3>
@@ -2570,8 +2757,9 @@ function recommendationSummaryHtml(d, summary) {
         <button type="button" id="fmaScoreCalcBtn" class="mt-2 text-sm font-medium text-brand-700 hover:text-brand-900">Open complete score calculation</button>
       </div>
     </div>
+    ${buildable ? "" : comingSoonNoticeHtml(chosen, summary, (d && d.opportunities) || [])}
     <div class="mt-5 flex flex-wrap gap-3">
-      <button id="buildThisProductBtn" class="btn-primary">Build This Product</button>
+      ${buildable ? `<button id="buildThisProductBtn" class="btn-primary">Build This Product</button>` : ""}
       <button type="button" id="fmaImproveIdeaBtn" class="rounded-xl border border-brand-500 text-brand-700 hover:bg-brand-50 px-4 py-2 text-sm font-medium">Improve This Idea</button>
     </div>
     <div class="mt-3 flex flex-wrap gap-4 text-sm">
@@ -2610,7 +2798,7 @@ function renderDiscovery(d) {
   }
 
   if (!d.selected_opportunity && !d.selectedOpportunity) {
-    const chosen = ops.find((o) => o.product_idea === reco.best_product) || ops[0];
+    const chosen = pickBestOpportunity(ops, reco);
     if (chosen) {
       d.selected_opportunity = chosen;
       d.selectedOpportunity = chosen;
@@ -2653,6 +2841,7 @@ function renderDiscovery(d) {
   const diffs = ((report.G_differentiation_plan || {}).opportunities) || gap.opportunities || [];
 
   out.innerHTML = `<div class="space-y-4">
+    <div id="fmaNotice" class="hidden"></div>
     ${explainerVideoHtml()}
     ${recommendationSummaryHtml(d, recoSummary)}
     ${err ? `<p class="text-sm text-amber-700">${escapeHtml(err)} <button id="fmaRetryBtn" class="underline">Retry</button></p>` : ""}
@@ -2879,18 +3068,26 @@ async function buildThisProduct() {
   if (!d) return toast("Run research first.", "error");
   let op = d.selected_opportunity || d.selectedOpportunity;
   if (!op) {
-    const ops = d.opportunities || [];
-    const reco = d.recommendation || {};
-    op = ops.find((o) => o.product_idea === reco.best_product) || ops[0];
+    // Same rule the page used to headline the Best Opportunity, so the button
+    // never builds something different from what the card recommends.
+    op = pickBestOpportunity(d.opportunities || [], d.recommendation || {});
     if (op) {
       d.selected_opportunity = op;
       d.selectedOpportunity = op;
     }
   }
   if (!op) return toast("Choose Your Advantage before building.", "error");
-  const out = selectionOutEl();
+  // Unsupported type: say it once, plainly, and stop. Calling the handoff
+  // would only earn a refusal from /research-to-builder, and every click used
+  // to leave one more full-size red warning behind on the page.
+  if (!isBuildableOpportunity(op)) {
+    setFmaNotice(comingSoonNoticeText(op, null, d.opportunities || []), "info");
+    toast(COMING_SOON_LABEL + " — pick an opportunity the Factory can build.", "error");
+    return;
+  }
   setFmaStep("build");
   try {
+    setFmaNotice("");
     await saveResearchOnly();
     const clean = { ...d };
     delete clean._rerender;
@@ -2935,6 +3132,13 @@ async function buildThisProduct() {
             audience: plan.target_audience || op.target_audience || "",
             outcome: plan.main_transformation || plan.product_promise || "",
             name: String(topic).slice(0, 120),
+            // Seed the research the customer already produced so the new
+            // workspace lands at Title (or beyond) instead of a dead-end
+            // Research stage. The server auto-approves research on seed.
+            title: topic,
+            subtitle: plan.subtitle || brief.subtitle || "",
+            research: clean,
+            opportunity: op,
           }),
         });
         loadProjects();
@@ -2952,9 +3156,8 @@ async function buildThisProduct() {
       ? "Draft opened in the matching builder. Review the brief, then generate when you are ready."
       : "Draft saved. Pick the matching product type in Product Factory.");
   } catch (e) {
-    if (out) {
-      out.insertAdjacentHTML("afterbegin", card(`<p class="text-rose-600 text-sm">${escapeHtml(e.message)}</p>`));
-    }
+    // One slot, replaced each time — repeated clicks never stack warnings.
+    setFmaNotice(e.message, "error");
     toast(e.message, "error");
   }
 }
@@ -6848,14 +7051,40 @@ function renderEbookWorkspace(ws) {
         </div>
       </div>
       <div class="flex gap-2 overflow-x-auto pb-1" data-ebook-rail>${railHtml}</div>
+      ${
+        ws.current_stage === "export" || ws.next_action === "download"
+          ? ""
+          : `<div class="rounded-xl border-2 border-brand-500 bg-brand-50/40 p-4">
+               <div class="flex flex-wrap items-center justify-between gap-3">
+                 <div class="min-w-0">
+                   <div class="text-sm font-bold text-slate-900">Finish this book for me</div>
+                   <p class="text-sm text-slate-600">One click runs every remaining step — writing, images, cover, layout, preview and checks — and stops only if something really needs you.</p>
+                   <p class="text-xs text-slate-500 mt-1" data-ws-build-all-cost>Checking what is left…</p>
+                 </div>
+                 <button type="button" class="btn-primary" data-ws-build-all>Build My Whole Book</button>
+               </div>
+             </div>`
+      }
       <div class="flex flex-wrap items-center gap-2">
-        <span class="text-sm text-slate-600">Next production action:</span>
+        <span class="text-sm text-slate-600">Or step by step:</span>
         <b class="text-sm text-slate-900" data-ws-next-label>${escapeHtml(ws.next_action_label || ws.next_action || "—")}</b>
         ${
-          ws.next_action === "generate_manuscript" && ws.gates && ws.gates.manuscript_enabled
+          !ws.gates
+            ? ""
+            : ws.next_action === "run_research" && ws.gates.run_research_enabled
+            ? `<button type="button" class="btn-primary text-sm" data-ws-estimate-research>Run Research…</button>`
+            : ws.next_action === "approve_research" && ws.gates.approve_research_enabled
+            ? `<button type="button" class="btn-primary text-sm" data-ws-approve-research>Approve Research</button>`
+            : ws.next_action === "approve_title" && ws.gates.approve_title_enabled
+            ? `<button type="button" class="btn-primary text-sm" data-ws-approve-title>Approve Title</button>`
+            : ws.next_action === "generate_outline_options" && ws.gates.draft_outline_enabled
+            ? `<button type="button" class="btn-primary text-sm" data-ws-draft-outline>Generate Draft Outline</button>`
+            : ws.next_action === "approve_outline" && ws.gates.approve_outline_enabled
+            ? `<button type="button" class="btn-primary text-sm" data-ws-approve-outline>Approve Outline</button>`
+            : ws.next_action === "generate_manuscript" && ws.gates.manuscript_enabled
             ? `<button type="button" class="btn-primary text-sm" data-ws-estimate-manuscript>Generate Manuscript…</button>`
-            : (ws.next_action === "request_correction" || ws.next_action === "correct_manuscript") && ws.gates && ws.gates.correction_enabled
-            ? `<button type="button" class="btn-primary text-sm" data-ws-request-correction-top>Request Correction…</button>`
+            : (ws.next_action === "request_correction" || ws.next_action === "correct_manuscript") && ws.gates.correction_enabled
+            ? `<button type="button" class="btn-primary text-sm" data-ws-request-correction-top>Fix This For Me…</button>`
             : ws.next_action === "generate_manuscript"
             ? `<button type="button" class="btn-secondary text-sm opacity-60 cursor-not-allowed" disabled title="Blocked until prior stages are approved">Generate Manuscript</button>`
             : ""
@@ -6877,6 +7106,25 @@ function renderEbookWorkspace(ws) {
   if (corrTop) {
     corrTop.onclick = () => estimateCorrectionInWorkspace(ws.project_id);
   }
+  const recheckTop = root.querySelector("[data-ws-recheck-top]");
+  if (recheckTop) {
+    recheckTop.onclick = () => recheckManuscriptQuality(ws.project_id);
+  }
+  const buildAll = root.querySelector("[data-ws-build-all]");
+  if (buildAll) {
+    buildAll.onclick = () => runFullBuild(ws.project_id, buildAll);
+    loadFullBuildCost(ws.project_id, root);
+  }
+  const estResTop = root.querySelector("[data-ws-estimate-research]");
+  if (estResTop) estResTop.onclick = () => estimateRunResearchInWorkspace(ws.project_id);
+  const appResTop = root.querySelector("[data-ws-approve-research]");
+  if (appResTop) appResTop.onclick = () => approveEbookStage("research", "Research approved. Next: set your title and subtitle.");
+  const appTitleTop = root.querySelector("[data-ws-approve-title]");
+  if (appTitleTop) appTitleTop.onclick = () => approveEbookStage("title", "Title approved. Next: generate a draft outline.");
+  const draftTop = root.querySelector("[data-ws-draft-outline]");
+  if (draftTop) draftTop.onclick = () => generateEbookDraftOutline(ws.project_id);
+  const appOutlineTop = root.querySelector("[data-ws-approve-outline]");
+  if (appOutlineTop) appOutlineTop.onclick = () => approveEbookStage("outline", "Outline approved. Next: Generate Manuscript.");
   const returnOpts = _ebookWorkspaceReturnOpts || {};
   const returnStage = returnOpts.stage || "";
   showEbookWorkspaceStage(returnStage || ws.current_stage || "research");
@@ -6920,12 +7168,30 @@ function showEbookWorkspaceStage(stageId) {
       <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1 mb-3">${rules}</ul>
       <h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Sources</h4>
       <ul class="text-sm space-y-1">${sources}</ul>
+      <div class="mt-3 flex flex-wrap gap-2">
+        ${ws.gates && ws.gates.run_research_enabled ? `<button type="button" class="btn-primary text-sm" data-ws-estimate-research>${r.summary ? "Rerun Research…" : "Run Research…"}</button>` : ""}
+        ${ws.gates && ws.gates.approve_research_enabled ? `<button type="button" class="btn-primary text-sm" data-ws-approve-research>Approve Research</button>` : ""}
+      </div>
     `;
   } else if (stageId === "title") {
+    const titleApproved = !!((ws.rail || []).find((s) => s.id === "title" && s.status === "approved"));
+    const editable = titleApproved ? "" : `
+      <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Book title</label>
+      <input type="text" data-ws-title-input value="${escapeHtml(ws.title || "")}" placeholder="e.g. The 30-Day Vegan Reset" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-2">
+      <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Subtitle (needed to approve the title)</label>
+      <input type="text" data-ws-subtitle-input value="${escapeHtml(ws.subtitle || "")}" placeholder="e.g. Simple Plant-Based Meals for Busy People" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-2">
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn-secondary text-sm" data-ws-save-title>Save Title</button>
+        ${ws.gates && ws.gates.approve_title_enabled ? `<button type="button" class="btn-primary text-sm" data-ws-approve-title>Approve Title</button>` : ""}
+      </div>
+      <p class="text-xs text-slate-500 mt-3">${ws.gates && ws.gates.approve_title_enabled ? "Title and subtitle are set. Review them, then Approve Title." : "Add both a title and a subtitle, then Save Title to enable Approve Title."}</p>
+    `;
     body = `
       <h3 class="text-sm font-bold text-slate-900 mb-2">Title · ${escapeHtml(stage.status_label || "")}</h3>
-      <p class="text-lg font-semibold text-slate-900">${escapeHtml(ws.title || "—")}</p>
-      <p class="text-sm text-slate-600 mt-1">${escapeHtml(ws.subtitle || "")}</p>
+      ${titleApproved
+        ? `<p class="text-lg font-semibold text-slate-900">${escapeHtml(ws.title || "—")}</p>
+           <p class="text-sm text-slate-600 mt-1">${escapeHtml(ws.subtitle || "")}</p>`
+        : editable}
       <p class="text-xs text-slate-500 mt-3">Approved option: ${escapeHtml(ws.approved_title_id || "—")}</p>
     `;
   } else if (stageId === "outline") {
@@ -6938,57 +7204,13 @@ function showEbookWorkspaceStage(stageId) {
       <h3 class="text-sm font-bold text-slate-900 mb-2">Outline · ${escapeHtml(stage.status_label || "")}</h3>
       <p class="text-xs text-slate-500 mb-3">Approved option: ${escapeHtml(ws.approved_outline_id || "—")}</p>
       <ol class="space-y-2">${chapters}</ol>
+      <div class="mt-3 flex flex-wrap gap-2">
+        ${ws.gates && ws.gates.draft_outline_enabled ? `<button type="button" class="btn-primary text-sm" data-ws-draft-outline>Generate Draft Outline</button>` : ""}
+        ${ws.gates && ws.gates.approve_outline_enabled ? `<button type="button" class="btn-primary text-sm" data-ws-approve-outline>Approve Outline</button>` : ""}
+      </div>
     `;
   } else if (stageId === "manuscript") {
-    const m = ws.manuscript || {};
-    const findings = (m.chapter_findings || []).flatMap((ch) =>
-      (ch.findings || []).map((f) => `<li><b>Ch ${escapeHtml(String(ch.order || ""))} ${escapeHtml(ch.title || "")}:</b> ${escapeHtml(String(f.code || ""))} — ${escapeHtml(String(f.message || f))}</li>`)
-    ).join("") || (m.structure_findings || m.qa_findings || []).map((f) => `<li>${escapeHtml(String(f))}</li>`).join("");
-    const chapters = (m.chapters || []).map((c) =>
-      `<li class="rounded-lg border border-slate-200 bg-white p-2 text-sm"><b>Ch ${escapeHtml(String(c.order || ""))}:</b> ${escapeHtml(c.title || "")}${c.quality_status ? ` · ${escapeHtml(String(c.quality_status))}` : ""}${c.word_count != null ? ` · ${escapeHtml(String(c.word_count))} words` : ""}</li>`
-    ).join("");
-    const canApprove = m.can_approve === true && m.status === "awaiting_approval" && m.quality_status === "PASS";
-    const needsCorrection = m.status === "needs_correction";
-    const contentPreview = (m.content || "").slice(0, 4000);
-    const rem = Number((m.remaining_usd != null ? m.remaining_usd : (ws.budget || {}).remaining_usd) || 0);
-    const corrEst = Number(m.correction_estimate_usd || 0.75);
-    body = `
-      <h3 class="text-sm font-bold text-slate-900 mb-2">Manuscript · ${escapeHtml(stage.status_label || m.status_label || "")}</h3>
-      ${
-        m.status === "not_started"
-          ? `<p class="text-sm text-slate-600">Not started. Click <b>Generate Manuscript…</b> for a cost estimate. Nothing is spent until you click <b>Confirm and Generate Manuscript</b>.</p>`
-          : ""
-      }
-      ${
-        needsCorrection
-          ? `<p class="text-sm text-orange-800 mb-2">Needs correction. The generated draft is preserved for inspection. Approve is blocked while structural FAIL findings remain.</p>`
-          : ""
-      }
-      ${
-        m.quality_status
-          ? `<p class="text-sm mb-2 ${m.quality_status === "PASS" ? "text-emerald-800" : "text-rose-800"}">Quality: <b>${escapeHtml(m.quality_status)}</b>${m.quality_status !== "PASS" ? " — Approve Manuscript is disabled until quality is PASS." : ""}</p>`
-          : ""
-      }
-      ${chapters ? `<h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Generated chapter list</h4><ol class="space-y-1 mb-3">${chapters}</ol>` : ""}
-      ${findings ? `<h4 class="text-xs font-semibold uppercase text-rose-700 mb-1">Chapter-level / QA findings</h4><ul class="list-disc pl-5 text-sm text-rose-700 mb-3">${findings}</ul>` : ""}
-      ${contentPreview ? `<h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Preserved draft (preview)</h4><pre class="text-xs bg-white border border-slate-200 rounded-lg p-3 whitespace-pre-wrap max-h-64 overflow-auto font-mono">${escapeHtml(contentPreview)}</pre>` : ""}
-      ${
-        canApprove
-          ? `<div class="mt-3 flex flex-wrap gap-2">
-              <button type="button" class="btn-primary text-sm" data-ws-approve-manuscript>Approve Manuscript</button>
-            </div>`
-          : ""
-      }
-      ${
-        needsCorrection
-          ? `<div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-              <p class="text-sm text-amber-900">Request Correction first issues a <b>free $0 estimate</b>. Nothing is spent until you check authorization and click <b>Confirm and Correct Manuscript</b>.</p>
-              <p class="text-xs text-amber-800">Remaining project budget: <b>$${rem.toFixed(3)}</b>. Estimated maximum remaining work if confirmed: <b>$${corrEst.toFixed(3)}</b>. Correction uses the existing manuscript and the exact approved outline — it does not restart research.</p>
-              <button type="button" class="btn-primary text-sm" data-ws-request-correction>Request Correction…</button>
-            </div>`
-          : ""
-      }
-    `;
+    body = manuscriptStagePanelHtml(ws, stage);
   } else if (stageId === "visuals") {
     const d = ws.design || {};
     const review = d.visual_review || {};
@@ -7291,12 +7513,22 @@ function showEbookWorkspaceStage(stageId) {
   if (corrBtn) {
     corrBtn.onclick = () => estimateCorrectionInWorkspace(ws.project_id);
   }
+  const recheckBtn = panel.querySelector("[data-ws-recheck-manuscript]");
+  if (recheckBtn) {
+    recheckBtn.onclick = () => recheckManuscriptQuality(ws.project_id);
+  }
   const bind = (sel, fn) => {
     const el = panel.querySelector(sel);
     if (el) el.onclick = fn;
   };
   bind("[data-ws-prepare-visuals]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/visuals`, { action: "prepare" }, "Visuals ready for review."));
   bind("[data-ws-approve-visuals]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/visuals`, { action: "approve" }, "Visuals approved."));
+  bind("[data-ws-estimate-research]", () => estimateRunResearchInWorkspace(ws.project_id));
+  bind("[data-ws-approve-research]", () => approveEbookStage("research", "Research approved. Next: set your title and subtitle."));
+  bind("[data-ws-approve-title]", () => approveEbookStage("title", "Title approved. Next: generate a draft outline."));
+  bind("[data-ws-draft-outline]", () => generateEbookDraftOutline(ws.project_id));
+  bind("[data-ws-approve-outline]", () => approveEbookStage("outline", "Outline approved. Next: Generate Manuscript."));
+  bind("[data-ws-save-title]", () => saveEbookTitle(ws.project_id));
   panel.querySelectorAll("[data-ws-replace-photo]").forEach((btn) => {
     btn.onclick = () => postEbookWorkspaceAction(
       `/ebook-workspace/${ws.project_id}/visuals`,
@@ -7636,6 +7868,10 @@ async function estimateCorrectionInWorkspace(projectId) {
       const btn = confirmEl.querySelector("[data-ws-confirm-correct]");
       setBusyEl(btn, true);
       confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = true;
+      const progressMount = document.createElement("div");
+      progressMount.className = "mt-3";
+      confirmEl.appendChild(progressMount);
+      const progress = startWorkspaceProgress(projectId, progressMount);
       try {
         const body = {
           confirmation_token: est.confirmation_token,
@@ -7650,6 +7886,7 @@ async function estimateCorrectionInWorkspace(projectId) {
           method: "POST",
           body: JSON.stringify(body),
         });
+        progress.stop("Correction complete.");
         if (gen.workspace) {
           renderEbookWorkspace(gen.workspace);
         }
@@ -7664,6 +7901,503 @@ async function estimateCorrectionInWorkspace(projectId) {
           toast("Correction complete — awaiting approval.");
         }
       } catch (e) {
+        progress.stop("Correction stopped.");
+        progressMount.remove();
+        toast(e.message || String(e), "error");
+        setBusyEl(btn, false);
+        confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = false;
+      }
+    };
+  } catch (e) {
+    confirmEl.innerHTML = `<p class="text-sm text-rose-700">${escapeHtml(e.message || String(e))}</p>`;
+  }
+}
+
+// ---------- manuscript stage, in plain language ----------
+// Blueprint §3: one clear recommendation, one obvious next action, and no wall
+// of raw scores or logs. This panel used to open with a per-chapter PASS /
+// NEEDS_CORRECTION list with word counts, a raw finding code
+// ("PURPOSE_MISALIGN"), a monospace dump of the markdown, and two competing
+// action boxes. Nothing is removed — the same evidence is one click away under
+// "Technical details" — but the default view is now what a first-time author
+// needs: what happened, what it means, what to do next.
+
+// Plain-English translations of the chapter-quality codes the engine emits.
+// Anything unmapped falls back to the engine's own message, so a new code is
+// still readable rather than hidden.
+const MANUSCRIPT_FINDING_PLAIN = {
+  PURPOSE_MISALIGN: "this chapter drifts from what its title promises",
+  THIN_CHAPTER: "this chapter is shorter than a reader would expect",
+  GENERIC_FILLER: "this chapter has filler that does not say anything useful",
+  PADDING_WITHOUT_SUBSTANCE: "this chapter repeats itself instead of adding detail",
+  REPEATED_MATERIAL: "this chapter repeats material from another chapter",
+  EXCESSIVE_HEDGING: "this chapter hedges too much to be useful advice",
+  PLACEHOLDER: "this chapter still contains placeholder text",
+  MISSING_REQUIRED_EXAMPLE: "this chapter needs a concrete example",
+  MISSING_REQUIRED_TABLE: "this chapter is missing a table it promised",
+  MISSING_REQUIRED_CHECKLIST: "this chapter is missing a checklist it promised",
+  MISSING_REQUIRED_WORKFLOW: "this chapter is missing step-by-step instructions",
+  MISSING_REQUIRED_FACT: "this chapter is missing a fact it was asked to cover",
+  MISSING_CITATION: "this chapter needs a source for a claim it makes",
+  MISSING_DISCLAIMER: "the book still needs its disclaimer page",
+  MISSING_SOURCES: "the book still needs its sources page",
+  CHAPTER_TITLE_MISMATCH: "a chapter title does not match the approved outline",
+  MISSING_CORE_CHAPTER: "a chapter from your approved outline is missing",
+  EXTRA_CHAPTER: "there is a chapter that is not in your approved outline",
+  CHAPTER_COUNT: "the number of chapters does not match your approved outline",
+};
+
+function plainManuscriptFinding(code, fallback) {
+  const key = String(code || "").toUpperCase();
+  if (MANUSCRIPT_FINDING_PLAIN[key]) return MANUSCRIPT_FINDING_PLAIN[key];
+  const prefix = Object.keys(MANUSCRIPT_FINDING_PLAIN).find((k) => key.startsWith(k));
+  return prefix ? MANUSCRIPT_FINDING_PLAIN[prefix] : String(fallback || "").trim();
+}
+
+// "Chapter 7 — Tools, Templates, and Checklists You Can Use: this chapter
+// drifts from what its title promises." One sentence per real problem.
+function plainManuscriptIssues(m) {
+  const rows = [];
+  (m.chapter_findings || []).forEach((ch) => {
+    (ch.findings || []).forEach((f) => {
+      const plain = plainManuscriptFinding(f.code, f.message || f);
+      if (!plain) return;
+      rows.push({
+        where: ch.order ? `Chapter ${ch.order}${ch.title ? ` — ${ch.title}` : ""}` : "",
+        plain,
+      });
+    });
+  });
+  if (!rows.length) {
+    (m.structure_findings || m.qa_findings || []).forEach((f) => {
+      const raw = String(f || "");
+      const code = raw.split(/[:\s]/)[0];
+      rows.push({ where: "", plain: plainManuscriptFinding(code, raw) || raw });
+    });
+  }
+  return rows;
+}
+
+function manuscriptStagePanelHtml(ws, stage) {
+  const m = ws.manuscript || {};
+  const chapters = m.chapters || [];
+  const ready = chapters.filter((c) => String(c.quality_status || "").toUpperCase() === "PASS").length;
+  const canApprove = m.can_approve === true && m.status === "awaiting_approval" && m.quality_status === "PASS";
+  const needsCorrection = m.status === "needs_correction";
+  const issues = needsCorrection ? plainManuscriptIssues(m) : [];
+  const rem = Number((m.remaining_usd != null ? m.remaining_usd : (ws.budget || {}).remaining_usd) || 0);
+  const corrEst = Number(m.correction_estimate_usd || 0.75);
+  const words = chapters.reduce((sum, c) => sum + Number(c.word_count || 0), 0);
+
+  // Headline: what happened, in one sentence a first-time author can act on.
+  let headline = "";
+  let tone = "text-slate-700";
+  if (m.status === "not_started") {
+    headline = "Your chapters have not been written yet.";
+  } else if (canApprove) {
+    headline = `Your draft is written and passed every quality check${
+      chapters.length ? ` — ${chapters.length} chapters` : ""}${words ? `, about ${words.toLocaleString()} words` : ""}.`;
+    tone = "text-emerald-800";
+  } else if (needsCorrection) {
+    const n = issues.length;
+    headline = `Your draft is written and saved${
+      chapters.length ? ` — ${ready} of ${chapters.length} chapters are ready` : ""}. ${
+      n === 1 ? "One thing" : `${n || "Something"} still`} needs a small fix before you approve it.`;
+    tone = "text-slate-800";
+  } else {
+    headline = "Your draft is written and saved.";
+  }
+
+  const issueList = issues.length
+    ? `<ul class="mt-2 space-y-1 text-sm text-slate-700">${issues
+        .map(
+          (r) =>
+            `<li class="flex gap-2"><span class="text-slate-400">•</span><span>${
+              r.where ? `<b>${escapeHtml(r.where)}</b>: ` : ""}${escapeHtml(r.plain)}</span></li>`
+        )
+        .join("")}</ul>`
+    : "";
+
+  // Everything technical stays available, just folded away.
+  const techChapters = chapters
+    .map(
+      (c) =>
+        `<li class="rounded-lg border border-slate-200 bg-white p-2 text-sm"><b>Ch ${escapeHtml(
+          String(c.order || "")
+        )}:</b> ${escapeHtml(c.title || "")}${
+          c.quality_status ? ` · ${escapeHtml(String(c.quality_status))}` : ""
+        }${c.word_count != null ? ` · ${escapeHtml(String(c.word_count))} words` : ""}</li>`
+    )
+    .join("");
+  const techFindings =
+    (m.chapter_findings || [])
+      .flatMap((ch) =>
+        (ch.findings || []).map(
+          (f) =>
+            `<li><b>Ch ${escapeHtml(String(ch.order || ""))} ${escapeHtml(
+              ch.title || ""
+            )}:</b> ${escapeHtml(String(f.code || ""))} — ${escapeHtml(String(f.message || f))}</li>`
+        )
+      )
+      .join("") ||
+    (m.structure_findings || m.qa_findings || [])
+      .map((f) => `<li>${escapeHtml(String(f))}</li>`)
+      .join("");
+  const draftHtml = m.content ? md(String(m.content).slice(0, 20000)) : "";
+
+  return `
+    <h3 class="text-sm font-bold text-slate-900 mb-2">Manuscript · ${escapeHtml(
+      stage.status_label || m.status_label || ""
+    )}</h3>
+    <p class="text-sm ${tone}">${escapeHtml(headline)}</p>
+    ${
+      m.status === "not_started"
+        ? `<p class="text-sm text-slate-600 mt-1">Click <b>Generate Manuscript…</b> to see the cost first. Nothing is spent until you confirm.</p>`
+        : ""
+    }
+    ${issueList}
+    ${
+      canApprove
+        ? `<div class="mt-4"><button type="button" class="btn-primary text-sm" data-ws-approve-manuscript>Approve Manuscript</button></div>`
+        : ""
+    }
+    ${
+      needsCorrection
+        ? `<div class="mt-4 flex flex-wrap items-center gap-3">
+             <button type="button" class="btn-primary text-sm" data-ws-request-correction>Fix This For Me…</button>
+             <button type="button" class="text-sm font-medium text-slate-600 hover:text-slate-900 underline" data-ws-recheck-manuscript>Check again first (free)</button>
+           </div>
+           <p class="mt-2 text-xs text-slate-500">You will see the cost before anything is spent (about $${corrEst.toFixed(
+             2
+           )}, budget left $${rem.toFixed(2)}). Your draft is kept exactly as it is.</p>`
+        : ""
+    }
+    ${
+      draftHtml
+        ? `<details class="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+             <summary class="cursor-pointer text-sm font-medium text-slate-700">Read your draft</summary>
+             <div class="prose prose-sm max-w-none mt-3 max-h-80 overflow-auto">${draftHtml}</div>
+           </details>`
+        : ""
+    }
+    ${
+      techChapters || techFindings
+        ? `<details class="mt-2 rounded-xl border border-slate-200 bg-white p-3">
+             <summary class="cursor-pointer text-sm font-medium text-slate-500">Technical details</summary>
+             <div class="mt-3">
+               ${
+                 m.quality_status
+                   ? `<p class="text-xs text-slate-500 mb-2">Quality gate: <b>${escapeHtml(
+                       m.quality_status
+                     )}</b></p>`
+                   : ""
+               }
+               ${
+                 techChapters
+                   ? `<h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Generated chapter list</h4><ol class="space-y-1 mb-3">${techChapters}</ol>`
+                   : ""
+               }
+               ${
+                 techFindings
+                   ? `<h4 class="text-xs font-semibold uppercase text-slate-500 mb-1">Chapter-level / QA findings</h4><ul class="list-disc pl-5 text-sm text-slate-600">${techFindings}</ul>`
+                   : ""
+               }
+             </div>
+           </details>`
+        : ""
+    }
+  `;
+}
+
+// ---------- one-click build ----------
+// One click. No confirmation dialog, no authorization checkbox: pressing the
+// button IS the go-ahead, so a book takes one action instead of five. The
+// cost ceiling is shown on the card *before* the click and is recomputed
+// server-side, so the browser cannot raise it and the project budget cap still
+// binds. The quality gates are untouched — a stage whose check fails stops the
+// run and says so rather than being auto-approved.
+
+// Fill in the cost line on the Build card. Free; calls no provider.
+async function loadFullBuildCost(projectId, root) {
+  const el = root && root.querySelector("[data-ws-build-all-cost]");
+  if (!el) return;
+  try {
+    const res = await api(`/ebook-workspace/${projectId}/estimate-full-build`, {
+      method: "POST",
+      body: "{}",
+    });
+    const plan = res.plan || {};
+    const max = Number(plan.max_total_usd || 0);
+    const steps = (plan.steps || []).map((s) => s.label).join(" → ");
+    el.textContent =
+      (steps ? steps + ". " : "") +
+      (max > 0
+        ? `Costs at most $${max.toFixed(2)} of your own AI credit — images, cover, layout, preview and checks are free.`
+        : "Nothing left to pay for — the remaining steps are free.");
+  } catch (e) {
+    /* the card still works without the cost line */
+  }
+}
+
+async function runFullBuild(projectId, btn) {
+  const confirmEl = document.querySelector("[data-ws-confirm]");
+  if (btn) setBusyEl(btn, true);
+  let progress = { stop() {} };
+  if (confirmEl) {
+    confirmEl.classList.remove("hidden");
+    confirmEl.innerHTML = "";
+    const mount = document.createElement("div");
+    confirmEl.appendChild(mount);
+    progress = startWorkspaceProgress(projectId, mount);
+  }
+  try {
+    const out = await api(`/ebook-workspace/${projectId}/run-full-build`, {
+      method: "POST",
+      body: JSON.stringify({ idempotency_key: "fb-" + String(projectId) + "-" + Date.now() }),
+    });
+    const r = out.result || {};
+    progress.stop(r.finished ? "Your book is built." : "Build paused.");
+    if (out.workspace) renderEbookWorkspace(out.workspace);
+    if (confirmEl) {
+      confirmEl.classList.add("hidden");
+      confirmEl.innerHTML = "";
+    }
+    if (r.finished) {
+      toast(`Your book is built — $${Number(r.charged_usd || 0).toFixed(2)} spent.`);
+    } else {
+      toast((r.stopped || {}).reason || "Build paused — one step needs you.", "error");
+    }
+  } catch (e) {
+    progress.stop("Build stopped.");
+    if (confirmEl) {
+      confirmEl.classList.add("hidden");
+      confirmEl.innerHTML = "";
+    }
+    toast(e.message || String(e), "error");
+    if (btn) setBusyEl(btn, false);
+  }
+}
+
+// ---------- long-action progress ----------
+// Generating a manuscript is one request that makes a provider call per
+// chapter and can run for minutes. Without this the button just sat there and
+// the app was indistinguishable from a hung one. The server publishes progress
+// (GET /ebook-workspace/<id>/progress); this renders it and keeps moving even
+// before the first chapter lands, so "still working" is always visible.
+function workspaceProgressHtml() {
+  return `<div data-ws-progress class="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+    <div class="flex items-center gap-2">
+      <svg class="animate-spin h-4 w-4 text-brand-600 shrink-0" viewBox="0 0 24 24" fill="none">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"></path>
+      </svg>
+      <span data-ws-progress-label class="text-sm font-medium text-slate-800">Starting…</span>
+      <span data-ws-progress-elapsed class="ml-auto text-xs tabular-nums text-slate-500">0:00</span>
+    </div>
+    <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+      <div data-ws-progress-bar class="h-full rounded-full bg-brand-600 transition-all duration-500" style="width:8%"></div>
+    </div>
+    <p data-ws-progress-note class="text-xs text-slate-500">This can take a few minutes. Keep this page open — closing it does not stop work already paid for.</p>
+  </div>`;
+}
+
+function startWorkspaceProgress(projectId, mountEl) {
+  if (!mountEl) return { stop() {} };
+  mountEl.innerHTML = workspaceProgressHtml();
+  const labelEl = mountEl.querySelector("[data-ws-progress-label]");
+  const barEl = mountEl.querySelector("[data-ws-progress-bar]");
+  const elapsedEl = mountEl.querySelector("[data-ws-progress-elapsed]");
+  const startedAt = Date.now();
+  let stopped = false;
+  let creep = 8;
+
+  const tick = () => {
+    if (stopped) return;
+    const secs = Math.floor((Date.now() - startedAt) / 1000);
+    if (elapsedEl) {
+      elapsedEl.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+    }
+  };
+
+  const poll = async () => {
+    if (stopped) return;
+    try {
+      const p = await api(`/ebook-workspace/${projectId}/progress`);
+      if (stopped) return;
+      const total = Number(p.total || 0);
+      const done = Number(p.done || 0);
+      if (p.step_label && labelEl) labelEl.textContent = p.step_label;
+      else if (p.label && labelEl) labelEl.textContent = p.label;
+      if (total > 0 && barEl) {
+        // Sit just short of the finished chapter count so the bar never claims
+        // a chapter is done while its provider call is still running.
+        const pct = Math.max(6, Math.min(97, Math.round((done / total) * 100)));
+        barEl.style.width = `${pct}%`;
+        creep = pct;
+      } else if (barEl) {
+        creep = Math.min(creep + 2, 60); // no server data yet — still show life
+        barEl.style.width = `${creep}%`;
+      }
+    } catch (e) {
+      /* polling is best-effort: never surface an error over the real action */
+    }
+  };
+
+  const clockId = setInterval(tick, 1000);
+  const pollId = setInterval(poll, 1500);
+  poll();
+  tick();
+
+  return {
+    stop(finalLabel) {
+      stopped = true;
+      clearInterval(clockId);
+      clearInterval(pollId);
+      if (finalLabel && labelEl) labelEl.textContent = finalLabel;
+      if (barEl) barEl.style.width = "100%";
+    },
+  };
+}
+
+// Free re-check of a manuscript that is already written. No estimate, no
+// confirmation panel, no provider call — a manuscript the customer already
+// paid for must never need a second paid action just to clear a finding that
+// turned out not to be a real defect.
+async function recheckManuscriptQuality(projectId) {
+  try {
+    const res = await api(`/ebook-workspace/${projectId}/recheck-manuscript`, {
+      method: "POST",
+      body: "{}",
+    });
+    if (res.workspace) renderEbookWorkspace(res.workspace);
+    const r = res.result || {};
+    if (r.cleared) {
+      toast("Re-check passed — $0 spent. Your manuscript is ready to approve.");
+    } else if ((r.findings || []).length) {
+      toast(`Re-check still found ${r.findings.length} issue(s) — $0 spent.`, "error");
+    } else {
+      toast("Re-check complete — $0 spent.");
+    }
+  } catch (e) {
+    toast(e.message || String(e), "error");
+  }
+}
+
+async function approveEbookStage(stage, successMsg) {
+  const ws = _ebookWorkspaceState;
+  if (!ws) return;
+  try {
+    const res = await api(`/ebook-workspace/${ws.project_id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ stage }),
+    });
+    if (res.workspace) renderEbookWorkspace(res.workspace);
+    toast(successMsg || ("Approved " + stage + "."));
+  } catch (e) {
+    toast(e.message || String(e), "error");
+  }
+}
+
+async function generateEbookDraftOutline(projectId) {
+  try {
+    const res = await api(`/ebook-workspace/${projectId}/draft-outline`, {
+      method: "POST",
+      body: "{}",
+    });
+    if (res.workspace) renderEbookWorkspace(res.workspace);
+    toast("Draft outline generated — review the chapters, then Approve Outline.");
+  } catch (e) {
+    toast(e.message || String(e), "error");
+  }
+}
+
+async function saveEbookTitle(projectId) {
+  const panel = document.querySelector("[data-ws-stage-panel]");
+  const titleEl = panel && panel.querySelector("[data-ws-title-input]");
+  const subEl = panel && panel.querySelector("[data-ws-subtitle-input]");
+  const title = (titleEl ? titleEl.value : "").trim();
+  const subtitle = (subEl ? subEl.value : "").trim();
+  if (!title) return toast("Enter a book title.", "error");
+  if (!subtitle) return toast("Add a subtitle too — a title and subtitle together unlock Approve Title.", "error");
+  try {
+    const res = await api(`/ebook-workspace/${projectId}/title`, {
+      method: "POST",
+      body: JSON.stringify({ title, subtitle }),
+    });
+    if (res.workspace) renderEbookWorkspace(res.workspace);
+    toast("Title saved. Review it, then Approve Title.");
+  } catch (e) {
+    toast(e.message || String(e), "error");
+  }
+}
+
+async function estimateRunResearchInWorkspace(projectId) {
+  const confirmEl = document.querySelector("[data-ws-confirm]");
+  if (!confirmEl) return;
+  confirmEl.classList.remove("hidden");
+  confirmEl.innerHTML = `<p class="text-sm text-slate-700">Preparing cost estimate…</p>`;
+  const ws = _ebookWorkspaceState || {};
+  try {
+    const res = await api(`/ebook-workspace/${projectId}/estimate-cost`, {
+      method: "POST",
+      body: JSON.stringify({ action: "run_research" }),
+    });
+    if (res.workspace) _ebookWorkspaceState = res.workspace;
+    const est = res.estimate || {};
+    const idempotencyKey =
+      "rs-" + String(projectId) + "-" + String(est.confirmation_token || "").slice(0, 12) + "-" + Date.now();
+    confirmEl.innerHTML = `
+      <h4 class="text-sm font-bold text-amber-900">Confirm paid action</h4>
+      <p class="text-sm text-amber-900">${escapeHtml(est.label || "Run fresh market research")}</p>
+      <p class="text-sm">This calls the research service (provider cost only, capped) and seeds the result into this Ebook Project. Nothing is charged on this page — only after you click Confirm.</p>
+      <p class="text-sm">Maximum total: <b>$${Number(est.max_total_usd != null ? est.max_total_usd : 0).toFixed(3)}</b></p>
+      <p class="text-xs text-amber-800">Spent $${Number(est.spent_usd || 0).toFixed(3)} · Remaining $${Number(est.remaining_usd || 0).toFixed(3)} · Cap $${Number(((ws.budget || {}).cap_usd) || 0).toFixed(2)}</p>
+      <p class="text-xs text-slate-600">${escapeHtml(est.expires_note || "Confirmation required before any paid call.")}</p>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn-secondary text-sm" data-ws-cancel-confirm>Cancel</button>
+        <button type="button" class="btn-primary text-sm" data-ws-confirm-run-research>Confirm and Run Research</button>
+      </div>
+    `;
+    confirmEl.querySelector("[data-ws-cancel-confirm]").onclick = async () => {
+      try {
+        await api(`/ebook-workspace/${projectId}/cancel-estimate`, { method: "POST", body: "{}" });
+      } catch (e) { /* non-fatal */ }
+      confirmEl.classList.add("hidden");
+      confirmEl.innerHTML = "";
+      toast("Cancelled — nothing spent.");
+    };
+    confirmEl.querySelector("[data-ws-confirm-run-research]").onclick = async () => {
+      const btn = confirmEl.querySelector("[data-ws-confirm-run-research]");
+      setBusyEl(btn, true);
+      confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = true;
+      const progressMount = document.createElement("div");
+      progressMount.className = "mt-3";
+      confirmEl.appendChild(progressMount);
+      const progress = startWorkspaceProgress(projectId, progressMount);
+      try {
+        const body = {
+          confirmation_token: est.confirmation_token,
+          expected_artifact_id: est.artifact_id || ws.artifact_id || "",
+          expected_revision: est.artifact_revision != null ? est.artifact_revision : (ws.artifact_revision || 1),
+          max_authorized_usd: est.max_authorized_usd != null ? est.max_authorized_usd : est.estimated_max_usd,
+          idempotency_key: idempotencyKey,
+        };
+        const gen = await api(`/ebook-workspace/${projectId}/run-research`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        progress.stop("Research complete.");
+        if (gen.workspace) renderEbookWorkspace(gen.workspace);
+        confirmEl.classList.add("hidden");
+        confirmEl.innerHTML = "";
+        if (gen.duplicate) {
+          toast("Research already completed for this confirmation — no extra charge.");
+        } else {
+          toast("Research complete — review, then Approve Research.");
+        }
+      } catch (e) {
+        progress.stop("Research stopped.");
+        progressMount.remove();
         toast(e.message || String(e), "error");
         setBusyEl(btn, false);
         confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = false;
@@ -7714,6 +8448,10 @@ async function estimateManuscriptInWorkspace(projectId) {
       const btn = confirmEl.querySelector("[data-ws-confirm-generate]");
       setBusyEl(btn, true);
       confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = true;
+      const progressMount = document.createElement("div");
+      progressMount.className = "mt-3";
+      confirmEl.appendChild(progressMount);
+      const progress = startWorkspaceProgress(projectId, progressMount);
       try {
         const body = {
           confirmation_token: est.confirmation_token,
@@ -7727,6 +8465,7 @@ async function estimateManuscriptInWorkspace(projectId) {
           method: "POST",
           body: JSON.stringify(body),
         });
+        progress.stop("Manuscript complete.");
         if (gen.workspace) {
           renderEbookWorkspace(gen.workspace);
         }
@@ -7741,6 +8480,8 @@ async function estimateManuscriptInWorkspace(projectId) {
           toast("Manuscript generated — awaiting your approval.");
         }
       } catch (e) {
+        progress.stop("Generation stopped.");
+        progressMount.remove();
         toast(e.message || String(e), "error");
         setBusyEl(btn, false);
         confirmEl.querySelector("[data-ws-cancel-confirm]").disabled = false;

@@ -1,6 +1,7 @@
 """Digital Product Factory — Flask backend."""
 import os
 import re
+import time
 
 # Bump this by hand with each release commit/tag (see git tags for history).
 APP_VERSION = "1.3.0"
@@ -71,6 +72,7 @@ from services.product_cover_agent import (
 )
 from services.cover_quality_agent import validate_cover_for_export
 from services.cover_agent import apply_cover_to_preview
+from services import progress_tracker
 from services.publishing import build_publishing_preview, template_list
 from services.research import research
 from services.ebook import _youtube_id
@@ -366,11 +368,18 @@ def _ebook_workspace_project_or_404(project_id: int):
 
 @app.post("/ebook-workspace")
 def create_ebook_workspace_route():
-    """Start a new Ebook Project workspace at Research (no paid call)."""
+    """Start a new Ebook Project workspace.
+
+    When Build This Product sends the research it already researched and the
+    customer explicitly chose, the workspace is seeded with it (research
+    approved, title pre-filled as AWAITING). Otherwise the workspace starts
+    blank at Research with a Run Research control. No paid call either way.
+    """
     body = request.get_json(silent=True) or {}
     try:
         from services.ebook_project_workspace import (
             new_workspace,
+            seed_research_from_build,
             sync_document_from_workspace,
             workspace_public_view,
         )
@@ -402,7 +411,20 @@ def create_ebook_workspace_route():
                 budget_cap_usd=float(body.get("budget_cap_usd") or 3.5),
             ),
         }
-        data = sync_document_from_workspace(data)
+        research_payload = body.get("research")
+        if isinstance(research_payload, dict) and research_payload:
+            title = str(body.get("title") or "").strip()
+            subtitle = str(body.get("subtitle") or "").strip()
+            data = seed_research_from_build(
+                data,
+                research=research_payload,
+                opportunity=body.get("opportunity"),
+                title=title,
+                subtitle=subtitle,
+            )
+            name = str(body.get("name") or title or data.get("title") or topic)[:200]
+        else:
+            data = sync_document_from_workspace(data)
         project = database.create_project(
             name,
             "ebook",
@@ -414,6 +436,7 @@ def create_ebook_workspace_route():
         return jsonify(
             {
                 "ok": True,
+                "seeded": bool(research_payload),
                 "project": _enrich_project_artifact_fields(project),
                 "workspace": workspace_public_view(project),
             }
@@ -440,7 +463,7 @@ def get_ebook_workspace_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         data = dict(project.get("data") or {})
         if get_workspace(data) is None and data.get("ebook_project_workspace"):
             data = ensure_workspace(data)
@@ -472,7 +495,7 @@ def ebook_workspace_cover_preview_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         digest = str(request.args.get("digest") or "").strip()
         download = str(request.args.get("download") or "").strip().lower() in {
             "1",
@@ -519,7 +542,7 @@ def save_ebook_workspace_research_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         data = save_research(dict(project.get("data") or {}), body.get("research") or body)
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -538,7 +561,7 @@ def approve_ebook_workspace_stage_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         stage = str(body.get("stage") or "").strip()
         data = approve_stage(
             dict(project.get("data") or {}),
@@ -563,7 +586,7 @@ def edit_ebook_workspace_title_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         data = edit_title(
             dict(project.get("data") or {}),
             title=str(body.get("title") or ""),
@@ -587,7 +610,7 @@ def edit_ebook_workspace_outline_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         chapters = body.get("chapters") or body.get("outline") or []
         data = edit_outline(
             dict(project.get("data") or {}),
@@ -612,7 +635,7 @@ def estimate_ebook_workspace_cost_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         action = str(body.get("action") or "").strip()
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
@@ -646,7 +669,7 @@ def cancel_ebook_workspace_estimate_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         data = cancel_paid_estimate(dict(project.get("data") or {}))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -700,17 +723,27 @@ def generate_ebook_workspace_manuscript_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         data = dict(project.get("data") or {})
-        out = execute_generate_manuscript(
-            data,
-            confirmation_token=str(body.get("confirmation_token") or ""),
-            expected_artifact_id=str(body.get("expected_artifact_id") or body.get("artifact_id") or ""),
-            expected_revision=int(body.get("expected_revision") or body.get("artifact_revision") or 0),
-            outline_digest_expected=str(body.get("outline_digest") or ""),
-            max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
-            idempotency_key=str(body.get("idempotency_key") or ""),
-        )
+        # Publish live progress so the page can show "chapter 3 of 8" instead of
+        # a button that looks hung for several minutes.
+        key = progress_tracker.job_key("ebook", project_id)
+        progress_tracker.start(key, action="generate_manuscript", label="Generating your manuscript")
+        try:
+            out = execute_generate_manuscript(
+                data,
+                confirmation_token=str(body.get("confirmation_token") or ""),
+                expected_artifact_id=str(body.get("expected_artifact_id") or body.get("artifact_id") or ""),
+                expected_revision=int(body.get("expected_revision") or body.get("artifact_revision") or 0),
+                outline_digest_expected=str(body.get("outline_digest") or ""),
+                max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
+                idempotency_key=str(body.get("idempotency_key") or ""),
+                progress_key=key,
+            )
+        except Exception:
+            progress_tracker.finish(key, status="error", message="Generation stopped.")
+            raise
+        progress_tracker.finish(key, status="done", message="Manuscript complete.")
         data = out["data"]
         project = database.update_project(project_id, None, data) or project
         return jsonify(
@@ -728,6 +761,220 @@ def generate_ebook_workspace_manuscript_route(project_id: int):
         return _error(str(exc), 500)
 
 
+def _auto_build_stage_functions():
+    """The free stage steps the one-click build runs between the paid ones.
+
+    Each is the same function the individual stage button calls, so the
+    one-click path cannot drift from the step-by-step path.
+    """
+    from services.ebook_design_workspace import (
+        approve_visuals_local,
+        build_preview,
+        prepare_visuals_local,
+        run_preflight_stage,
+        select_and_stage_theme,
+        stage_photo_cover,
+    )
+    from services.ebook_pexels import search_pexels
+    from services.ebook_photo_cover import attach_pexels
+
+    def visuals(data):
+        return approve_visuals_local(prepare_visuals_local(data))
+
+    def cover(data):
+        # Take the best-ranked stock photo automatically. Same search and same
+        # attach the Cover step uses; this only removes the click, and the
+        # cover stays fully replaceable afterwards.
+        from services.ebook_auto_build import AutoBuildStop
+
+        ws = data.get("ebook_workspace") or {}
+        query = str(ws.get("topic") or data.get("title") or "").strip()
+        result = search_pexels(query, page=1)
+        photos = result.get("photos") or []
+        if not photos:
+            raise AutoBuildStop("cover", "No suitable cover photo was found for this topic.")
+        data = attach_pexels(data, str((photos[0] or {}).get("id") or ""))
+        return stage_photo_cover(data)
+
+    def design(data):
+        from services.ebook_design_system import PROFESSIONAL_THEME_IDS
+
+        return select_and_stage_theme(data, PROFESSIONAL_THEME_IDS[0])
+
+    return {
+        "visuals_fn": visuals,
+        "cover_fn": cover,
+        "design_fn": design,
+        "preview_fn": build_preview,
+        "preflight_fn": run_preflight_stage,
+    }
+
+
+@app.post("/ebook-workspace/<int:project_id>/estimate-full-build")
+def estimate_ebook_full_build_route(project_id: int):
+    """What one-click Build My Whole Book would do and cost. Spends nothing."""
+    try:
+        from services.ebook_auto_build import plan_full_build
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0]  # already a (response, status) pair
+        data = dict(project.get("data") or {})
+        data["_project_id"] = project_id
+        return jsonify({"ok": True, "plan": plan_full_build(data)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("full build estimate failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/run-full-build")
+def run_ebook_full_build_route(project_id: int):
+    """Run every remaining stage from one authorization."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_auto_build import plan_full_build, run_full_build
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0]  # already a (response, status) pair
+        data = dict(project.get("data") or {})
+        # Clicking Build My Whole Book is the authorization. The ceiling is
+        # computed here rather than taken from the request, so the browser
+        # cannot raise it, and the project's own budget cap still binds.
+        plan = plan_full_build(dict(data))
+        ceiling = round(float(plan.get("max_total_usd") or 0), 4)
+        key = progress_tracker.job_key("ebook", project_id)
+        progress_tracker.start(key, action="full_build", label="Building your book")
+        try:
+            out = run_full_build(
+                data,
+                max_authorized_usd=ceiling,
+                idempotency_key=str(body.get("idempotency_key") or "")
+                or f"fb-{project_id}-{int(time.time())}",
+                progress_key=key,
+                project_id=project_id,
+                **_auto_build_stage_functions(),
+            )
+        except Exception:
+            progress_tracker.finish(key, status="error", message="Build stopped.")
+            raise
+        result = out.get("result") or {}
+        progress_tracker.finish(
+            key,
+            status="done" if result.get("finished") else "stopped",
+            message="Your book is built." if result.get("finished") else "Build paused.",
+        )
+        project = database.update_project(project_id, None, out["data"]) or project
+        from services.ebook_project_workspace import workspace_public_view
+
+        return jsonify({"ok": True, "result": result, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("full build failed")
+        return _error(str(exc), 500)
+
+
+@app.get("/ebook-workspace/<int:project_id>/progress")
+def ebook_workspace_progress_route(project_id: int):
+    """Live progress for a long action on this project. Read-only, never spends.
+
+    Polled by the page while a generation is in flight so the customer can see
+    it moving. Cheap by design: reads process-local memory, touches no database
+    and no provider.
+    """
+    return jsonify(progress_tracker.read(progress_tracker.job_key("ebook", project_id)))
+
+
+@app.post("/ebook-workspace/<int:project_id>/recheck-manuscript")
+def recheck_ebook_workspace_manuscript_route(project_id: int):
+    """Re-run the free validators against the saved manuscript. Never charges."""
+    try:
+        from services.ebook_project_workspace import (
+            recheck_manuscript_quality,
+            workspace_public_view,
+        )
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0]  # already a (response, status) pair
+        out = recheck_manuscript_quality(dict(project.get("data") or {}))
+        project = database.update_project(project_id, None, out["data"]) or project
+        return jsonify(
+            {
+                "ok": True,
+                "result": out.get("result") or {},
+                "workspace": workspace_public_view(project),
+            }
+        )
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook manuscript re-check failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/run-research")
+def run_ebook_workspace_research_route(project_id: int):
+    """Execute confirmed research on a blank Ebook workspace (server-authoritative)."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_project_workspace import (
+            execute_run_research,
+            workspace_public_view,
+        )
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0]  # already a (response, status) pair
+        data = dict(project.get("data") or {})
+        out = execute_run_research(
+            data,
+            confirmation_token=str(body.get("confirmation_token") or ""),
+            expected_artifact_id=str(body.get("expected_artifact_id") or body.get("artifact_id") or ""),
+            expected_revision=int(body.get("expected_revision") or body.get("artifact_revision") or 0),
+            max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
+            idempotency_key=str(body.get("idempotency_key") or ""),
+        )
+        data = out["data"]
+        project = database.update_project(project_id, None, data) or project
+        return jsonify(
+            {
+                "ok": True,
+                "duplicate": bool(out.get("duplicate")),
+                "result": out.get("result") or {},
+                "workspace": workspace_public_view(project),
+            }
+        )
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook workspace research run failed")
+        return _error(str(exc), 500)
+
+
+@app.post("/ebook-workspace/<int:project_id>/draft-outline")
+def draft_ebook_workspace_outline_route(project_id: int):
+    """Derive and stage a free DRAFT outline (no paid call)."""
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_project_workspace import apply_draft_outline, workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err[0]  # already a (response, status) pair
+        data = apply_draft_outline(dict(project.get("data") or {}))
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("ebook workspace draft outline failed")
+        return _error(str(exc), 500)
+
+
 @app.post("/ebook-workspace/<int:project_id>/correct-manuscript")
 def correct_ebook_workspace_manuscript_route(project_id: int):
     """Execute confirmed manuscript correction against the approved outline."""
@@ -740,7 +987,7 @@ def correct_ebook_workspace_manuscript_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         if body.get("authorize_paid_call") is not True:
             return _error(
                 "Correction requires explicit paid authorization. "
@@ -749,15 +996,23 @@ def correct_ebook_workspace_manuscript_route(project_id: int):
             )
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
-        out = execute_correct_manuscript(
-            data,
-            confirmation_token=str(body.get("confirmation_token") or ""),
-            expected_artifact_id=str(body.get("expected_artifact_id") or body.get("artifact_id") or ""),
-            expected_revision=int(body.get("expected_revision") or body.get("artifact_revision") or 0),
-            outline_digest_expected=str(body.get("outline_digest") or ""),
-            max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
-            idempotency_key=str(body.get("idempotency_key") or ""),
-        )
+        key = progress_tracker.job_key("ebook", project_id)
+        progress_tracker.start(key, action="correct_manuscript", label="Correcting your manuscript")
+        try:
+            out = execute_correct_manuscript(
+                data,
+                confirmation_token=str(body.get("confirmation_token") or ""),
+                expected_artifact_id=str(body.get("expected_artifact_id") or body.get("artifact_id") or ""),
+                expected_revision=int(body.get("expected_revision") or body.get("artifact_revision") or 0),
+                outline_digest_expected=str(body.get("outline_digest") or ""),
+                max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
+                idempotency_key=str(body.get("idempotency_key") or ""),
+                progress_key=key,
+            )
+        except Exception:
+            progress_tracker.finish(key, status="error", message="Correction stopped.")
+            raise
+        progress_tracker.finish(key, status="done", message="Correction complete.")
         data = out["data"]
         project = database.update_project(project_id, None, data) or project
         return jsonify(
@@ -831,7 +1086,7 @@ def ebook_workspace_visuals_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         body = request.get_json(silent=True) or {}
         action = str(body.get("action") or "prepare").strip().lower()
         data = dict(project.get("data") or {})
@@ -918,7 +1173,7 @@ def ebook_workspace_cover_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         action = str(body.get("action") or "").strip().lower()
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
@@ -985,7 +1240,7 @@ def ebook_workspace_cover_image_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         license_note = str(request.form.get("license_note") or "").strip()
         owned = str(request.form.get("i_own_this") or "").strip().lower() in {"1", "true", "on", "yes"}
         upload = request.files.get("file")
@@ -1048,7 +1303,7 @@ def ebook_workspace_cover_photo_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         asset = verified_source_photo_asset(
             dict(project.get("data") or {}),
             project_id=project_id,
@@ -1077,7 +1332,7 @@ def ebook_workspace_cover_variant_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         asset = verified_variant_asset(
             dict(project.get("data") or {}),
             project_id=project_id,
@@ -1107,7 +1362,7 @@ def ebook_workspace_design_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         theme_id = str(body.get("theme_id") or "").strip()
         data = select_and_stage_theme(dict(project.get("data") or {}), theme_id)
         project = database.update_project(project_id, None, data) or project
@@ -1128,7 +1383,7 @@ def ebook_workspace_preview_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         data = build_preview(dict(project.get("data") or {}))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -1154,7 +1409,7 @@ def ebook_workspace_full_preview_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         data = dict(project.get("data") or {})
         html = str(data.get("ebook_preview_html") or data.get("preview_html") or "")
         if not html.strip():
@@ -1202,7 +1457,7 @@ def ebook_workspace_preview_opened_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         data = record_preview_opened(dict(project.get("data") or {}))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -1222,7 +1477,7 @@ def ebook_workspace_preflight_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         data = run_preflight_stage(dict(project.get("data") or {}))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -1243,7 +1498,7 @@ def ebook_workspace_rewind_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err[0]  # already a (response, status) pair
         data = rewind_to_stage(dict(project.get("data") or {}), str(body.get("stage") or ""))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -3239,6 +3494,20 @@ def _enrich_project_artifact_fields(
         stamp_coloring_author_fields(data)
         attach_coloring_preview_urls(data, project_id=project.get("id"))
     return project
+
+
+@app.get("/projects/in-progress")
+def list_in_progress_projects_route():
+    """Unfinished Ebook Projects, so a half-written book can be reopened.
+
+    Saved Projects lists finished products only; without this a project that
+    was started but not completed had no route back to it.
+    """
+    try:
+        limit = int(request.args.get("limit", 12))
+    except (TypeError, ValueError):
+        limit = 12
+    return jsonify(database.list_in_progress_workspaces(limit=limit))
 
 
 @app.get("/projects")
