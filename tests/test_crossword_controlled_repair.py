@@ -164,8 +164,11 @@ class TestFullBookDefaultsAndPageCount(unittest.TestCase):
         })
         self.assertEqual(cw["worksheets"], 12)
 
-    def test_full_book_ignores_legacy_ten_puzzle_submission(self):
-        """Browser autofill / legacy UI sent puzzles=10; Full Book must still be 12."""
+    def test_full_book_honors_a_customer_selected_puzzle_count(self):
+        """CROSSWORD UI REGRESSION REPAIR: 'Number of puzzles' is a dropdown
+        again (services/factory/puzzle_plan.py CROSSWORD_BOOK_PUZZLE_COUNTS),
+        not a fixed/forced value -- a deliberately submitted, allowed count
+        must reach the generator, not be silently discarded in favor of 12."""
         cw = _crossword_plan({
             "book_title": "California Gold Rush Days",
             "theme": "California Gold Rush Days",
@@ -176,10 +179,47 @@ class TestFullBookDefaultsAndPageCount(unittest.TestCase):
             "include_answer_key": "Yes",
             "include_cover": "Yes",
         })
+        self.assertEqual(cw["worksheets"], 10)
+        self.assertEqual(cw["output_type"], "book")
+
+    def test_full_book_ignores_a_stale_out_of_range_puzzle_value(self):
+        """A value outside 1-20 (the dropdown's max) -- e.g. genuinely
+        stale data, a forged request, or plain corruption -- still falls
+        back to the 12-puzzle default. UNIVERSAL TOPIC PUZZLE ENGINE
+        (2026-09-08): "5" was this test's original example, but a value
+        inside 1-20 is now legitimately reachable via adaptive sizing
+        (see services.crossword.book -- a topic whose real word pool
+        can't support the requested count is built smaller instead of
+        failing), so "5" is a valid, honored count now, not a stale one.
+        "37" is unambiguously out of range regardless."""
+        cw = _crossword_plan({
+            "book_title": "California Gold Rush Days",
+            "theme": "California Gold Rush Days",
+            "output_format": "Full Book",
+            "puzzles": "37",
+            "creation_mode": "Topic (AI generates words)",
+            "difficulty": "Easy",
+            "include_answer_key": "Yes",
+            "include_cover": "Yes",
+        })
         self.assertEqual(cw["worksheets"], 12)
         self.assertEqual(cw["output_type"], "book")
 
-    def test_normalize_rewrites_legacy_ten_puzzle_saved_fields(self):
+    def test_full_book_honors_an_adaptive_sized_count_outside_the_dropdown(self):
+        """A count reachable only via server-side adaptive sizing (not one
+        of the six dropdown values) must still be honored, not reset."""
+        cw = _crossword_plan({
+            "book_title": "California Gold Rush Days",
+            "theme": "California Gold Rush Days",
+            "output_format": "Full Book",
+            "puzzles": "7",
+            "creation_mode": "Topic (AI generates words)",
+            "difficulty": "Easy",
+            "include_answer_key": "Yes",
+        })
+        self.assertEqual(cw["worksheets"], 7)
+
+    def test_normalize_preserves_a_valid_saved_puzzle_count(self):
         from services.product import normalize_crossword_project_data
 
         data = normalize_crossword_project_data({
@@ -201,9 +241,64 @@ class TestFullBookDefaultsAndPageCount(unittest.TestCase):
                 "subtitle": "10 Crossword Puzzles - Easy Level",
             },
         })
+        self.assertEqual(str(data["fields"]["puzzles"]), "10")
+        self.assertEqual(data["puzzle_count"], 10)
+        self.assertIn("10 Crossword Puzzles", data["cover_design"]["subtitle"])
+
+    def test_normalize_rewrites_a_stale_out_of_range_saved_puzzle_count(self):
+        """See test_full_book_ignores_a_stale_out_of_range_puzzle_value's
+        note: "37" (not "5") is now the genuinely out-of-range example."""
+        from services.product import normalize_crossword_project_data
+
+        data = normalize_crossword_project_data({
+            "product_type": "crossword",
+            "title": "California Gold Rush Days",
+            "is_book": True,
+            "puzzle_count": 37,
+            "fields": {
+                "book_title": "California Gold Rush Days",
+                "theme": "California Gold Rush Days",
+                "output_format": "Full Book",
+                "puzzles": "37",
+                "creation_mode": "Topic (AI generates words)",
+                "difficulty": "Easy",
+                "include_answer_key": "Yes",
+            },
+            "cover_design": {
+                "title": "California Gold Rush Days",
+                "subtitle": "37 Crossword Puzzles - Easy Level",
+            },
+        })
         self.assertEqual(str(data["fields"]["puzzles"]), "12")
         self.assertEqual(data["puzzle_count"], 12)
         self.assertIn("12 Crossword Puzzles", data["cover_design"]["subtitle"])
+
+    def test_normalize_preserves_an_adaptive_sized_saved_puzzle_count(self):
+        """A saved count outside the six dropdown values but within 1-20
+        (only reachable via server-side adaptive sizing) survives reopen."""
+        from services.product import normalize_crossword_project_data
+
+        data = normalize_crossword_project_data({
+            "product_type": "crossword",
+            "title": "Container Gardening",
+            "is_book": True,
+            "puzzle_count": 4,
+            "fields": {
+                "book_title": "Container Gardening",
+                "theme": "Container gardening",
+                "output_format": "Full Book",
+                "puzzles": "4",
+                "creation_mode": "Topic (AI generates words)",
+                "difficulty": "Easy",
+                "include_answer_key": "Yes",
+            },
+            "cover_design": {
+                "title": "Container Gardening",
+                "subtitle": "4 Crossword Puzzles - Easy Level",
+            },
+        })
+        self.assertEqual(str(data["fields"]["puzzles"]), "4")
+        self.assertEqual(data["puzzle_count"], 4)
 
     def test_twelve_puzzles_cover_keys_make_25_pages(self):
         puzzles, warnings, errors = build_crossword_puzzles(
@@ -387,14 +482,25 @@ class TestExportPathAndCoverEntry(unittest.TestCase):
             "Edit Cover" in window or "openCoverEditor" in window,
             "Edit Cover must be visible in the post-save Next Steps UI for saved crosswords",
         )
-        # Submit path must force puzzles=12 even if the form field still says 10.
+        # CROSSWORD UI REGRESSION REPAIR: "Number of puzzles" is a real
+        # dropdown again -- the submit path must honor whatever Full Book
+        # count the customer picked, not force it to a fixed "12". A
+        # non-book format (Single page / Single Worksheet) is still always
+        # exactly one puzzle.
         collect_idx = source.find("function collectFactoryFields")
         self.assertGreater(collect_idx, 0)
         collect_window = source[collect_idx:collect_idx + 1200]
-        self.assertIn('fields.puzzles = "12"', collect_window)
+        self.assertNotIn('fields.puzzles = "12"', collect_window)
+        self.assertIn('fields.puzzles = "1"', collect_window)
 
-    def test_stale_ten_puzzle_saved_pdf_is_rebuilt_on_export(self):
-        """Export must not re-serve a stored 21-page / 10-puzzle PDF."""
+    def test_stale_out_of_range_saved_pdf_is_rebuilt_on_export(self):
+        """Export must not re-serve a stored 21-page / 10-puzzle PDF for a
+        project whose own puzzle count is out of the allowed range (a
+        genuinely stale/legacy value from before "Number of puzzles" was a
+        dropdown) -- it must rebuild to the 12-puzzle default. A project
+        that legitimately selected 10 (now a valid dropdown option) is
+        covered separately -- see test_full_book_honors_a_customer_selected_
+        puzzle_count / test_normalize_preserves_a_valid_saved_puzzle_count."""
         import base64
         from pypdf import PdfReader, PdfWriter
         from reportlab.pdfgen import canvas
@@ -427,14 +533,20 @@ class TestExportPathAndCoverEntry(unittest.TestCase):
                 "is_pdf": True,
                 "is_book": True,
                 "title": "California Gold Rush Days",
-                "puzzle_count": 10,
+                # "37" is a genuinely stale/legacy value: it predates the
+                # "Number of puzzles" dropdown AND falls outside the range
+                # adaptive sizing can legitimately produce (1..20, the max
+                # curated dropdown size) -- unlike a real customer
+                # selection such as 10, or an adaptively-shrunk count like
+                # 5 (now valid via CROSSWORD_BOOK_PUZZLE_COUNTS range check).
+                "puzzle_count": 37,
                 "pdf_bytes": base64.b64encode(stale_pdf).decode("ascii"),
                 "filename": "california_gold_rush_days.pdf",
                 "fields": {
                     "book_title": "California Gold Rush Days",
                     "theme": "California Gold Rush Days",
                     "output_format": "Full Book",
-                    "puzzles": "10",
+                    "puzzles": "37",
                     "creation_mode": "Topic (AI generates words)",
                     "difficulty": "Easy",
                     "include_answer_key": "Yes",

@@ -71,6 +71,15 @@ _ALLOWLIST: dict[str, str] = {
         "the repo root. The literal filename 'projects.db' matches the "
         "guard's regex but this is already fully isolated."
     ),
+    "test_warm_wellness_template.py": (
+        "Read-only verification code: test_preserved_project_351_package_is_"
+        "untouched_if_present intentionally hashes the REAL preserved "
+        "exports/ebook-visuals-local/ebook.pdf and package.zip to prove this "
+        "session's Warm Wellness render never touched them -- checking a "
+        "test-isolated copy would defeat the point. It never writes to that "
+        "path, and skips cleanly (self.skipTest) on any machine where the "
+        "real preserved package is not present."
+    ),
 }
 
 

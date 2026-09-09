@@ -537,6 +537,52 @@ def is_photo_led_subject(*, title: str = "", topic: str = "", content: str = "")
     return classify_ebook_subject(title=title, topic=topic, content=content) == PHOTO_LED
 
 
+#: Subjects that genuinely have nothing to photograph. Deliberately short: it
+#: is a list of reference material, not of topics we find unphotogenic.
+_NO_PHOTOGRAPHY_HINTS = (
+    "tax table", "legal reference", "api reference", "changelog", "glossary",
+    "citation style", "regulatory filing", "statute", "case law",
+)
+
+#: People doing something, somewhere, with something. Nearly all practical
+#: non-fiction qualifies, which is the point.
+_HUMAN_ACTIVITY_HINTS = (
+    "practice", "practise", "breathe", "breathing", "walk", "walking", "sit",
+    "sitting", "routine", "habit", "morning", "evening", "desk", "office",
+    "home", "kitchen", "outdoors", "commute", "workplace", "sleep", "meal",
+    "meals", "exercise", "meditate", "meditation", "mindful", "mindfulness",
+    "stretch", "posture", "journal", "conversation", "family", "child",
+    "children", "parent", "team", "customer", "classroom", "student",
+    "garden", "cook", "travel", "hobby", "craft", "rest", "relax", "focus",
+    "notice", "attention", "body", "hands", "eyes", "chair", "room",
+)
+
+
+def photography_supported_subject(
+    *, title: str = "", topic: str = "", content: str = ""
+) -> bool:
+    """Whether this book may contain photographs at all.
+
+    NOT the same question as is_photo_led_subject(), and confusing the two cost
+    a real book its illustrations. That function asks whether photographs
+    should be the PRIMARY medium — true of a gardening manual, false of a
+    mindfulness guide, which teaches practices rather than showing objects. It
+    was then used as the gate on whether a photograph could appear at all, so a
+    44-page book about what people do with their attention shipped with nine
+    text boxes and not one picture of a person.
+
+    A book is about people doing something somewhere. That almost always
+    photographs. The exceptions are reference works with no scene to show, and
+    they are listed rather than inferred.
+    """
+    if is_photo_led_subject(title=title, topic=topic, content=content):
+        return True
+    blob = _norm(f"{title} {topic} {str(content or '')[:1500]}")
+    if _hint_matches(blob, _NO_PHOTOGRAPHY_HINTS):
+        return False
+    return _hint_matches(blob, _HUMAN_ACTIVITY_HINTS)
+
+
 _GARDEN_REJECT_TOKENS = (
     "pasta", "recipe", "kitchen", "bathroom", "lotion", "serum", "conditioner",
     "cosmetic", "skincare", "maraschino", "after sun", "hair dryer", "shampoo",

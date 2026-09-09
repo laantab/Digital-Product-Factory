@@ -249,8 +249,14 @@ class PhotoCoverWorkflowTests(unittest.TestCase):
             os.environ["PEXELS_API_KEY"] = ""
 
     def test_04_mocked_search_has_attribution_and_no_key_leak(self):
-        os.environ["PEXELS_API_KEY"] = "test-pexels-key-not-live"
+        # _project() approves interior visuals for a photo-led manuscript.
+        # review_visual_set's minimum-photograph requirement (v1.5.0) only
+        # applies when a Pexels key is actually configured, so the key must
+        # go on AFTER _project() -- setting it first made the fixture's own
+        # setup step demand real photographs it never resolves, before the
+        # cover-search flow this test actually exercises even runs.
         pid, data = self._project()
+        os.environ["PEXELS_API_KEY"] = "test-pexels-key-not-live"
         try:
             with patch("services.ebook_pexels._http_get", side_effect=_mock_pexels_http) as http:
                 r = self.client.post(
@@ -279,8 +285,9 @@ class PhotoCoverWorkflowTests(unittest.TestCase):
             os.environ["PEXELS_API_KEY"] = ""
 
     def test_05_pexels_select_downloads_original_not_thumbnail(self):
-        os.environ["PEXELS_API_KEY"] = "test-pexels-key-not-live"
+        # See test_04: the key must be set after _project(), not before.
         pid, data = self._project()
+        os.environ["PEXELS_API_KEY"] = "test-pexels-key-not-live"
         try:
             with patch("services.ebook_pexels._http_get", side_effect=_mock_pexels_http):
                 search = self.client.post(
@@ -663,8 +670,9 @@ class PhotoCoverWorkflowTests(unittest.TestCase):
         return " ".join(parts)
 
     def test_22_upload_replaces_pexels_source_and_regenerates_variants(self):
-        os.environ["PEXELS_API_KEY"] = "test-pexels-key-not-live"
+        # See test_04: the key must be set after _project(), not before.
         pid, data = self._project()
+        os.environ["PEXELS_API_KEY"] = "test-pexels-key-not-live"
         before_ms = manuscript_digest(data)
         before_spent = data["ebook_workspace"]["paid_call_ledger"]["spent_usd"]
         before_title = data.get("title")

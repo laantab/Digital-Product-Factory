@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -28,13 +29,46 @@ sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
 
-def _fresh_db() -> str:
+def use_fresh_db(test: unittest.TestCase) -> str:
+    """Point the live `database` module at an empty database for one test.
+
+    This used to reassign os.environ["FACTORY_DB_PATH"] and then delete
+    `database` from sys.modules so the next import would read the new path.
+    Neither was put back, so every test that ran afterwards in the same process
+    inherited a database it knew nothing about -- and, worse, a second
+    `database` module object. app.py holds the original from its own import;
+    services/quality/download_pipeline_agent imports it lazily inside the
+    function and got the replacement. A customer flow then saved its project
+    through one and looked the export up through the other, which returned
+    nothing, so the download was refused as an orphan package. About 1,100
+    tests later, in a file that passes on its own.
+
+    Swapping DB_PATH on the module that is already loaded gets this file the
+    empty database it wants without a second module ever existing, and the
+    cleanup returns the session database to everyone else.
+    """
+    import database
+
     # Deliberately not named after the production database file: the repo
     # guard in test_no_hardcoded_production_paths.py scans for that literal.
-    path = os.path.join(tempfile.mkdtemp(prefix="saved_vis_"), "isolated_saved_visibility.db")
+    tmp_dir = tempfile.mkdtemp(prefix="saved_vis_")
+    path = os.path.join(tmp_dir, "isolated_saved_visibility.db")
+
+    previous_path = database.DB_PATH
+    previous_env = os.environ.get("FACTORY_DB_PATH")
+
+    def _restore() -> None:
+        database.DB_PATH = previous_path
+        if previous_env is None:
+            os.environ.pop("FACTORY_DB_PATH", None)
+        else:
+            os.environ["FACTORY_DB_PATH"] = previous_env
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    test.addCleanup(_restore)
+
+    database.DB_PATH = path
     os.environ["FACTORY_DB_PATH"] = path
-    for mod in [m for m in list(sys.modules) if m == "database"]:
-        del sys.modules[mod]
     return path
 
 
@@ -161,7 +195,8 @@ class EbookQualificationTests(unittest.TestCase):
 class SavedProjectsListTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="spl_"))
-        _fresh_db()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        use_fresh_db(self)
         import database
 
         database.init_db()

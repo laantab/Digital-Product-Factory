@@ -276,9 +276,22 @@ def build_math_worksheet_pdf_bytes(
     result: MathWorksheetResult,
     *,
     include_answer_key: bool = True,
+    include_cover: bool = False,
     cover_image_path: str = "",
 ) -> tuple[bytes, MathWorksheetLayoutInfo]:
-    """Render a math worksheet PDF from MathWorksheetResult."""
+    """Render a math worksheet PDF from MathWorksheetResult.
+
+    include_cover: Math Worksheet has no AI-image cover pipeline (unlike
+    Crossword/Word Search's generate_cover_from_payload) -- when True and no
+    cover_image_path is available (the normal case: zero-cost generation
+    never calls a paid image API), a plain text-only cover page is drawn
+    instead, reusing the same _paint_white + _draw_text primitives already
+    used for the image-failure fallback below. Previously this parameter
+    did not exist at all: only a truthy cover_image_path (which nothing
+    ever set) could produce a cover, so Include Cover was a no-op for every
+    Math Worksheet regardless of selection. See MATH_WORKSHEET_COVER_
+    SELECTION_LOCKED_STATE.md.
+    """
     ensure_math_fonts()
     buffer = io.BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
@@ -287,15 +300,31 @@ def build_math_worksheet_pdf_bytes(
     font, font_bold, _font_italic = _fonts()
 
     # Cover page
-    if cover_image_path and os.path.isfile(cover_image_path):
-        try:
-            pdf.drawImage(cover_image_path, 0, 0, width=page_w, height=page_h, preserveAspectRatio=False)
-        except Exception:  # noqa: BLE001
+    if include_cover:
+        if cover_image_path and os.path.isfile(cover_image_path):
+            try:
+                pdf.drawImage(cover_image_path, 0, 0, width=page_w, height=page_h, preserveAspectRatio=False)
+            except Exception:  # noqa: BLE001
+                _paint_white(pdf)
+                _draw_text(
+                    pdf, page_w / 2.0, page_h / 2.0 + 20, result.title[:80],
+                    font_name=font_bold, font_size=20, align="center",
+                )
+        else:
             _paint_white(pdf)
             _draw_text(
                 pdf, page_w / 2.0, page_h / 2.0 + 20, result.title[:80],
                 font_name=font_bold, font_size=20, align="center",
             )
+            cover_meta = "  |  ".join(
+                p for p in (_format_grade_display(result.grade), str(result.math_topic or "")) if p
+            )
+            if cover_meta:
+                _draw_text(
+                    pdf, page_w / 2.0, page_h / 2.0 - 10, cover_meta,
+                    font_name=font, font_size=13, align="center",
+                    fill=colors.HexColor("#4B5563"),
+                )
         layout.cover_page_count = 1
         pdf.showPage()
 

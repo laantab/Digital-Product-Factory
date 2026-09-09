@@ -13,6 +13,29 @@ DEFAULT_BOOK_COUNTS = {
     "spelling_worksheet": 10,
 }
 
+# Curated Full Book sizes the crossword customer form's "Number of puzzles"
+# dropdown offers (static/js/app.js, product type "crossword"). 12 puzzles
+# (1 cover + 12 puzzles + 12 answer keys = 25 pages) is the proven, tested
+# "sellable standard" and stays the default; the others are genuine
+# customer choices, not free text -- a value outside this set can only
+# reach the backend from a forged request or stale/legacy data, and is
+# treated as such (falls back to the 12-puzzle default) by
+# services.product._crossword_plan / normalize_crossword_project_data.
+# No historical dropdown list was recoverable from git history or any
+# on-disk backup -- every prior version of this form used a free-text
+# number field instead (default "5"), so this list is a newly chosen,
+# deliberately small "sensible set" spanning a quick book to a large one,
+# anchored on the one size ("12") every existing test and cover/page-count
+# contract already assumes.
+CROSSWORD_BOOK_PUZZLE_COUNTS = (6, 8, 10, 12, 15, 20)
+
+# Same idea, for the Word Search customer form's "Number of puzzles"
+# dropdown (previously a free-text number field, default "5" -- unlike
+# Crossword, nothing in services.product._word_search_plan ever forced a
+# fixed count, so this is a pure UX restoration, not a backend unlock).
+# 10 matches DEFAULT_BOOK_COUNTS["word_search"] and stays the default.
+WORD_SEARCH_BOOK_PUZZLE_COUNTS = (6, 8, 10, 12, 15, 20)
+
 
 def _field(fields: dict, key: str, default: str = "") -> str:
     value = fields.get(key)

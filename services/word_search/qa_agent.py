@@ -110,7 +110,14 @@ def _check_topic_relevance(puzzle: PuzzleResult, result: WordSearchQAResult) -> 
         if word_lower in _GENERIC_FALLBACK_WORDS:
             generic_words.append(word)
 
-    if generic_words:
+    # UNIVERSAL TOPIC PUZZLE ENGINE: this check must not fire when a real
+    # pack matched. _GENERIC_FALLBACK_WORDS is a blocklist of words that
+    # are ambiguous OUT OF CONTEXT (e.g. "CHARGER"), but a curated,
+    # relevance-verified pack can legitimately contain one on-topic (the
+    # Dodge Charger, for American automobiles) -- exactly the case the
+    # docstring above already says to trust. Only treat it as a sign that
+    # no real pack was found when, in fact, none was.
+    if generic_words and not pack_used:
         result.errors.append(
             f"Word list contains generic fallback words {generic_words!r} "
             f"that are unrelated to topic \"{puzzle.topic}\". "

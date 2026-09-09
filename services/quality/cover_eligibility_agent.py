@@ -289,6 +289,26 @@ def determine_cover_eligibility(
 
     # ── Math / Spelling worksheets ──────────────────────────────────────────
     if product_type in ("math_worksheet", "spelling_worksheet"):
+        # Single Worksheet is not "Single Sheet" (the is_single_sheet check
+        # above only matches that literal phrasing), so it fell through to
+        # the page-count check alone -- meaning eligibility could say
+        # cover_allowed=True for a single-worksheet product, contradicted
+        # only by a downstream QA hard-block ("Cover page was generated for
+        # a single-worksheet output") that rejected the export outright
+        # instead of the cover simply never being offered. Matches the same
+        # is_book / single-format check Word Search and Crossword already
+        # use in their own branches above.
+        is_book = mode_lower in {"book", "full book", "full workbook", "digital book", "multi-page"}
+        if not is_book:
+            return CoverEligibility(
+                cover_allowed=False,
+                must_block_cover=True,
+                planned_page_count=planned_page_count,
+                product_type=product_type,
+                product_mode=product_mode,
+                reason=f"{product_type} single worksheet cannot include a cover.",
+                enforce_page_count=True,
+            )
         under_min = _under_minimum_pages(planned_page_count)
         if under_min:
             return CoverEligibility(

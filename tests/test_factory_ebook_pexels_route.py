@@ -417,7 +417,6 @@ class FactoryEbookPexelsRouteTests(unittest.TestCase):
         self.assertNotIn(TEEN_TITLE.lower(), event_cover)
 
     def test_10_changed_source_photo_sha_clears_cover_selection(self):
-        os.environ["PEXELS_API_KEY"] = "test-pexels-key-not-live"
         data = build_acceptance_project_data()
         data["acceptance_marker"] = None
         pkg = f"sha-clear-{uuid.uuid4().hex[:12]}"
@@ -429,6 +428,13 @@ class FactoryEbookPexelsRouteTests(unittest.TestCase):
         set_stage_status(data["ebook_workspace"], "manuscript", "awaiting_approval")
         data = approve_stage(data, "manuscript")
         data = approve_visuals_local(data)
+        # Set after visuals approval, not before: review_visual_set's
+        # minimum-photograph requirement (v1.5.0) only applies when a Pexels
+        # key is actually configured, and this test's manuscript is
+        # photo-led. Nothing below this line calls Pexels -- it is a plain
+        # upload flow -- but the key must still not be present while
+        # approve_visuals_local runs.
+        os.environ["PEXELS_API_KEY"] = "test-pexels-key-not-live"
         first = _jpeg_bytes(color=(20, 40, 80))
         second = _jpeg_bytes(color=(180, 30, 30))
         data = attach_upload(
@@ -460,7 +466,6 @@ class FactoryEbookPexelsRouteTests(unittest.TestCase):
         self.assertNotEqual(data["cover_design"]["source"]["sha256"], sha_a)
 
     def test_11_approved_cover_identity_matches_export_slots(self):
-        os.environ["PEXELS_API_KEY"] = "test-pexels-key-not-live"
         data = build_acceptance_project_data()
         data["acceptance_marker"] = None
         pkg = f"ident-{uuid.uuid4().hex[:12]}"
@@ -472,6 +477,8 @@ class FactoryEbookPexelsRouteTests(unittest.TestCase):
         set_stage_status(data["ebook_workspace"], "manuscript", "awaiting_approval")
         data = approve_stage(data, "manuscript")
         data = approve_visuals_local(data)
+        # See test_10: set after visuals approval, not before.
+        os.environ["PEXELS_API_KEY"] = "test-pexels-key-not-live"
         data = attach_upload(
             data,
             _jpeg_bytes(),

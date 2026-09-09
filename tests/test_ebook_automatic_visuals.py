@@ -443,6 +443,12 @@ class AutomaticEbookVisualTests(unittest.TestCase):
         aid = store_interior_photo(self._aid(alt=PARENT_ALT), _jpeg_bytes(), package_id=pkg)
         aid["alt"] = PARENT_ALT
         aid["match_status"] = MATCH_PASS
+        # review_visual_set (v1.5.0) requires every photograph aid to carry
+        # attribution before it will judge the plan worth reusing -- true for
+        # a Pexels credit and equally true for a customer's own upload, which
+        # store_interior_photo (a bare local-storage helper) does not set.
+        aid["attribution"] = "Customer-provided photograph"
+        aid["source"] = "local_licensed"
         data = build_acceptance_project_data()
         data["acceptance_marker"] = None
         data["package_id"] = pkg
@@ -452,7 +458,36 @@ class AutomaticEbookVisualTests(unittest.TestCase):
         data["fields"] = {"include_images": "No"}
         set_stage_status(data["ebook_workspace"], "manuscript", STATUS_AWAITING)
         data = approve_stage(data, "manuscript")
-        data["visual_plan"] = {"chapters": [{"chapter": aid["chapter"], "chapter_index": 1, "aids": [aid]}]}
+        # A second, differently-typed aid so this existing plan clears
+        # review_visual_set's own minimum-variety floor (v1.5.0) and the
+        # reopen path judges it worth reusing -- prepare_visuals_for_review
+        # now runs that same review before deciding to keep an existing plan
+        # instead of rebuilding it, and a lone photo is only one kind of
+        # visual. A checklist alone was not enough either: a checklist is a
+        # text box, not something "prose cannot show" (illustrative share),
+        # and review_visual_set checks resolution on the plan as given here,
+        # before materialize_visual_plan would normally fill width/height in
+        # -- so this one carries its own (chart, not photo, so it is judged
+        # on its own resolution floor, not the photograph one).
+        second = {
+            "visual_id": "v_ch2",
+            "type": "chart",
+            "title": "Screen time by day",
+            "caption": "Minutes of reported screen time across the week.",
+            "chapter": "Before You Post",
+            "chapter_index": 2,
+            "placement": "after_opening",
+            "required": True,
+            "width": 700,
+            "height": 500,
+            "chart_data": {"kind": "bar", "labels": ["Weekday", "Weekend"], "values": [90, 150]},
+        }
+        data["visual_plan"] = {
+            "chapters": [
+                {"chapter": aid["chapter"], "chapter_index": 1, "aids": [aid]},
+                {"chapter": second["chapter"], "chapter_index": 2, "aids": [second]},
+            ]
+        }
         pex, dl = self._mock_pexels()
         with pex, dl, self._mock_ai() as ai:
             restored = prepare_visuals_for_review(data)

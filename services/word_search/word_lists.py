@@ -215,6 +215,25 @@ def suggest_words_from_topic(
         errors.append("Topic is required for Create From Topic mode.")
         return [], warnings, errors, ""
 
+    # UNIVERSAL TOPIC PUZZLE ENGINE: shared high-confidence pack first (see
+    # services.factory.topic_vocabulary and Crossword's identical check in
+    # services.crossword.word_entries.suggest_crossword_words_from_topic --
+    # the same real word lists back both products for these topics). Falls
+    # through unchanged when unmatched, so existing topics are unaffected.
+    from services.factory.topic_vocabulary import resolve_topic_vocabulary
+
+    shared = resolve_topic_vocabulary(topic_clean, max_words)
+    if shared.matched:
+        warnings.extend(shared.warnings)
+        # book.py forwards only warnings containing this exact phrase into
+        # puzzle.warnings (see extra_warnings below), and word_search's QA
+        # gate (services.word_search.qa_agent) treats that phrase as proof
+        # a real, relevance-checked pack backed this word list -- without
+        # it, a shared-resolver match was silently invisible to QA and got
+        # re-flagged as "no matching vocabulary pack found".
+        warnings.append(f'Used local vocabulary pack "{shared.category}" for topic "{topic_clean}".')
+        return shared.words[:max_words], warnings, errors, shared.category or ""
+
     data = _load_topics_data()
     topic_lower = topic_clean.lower()
     audience_note = str(audience or "").strip()
@@ -293,12 +312,33 @@ def suggest_words_from_topic(
         # No confident match — use only the topic tokens themselves.
         # NEVER pull from unrelated topic packs; that caused
         # "computer parts" to get "apple, banana, cherry" from cross-pack supplementation.
-        tokens = [t for t in re.split(r"[^A-Za-z0-9]+", topic_clean) if len(t) >= 3]
+        #
+        # UNIVERSAL TOPIC PUZZLE ENGINE (2026-09-08) safe-fail guard: a
+        # purely numeric token ("9382") or a token with no vowel (a crude
+        # but effective gibberish signal -- "ZXQV" fails, "NEBULA" and
+        # "SPOONS" pass) was previously used as puzzle content verbatim,
+        # so a genuinely nonsense topic like "zxqv nebula spoons 9382"
+        # quietly built a 4-word puzzle out of gibberish instead of
+        # failing safely. Filtering those out, then requiring at least 4
+        # remaining real-looking tokens (the same minimum used everywhere
+        # else in this Factory for "enough for one real puzzle"), turns a
+        # nonsense topic into the same friendly "add custom words" outcome
+        # a topic with zero matching content already got.
+        tokens = [
+            t for t in re.split(r"[^A-Za-z0-9]+", topic_clean)
+            if len(t) >= 3 and t.isalpha() and re.search(r"[aeiouyAEIOUY]", t)
+        ]
         words = []
         for token in tokens:
             word = token.upper()
             if word not in words:
                 words.append(word)
+        if len(words) < 4:
+            errors.append(
+                f'We could not build a strong enough word set for "{topic_clean}" yet. '
+                "Try a broader topic or add your own words."
+            )
+            return [], warnings, errors, ""
         warnings.append(
             f'No exact local pack matched "{topic_clean}". '
             "Topic tokens used as starter words; supplementation restricted."

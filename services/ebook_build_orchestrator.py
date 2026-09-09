@@ -607,6 +607,14 @@ def _run_export(data: dict, pid: int) -> dict:
     from services.ebook_customer_path import mark_ebook_customer_saved
 
     data = mark_ebook_customer_saved(data)
+
+    # The identity block is stamped by design preflight; the files a customer
+    # downloads are written here, later. Leaving the two unreconciled showed
+    # hashes from an earlier revision beside this one's approved stages. Read
+    # the bytes just written and record those (v1.5.0).
+    from services.ebook_revision_identity import stamp_current_revision
+
+    stamp_current_revision(data)
     return data
 
 

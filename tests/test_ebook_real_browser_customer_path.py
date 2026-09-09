@@ -130,6 +130,7 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
             text=True,
         )
         started = False

@@ -331,6 +331,39 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
         from services.ebook_design_export import is_ebook_workspace
 
         if is_ebook_workspace(data):
+            from services.ebook_revision_identity import (
+                customer_download_refs,
+                workspace_export_action,
+            )
+
+            action = workspace_export_action(data)
+            if action in {"reuse", "keep_existing"}:
+                refs = customer_download_refs(data)
+                package_id = refs["package_id"]
+                exports = data.get("product_exports")
+                if not isinstance(exports, dict) or not isinstance(exports.get("files"), dict):
+                    exports = {
+                        "pdf_available": True,
+                        "files": {
+                            "html": {
+                                "name": "product.html",
+                                "url": _download_url(package_id, "ebook.html"),
+                            },
+                            "pdf": {
+                                "name": "product.pdf",
+                                "url": _download_url(package_id, "ebook.pdf"),
+                            },
+                            "zip": {
+                                "name": "product.zip",
+                                "url": _download_url(package_id, "package.zip"),
+                            },
+                        },
+                    }
+                data["export_package_id"] = package_id
+                data["package_id"] = package_id
+                project["data"] = data
+                return _finalize_export_result(package_id, exports, data=data)
+
             from services.ebook_design_export import apply_workspace_design_to_export
 
             project = apply_workspace_design_to_export(project)
@@ -577,14 +610,27 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
         from services.product import (
             _crossword_pdf_payload,
             crossword_full_book_pdf_is_valid,
+            crossword_include_cover_choice,
             normalize_crossword_project_data,
         )
 
-        # Normalize first so Full Book legacy puzzles=10 becomes 12 before rebuild/export.
+        # Normalize first so a stale/invalid Full Book puzzle count is
+        # rewritten to the 12-puzzle default before rebuild/export; a valid,
+        # customer-selected count (CROSSWORD_BOOK_PUZZLE_COUNTS) survives
+        # normalization unchanged.
         data = normalize_crossword_project_data(data)
         project = {**project, "data": data}
         cw_fields = data.get("fields") or {}
         is_full_book = bool(data.get("is_book")) or "book" in str(cw_fields.get("output_format") or "").lower()
+        # The count and cover state this specific project's Full Book must
+        # have -- not always 12 puzzles / always a cover.
+        # normalize_crossword_project_data() already resolved and stamped
+        # the real customer-selected (or defaulted) count onto puzzle_count;
+        # crossword_include_cover_choice reads the same "Include cover page"
+        # field _crossword_pdf_payload itself honors, so validation here can
+        # never silently drift from what was actually built.
+        expected_puzzle_count = int(data.get("puzzle_count") or 12)
+        expected_cover = crossword_include_cover_choice(cw_fields, is_book=is_full_book)
 
         pdf_bytes = b""
         needs_rebuild = not data.get("pdf_bytes")
@@ -593,8 +639,10 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
                 pdf_bytes = base64.b64decode(data["pdf_bytes"])
             except Exception as exc:
                 raise ValueError(f"Crossword PDF decode failed: {exc}") from exc
-            if is_full_book and not crossword_full_book_pdf_is_valid(pdf_bytes, expected_puzzles=12):
-                # Stale thin books (e.g. 10 puzzles / 21 pages) must not be re-exported.
+            if is_full_book and not crossword_full_book_pdf_is_valid(
+                pdf_bytes, expected_puzzles=expected_puzzle_count, expect_cover=expected_cover
+            ):
+                # Stale/thin books (wrong puzzle count or cover state for this project) must not be re-exported.
                 needs_rebuild = True
 
         if needs_rebuild:
@@ -630,11 +678,15 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
 
         if not pdf_bytes.startswith(b"%PDF"):
             raise ValueError("Crossword PDF export is invalid.")
-        if is_full_book and not crossword_full_book_pdf_is_valid(pdf_bytes, expected_puzzles=12):
+        if is_full_book and not crossword_full_book_pdf_is_valid(
+            pdf_bytes, expected_puzzles=expected_puzzle_count, expect_cover=expected_cover
+        ):
+            _expected_pages = (1 if expected_cover else 0) + expected_puzzle_count * 2
+            _cover_clause = "1 cover + " if expected_cover else ""
             raise ValueError(
-                "Crossword Full Book export must be exactly 25 pages "
-                "(1 cover + 12 puzzles + 12 answer keys) with metadata "
-                "'12 Crossword Puzzles'."
+                f"Crossword Full Book export must be exactly {_expected_pages} pages "
+                f"({_cover_clause}{expected_puzzle_count} puzzles + {expected_puzzle_count} answer keys) with metadata "
+                f"'{expected_puzzle_count} Crossword Puzzles'."
             )
         # ── Cover Eligibility Agent ───────────────────────────────────────────────
         from services.quality.cover_eligibility_agent import (

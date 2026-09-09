@@ -285,6 +285,111 @@ _seed_admin_baseline_rows()
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Database-identity guard: one database, one module, for the whole session.
+#
+# THE FAILURE THIS PREVENTS
+# ------------------------
+# A test pointed FACTORY_DB_PATH at its own temporary file and then deleted
+# `database` from sys.modules so the next import would pick the new path up.
+# Neither was restored, so every test that ran afterwards inherited both.
+#
+# That is worse than it sounds, because the application does not agree with
+# itself about which module object it means. app.py binds `import database` at
+# module import and keeps that object forever. Other code -- notably
+# services/quality/download_pipeline_agent._load_project_by_package_id --
+# imports it lazily, inside the function, and so resolves whatever
+# sys.modules["database"] happens to be at call time.
+#
+# After the leak those are two different modules pointing at two different
+# files. A customer flow then writes its project through the app's database and
+# looks the export up through the reimported one, which has never heard of it.
+# The lookup returns nothing, the download context has no project, and the
+# orphan-package rule correctly refuses to serve the file: HTTP 403
+# stale_or_orphan_export_package, roughly 1,100 tests into the run, in a test
+# that passes perfectly well on its own.
+#
+# The rule restored here is simply that a test may borrow the database, but it
+# must give it back. Nothing about the stale/orphan validation changes.
+# ---------------------------------------------------------------------------
+_GUARDED_ENV_VARS = ("FACTORY_DB_PATH", "FACTORY_EXPORTS_DIR", "FLASK_EXPORTS_DIR")
+
+
+_SESSION_DATABASE_MODULE = None
+
+
+def _database_module_identity():
+    """The live `database` module and its DB_PATH, without importing it."""
+    import sys
+
+    module = sys.modules.get("database")
+    return module, getattr(module, "DB_PATH", None)
+
+
+def _remember_session_database_module(module) -> None:
+    global _SESSION_DATABASE_MODULE
+    if (
+        module is not None
+        and _SESSION_DATABASE_MODULE is None
+        and os.path.realpath(str(getattr(module, "DB_PATH", "") or ""))
+        == os.path.realpath(_FACTORY_TEST_DB)
+    ):
+        _SESSION_DATABASE_MODULE = module
+
+
+def _restore_session_database(before_module=None, before_db_path=None, before_env=None):
+    """Put the session database file and module back. Safe to call twice."""
+    import sys
+
+    env = before_env or {
+        "FACTORY_DB_PATH": _FACTORY_TEST_DB,
+        "FACTORY_EXPORTS_DIR": _FACTORY_TEST_EXPORTS,
+        "FLASK_EXPORTS_DIR": _FACTORY_TEST_EXPORTS,
+    }
+    for name, value in env.items():
+        if value is None:
+            os.environ.pop(name, None)
+        elif os.environ.get(name) != value:
+            os.environ[name] = value
+
+    session_module = before_module or _SESSION_DATABASE_MODULE
+    session_path = before_db_path or _FACTORY_TEST_DB
+    after_module, after_db_path = _database_module_identity()
+    if session_module is not None and after_module is not session_module:
+        sys.modules["database"] = session_module
+        session_module.DB_PATH = session_path
+    elif session_module is not None and after_db_path != session_path:
+        session_module.DB_PATH = session_path
+    elif after_module is not None:
+        after_module.DB_PATH = _FACTORY_TEST_DB
+
+
+@pytest.fixture(autouse=True)
+def keep_one_database_for_the_whole_session():
+    """Restore the session database after any test that redirects it.
+
+    Deliberately generic: it does not know which test misbehaves, and it keeps
+    working when a new one does. Restoring rather than failing is the point --
+    the suite must give the same answer whatever order it runs in.
+    """
+    before_env = {name: os.environ.get(name) for name in _GUARDED_ENV_VARS}
+    before_module, before_db_path = _database_module_identity()
+    _remember_session_database_module(before_module)
+
+    yield
+
+    _restore_session_database(before_module, before_db_path, before_env)
+
+
+def pytest_runtest_teardown(item, nextitem):
+    """Function-scoped fixtures can miss a unittest.TestCase leak in a long run.
+
+    A hook always runs, so a test that redirected FACTORY_DB_PATH or reimported
+    `database` cannot leave the next file looking at an empty stray database.
+    """
+    _restore_session_database(_SESSION_DATABASE_MODULE, _FACTORY_TEST_DB)
+
+
 _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 

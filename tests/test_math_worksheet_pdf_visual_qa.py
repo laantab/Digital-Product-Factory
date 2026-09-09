@@ -325,11 +325,18 @@ class MathWorksheetPdfVisualQaTests(unittest.TestCase):
             self.assertTrue(pdf_dl.data.startswith(b"%PDF"))
             self.assertTrue(zip_dl.data.startswith(b"PK"))
             # Customer PDF must also carry the fixed page labels.
+            # 3 pages, not 2: no "include_cover" field was submitted, so
+            # the Include Cover repair's backward-compatible default (Yes)
+            # applies -- cover + worksheet + answer key. See
+            # tests/test_math_worksheet_cover_selection_repair.py for the
+            # dedicated Include Cover Yes/No coverage; this test's own
+            # purpose (download links, page labels) is unaffected by which
+            # physical page index the labels land on.
             import fitz
             doc = fitz.open(stream=pdf_dl.data, filetype="pdf")
-            self.assertEqual(doc.page_count, 2)
-            self.assertIn("Page 1 of 2", doc.load_page(0).get_text("text"))
-            self.assertIn("Page 2 of 2", doc.load_page(1).get_text("text"))
+            self.assertEqual(doc.page_count, 3)
+            self.assertIn("Page 1 of 2", doc.load_page(1).get_text("text"))
+            self.assertIn("Page 2 of 2", doc.load_page(2).get_text("text"))
         finally:
             client.delete(f"/projects/{pid}")
 

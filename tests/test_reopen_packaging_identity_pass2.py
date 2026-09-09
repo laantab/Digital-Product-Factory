@@ -533,12 +533,19 @@ class ReopenPackagingIdentityPass2Tests(unittest.TestCase):
             crossword_full_book_pdf_is_valid(stale_pdf, expected_puzzles=12)
         )
 
+        # The project itself wants the 12-puzzle default (no explicit,
+        # dropdown-selected "puzzles" override) -- the stored PDF is a stale
+        # 10-puzzle book left over from an earlier save. Since "Number of
+        # puzzles" restore (CROSSWORD_BOOK_PUZZLE_COUNTS), a valid
+        # customer-selected count is honored instead of always-12, so this
+        # mismatch must come from the project's own expectation vs. its
+        # stored bytes, not from an arbitrary non-12 value on its own.
         approved = {
             "product_type": "crossword",
             "is_pdf": True,
             "is_book": True,
             "title": "Pass2 Thin Crossword",
-            "puzzle_count": 10,
+            "puzzle_count": 12,
             "pdf_bytes": base64.b64encode(stale_pdf).decode("ascii"),
             "filename": "pass2_thin_crossword.pdf",
             "artifact_revision": 1,
@@ -548,7 +555,7 @@ class ReopenPackagingIdentityPass2Tests(unittest.TestCase):
                 "book_title": "Pass2 Thin Crossword",
                 "theme": "Pass2 Thin Crossword",
                 "output_format": "Full Book",
-                "puzzles": "10",
+                "puzzles": "12",
                 "creation_mode": "Topic (AI generates words)",
                 "difficulty": "Easy",
                 "include_answer_key": "Yes",

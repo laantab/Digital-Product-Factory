@@ -118,13 +118,14 @@ class EbookDesignExportTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             select_theme(data, "studio_clean")
 
-    def test_three_professional_themes_complete(self):
+    def test_professional_themes_complete(self):
+        # warm_wellness joined the catalog after this test was written (see
+        # PROFESSIONAL_THEME_IDS in ebook_design_system.py) -- asserted
+        # against the live list rather than re-hardcoding a second copy of it
+        # here, which is exactly what went stale the first time.
         themes = list_professional_themes()
         ids = [t["theme_id"] for t in themes]
-        self.assertEqual(
-            ids,
-            ["studio_clean", "editorial_professional", "modern_practical"],
-        )
+        self.assertEqual(ids, list(PROFESSIONAL_THEME_IDS))
         for tid in PROFESSIONAL_THEME_IDS:
             css = theme_css(tid)
             self.assertNotRegex(css, r"letter-spacing\s*:")

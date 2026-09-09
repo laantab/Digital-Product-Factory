@@ -586,6 +586,32 @@ def build_crossword_puzzles_with_qa(
         puzzles, warnings, errors = build_fn(**build_kwargs, seed=seed)
         all_warnings.extend(warnings)
 
+        # UNIVERSAL TOPIC PUZZLE ENGINE — adaptive sizing: build_fn (see
+        # services.crossword.book.build_crossword_puzzles) may legitimately
+        # build fewer puzzles than requested when the topic's real word
+        # pool can't support the full count, and says so via a warning.
+        # The book-QA check below must validate against what was actually,
+        # deliberately built in that case -- not the original request --
+        # or a correctly-sized smaller book fails QA as if it were a
+        # defect. Mirrors the identical fix already shipped for Word
+        # Search (services/word_search/pdf_builder.py).
+        # NOTE: gate this on the warning marker alone, not on "no errors
+        # this attempt" -- a legitimately shrunk book (e.g. 12 requested,
+        # 9 actually built) can still have a per-puzzle placement error
+        # for one of those 9 puzzles; that error must not make this check
+        # fall back to comparing against the ORIGINAL 12, which would
+        # reject an honestly-sized book as if the shrink never happened.
+        # len(puzzles) is how many puzzle attempts build_fn actually made
+        # (book.py appends one result per non-empty chunk, regardless of
+        # whether that puzzle's own placement later succeeded) -- the
+        # right "what was actually, deliberately built" figure.
+        attempt_expected_count = expected_count
+        if output_type not in {"single_worksheet", "single_page"} and puzzles:
+            if 0 < len(puzzles) < expected_count and any(
+                "instead of leaving the book incomplete" in w for w in warnings
+            ):
+                attempt_expected_count = len(puzzles)
+
         if output_type in {"single_worksheet", "single_page"}:
             puzzle = next((p for p in puzzles if p.clues), None)
             if puzzle is None:
@@ -640,7 +666,7 @@ def build_crossword_puzzles_with_qa(
         else:
             item_qa = run_crossword_book_qa(
                 puzzles,
-                expected_puzzle_count=expected_count,
+                expected_puzzle_count=attempt_expected_count,
                 include_answer_key=include_answer_key,
                 words_per_puzzle=words_per_puzzle,
             )

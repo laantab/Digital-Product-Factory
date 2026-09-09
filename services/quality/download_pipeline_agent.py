@@ -363,6 +363,11 @@ def resolve_download_request(
             if isinstance((data or {}).get("product_exports"), dict)
             else None,
             "customer_keep": bool((data or {}).get("customer_keep") is True),
+            "ebook_preview_digest": str(
+                ((data or {}).get("ebook_export_identity") or {}).get("preview_digest")
+                if isinstance((data or {}).get("ebook_export_identity"), dict)
+                else ""
+            ).strip().lower(),
         },
     )
 

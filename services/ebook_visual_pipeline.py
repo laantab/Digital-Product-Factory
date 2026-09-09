@@ -152,12 +152,175 @@ def stamp_photo_aid_metadata(
     return out
 
 
+#: Ambient render scale. 1.0 == the layouts below as originally tuned (every
+#: coordinate, radius and font size in every _render_* function is a literal
+#: number sized for a 1x canvas). Rendering at a higher resolution should mean
+#: re-running those same drawing instructions at a larger scale, not resizing
+#: the finished PNG afterward -- so this is a single shared multiplier that
+#: _new_canvas/_font/_ScaledDraw apply consistently, and no _render_* function
+#: needs to change at all.
+_RENDER_SCALE = [1.0]
+
+
+class _RenderScale:
+    """Context manager: `with _RenderScale(2.0): render_aid_png(aid)`."""
+
+    def __init__(self, scale: float) -> None:
+        self.scale = float(scale)
+        self._prev = 1.0
+
+    def __enter__(self) -> "_RenderScale":
+        self._prev = _RENDER_SCALE[0]
+        _RENDER_SCALE[0] = self.scale
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        _RENDER_SCALE[0] = self._prev
+
+
+def _sc(value: float) -> float:
+    return value * _RENDER_SCALE[0]
+
+
+def _sc_xy(seq):
+    """Scale a coordinate tuple/list of tuples for a PIL draw call."""
+    if not seq:
+        return seq
+    if isinstance(seq[0], (int, float)):
+        return tuple(_sc(v) for v in seq)
+    return [tuple(_sc(v) for v in pt) for pt in seq]
+
+
+#: Same context-manager-and-module-list pattern as _RENDER_SCALE above, for
+#: the same reason: every _render_* function already reads its colors from
+#: one place (a handful of hardcoded RGB tuples), so making that one place
+#: swappable makes every structured diagram theme-aware without changing
+#: those functions' call signatures.
+#:
+#: THE DEFECT THIS FIXES
+#: ----------------------
+#: Every generated diagram (infographics, timelines, habit loops, calendars,
+#: step cards) drew in the same fixed teal-and-slate palette no matter which
+#: design theme was selected -- a Bold Creator or Modern Business book showed
+#: the identical Warm-Wellness-colored chart. Found reviewing rendered pages
+#: side by side across themes, not by reading the CSS (these are raster PNGs;
+#: CSS variables never reach them).
+_RENDER_PALETTE: list[dict[str, tuple[int, int, int]] | None] = [None]
+
+#: Fallback palette: exactly the literal colors every _render_* function used
+#: before this existed, so a caller that never sets a palette (or a theme
+#: that leaves its diagram_*_rgb fields blank) renders pixel-identical output.
+_DEFAULT_PALETTE: dict[str, tuple[int, int, int]] = {
+    "primary": (15, 76, 92),
+    "accent": (15, 118, 110),
+    "secondary": (180, 83, 9),
+    "text": (15, 45, 58),
+}
+
+
+class _RenderPalette:
+    """Context manager: `with _RenderPalette(palette): render_aid_png(aid)`.
+
+    `palette` is a dict with any of "primary"/"accent"/"secondary"/"text" as
+    (R, G, B) tuples; missing keys fall back to _DEFAULT_PALETTE, so a theme
+    only has to override the colors it actually wants to change.
+    """
+
+    def __init__(self, palette: dict[str, tuple[int, int, int]] | None) -> None:
+        self.palette = palette
+        self._prev: dict[str, tuple[int, int, int]] | None = None
+
+    def __enter__(self) -> "_RenderPalette":
+        self._prev = _RENDER_PALETTE[0]
+        _RENDER_PALETTE[0] = self.palette
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        _RENDER_PALETTE[0] = self._prev
+
+
+def _pal(key: str, default: tuple[int, int, int] | None = None) -> tuple[int, int, int]:
+    """The current theme's color for `key`, or the long-standing default."""
+    active = _RENDER_PALETTE[0]
+    if active and key in active:
+        return active[key]
+    return default if default is not None else _DEFAULT_PALETTE.get(key, (15, 76, 92))
+
+
+def theme_diagram_palette(theme) -> dict[str, tuple[int, int, int]]:
+    """Build a _RenderPalette-ready dict from an EbookTheme's diagram_*_rgb
+    fields ("R,G,B" strings). A theme that leaves a field blank contributes
+    nothing for that key, so _pal() falls through to _DEFAULT_PALETTE."""
+    out: dict[str, tuple[int, int, int]] = {}
+    field_map = {
+        "primary": "diagram_primary_rgb",
+        "accent": "diagram_accent_rgb",
+        "secondary": "diagram_secondary_rgb",
+        "text": "diagram_text_rgb",
+    }
+    for key, field in field_map.items():
+        raw = str(getattr(theme, field, "") or "").strip()
+        if not raw:
+            continue
+        try:
+            parts = tuple(int(p.strip()) for p in raw.split(","))
+        except ValueError:
+            continue
+        if len(parts) == 3:
+            out[key] = parts  # type: ignore[assignment]
+    return out
+
+
+class _ScaledDraw:
+    """Wraps ImageDraw so every _render_* function can keep its original,
+    already-tuned 1x coordinates. Shape/line calls are scaled on the way in;
+    text is measured back down to 1x space so _wrap()'s line-breaking
+    decisions never change, and painted at the scaled position with the
+    already-scaled font from _font().
+    """
+
+    def __init__(self, draw: "ImageDraw.ImageDraw") -> None:
+        self._d = draw
+
+    def rectangle(self, xy, *a, **k):
+        return self._d.rectangle(_sc_xy(xy), *a, **k)
+
+    def rounded_rectangle(self, xy, radius=0, *a, **k):
+        return self._d.rounded_rectangle(_sc_xy(xy), _sc(radius), *a, **k)
+
+    def ellipse(self, xy, *a, **k):
+        return self._d.ellipse(_sc_xy(xy), *a, **k)
+
+    def line(self, xy, *a, fill=None, width=1, **k):
+        return self._d.line(_sc_xy(xy), *a, fill=fill, width=max(1, round(_sc(width))), **k)
+
+    def polygon(self, xy, *a, **k):
+        return self._d.polygon(_sc_xy(xy), *a, **k)
+
+    def arc(self, xy, start, end, *a, width=1, **k):
+        return self._d.arc(_sc_xy(xy), start, end, *a, width=max(1, round(_sc(width))), **k)
+
+    def text(self, xy, text, *a, **k):
+        x, y = xy
+        return self._d.text((_sc(x), _sc(y)), text, *a, **k)
+
+    def textbbox(self, xy, text, *a, **k):
+        x, y = xy
+        box = self._d.textbbox((_sc(x), _sc(y)), text, *a, **k)
+        s = _RENDER_SCALE[0]
+        return tuple(v / s for v in box)
+
+    def __getattr__(self, name):
+        return getattr(self._d, name)
+
+
 def _font(size: int, *, bold: bool = False):
     paths = ebook_font_paths()
     path = paths.get("bold" if bold else "regular")
+    scaled_size = max(1, round(_sc(size)))
     if path:
         try:
-            return ImageFont.truetype(path, size)
+            return ImageFont.truetype(path, scaled_size)
         except OSError:
             pass
     return ImageFont.load_default()
@@ -283,6 +446,44 @@ def _clean_sentence(text: str, *, limit: int = _LABEL_LIMIT) -> str:
         return out
     cut = out[:limit].rsplit(" ", 1)[0]
     return cut.rstrip(" ,;:—-") + "…"
+
+
+def _first_sentence_excerpt(text: str, *, fallback: str) -> str:
+    """The chapter's own first real sentence, safe to show as a caption.
+
+    THE DEFECT THIS FIXES
+    ----------------------
+    `text` here is always a chapter's raw body as numbered_chapters()/
+    _split_chapters() hand it out, which starts with that chapter's own
+    "## Chapter Title" markdown heading line -- every caller of this
+    function was flattening whitespace and then taking everything before the
+    first "." as "the first sentence", with nothing removing the heading
+    line first. A heading with no sentence-ending punctuation of its own
+    (the normal case) merges straight into the chapter's real opening
+    sentence, so the caption reads "## Mindfulness Made Simple Ask ten
+    people what mindfulness is..." -- literal Markdown syntax on a customer's
+    finished PDF page. Found on a real book whose subject supported
+    photography: _commission_media_mix and the photo-fallback branch below
+    both build a caption this way, and both only run when Pexels is
+    actually configured -- a condition the test suite deliberately never
+    creates, so nothing had ever exercised this path before a human review
+    caught it in a rendered PDF.
+
+    `fallback` is always this chapter's own title (the same string the
+    heading names), so it doubles as the exact text to strip -- matching a
+    generic "any ATX heading line" pattern instead broke on chapter_body
+    that had already been flattened to one line elsewhere (no newline after
+    the heading for the pattern to anchor on), which silently returned the
+    fallback title for every caption instead of a real sentence. Matching
+    the known title text works whether or not a newline follows it.
+    """
+    raw = str(text or "")
+    title = str(fallback or "").strip()
+    if title:
+        raw = re.sub(r"^\s*#{1,6}\s*" + re.escape(title) + r"\s*", "", raw, count=1, flags=re.I)
+    flat = re.sub(r"\s+", " ", raw).strip()
+    first = flat.split(".")[0].strip() if flat else ""
+    return first or title
 
 
 #: Sentences that open a story rather than state a point. A visual summarising
@@ -714,24 +915,194 @@ def _fixture_requirement_plan(manuscript_md: str, *, title: str = "") -> dict[st
                 "source": "local_fixture",
             })
 
-        # Supporting aid for scanning; never counted against the requirement.
+        # Supporting aid for scanning; never counted against the minimum-
+        # photograph requirement.
+        #
+        # THE DEFECT THIS FIXES
+        # Every chapter used to get the identical fixed template here: same
+        # "worksheet box" type, same three items, differing only by chapter
+        # name. review_visual_set's design-signature check (type + item
+        # count -- the shape a reader actually notices, not the words) then
+        # flagged every chapter after the first as an exact repeat of the
+        # first, for any book of more than one chapter. "worksheet box" also
+        # has no case in render_aid_png's dispatch, so it silently rendered
+        # as a blank, title-only box.
+        #
+        # A real customer never hits this: plan_content_aware_visuals only
+        # takes this fixture path under EBOOK_CUSTOMER_PATH_FIXTURE (test-only
+        # deterministic content, no model call). The production per-chapter
+        # planner (_choose_aid) already tracks recent types and swaps in an
+        # alternate to avoid a template feel; this fixture generator never
+        # did. Fixed the same way: rotate between two real, rendered types
+        # (checklist/workflow) and grow the item count strictly within each
+        # type's own track, so no two chapters in a book of any length can
+        # land on the same (type, item count) shape.
+        idx0 = idx - 1
+        support_type = "checklist" if idx0 % 2 == 0 else "workflow"
+        support_count = 3 + (idx0 // 2)
+        support_items = [
+            f"Materials for {short} are ready",
+            f"The steps in {short} were followed in order",
+            f"The result of {short} was checked",
+        ]
+        extra_templates = [
+            f"Nothing about {short} was skipped",
+            f"{short} matches the written plan",
+            f"Every step in {short} is accounted for",
+            f"{short} is ready to move on from",
+            f"The result of {short} was double-checked",
+        ]
+        e = 0
+        while len(support_items) < support_count:
+            support_items.append(extra_templates[e % len(extra_templates)])
+            e += 1
         aids.append({
             "visual_id": f"v_{slug}_list",
             "chapter": ctitle,
             "chapter_index": idx,
             "placement": "after_opening",
-            "type": "worksheet box",
-            "title": f"{short}: quick checklist",
-            "caption": f"Confirm each point before leaving {short}.",
-            "items": [
-                f"Materials for {short} are ready",
-                f"The steps in {short} were followed in order",
-                f"The result of {short} was checked",
-            ],
+            "type": support_type,
+            "title": (
+                f"{short}: quick checklist" if support_type == "checklist"
+                else f"{short}: quick sequence"
+            ),
+            "caption": (
+                f"Confirm each point before leaving {short}."
+                if support_type == "checklist"
+                else f"Work through {short} in order."
+            ),
+            "items": support_items,
         })
         plan_chapters.append({"chapter": ctitle, "aids": aids})
 
     return {"chapters": plan_chapters}
+
+
+def _commission_media_mix(
+    plan_chapters: list[dict[str, Any]],
+    *,
+    title: str,
+    topic: str,
+    include_photographs: bool,
+) -> list[dict[str, Any]]:
+    """Decide the book's media mix, having seen every chapter.
+
+    THE DEFECT THIS FIXES
+    ---------------------
+    Choosing a visual chapter by chapter cannot produce an illustrated book. A
+    44-page mindfulness title shipped with nine visuals, eight of them the same
+    rounded box of text lines, because each chapter was asked in isolation
+    "what does your prose support?" and each answered "a list". Nobody was ever
+    asked what the *book* should look like.
+
+    A photograph was never reached: photographs were only considered when a
+    chapter offered nothing else at all, which never happened, because prose
+    can always be cut into a list.
+
+    So the mix is commissioned once, for the whole book. Chapters whose local
+    graphic carries the least — the thinnest lists, the ones a reader learns
+    nothing from — give up their slot to a photograph, spread through the book
+    rather than bunched at one end. Chapters with real substance (a full
+    fourteen-day plan, a genuine comparison) are never displaced.
+
+    Nothing is fabricated here. This decides only what KIND of visual each
+    chapter gets; the content still comes from the chapter, and a photograph
+    still has to be found, matched and approved on its own merits.
+    """
+    from services.ebook_visual_editorial import (
+        PHOTO_TYPES,
+        TEXT_BOX_TYPES,
+        media_requirements,
+    )
+    from services.ebook_visual_match import photography_supported_subject
+    from services.ebook_pexels import pexels_configured
+
+    chapters = [c for c in plan_chapters if isinstance(c, dict)]
+    if not chapters:
+        return plan_chapters
+
+    def _aids(chapter):
+        return [a for a in (chapter.get("aids") or []) if isinstance(a, dict)]
+
+    photographs = [
+        a for c in chapters for a in _aids(c)
+        if str(a.get("type") or "").lower() in PHOTO_TYPES
+    ]
+
+    body_sample = " ".join(str(c.get("chapter_body") or "") for c in chapters)[:6000]
+    # A commission here converts a chapter's own working checklist/workflow
+    # into a bare "photo, missing" slot on the promise that fill_plan_photos_
+    # automatic can resolve it into a REAL photograph -- real diversity, the
+    # whole point of this function (see the module docstring above). When
+    # Pexels is not reachable (this Factory's own test isolation deliberately
+    # blocks it during automated tests, or a genuinely offline run), that
+    # promise cannot be kept: the aid falls back to another local visual, and
+    # several chapters commissioned on the same pass can fall back to the
+    # same shape, recreating the exact "nine boxes" monotony this function
+    # exists to prevent -- found by tracing why a book with real, working
+    # checklists started failing "repeats the design of" only after this
+    # function converted them to unfulfillable photo commitments. Skipping
+    # the commission entirely when photography cannot actually be delivered
+    # leaves each chapter's original, already-distinct local visual in
+    # place, which is strictly better than a forced, unresolvable swap.
+    supported = (
+        include_photographs
+        and pexels_configured()
+        and photography_supported_subject(title=title, topic=topic, content=body_sample)
+    )
+    if not supported:
+        return plan_chapters
+
+    want = media_requirements(len(chapters), photography_supported=True)
+    shortfall = want["photographs"] - len(photographs)
+    if shortfall <= 0:
+        return plan_chapters
+
+    # Rank the candidates a photograph could replace: only text boxes, weakest
+    # first. A chapter carrying a real table or sequence keeps what it has.
+    candidates = []
+    for position, chapter in enumerate(chapters):
+        aids = _aids(chapter)
+        if len(aids) != 1:
+            continue
+        aid = aids[0]
+        if str(aid.get("type") or "").lower() not in TEXT_BOX_TYPES:
+            continue
+        candidates.append((_aid_content_weight(aid), position))
+    candidates.sort()
+
+    # Spread the chosen chapters through the book instead of taking the first
+    # few: a run of photographs at the front reads as badly as a run of boxes.
+    chosen = sorted(position for _weight, position in candidates[: shortfall * 2])
+    if len(chosen) > shortfall:
+        step = len(chosen) / float(shortfall)
+        chosen = [chosen[int(i * step)] for i in range(shortfall)]
+
+    for position in chosen:
+        chapter = chapters[position]
+        index = int(chapter.get("chapter_index") or position + 1)
+        ctitle = str(chapter.get("chapter") or "")
+        # Full body, not a short display excerpt: this aid's own fallback if
+        # Pexels finds nothing (_local_visual_for_aid) needs the same content
+        # _choose_aid used to build this chapter's ORIGINAL working visual,
+        # or it can only ever fail with "No matching photograph was found."
+        excerpt = str(chapter.get("chapter_body") or "")
+        first = _first_sentence_excerpt(excerpt, fallback=ctitle)
+        chapter["aids"] = [{
+            "type": "photo",
+            "visual_id": f"v_ch{index}",
+            "title": f"{ctitle}: chapter scene",
+            "caption": (first[:400] if first else ctitle) or ctitle,
+            "chapter": ctitle,
+            "chapter_index": index,
+            "placement": "after_opening",
+            "required": True,
+            "source": "pexels",
+            "chapter_body": excerpt,
+            "status": "missing",
+            "commissioned": "media_mix",
+        }]
+    return chapters
 
 
 def plan_content_aware_visuals(
@@ -751,9 +1122,12 @@ def plan_content_aware_visuals(
         return _fixture_requirement_plan(manuscript_md, title=title)
     from services.ebook_visual_match import is_photo_led_subject
 
+    from services.ebook_visual_editorial import _design_signature as _visual_design_signature
+
     chapters = numbered_chapters(manuscript_md)
     plan_chapters: list[dict[str, Any]] = []
     recent_types: list[str] = []
+    seen_signatures: dict[str, int] = {}
     for i, (ctitle, body) in enumerate(chapters, start=1):
         aid = _choose_aid(i, ctitle, body)
         # Every chapter carrying the identical layout reads as a template, not a
@@ -771,6 +1145,62 @@ def plan_content_aware_visuals(
                 weight = _aid_content_weight(aid)
                 if _aid_content_weight(alternate) >= max(4, int(weight * 0.6)):
                     aid = alternate
+        # A chapter's visual can be the exact same shape as an EARLIER
+        # chapter's -- e.g. two bar charts with the same number of bars, or
+        # two six-item checklists -- without ever being part of a consecutive
+        # run, which the check above cannot see (v1.5.1). review_visual_set
+        # judges the whole book, not a sliding window of two, and calls that
+        # an exact repeat regardless of distance; found by tracing why a real
+        # ten-chapter manuscript with only three charts among its visuals
+        # still failed editorial review. Swap to the chapter's own alternate
+        # visual under the same substance guarantee as above, and only when
+        # the alternate is not itself a repeat of something already used.
+        if aid:
+            sig = _visual_design_signature(aid)
+            if sig and sig in seen_signatures:
+                alternate = derive_local_aid_from_prose(i, ctitle, body)
+                if alternate and alternate.get("type") != aid.get("type"):
+                    alt_sig = _visual_design_signature(alternate)
+                    if not alt_sig or alt_sig not in seen_signatures:
+                        weight = _aid_content_weight(aid)
+                        if _aid_content_weight(alternate) >= max(4, int(weight * 0.6)):
+                            aid = alternate
+                            sig = alt_sig
+            # The chapter's own prose offers no real alternate (a checklist's
+            # only other local shape is a workflow, and a chapter can hit the
+            # same collision there too), or the alternate is itself already
+            # used. checklist/workflow items are drawn one per row, and
+            # _parse_checklist/_parse_workflow already cap what is SHOWN at 8
+            # regardless of how many the manuscript actually lists -- so two
+            # chapters with genuinely different real checklists (8 real items
+            # vs 20) can still clip to the identical visible shape. Retyping
+            # first (same content, different icon: checkmark vs numeral).
+            if aid and sig and sig in seen_signatures and aid.get("type") in ("checklist", "workflow"):
+                retyped = dict(aid, type="workflow" if aid["type"] == "checklist" else "checklist")
+                retyped_sig = _visual_design_signature(retyped)
+                if not retyped_sig or retyped_sig not in seen_signatures:
+                    aid = retyped
+                    sig = retyped_sig
+            # Last resort: trim the visible item count. This never drops
+            # content the reader was going to see in prose -- the manuscript
+            # text is untouched -- it only changes how many of the already-
+            # display-capped items this one card shows, and only down to the
+            # floor (3) the parsers themselves require to call it a checklist
+            # at all.
+            if aid and sig and sig in seen_signatures:
+                items_list = aid.get("items") if isinstance(aid.get("items"), list) else None
+                if items_list and len(items_list) > 3:
+                    trial_items = list(items_list)
+                    while len(trial_items) > 3:
+                        trial_items = trial_items[:-1]
+                        trial = dict(aid, items=trial_items)
+                        trial_sig = _visual_design_signature(trial)
+                        if trial_sig and trial_sig not in seen_signatures:
+                            aid = trial
+                            sig = trial_sig
+                            break
+            if sig:
+                seen_signatures[sig] = i
         if aid:
             recent_types.append(str(aid.get("type") or ""))
         if aid is None:
@@ -783,19 +1213,37 @@ def plan_content_aware_visuals(
             if not photo_led:
                 aid = derive_local_aid_from_prose(i, ctitle, body)
         if aid is None and include_photographs:
-            excerpt = re.sub(r"\s+", " ", str(body or "")).strip()[:400]
-            first = excerpt.split(".")[0].strip() if excerpt else ctitle
+            # chapter_body here must be the FULL chapter text WITH its real
+            # line breaks intact, not a single-line display excerpt:
+            # _local_visual_for_aid (this photo's own fallback if Pexels
+            # finds nothing) calls derive_local_aid_from_prose on exactly
+            # this field, and that function's numbered-step/key-point
+            # detectors match per LINE (re.M against "^\d+\." etc.). An
+            # earlier version of this fix widened the character count but
+            # still ran the same collapse-all-whitespace-to-one-line
+            # normalization the display excerpt used -- which joins "1.
+            # Item" and "2. Item" onto one line and makes them undetectable,
+            # even though _choose_aid, two lines above, had just built a
+            # *working* checklist/workflow from this exact chapter using the
+            # RAW (newline-preserving) body. Only horizontal whitespace is
+            # collapsed here; line breaks are kept. Found by comparing what
+            # _choose_aid received against what this fallback received for
+            # the same chapter, not by reading either function in isolation.
+            full_body = "\n".join(
+                re.sub(r"[ \t]+", " ", ln).strip() for ln in str(body or "").splitlines()
+            ).strip()
+            first = _first_sentence_excerpt(full_body, fallback=ctitle)
             aid = {
                 "type": "photo",
                 "visual_id": f"v_ch{i}",
                 "title": f"{ctitle}: chapter scene",
-                "caption": first or ctitle,
+                "caption": (first[:400] if first else ctitle) or ctitle,
                 "chapter": ctitle,
                 "chapter_index": i,
                 "placement": "after_opening",
                 "required": True,
                 "source": "pexels",
-                "chapter_body": excerpt,
+                "chapter_body": full_body,
                 "status": "missing",
             }
         plan_chapters.append(
@@ -803,8 +1251,23 @@ def plan_content_aware_visuals(
                 "chapter": ctitle,
                 "chapter_index": i,
                 "aids": [aid] if aid else [],
+                # Full text with real line breaks kept, for the same reason
+                # as above: _commission_media_mix (below) can still convert
+                # this chapter to a photo later, and needs the same
+                # line-based pattern detection the initial aid had.
+                "chapter_body": "\n".join(
+                    re.sub(r"[ \t]+", " ", ln).strip() for ln in str(body or "").splitlines()
+                ).strip(),
             }
         )
+
+    plan_chapters = _commission_media_mix(
+        plan_chapters,
+        title=title,
+        topic=topic,
+        include_photographs=include_photographs,
+    )
+
     return {
         "title": title,
         "source": "content_aware_local",
@@ -837,17 +1300,22 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int) -> list[str]:
 
 
 def _new_canvas(width: int = 1400, height: int = 900) -> tuple[Image.Image, ImageDraw.ImageDraw]:
-    img = Image.new("RGB", (width, height), (250, 248, 244))
-    draw = ImageDraw.Draw(img)
-    draw.rectangle((0, 0, width, 10), fill=(15, 76, 92))
-    draw.rectangle((0, height - 10, width, height), fill=(15, 76, 92))
+    """A canvas at _RENDER_SCALE, addressed by every _render_* function in the
+    original 1x coordinate space -- see _ScaledDraw."""
+    s = _RENDER_SCALE[0]
+    real_w, real_h = max(1, round(width * s)), max(1, round(height * s))
+    img = Image.new("RGB", (real_w, real_h), (250, 248, 244))
+    real_draw = ImageDraw.Draw(img)
+    draw = _ScaledDraw(real_draw) if s != 1.0 else real_draw
+    draw.rectangle((0, 0, width, 10), fill=_pal("primary"))
+    draw.rectangle((0, height - 10, width, height), fill=_pal("primary"))
     return img, draw
 
 
 def _draw_title(draw: ImageDraw.ImageDraw, title: str, width: int) -> None:
     font = _font(28, bold=True)
     for i, line in enumerate(_wrap(draw, title, font, width - 80)[:2]):
-        draw.text((40, 28 + i * 34), line, font=font, fill=(15, 45, 58))
+        draw.text((40, 28 + i * 34), line, font=font, fill=_pal("text"))
 
 
 def _looks_currency(aid: dict[str, Any], values: list[float]) -> bool:
@@ -895,10 +1363,10 @@ def _render_chart(aid: dict[str, Any]) -> Image.Image:
             x = x0 + i * (bar_w + gap)
             bh = int((plot_bottom - plot_top) * (val / max_v))
             y = plot_bottom - max(bh, 8)
-            draw.rounded_rectangle((x, y, x + bar_w, plot_bottom), 10, fill=(15, 118, 110))
+            draw.rounded_rectangle((x, y, x + bar_w, plot_bottom), 10, fill=_pal("accent"))
             txt = _fmt_chart_value(val, currency=currency)
             tw, _ = _text_size(draw, txt, value_font)
-            draw.text((x + (bar_w - tw) / 2, y - 32), txt, font=value_font, fill=(15, 45, 58))
+            draw.text((x + (bar_w - tw) / 2, y - 32), txt, font=value_font, fill=_pal("text"))
             for j, line in enumerate(_wrap(draw, str(lbl), body, bar_w + 20)[:2]):
                 lw, _ = _text_size(draw, line, body)
                 draw.text((x + (bar_w - lw) / 2, plot_bottom + 10 + j * 18), line, font=body, fill=(30, 41, 59))
@@ -908,14 +1376,14 @@ def _render_chart(aid: dict[str, Any]) -> Image.Image:
     for i, (lbl, val) in enumerate(zip(labels, values)):
         y = top + i * (bar_h + 18)
         bw = int((width - left - 80) * (val / max_v))
-        draw.rounded_rectangle((left, y, left + max(bw, 8), y + bar_h), 8, fill=(15, 118, 110))
+        draw.rounded_rectangle((left, y, left + max(bw, 8), y + bar_h), 8, fill=_pal("accent"))
         for line in _wrap(draw, str(lbl), body, left - 60)[:2]:
             draw.text((40, y + 8), line, font=body, fill=(30, 41, 59))
         draw.text(
             (left + max(bw, 8) + 12, y + 16),
             _fmt_chart_value(val, currency=currency),
             font=value_font,
-            fill=(15, 45, 58),
+            fill=_pal("text"),
         )
     return img
 
@@ -941,7 +1409,7 @@ def _render_horizontal_steps(aid: dict[str, Any], items: list[str], *, kind: str
     width, height = 1400, 460
     img, draw = _new_canvas(width, height)
     _draw_title(draw, str(aid.get("title") or kind.title()), width)
-    accent = (180, 83, 9) if kind == "timeline" else (15, 76, 92)
+    accent = _pal("secondary") if kind == "timeline" else _pal("primary")
     gap = 22
     box_w = min(210, max(120, (width - 80 - (n - 1) * gap) // n))
     total_w = n * box_w + (n - 1) * gap
@@ -1057,7 +1525,7 @@ def _render_station_map(aid: dict[str, Any], items: list[str]) -> Image.Image:
     width, height = 1400, 900
     img, draw = _new_canvas(width, height)
     _draw_title(draw, str(aid.get("title") or "Production station"), width)
-    accent = (15, 76, 92)
+    accent = _pal("primary")
     ink = (15, 23, 42)
     floor = (236, 242, 239)
     white = (255, 255, 255)
@@ -1144,24 +1612,31 @@ def _render_station_map(aid: dict[str, Any], items: list[str]) -> Image.Image:
 
 
 def _render_timeline_roadmap(aid: dict[str, Any], items: list[str]) -> Image.Image:
+    """A horizontal roadmap. Given more vertical room than the original cut
+    (420px -> 560px, larger type, wider wrap column) so six labels have space
+    to breathe instead of reading as a thin strip floating on the page."""
     n = max(1, len(items))
-    width, height = 1400, 420
+    width, height = 1400, 560
     img, draw = _new_canvas(width, height)
     _draw_title(draw, str(aid.get("title") or "Timeline"), width)
-    accent = (180, 83, 9)
-    left, right, y = 70, width - 70, 200
+    accent = _pal("secondary")
+    left, right, y = 80, width - 80, 300
     draw.line((left, y, right, y), fill=accent, width=6)
-    body = _font(15, bold=True)
-    sub = _font(14)
+    body = _font(17, bold=True)
+    sub = _font(16)
     for i, item in enumerate(items):
         x = left + (right - left) * (i / max(n - 1, 1))
-        draw.ellipse((x - 16, y - 16, x + 16, y + 16), fill=accent)
-        draw.text((x - 5, y - 10), str(i + 1), font=_font(14, bold=True), fill=(255, 255, 255))
-        lines = _wrap(draw, item, body if i % 2 == 0 else sub, 200)[:3]
-        ty = y - 88 if i % 2 == 0 else y + 28
+        draw.ellipse((x - 19, y - 19, x + 19, y + 19), fill=accent)
+        nw, nh = _text_size(draw, str(i + 1), _font(15, bold=True))
+        draw.text((x - nw / 2, y - nh / 2), str(i + 1), font=_font(15, bold=True), fill=(255, 255, 255))
+        lines = _wrap(draw, item, body if i % 2 == 0 else sub, 240)[:3]
+        ty = y - 130 if i % 2 == 0 else y + 46
         for j, line in enumerate(lines):
             lw, _ = _text_size(draw, line, body)
-            draw.text((x - lw / 2, ty + j * 20), line, font=body, fill=(15, 23, 42))
+            # Clamp so the first/last labels stay on-canvas instead of
+            # centering off the left or right edge of the strip.
+            lx = max(10, min(width - 10 - lw, x - lw / 2))
+            draw.text((lx, ty + j * 24), line, font=body, fill=(15, 23, 42))
     return img
 
 
@@ -1191,7 +1666,7 @@ def _render_steps(aid: dict[str, Any], *, kind: str) -> Image.Image:
     _draw_title(draw, str(aid.get("title") or kind.title()), 1400)
     body = _font(18)
     y = 110
-    accent = (180, 83, 9) if kind == "timeline" else (15, 76, 92)
+    accent = _pal("secondary") if kind == "timeline" else _pal("primary")
     for i, item in enumerate(items, start=1):
         draw.rounded_rectangle((40, y, 1360, y + 72), 10, fill=(255, 255, 255), outline=accent, width=2)
         draw.ellipse((58, y + 14, 106, y + 62), fill=accent)
@@ -1237,18 +1712,23 @@ def _render_comparison(aid: dict[str, Any]) -> Image.Image:
     ][:_COMPARISON_MAX_ROWS]
     # Pad short rows so every column keeps its cell.
     rows = [r + [""] * (len(headers) - len(r)) for r in rows]
-    img, draw = _new_canvas(1500, 980)
+    row_h = 96
+    # Size to the actual row count — a fixed tall canvas left a slab of dead
+    # white space below short tables, the same "doesn't look finished"
+    # problem as an under-filled card.
+    height = 108 + 64 + max(len(rows), 1) * row_h + 30
+    img, draw = _new_canvas(1500, height)
     _draw_title(draw, str(aid.get("title") or "Comparison"), 1500)
     if not headers:
         return img
     cols = len(headers)
-    left, top, width, row_h = 36, 108, 1500 - 72, 96
+    left, top, width, row_h = 36, 108, 1500 - 72, row_h
     col_w = width // cols
     head_font = _font(16, bold=True)
     cell_font = _font(15)
     for c, h in enumerate(headers):
         x0 = left + c * col_w
-        draw.rectangle((x0, top, x0 + col_w - 6, top + 56), fill=(15, 76, 92))
+        draw.rectangle((x0, top, x0 + col_w - 6, top + 56), fill=_pal("primary"))
         for j, line in enumerate(_wrap(draw, h, head_font, col_w - 20)[:2]):
             draw.text((x0 + 10, top + 8 + j * 18), line, font=head_font, fill=(255, 255, 255))
     y = top + 64
@@ -1264,12 +1744,294 @@ def _render_comparison(aid: dict[str, Any]) -> Image.Image:
     return img
 
 
-def render_aid_png(aid: dict[str, Any]) -> Image.Image:
+#: A small, coordinated palette for the multi-card infographic. Kept muted
+#: (not primary-color clip art) but genuinely distinct hue-to-hue, so four
+#: cards on one sheet read as "designed" rather than as four grey boxes.
+_INFOGRAPHIC_ACCENTS = (
+    (15, 118, 110),   # teal
+    (180, 83, 9),     # amber
+    (124, 58, 110),   # plum
+    (30, 90, 160),    # blue
+)
+
+
+def _icon_check_badge(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, color: tuple) -> None:
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=color)
+    _draw_tick(draw, (cx, cy + 1), fill=(255, 255, 255))
+
+
+def _icon_clock_badge(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, color: tuple) -> None:
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=color)
+    draw.line((cx, cy, cx, cy - r * 0.55), fill=(255, 255, 255), width=3)
+    draw.line((cx, cy, cx + r * 0.4, cy + r * 0.15), fill=(255, 255, 255), width=3)
+    draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=(255, 255, 255))
+
+
+def _icon_scale_badge(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, color: tuple) -> None:
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=color)
+    draw.line((cx - r * 0.5, cy + r * 0.15, cx + r * 0.5, cy - r * 0.15), fill=(255, 255, 255), width=3)
+    draw.ellipse((cx - r * 0.5 - 5, cy + r * 0.15 - 5, cx - r * 0.5 + 5, cy + r * 0.15 + 5), outline=(255, 255, 255), width=2)
+    draw.ellipse((cx + r * 0.5 - 5, cy - r * 0.15 - 5, cx + r * 0.5 + 5, cy - r * 0.15 + 5), outline=(255, 255, 255), width=2)
+
+
+def _icon_grid_badge(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, color: tuple) -> None:
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=color)
+    s = r * 0.55
+    draw.rectangle((cx - s, cy - s, cx + s, cy + s), outline=(255, 255, 255), width=2)
+    draw.line((cx - s, cy, cx + s, cy), fill=(255, 255, 255), width=2)
+    draw.line((cx, cy - s, cx, cy + s), fill=(255, 255, 255), width=2)
+
+
+_INFOGRAPHIC_ICONS = (_icon_check_badge, _icon_clock_badge, _icon_scale_badge, _icon_grid_badge)
+
+
+def _render_highlight_grid(aid: dict[str, Any]) -> Image.Image:
+    """A colorful 2x2 (or up to 2x3) grid of stat/fact cards.
+
+    Distinct from every row-based aid: each card gets its own accent color
+    and icon badge, not a shared teal outline down a list of rows.
+    """
+    cards = [c for c in (aid.get("cards") or []) if isinstance(c, dict)][:6]
+    n = max(1, len(cards))
+    cols = 2
+    rows = (n + cols - 1) // cols
+    width = 1400
+    card_w, card_h, gap = 640, 260, 40
+    height = 130 + rows * (card_h + gap)
+    img, draw = _new_canvas(width, height)
+    _draw_title(draw, str(aid.get("title") or "At a Glance"), width)
+    stat_font = _font(30, bold=True)
+    label_font = _font(16)
+    x0 = (width - (cols * card_w + (cols - 1) * gap)) // 2
+    y0 = 118
+    for i, card in enumerate(cards):
+        r, c = divmod(i, cols)
+        x = x0 + c * (card_w + gap)
+        y = y0 + r * (card_h + gap)
+        accent = _INFOGRAPHIC_ACCENTS[i % len(_INFOGRAPHIC_ACCENTS)]
+        icon = _INFOGRAPHIC_ICONS[i % len(_INFOGRAPHIC_ICONS)]
+        draw.rounded_rectangle((x, y, x + card_w, y + card_h), 16, fill=(255, 255, 255), outline=accent, width=3)
+        draw.rounded_rectangle((x, y, x + card_w, y + 10), 16, fill=accent)
+        icon(draw, x + 62, y + 74, 34, accent)
+        stat = _plain_cell(card.get("stat") or "")
+        for j, line in enumerate(_wrap(draw, stat, stat_font, card_w - 130)[:2]):
+            draw.text((x + 116, y + 42 + j * 36), line, font=stat_font, fill=(15, 23, 42))
+        label = _plain_cell(card.get("label") or "")
+        ty = y + 132
+        for line in _wrap(draw, label, label_font, card_w - 48)[:4]:
+            draw.text((x + 24, ty), line, font=label_font, fill=(51, 65, 85))
+            ty += 24
+    return img
+
+
+_FLOW_ICON_KINDS = {
+    "in": "up",
+    "inhale": "up",
+    "out": "down",
+    "exhale": "down",
+    "hold": "hold",
+    "start": "start",
+}
+
+
+def _icon_breath(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, kind: str, color: tuple) -> None:
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=color, width=4, fill=(255, 255, 255))
+    k = _FLOW_ICON_KINDS.get(kind, "hold")
+    if k == "up":
+        draw.polygon([(cx, cy - r * 0.5), (cx - r * 0.32, cy + r * 0.2), (cx + r * 0.32, cy + r * 0.2)], fill=color)
+    elif k == "down":
+        draw.polygon([(cx, cy + r * 0.5), (cx - r * 0.32, cy - r * 0.2), (cx + r * 0.32, cy - r * 0.2)], fill=color)
+    elif k == "start":
+        draw.ellipse((cx - r * 0.28, cy - r * 0.28, cx + r * 0.28, cy + r * 0.28), fill=color)
+    else:  # hold — two bars
+        draw.rectangle((cx - r * 0.32, cy - r * 0.38, cx - r * 0.1, cy + r * 0.38), fill=color)
+        draw.rectangle((cx + r * 0.1, cy - r * 0.38, cx + r * 0.32, cy + r * 0.38), fill=color)
+
+
+def _render_practice_flow(aid: dict[str, Any]) -> Image.Image:
+    """An icon-and-arrow practice sequence with a timing badge per step.
+
+    Distinct from `_render_horizontal_steps`: each box carries a breath-phase
+    icon (inhale / hold / exhale) and an explicit duration, and the sequence
+    closes with a drawn loop-back arrow plus a repeat caption, rather than
+    ending at the last box.
+    """
+    steps = [s for s in (aid.get("steps") or []) if isinstance(s, dict)][:6]
+    n = max(1, len(steps))
+    width = 1400
+    box_w = min(220, max(150, (width - 100 - (n - 1) * 30) // n))
+    gap = 30
+    total_w = n * box_w + (n - 1) * gap
+    x0 = (width - total_w) // 2
+    y0 = 150
+    box_h = 230
+    height = y0 + box_h + 130
+    img, draw = _new_canvas(width, height)
+    _draw_title(draw, str(aid.get("title") or "Practice Flow"), width)
+    accent = _pal("accent")
+    label_font = _font(15, bold=True)
+    time_font = _font(14, bold=True)
+    centers: list[float] = []
+    for i, step in enumerate(steps):
+        x = x0 + i * (box_w + gap)
+        cx = x + box_w / 2
+        centers.append(cx)
+        draw.rounded_rectangle((x, y0, x + box_w, y0 + box_h), 14, fill=(255, 255, 255), outline=accent, width=2)
+        _icon_breath(draw, cx, y0 + 56, 32, str(step.get("kind") or "hold"), accent)
+        timing = _plain_cell(step.get("timing") or "")
+        if timing:
+            tw, _ = _text_size(draw, timing, time_font)
+            badge = (cx - tw / 2 - 10, y0 + 96, cx + tw / 2 + 10, y0 + 122)
+            draw.rounded_rectangle(badge, 12, fill=accent)
+            draw.text((cx - tw / 2, y0 + 100), timing, font=time_font, fill=(255, 255, 255))
+        ty = y0 + 136
+        for line in _wrap(draw, _plain_cell(step.get("label") or ""), label_font, box_w - 24)[:4]:
+            lw, _ = _text_size(draw, line, label_font)
+            draw.text((cx - lw / 2, ty), line, font=label_font, fill=(15, 23, 42))
+            ty += 20
+        if i < n - 1:
+            ax = x + box_w + 4
+            draw.polygon([(ax, y0 + box_h / 2 - 12), (ax + gap - 8, y0 + box_h / 2), (ax, y0 + box_h / 2 + 12)], fill=accent)
+    if n >= 2:
+        loop_y = y0 + box_h + 34
+        left_x, right_x = centers[1], centers[-1]
+        draw.line((left_x, y0 + box_h, left_x, loop_y), fill=accent, width=3)
+        draw.line((right_x, y0 + box_h, right_x, loop_y), fill=accent, width=3)
+        draw.line((left_x, loop_y, right_x, loop_y), fill=accent, width=3)
+        # Arrowhead points UP, back into the second box — this line is the
+        # "repeat from here" return path, not a new step leaving the box.
+        draw.polygon([(left_x - 10, loop_y + 10), (left_x + 10, loop_y + 10), (left_x, loop_y - 8)], fill=accent)
+        caption = _plain_cell(aid.get("repeat_caption") or "Repeat until the timer sounds")
+        cfont = _font(15)
+        cw, _ = _text_size(draw, caption, cfont)
+        draw.text(((width - cw) / 2, loop_y + 16), caption, font=cfont, fill=(71, 85, 105))
+    return img
+
+
+def _render_habit_loop(aid: dict[str, Any]) -> Image.Image:
+    """A four-node circular habit loop, arrows running clockwise back to node 1.
+
+    Distinct from every straight-line aid on purpose: a habit loop is
+    circular by definition, so this is the one aid on the sheet that is
+    round.
+    """
+    import math
+
+    nodes = [_plain_cell(x) for x in (aid.get("nodes") or [])][:4]
+    while len(nodes) < 4:
+        nodes.append("")
+    width, height = 1400, 980
+    img, draw = _new_canvas(width, height)
+    _draw_title(draw, str(aid.get("title") or "The Habit Loop"), width)
+    accent = _pal("accent")
+    cx, cy, R = width / 2, 560, 300
+    node_r = 108
+    angles = [270, 0, 90, 180]  # top, right, bottom, left — clockwise
+    positions = [
+        (cx + R * math.cos(math.radians(a)), cy + R * math.sin(math.radians(a)))
+        for a in angles
+    ]
+    bbox = (cx - R, cy - R, cx + R, cy + R)
+    pad = 16
+    for i in range(4):
+        start = angles[i] + pad
+        end = angles[i] + 90 - pad
+        draw.arc(bbox, start, end, fill=accent, width=6)
+        end_angle_rad = math.radians(end)
+        ex = cx + R * math.cos(end_angle_rad)
+        ey = cy + R * math.sin(end_angle_rad)
+        tangent = end_angle_rad + math.pi / 2
+        tx, ty = math.cos(tangent), math.sin(tangent)
+        nx, ny = math.cos(end_angle_rad), math.sin(end_angle_rad)
+        p1 = (ex - 14 * tx - 4 * nx, ey - 14 * ty - 4 * ny)
+        p2 = (ex + 14 * tx - 4 * nx, ey + 14 * ty - 4 * ny)
+        p3 = (ex + 12 * nx, ey + 12 * ny)
+        draw.polygon([p1, p2, p3], fill=accent)
+    label_font = _font(17, bold=True)
+    num_font = _font(15, bold=True)
+    for i, (nx, ny) in enumerate(positions):
+        draw.ellipse((nx - node_r, ny - node_r, nx + node_r, ny + node_r), fill=(255, 255, 255), outline=accent, width=4)
+        badge = (nx - node_r + 8, ny - node_r + 8, nx - node_r + 40, ny - node_r + 40)
+        draw.ellipse(badge, fill=accent)
+        num = str(i + 1)
+        nw, nh = _text_size(draw, num, num_font)
+        draw.text((nx - node_r + 24 - nw / 2, ny - node_r + 24 - nh / 2), num, font=num_font, fill=(255, 255, 255))
+        lines = _wrap(draw, nodes[i], label_font, node_r * 1.6)[:4]
+        ty = ny - (len(lines) * 22) / 2
+        for line in lines:
+            lw, _ = _text_size(draw, line, label_font)
+            draw.text((nx - lw / 2, ty), line, font=label_font, fill=(15, 23, 42))
+            ty += 22
+    return img
+
+
+def _render_calendar_tracker(aid: dict[str, Any]) -> Image.Image:
+    """A colorful two-week (7x2) progress-tracker grid, one cell per day.
+
+    Distinct from the checklist rows: this is a real calendar/tracker shape
+    a reader fills in day by day, not a list of sentences.
+    """
+    days = [d for d in (aid.get("days") or []) if isinstance(d, dict)][:14]
+    width = 1400
+    cols = 7
+    cell_w = (width - 80) // cols
+    cell_h = 210  # was 168 -- daily text, duration and checkbox were cramped
+    week_gap = 44
+    header_h = 34
+    height = 128 + 2 * (header_h + cell_h) + week_gap
+    img, draw = _new_canvas(width, height)
+    _draw_title(draw, str(aid.get("title") or "Progress Tracker"), width)
+    week_accents = (_pal("accent"), _pal("secondary"))
+    day_font = _font(17, bold=True)
+    body_font = _font(14)
+    dur_font = _font(13, bold=True)
+    wk_font = _font(15, bold=True)
+    x0 = 40
+    for week in range(2):
+        accent = week_accents[week]
+        y_head = 118 + week * (header_h + cell_h + week_gap)
+        draw.text((x0, y_head), f"Week {week + 1}", font=wk_font, fill=accent)
+        y0 = y_head + header_h
+        for col in range(cols):
+            idx = week * cols + col
+            x = x0 + col * cell_w
+            draw.rounded_rectangle((x, y0, x + cell_w - 8, y0 + cell_h), 10, fill=(255, 255, 255), outline=accent, width=2)
+            draw.rounded_rectangle((x, y0, x + cell_w - 8, y0 + 30), 10, fill=accent)
+            if idx < len(days):
+                d = days[idx]
+                dnum = str(d.get("day") or idx + 1)
+                draw.text((x + 10, y0 + 5), f"Day {dnum}", font=day_font, fill=(255, 255, 255))
+                ty = y0 + 44
+                for line in _wrap(draw, _plain_cell(d.get("label") or ""), body_font, cell_w - 24)[:5]:
+                    draw.text((x + 10, ty), line, font=body_font, fill=(30, 41, 59))
+                    ty += 19
+                dur = _plain_cell(d.get("duration") or "")
+                if dur:
+                    draw.text((x + 10, y0 + cell_h - 32), dur, font=dur_font, fill=accent)
+                box = (x + cell_w - 44, y0 + cell_h - 42, x + cell_w - 16, y0 + cell_h - 14)
+                draw.rounded_rectangle(box, 4, outline=accent, width=3)
+    return img
+
+
+def render_aid_png(aid: dict[str, Any], *, scale: float = 1.0) -> Image.Image:
+    """Render one aid to a PNG. scale=2.0 re-runs the same drawing instructions
+    at double resolution (not a resize of a 1x render) -- see _ScaledDraw."""
+    if scale and scale != 1.0:
+        with _RenderScale(scale):
+            return render_aid_png(aid, scale=1.0)
     kind = str(aid.get("type") or "").lower()
     if kind == "chart":
         return _render_chart(aid)
     if kind == "comparison":
         return _render_comparison(aid)
+    if kind == "infographic":
+        return _render_highlight_grid(aid)
+    if kind == "flow":
+        return _render_practice_flow(aid)
+    if kind == "loop":
+        return _render_habit_loop(aid)
+    if kind == "calendar":
+        return _render_calendar_tracker(aid)
     if kind == "photo":
         raise ValueError("Photograph aids must use a stored image file; they are not locally invented.")
     if kind == "workflow":
@@ -1575,16 +2337,83 @@ def validate_visual_readiness(data: dict, *, html: str | None = None) -> VisualV
                 findings.append(f"Visual {vid} SHA is missing from preview HTML.")
                 continue
         resolved += 1
+
+    # Every check above asks about one file: does it exist, is it a real PNG,
+    # does its hash match, is it captioned. A book can pass all of them and
+    # still be nine copies of the same rounded box — which is what shipped.
+    # The editorial review judges the set instead of the file, so a
+    # text-box-only interior can no longer reach Visuals Approved (v1.5.0).
+    if not findings:
+        from services.ebook_visual_editorial import review_visual_set
+        from services.ebook_pexels import pexels_configured
+
+        # A book whose subject supports photography should still be judged
+        # on subject grounds for every other editorial check (variety,
+        # illustrative share, etc.) -- but the MINIMUM PHOTOGRAPH COUNT can
+        # only ever be satisfied by a real acquisition, and this Factory's
+        # own test isolation deliberately blocks that (no live Pexels calls
+        # during automated tests). Demanding real photographs the current
+        # run has no way to obtain is not a stricter editorial bar, it is an
+        # unconditional failure with no honest path to green -- found by
+        # tracing why a chapter whose commissioned photo correctly fell back
+        # to a local visual (Pexels unreachable, exactly as intended) then
+        # failed a SEPARATE check for not being a real photograph.
+        report = review_visual_set(
+            plan,
+            chapter_count=len(plan.get("chapters") or []),
+            photography_supported=_photography_supported(data) and pexels_configured(),
+            pdf_path=_designed_pdf_path(data),
+        )
+        findings.extend(report.findings)
+
     ok = not findings
     return VisualValidation(ok, findings, required_count=len(required), resolved_count=resolved)
+
+
+def _photography_supported(data: dict) -> bool:
+    """Whether this book's own subject admits photographs at all.
+
+    A book about a physical practice, a place or a person does; a pure
+    reference table might not, and must not be failed for that.
+    """
+    from services.ebook_visual_match import photography_supported_subject
+
+    plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else {}
+    title = str(data.get("title") or plan.get("title") or "")
+    body = str(data.get("content") or "")[:6000]
+    if photography_supported_subject(
+        title=title, topic=str(data.get("topic") or ""), content=body
+    ):
+        return True
+    # A book that already carries a photograph has settled the question.
+    return any(
+        str(aid.get("type") or "").lower() in {"photo", "stock photo"}
+        for chapter in (plan.get("chapters") or [])
+        for aid in (chapter.get("aids") or [])
+    )
+
+
+def _designed_pdf_path(data: dict) -> str:
+    """The PDF a customer would actually open, if one exists yet."""
+    exports = data.get("exports") if isinstance(data.get("exports"), dict) else {}
+    files = exports.get("files") if isinstance(exports.get("files"), dict) else {}
+    meta = files.get("pdf") if isinstance(files.get("pdf"), dict) else {}
+    path = str(meta.get("path") or data.get("pdf_path") or "")
+    return path if path and os.path.isfile(path) else ""
 
 
 def visuals_are_ready(data: dict, *, html: str | None = None) -> bool:
     return validate_visual_readiness(data, html=html).ok
 
 
-def _embed_preview_image(path: str, max_w: int = 720) -> tuple[str, int, int]:
-    """JPEG data-URI for PDF/HTML. Stored PNG files and SHAs stay unchanged."""
+def _embed_preview_image(path: str, max_w: int = 1600) -> tuple[str, int, int]:
+    """JPEG data-URI for PDF/HTML. Stored PNG files and SHAs stay unchanged.
+
+    max_w was 720 -- every interior visual and photograph was being
+    downsampled to 720px (~105 PPI on a printed page) before it ever reached
+    the PDF, regardless of the source file's real resolution. Raised to
+    1600px, in the 1,400-1,800px range a printed page actually needs.
+    """
     try:
         with Image.open(path) as img:
             img = img.convert("RGB")
@@ -1601,7 +2430,15 @@ def _embed_preview_image(path: str, max_w: int = 720) -> tuple[str, int, int]:
         return "", 0, 0
 
 
-def figure_html(aid: dict[str, Any]) -> str:
+def figure_html(aid: dict[str, Any], *, palette: dict[str, tuple[int, int, int]] | None = None) -> str:
+    """`palette`, when given, re-renders a generated (non-photo) diagram
+    fresh in the current design theme's colors instead of embedding the
+    stored file -- see _RenderPalette / theme_diagram_palette. It never
+    touches aid["asset_path"]/aid["sha256"]: the approved visual record (and
+    every hash test against it) is unaffected, because switching themes must
+    not force re-approving visuals and an approved photograph's hash must
+    never move. Only what this one render of the PDF actually shows changes.
+    """
     vid = _e(str(aid.get("visual_id") or ""))
     sha = _e(str(aid.get("sha256") or ""))
     cap = _e(strip_customer_source_urls(str(aid.get("caption") or aid.get("title") or "")))
@@ -1619,14 +2456,30 @@ def figure_html(aid: dict[str, Any]) -> str:
             f"{heading}{html_body}"
             f"<figcaption>{cap}</figcaption></figure>"
         )
-    path = str(aid.get("asset_path") or "")
-    if not path or not os.path.isfile(path):
-        return ""
-    uri, w, h = _embed_preview_image(path)
+    is_photo = is_photo_aid(aid)
+    uri = w = h = None
+    if palette and not is_photo:
+        try:
+            with _RenderPalette(palette):
+                img = render_aid_png(aid, scale=2.0)
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="JPEG", quality=88)
+            uri = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+            # scale=2.0 doubles pixel dimensions for print sharpness; report
+            # the same logical width/height _embed_preview_image would.
+            w, h = img.size[0] // 2, img.size[1] // 2
+        except Exception:
+            uri = None
     if not uri:
-        return ""
+        path = str(aid.get("asset_path") or "")
+        if not path or not os.path.isfile(path):
+            return ""
+        uri, w, h = _embed_preview_image(path)
+        if not uri:
+            return ""
+    photo_cls = " ebook-figure-photo" if is_photo else ""
     return (
-        f'<figure class="ebook-figure" id="{vid}" data-visual-id="{vid}" data-sha="{sha}">'
+        f'<figure class="ebook-figure{photo_cls}" id="{vid}" data-visual-id="{vid}" data-sha="{sha}">'
         f'<img src="{uri}" alt="{cap}" width="{w}" height="{h}"/>'
         f"<figcaption>{cap}</figcaption></figure>"
     )
@@ -1757,8 +2610,16 @@ def merge_teaching_tables_into_plan(visual_plan: dict | None) -> dict:
     return plan
 
 
-def insert_planned_visuals_into_html(html_doc: str, visual_plan: dict | None) -> str:
-    """Place each required visual into its chapter section. No manuscript rewrite."""
+def insert_planned_visuals_into_html(
+    html_doc: str,
+    visual_plan: dict | None,
+    *,
+    palette: dict[str, tuple[int, int, int]] | None = None,
+) -> str:
+    """Place each required visual into its chapter section. No manuscript
+    rewrite. `palette` (see figure_html) makes generated diagrams pick up the
+    current design theme's colors; omit it to embed the stored files as-is,
+    which is what every caller before design/theme existed still gets."""
     if not html_doc or not isinstance(visual_plan, dict):
         return html_doc
     from bs4 import BeautifulSoup
@@ -1787,16 +2648,26 @@ def insert_planned_visuals_into_html(html_doc: str, visual_plan: dict | None) ->
             existing = section.find(attrs={"data-visual-id": str(aid.get("visual_id") or "")})
             if existing:
                 continue
-            frag = BeautifulSoup(figure_html(aid), "html.parser")
+            frag = BeautifulSoup(figure_html(aid, palette=palette), "html.parser")
             node = frag.find("figure")
             if node is None:
                 continue
             h2 = section.find("h2")
+            # A themed chapter opener (Warm Wellness's colored band) wraps
+            # the h2 in its own div. Inserting after the bare h2 then drops
+            # the figure INSIDE that div, so the visual (and its caption)
+            # inherit the band's background/text color -- caught by
+            # rendering an actual chapter and looking at it, not by reading
+            # the CSS. Anchor on the top-level child of the section instead,
+            # so the figure always lands as a section-level sibling.
+            anchor = h2
+            if anchor is not None and anchor.parent is not section:
+                anchor = anchor.parent
             existing_figs = section.find_all("figure", class_="ebook-figure")
             if existing_figs:
                 existing_figs[-1].insert_after(node)
-            elif h2 is not None:
-                h2.insert_after(node)
+            elif anchor is not None:
+                anchor.insert_after(node)
             else:
                 section.append(node)
     restored = str(soup).replace(marker, "<pdf:nextpage />")
@@ -1984,6 +2855,54 @@ def _assert_mutable(data: dict, action: str) -> None:
     assert_content_mutation_allowed(data, action=action)
 
 
+def _carry_over_resolved_photographs(old_plan: dict | None, new_plan: dict) -> dict:
+    """Keep photographs that were already found, matched and stored.
+
+    Replanning must not mean re-downloading. When a chapter asked for a
+    photograph before and still does, and the old one is on disk and passed its
+    match, it is carried across rather than fetched again.
+    """
+    if not isinstance(old_plan, dict) or not isinstance(new_plan, dict):
+        return new_plan
+    from services.ebook_visual_match import MATCH_PASS
+
+    keep: dict[int, dict] = {}
+    for chapter in old_plan.get("chapters") or []:
+        for aid in (chapter.get("aids") or []) if isinstance(chapter, dict) else []:
+            if not isinstance(aid, dict):
+                continue
+            if str(aid.get("type") or "").lower() not in {"photo", "stock photo"}:
+                continue
+            if str(aid.get("match_status") or "") != MATCH_PASS:
+                continue
+            path = str(aid.get("asset_path") or "")
+            if not path or not os.path.isfile(path):
+                continue
+            try:
+                keep[int(aid.get("chapter_index") or 0)] = aid
+            except (TypeError, ValueError):
+                continue
+
+    if not keep:
+        return new_plan
+    for chapter in new_plan.get("chapters") or []:
+        if not isinstance(chapter, dict):
+            continue
+        for position, aid in enumerate(chapter.get("aids") or []):
+            if not isinstance(aid, dict):
+                continue
+            if str(aid.get("type") or "").lower() not in {"photo", "stock photo"}:
+                continue
+            try:
+                index = int(aid.get("chapter_index") or 0)
+            except (TypeError, ValueError):
+                continue
+            previous = keep.get(index)
+            if previous:
+                chapter["aids"][position] = dict(previous)
+    return new_plan
+
+
 def prepare_visuals_for_review(data: dict, *, preserve_downstream: bool = False) -> dict:
     """Create/reuse local visual assets and leave Visuals awaiting approval."""
     from services.ebook_project_workspace import (
@@ -2027,21 +2946,68 @@ def prepare_visuals_for_review(data: dict, *, preserve_downstream: bool = False)
     )
 
     automatic = automatic_visuals_requested(fields) or automatic_visuals_requested(data)
-    if plan_is_valid(existing) and required_aids(existing):
+    md = str(data.get("content") or data.get("ebook") or "")
+    title = str(data.get("title") or "")
+    topic = str((data.get("fields") or {}).get("topic") or data.get("topic") or "")
+
+    # Photographs used to be planned only when the customer had ticked an
+    # "automatic images" box, and even then only for subjects classified
+    # photo-LED. A book teaching a practice is not photo-led, so a 44-page
+    # mindfulness title was planned with no photograph considered at any point.
+    # Stock photography is free and already authorized; whether the book may
+    # have any is a question about the subject, not about a checkbox (v1.5.0).
+    from services.ebook_visual_match import photography_supported_subject
+
+    photographic = photography_supported_subject(title=title, topic=topic, content=md[:6000])
+
+    # Reusing a plan because it is structurally valid is the same mistake as
+    # approving a visual because the PNG opens: "it exists" is not "it is any
+    # good". A book whose plan was nine near-identical text boxes could be
+    # rebuilt forever and would come back nine near-identical text boxes,
+    # because nothing ever asked whether the plan was worth keeping.
+    reuse = bool(plan_is_valid(existing) and required_aids(existing))
+    if reuse:
+        from services.ebook_visual_editorial import review_visual_set
+        from services.ebook_pexels import pexels_configured
+
+        # Same reasoning as the identical gate in validate_visual_readiness:
+        # a real photograph count can only be demanded when a real
+        # acquisition path is actually reachable in this run.
+        verdict = review_visual_set(
+            existing,
+            chapter_count=len(existing.get("chapters") or []),
+            photography_supported=photographic and pexels_configured(),
+        )
+        if not verdict.ok:
+            reuse = False
+
+    if reuse:
         plan = existing
     else:
         set_visual_progress(data, PROGRESS_PLANNING)
-        md = str(data.get("content") or data.get("ebook") or "")
         plan = plan_content_aware_visuals(
             md,
-            title=str(data.get("title") or ""),
-            topic=str((data.get("fields") or {}).get("topic") or data.get("topic") or ""),
+            title=title,
+            topic=topic,
             research=ws.get("research_payload") if isinstance(ws.get("research_payload"), dict) else None,
-            include_photographs=automatic,
+            include_photographs=automatic or photographic,
         )
+        plan = _carry_over_resolved_photographs(existing, plan)
     pkg = _package_id(data)
     data["package_id"] = data.get("package_id") or pkg
-    if automatic:
+    # _commission_media_mix (above, inside plan_content_aware_visuals) commits
+    # a chapter to a "photo, status=missing" aid whenever the SUBJECT supports
+    # photography -- by its own design comment, "whether the book may have a
+    # photograph is a question about the subject, not about a checkbox"
+    # (v1.5.0). But resolution here was still gated on automatic alone (the
+    # checkbox), so a commitment made on subject grounds could go permanently
+    # unresolved whenever the checkbox was off -- exactly the "no existing
+    # local asset file" failure this reconciles. fill_plan_photos_automatic's
+    # own fallback chain (Pexels, then a free local visual built from the
+    # chapter's own text, then paid AI only with explicit authorization) was
+    # already safe to call on subject grounds alone; it just was not being
+    # called.
+    if automatic or photographic:
         plan = fill_plan_photos_automatic(
             plan,
             package_id=pkg,
@@ -2305,7 +3271,9 @@ def reconcile_visuals_gate(data: dict, *, html: str | None = None) -> dict:
     return data
 
 
-def collect_zip_visual_files(data: dict) -> dict[str, bytes]:
+def collect_zip_visual_files(
+    data: dict, *, palette: dict[str, tuple[int, int, int]] | None = None
+) -> dict[str, bytes]:
     files: dict[str, bytes] = {}
     plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else None
     if plan:
@@ -2326,6 +3294,23 @@ def collect_zip_visual_files(data: dict) -> dict[str, bytes]:
     for aid in required_aids(plan):
         path = str(aid.get("asset_path") or "")
         vid = str(aid.get("visual_id") or "visual")
+        # Keep the ZIP's own images consistent with what the PDF actually
+        # shows: a generated diagram re-rendered in the current theme's
+        # colors for the PDF (see figure_html) should not ship as the old
+        # fixed-teal file in the companion ZIP. Never applies to photographs
+        # or to a caller with no palette (e.g. the pre-design "prepare
+        # visuals" package, or a test asserting the stored bytes verbatim),
+        # both of which fall straight through to the stored file below.
+        if palette and not is_photo_aid(aid):
+            try:
+                with _RenderPalette(palette):
+                    img = render_aid_png(aid, scale=2.0)
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                files[f"visuals/{vid}.png"] = buf.getvalue()
+                continue
+            except Exception:
+                pass
         if path and os.path.isfile(path):
             files[f"visuals/{vid}.png"] = Path(path).read_bytes()
     return files

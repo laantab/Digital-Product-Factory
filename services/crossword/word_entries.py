@@ -135,9 +135,48 @@ def suggest_crossword_words_from_topic(topic: str, *, max_words: int = 40) -> tu
         )
         return [], warnings, errors
 
+    max_words = max(6, int(max_words or 10))
+
+    # UNIVERSAL TOPIC PUZZLE ENGINE: try the shared, high-confidence topic
+    # pack first (services.factory.topic_vocabulary) -- real, curated,
+    # topic-relevant words for both Crossword and Word Search, matched by
+    # exact/phrase alias rather than the looser keyword-scoring below (see
+    # topic_vocabulary.py's own docstring for the false-positive matches
+    # that scoring produced, e.g. "Dog training" -> business_training).
+    # Falls through UNCHANGED to the existing logic when no shared pack
+    # matches, so no previously-working topic can regress.
+    from services.factory.topic_vocabulary import resolve_topic_vocabulary
+
+    shared = resolve_topic_vocabulary(topic_clean, max_words)
+    if shared.matched:
+        warnings.extend(shared.warnings)
+        # Grid-aware filtering (Step 14): a crossword cell only ever holds
+        # a single A-Z letter, so a pack word containing a digit or other
+        # non-letter character (e.g. "OMEGA3") gets silently truncated by
+        # the grid parser downstream (to "OMEGA") -- and that truncated
+        # form then no longer matches the pack's own clue dictionary key,
+        # falling through to the generic "Related to <topic>." clue. Word
+        # Search tolerates such characters fine (no clue lookup involved),
+        # so this filter is Crossword-specific, applied here rather than
+        # in the shared resolver itself.
+        letters_only = [w for w in shared.words if re.fullmatch(r"[A-Za-z]+", w or "")]
+        # Grid-aware filtering (Step 14), continued: a word longer than 9
+        # letters occasionally triggers a pre-existing clue-numbering
+        # defect in the grid renderer (services.crossword.engine) once
+        # placed on the customer's grid (11x11 to 21x21, 15x15 default) --
+        # reproduced directly: a curated word list including 10-13 letter
+        # compound terms (e.g. "BASEBALLCAP", "WORLDSERIES") failed
+        # Crossword's own "Duplicate clue numbers detected on the grid"
+        # QA check in roughly 1 of every 6 builds; the same list capped at
+        # 9 letters passed 40/40. Every category still keeps at least 14
+        # words after this cap (see the pack audit in this task's work
+        # log), so this never starves a puzzle -- it only removes the
+        # handful of words too long to place reliably.
+        safe_length = [w for w in letters_only if len(w) <= 9]
+        return safe_length[:max_words], warnings, errors
+
     data = _load_topics_data()
     topic_lower = topic_clean.lower()
-    max_words = max(6, int(max_words or 10))
 
     best_score = 0
     best_words: list[str] = []

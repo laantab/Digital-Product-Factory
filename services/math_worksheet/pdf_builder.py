@@ -33,7 +33,15 @@ class MathWorksheetPdfRequest:
     include_answer_key: bool = True
     include_challenge: bool = False
     output_type: str = "book"
-    include_cover: bool = True
+    # Default False, not True: before the Include Cover repair this field
+    # was completely inert (nothing read it, so no caller could ever get a
+    # cover regardless of this default). Now that it is wired through to
+    # the renderer, every EXISTING direct construction of this dataclass
+    # (tests, and any other low-level caller) must keep getting no cover
+    # unless it explicitly asks for one -- only the customer-facing path
+    # (services.product._math_worksheet_pdf_payload) computes and passes
+    # the real resolved value explicitly, regardless of this default.
+    include_cover: bool = False
     cover_design: dict | None = None
     package_id: str = ""
     seed: int | None = None
@@ -84,6 +92,7 @@ def build_math_worksheet_pdf(request: MathWorksheetPdfRequest) -> MathWorksheetP
     pdf_bytes, layout = build_math_worksheet_pdf_bytes(
         worksheet,
         include_answer_key=request.include_answer_key,
+        include_cover=request.include_cover,
         cover_image_path=cover_img,
     )
 

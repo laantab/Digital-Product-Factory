@@ -218,9 +218,16 @@ def test_the_checker_never_edits_anything():
 
 
 def test_the_checker_runs_and_passes_on_the_current_tree():
+    # stdin=DEVNULL: see the identical comment in
+    # test_release_foundation.py::test_dotenv_does_not_override_the_
+    # environment_in_test_mode -- pytest's captured stdin has no real OS
+    # handle on Windows, and subprocess.run's default inheritance tries to
+    # duplicate it regardless, raising WinError 6. Proven with `pytest -s`
+    # (capture off): passes every time; with capture on: fails every time.
     result = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "check_version.py"), "--working"],
         cwd=str(ROOT), capture_output=True, text=True, timeout=120,
+        stdin=subprocess.DEVNULL,
     )
     assert result.returncode == 0, result.stdout + result.stderr
 

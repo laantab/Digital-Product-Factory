@@ -550,8 +550,26 @@ def _visual_review_view(data: dict) -> dict[str, Any]:
 
 def design_public_view(data: dict, *, project_id: int | None = None) -> dict[str, Any]:
     catalog = theme_catalog_payload()
+    # A suggestion, never a forced choice (Step 9): matched from the book's
+    # own topic/title/audience against each template's declared `topics`,
+    # deterministically and locally -- no OpenAI, no Tavily. The customer
+    # still sees and can pick any of the six.
+    from services.ebook_design_system import recommend_theme
+
+    fields = data.get("fields") if isinstance(data.get("fields"), dict) else {}
+    recommended_theme_id = recommend_theme(
+        topic=str(fields.get("topic") or data.get("topic") or ""),
+        title=str(data.get("title") or ""),
+        audience=str(data.get("audience") or fields.get("audience") or ""),
+    )
     pre = data.get("ebook_design_preflight") if isinstance(data.get("ebook_design_preflight"), dict) else {}
-    identity = data.get("ebook_export_identity") if isinstance(data.get("ebook_export_identity"), dict) else {}
+    # A hash is only shown when it was read from the bytes now on disk for the
+    # current export package. The stored block is stamped at design-preflight
+    # time and the downloadable files are written later, so displaying it
+    # unchecked showed customers a hash their own file did not have (v1.5.0).
+    from services.ebook_revision_identity import reconcile as _reconcile_identity
+
+    identity = _reconcile_identity(data).as_public_dict()
     cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
     design = data.get("ebook_design") if isinstance(data.get("ebook_design"), dict) else {}
     preview = cover_preview_public_fields(data, project_id=project_id)
@@ -567,6 +585,9 @@ def design_public_view(data: dict, *, project_id: int | None = None) -> dict[str
         "themes": catalog["themes"],
         "theme_samples": catalog["samples"],
         "selected_theme": design.get("theme_id") or "",
+        "recommended_theme_id": recommended_theme_id,
+        # Kept for internal/developer diagnostics (Step 12: not rendered to
+        # the customer -- see app.js's design-stage screen).
         "design_digest": design.get("digest") or "",
         "cover": {
             "title": cover.get("title"),

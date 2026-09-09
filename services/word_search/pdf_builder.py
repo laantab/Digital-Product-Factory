@@ -283,7 +283,28 @@ def build_word_search_pdf(request: WordSearchPdfRequest) -> WordSearchPdfResult:
             )
             return result
 
-    pdf_bytes, layout, book_qa = _build_book_with_minimax_renderer(request, puzzles)
+    # WORD SEARCH ADAPTIVE SIZING: build_word_search_puzzles() (errors ==
+    # []) is the single source of truth for what the book was ACTUALLY,
+    # legitimately built as -- including a puzzle_count/words_per_puzzle
+    # deliberately reduced from the original request when there were not
+    # enough usable words (see services/word_search/book.py). The QA gate
+    # below still validates against request.number_of_puzzles /
+    # words_per_puzzle unconditionally, so an intentionally-shrunk (and
+    # already warned-about) book must be validated against what was
+    # actually built, not the original request -- otherwise a legitimate
+    # smaller book fails QA as if it were a defect.
+    qa_request = request
+    if int(request.number_of_puzzles or 0) and len(puzzles) != int(request.number_of_puzzles):
+        from dataclasses import replace
+
+        actual_words_per_puzzle = min((len(p.word_bank) for p in puzzles), default=0) or None
+        qa_request = replace(
+            request,
+            number_of_puzzles=len(puzzles),
+            words_per_puzzle=actual_words_per_puzzle,
+        )
+
+    pdf_bytes, layout, book_qa = _build_book_with_minimax_renderer(qa_request, puzzles)
     result.qa_report = book_qa
     if not book_qa.passed or not pdf_bytes:
         result.errors.extend(book_qa.errors)

@@ -114,6 +114,14 @@ def test_dotenv_does_not_override_the_environment_in_test_mode():
     env["TAVILY_API_KEY"] = ""
     env["PEXELS_API_KEY"] = ""
     # A fresh interpreter, because app.py resolves this once at import time.
+    # stdin=DEVNULL: under pytest's default output capture on Windows,
+    # sys.stdin is replaced with a captured-output object that has no real
+    # OS handle, and subprocess.run's default handle-inheritance tries to
+    # duplicate it anyway -- OSError: [WinError 6] The handle is invalid.
+    # Proven by re-running this exact test with `pytest -s` (capture off):
+    # it passes every time capture is off and fails every time it is on,
+    # regardless of anything this test or app.py does. Giving the child a
+    # real, always-valid stdin sidesteps the duplication entirely.
     proc = subprocess.run(
         [sys.executable, "-c",
          "import app, os;"
@@ -121,6 +129,7 @@ def test_dotenv_does_not_override_the_environment_in_test_mode():
          " repr(os.environ.get('TAVILY_API_KEY')),"
          " repr(os.environ.get('PEXELS_API_KEY')))"],
         cwd=str(root), env=env, capture_output=True, text=True, timeout=180,
+        stdin=subprocess.DEVNULL,
     )
     assert proc.returncode == 0, f"importing app failed: {proc.stderr[-800:]}"
     assert proc.stdout.strip().endswith("'' '' ''"), (

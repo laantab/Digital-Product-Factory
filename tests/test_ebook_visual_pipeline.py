@@ -110,6 +110,60 @@ class EbookVisualPipelineTests(unittest.TestCase):
         types = {a["type"] for a in aids}
         self.assertTrue(types & {"chart", "comparison", "workflow", "timeline", "checklist"})
 
+    def test_commissioned_photo_captions_have_no_markdown_leakage(self):
+        """Project 351 defect: a commissioned photo's caption is the chapter's
+        own first sentence, taken from chapter_body -- which always starts
+        with that chapter's own "## Chapter Title" line. Without stripping
+        the heading first, a real 47-page customer PDF shipped two chapter
+        openers reading "## Mindfulness Made Simple Ask ten people what
+        mindfulness is..." -- literal Markdown syntax visible on the page.
+        _commission_media_mix only fires when Pexels is actually configured,
+        which the rest of this suite deliberately never is (test isolation
+        blanks the key), so this is the one place that condition is faked
+        on purpose to reach the code the human review caught failing.
+        """
+        md = build_event_photo_strong_manuscript()
+        with patch("services.ebook_pexels.pexels_configured", return_value=True):
+            plan = plan_content_aware_visuals(
+                md, title="From First Booking to On-Site Prints", include_photographs=True
+            )
+        aids = required_aids(plan)
+        photo_aids = [a for a in aids if a.get("type") == "photo"]
+        self.assertTrue(photo_aids, "fixture must actually commission at least one photo")
+        for aid in photo_aids:
+            caption = str(aid.get("caption") or "")
+            self.assertNotIn("#", caption, f"{aid.get('visual_id')} caption leaks Markdown: {caption!r}")
+            title = str(aid.get("chapter") or "")
+            self.assertFalse(
+                caption.lower().startswith(title.lower()),
+                f"{aid.get('visual_id')} caption still starts with the chapter title verbatim: {caption!r}",
+            )
+
+    def test_first_sentence_excerpt_strips_leading_chapter_heading(self):
+        from services.ebook_visual_pipeline import _first_sentence_excerpt
+
+        # Shape produced by a fresh, newline-preserving chapter body.
+        multiline = "## Mindfulness Made Simple\n\nAsk ten people what mindfulness is. It varies."
+        self.assertEqual(
+            _first_sentence_excerpt(multiline, fallback="Mindfulness Made Simple"),
+            "Ask ten people what mindfulness is",
+        )
+        # Shape produced once whitespace has already been flattened to one
+        # line elsewhere (no newline between the heading and the prose) --
+        # the exact stored shape found on Project 351's live visual_plan.
+        flattened = "## Mindfulness Made Simple Ask ten people what mindfulness is. It varies."
+        self.assertEqual(
+            _first_sentence_excerpt(flattened, fallback="Mindfulness Made Simple"),
+            "Ask ten people what mindfulness is",
+        )
+        # No heading at all: nothing to strip, first sentence as-is.
+        self.assertEqual(
+            _first_sentence_excerpt("Plain prose. More text.", fallback="Anything"),
+            "Plain prose",
+        )
+        # Empty body: falls back to the chapter title, never raises.
+        self.assertEqual(_first_sentence_excerpt("", fallback="Chapter Title"), "Chapter Title")
+
     def test_empty_manifest_cannot_approve(self):
         data = _manuscript_ready()
         data["visual_plan"] = {}
@@ -200,7 +254,22 @@ class EbookVisualPipelineTests(unittest.TestCase):
             self.assertEqual(zip_shas, shas)
             for aid in required_aids(plan):
                 blob = zf.read(f"visuals/{aid['visual_id']}.png")
-                self.assertEqual(hashlib.sha256(blob).hexdigest(), aid["sha256"])
+                from services.ebook_visual_pipeline import is_photo_aid
+
+                if is_photo_aid(aid):
+                    # An approved photograph is frozen: the ZIP must ship the
+                    # exact bytes that were approved, regardless of theme.
+                    self.assertEqual(hashlib.sha256(blob).hexdigest(), aid["sha256"])
+                else:
+                    # A generated diagram (Template System V1, Step 7): the
+                    # ZIP's own image is re-rendered in the selected theme's
+                    # colors for PDF/ZIP consistency, so it legitimately
+                    # differs from the approved record's stored hash once a
+                    # non-default theme (here, Modern Business) is selected.
+                    # The approved record itself (aid["sha256"] on the
+                    # in-memory plan) is untouched -- checked above via
+                    # zip_shas == shas -- only the shipped bytes differ.
+                    self.assertTrue(blob.startswith(b"\x89PNG"), "still a real PNG")
             html_zip = zf.read("ebook.html").decode("utf-8")
             for vid, sha in shas.items():
                 self.assertIn(vid, html_zip)
@@ -241,7 +310,11 @@ class EbookVisualPipelineTests(unittest.TestCase):
     def test_replacement_kinds_photo_chart_workflow_timeline(self):
         pkg = f"ebook-vis-kinds-{uuid.uuid4().hex[:12]}"
         photo_bytes = io.BytesIO()
-        img = PILImage.new("RGB", (900, 620), (40, 70, 90))
+        # 1200x900, not the original 900x620: review_visual_set's resolution
+        # floor for a photograph (MIN_PHOTO_PIXELS, v1.5.0) postdates this
+        # test's fixture image and rejects anything under 1000x700 as
+        # printing soft at page width.
+        img = PILImage.new("RGB", (1200, 900), (40, 70, 90))
         draw = PILImageDraw.Draw(img)
         draw.rectangle((40, 40, 500, 400), fill=(200, 150, 80))
         draw.ellipse((200, 120, 780, 560), fill=(20, 30, 40))
@@ -441,8 +514,14 @@ class EbookVisualPipelineTests(unittest.TestCase):
         self.assertTrue(os.path.isfile(aid["asset_path"]))
         self.assertEqual(int(aid["width"]), 1400)
         self.assertEqual(int(aid["height"]), 900)
-        report = validate_visual_readiness({"visual_plan": materialized})
-        self.assertTrue(report.ok, report.findings)
+        # No book-level editorial assertion here (review_visual_set, v1.5.0):
+        # this plan is deliberately one workflow aid in one chapter, to keep
+        # this test's assertions above about materialize_visual_plan's own
+        # behaviour (layout/items/dims survive it) -- a single-visual "book"
+        # can never satisfy a whole-book variety/illustrative-share floor,
+        # by construction, whatever that floor is. test_replacement_kinds_
+        # photo_chart_workflow_timeline is the editorial-review coverage for
+        # materialized plans; this one is not trying to be a real book.
 
 
 class Live4249VisualStopTests(unittest.TestCase):

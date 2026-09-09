@@ -852,7 +852,13 @@ def build_crossword_book_pdf_bytes(
 
     pdf.setTitle(ascii_pdf_text(product_title) or "Crossword Puzzle Book")
     pdf.setAuthor("Digital Product Factory")
-    pdf.setSubject(ascii_pdf_text(subtitle) or f"Crossword Puzzle Book - {len(puzzles)} puzzles")
+    # This fallback was unreachable before the Include Cover repair (a Full
+    # Book's cover -- and therefore its subtitle -- used to be built
+    # unconditionally). It is reachable now whenever a customer selects
+    # Include Cover = No, so its phrasing must match the same
+    # "N Crossword Puzzles" needle services.product.crossword_full_book_pdf_is_valid
+    # checks the subject against, not a differently-worded fallback.
+    pdf.setSubject(ascii_pdf_text(subtitle) or f"{len(puzzles)} Crossword Puzzles")
     pdf.setCreator("Digital Product Factory - Crossword Generator")
 
     if cover_design:

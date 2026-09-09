@@ -5,6 +5,62 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.5.0 — 2026-09-06
+
+**Books are illustrated now, not just supplied with image files — and the
+hashes on your screen belong to the file you would actually download.**
+
+### What changed
+
+- **The Factory decides what a book should look like before it fills in the
+  pictures.** Until now each chapter was asked on its own "what does your text
+  support?", and prose can always be cut into a list, so every chapter answered
+  "a list". A finished 44-page book came out with nine pictures, eight of them
+  the same rounded box of bullet points, and passed every check. The media mix
+  is now chosen once for the whole book: chapters whose box carried the least
+  give up their slot to a photograph, spread through the book rather than
+  bunched at the front. Chapters holding a real plan or comparison keep it.
+- **A new editorial review judges the set of pictures, not one file at a
+  time.** It refuses a book whose pictures are all text boxes, requires more
+  than one kind, stops any single kind from dominating, requires photographs
+  where the subject supports them, and rejects two pictures that share a
+  design. It is a fixed set of rules — no model is asked for an opinion, and
+  nothing is invented to satisfy it.
+- **Pictures must be inside the book.** The Factory used to confirm that image
+  files existed in the export folder and the ZIP. It now opens the finished PDF
+  and counts the images that are actually on its pages, which is what a
+  customer opens.
+
+### What was fixed
+
+- **The Export panel could show a PDF and ZIP hash from an earlier version of
+  the book.** Those hashes were recorded when the design check last ran, while
+  the downloadable files are written later by a separate step that saved its
+  own hash somewhere else and never updated the display. A hash you cannot
+  reproduce is worse than no hash, so a hash is now shown only when it was read
+  from the file currently on disk; otherwise the panel says it is not yet
+  verified, and packaging records the file it just wrote.
+- **A picture could be approved for being a valid file.** Existence, size,
+  hash and caption all passed while the book was unusable. Those checks remain;
+  they are no longer the whole standard.
+- **A chart with research-sounding figures and no source is refused**, and a
+  diagram with fewer than three steps is not accepted as an explanation.
+- **Low-resolution images are caught before print**, with a higher bar for
+  photographs than for graphics the Factory draws itself.
+
+### Do the steps change for you?
+
+No. Build as before. You will see more photographs and more variety, and a
+book that would previously have been approved with nine near-identical boxes
+now stops and asks for better pictures instead of shipping.
+
+### Release gate
+
+Run once before release with a temporary database; results recorded with the
+release commit.
+
+---
+
 ## 1.4.1 — 2026-09-04
 
 **Books now carry page numbers, a matching contents page, a disclaimer about

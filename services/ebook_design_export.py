@@ -5,6 +5,7 @@ import io as _io
 import hashlib
 import json
 import os
+import re
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,7 @@ from services.ebook_design_preflight import (
     verify_export_bytes,
 )
 from services.ebook_design_spec import EbookDesign, build_ebook_design, design_is_stale
-from services.ebook_design_system import list_professional_themes, theme_sample_html
+from services.ebook_design_system import get_theme, list_professional_themes, theme_sample_html
 from services.ebook_manuscript_engine import QUALITY_PASS, validate_manuscript_quality
 
 FIXTURE_EXPORT_DIRNAME = "ebook_design_fixture_pass_b"
@@ -168,6 +169,49 @@ def _html_to_pdf(html_doc: str, *, title: str, author: str, subtitle: str = "") 
     )
 
 
+def _add_chapter_bookmarks(pdf_bytes: bytes, chapter_titles: list[str]) -> bytes:
+    """PDF viewer navigation panel: one bookmark per chapter, plus Contents.
+
+    Generic -- runs for every theme, not just Warm Wellness. Finds each
+    chapter's real page in THIS exact file (not the cover-offset-corrected
+    numbers used for the printed page footer) and writes a real outline
+    entry there. Never touches page content, so it cannot change the
+    manuscript digest or any preflight identity computed from pdf_bytes
+    before this step; it runs after those, and preview_digest is taken from
+    its output, so the two never disagree.
+    """
+    if not pdf_bytes or not chapter_titles:
+        return pdf_bytes
+    try:
+        from pypdf import PdfReader, PdfWriter
+
+        raw_pages = find_designed_chapter_pages(pdf_bytes, chapter_titles)
+        reader = PdfReader(_io.BytesIO(pdf_bytes))
+        writer = PdfWriter()
+        writer.append(reader)
+        toc_page = None
+        for i in range(min(6, len(reader.pages))):
+            text = reader.pages[i].extract_text() or ""
+            if "table of contents" in text.lower() or re.search(r"(?m)^\s*contents\s*$", text, re.I):
+                toc_page = i
+                break
+        if toc_page is not None:
+            writer.add_outline_item("Contents", toc_page)
+        for title in chapter_titles:
+            page_1based = raw_pages.get(title)
+            if not page_1based:
+                continue
+            idx = max(0, min(len(reader.pages) - 1, int(page_1based) - 1))
+            writer.add_outline_item(title, idx)
+        buf = _io.BytesIO()
+        writer.write(buf)
+        return buf.getvalue()
+    except Exception:  # noqa: BLE001
+        # Bookmarks are a navigation nicety, not content. A failure here must
+        # never block a render the rest of the pipeline would otherwise ship.
+        return pdf_bytes
+
+
 def render_designed_bundle(data: dict, *, output_dir: str | Path | None = None) -> dict[str, Any]:
     """Render preview HTML + PDF + ZIP for a quality-PASS manuscript and bound design."""
     from services.ebook_project_workspace import manuscript_digest
@@ -262,6 +306,7 @@ def render_designed_bundle(data: dict, *, output_dir: str | Path | None = None) 
         numbered_pdf = _merge(numbered_html)
         html_doc = numbered_html
         pdf_bytes = numbered_pdf
+    pdf_bytes = _add_chapter_bookmarks(pdf_bytes, chapter_titles)
     preview_digest = _sha_bytes(pdf_bytes)
 
     manifest = {
@@ -282,9 +327,11 @@ def render_designed_bundle(data: dict, *, output_dir: str | Path | None = None) 
         "ebook.html": html_doc.encode("utf-8"),
         "manifest.json": json.dumps(manifest, indent=2).encode("utf-8"),
     }
-    from services.ebook_visual_pipeline import collect_zip_visual_files
+    from services.ebook_visual_pipeline import collect_zip_visual_files, theme_diagram_palette
 
-    zip_buf_files.update(collect_zip_visual_files(data))
+    zip_buf_files.update(
+        collect_zip_visual_files(data, palette=theme_diagram_palette(get_theme(design.theme_id)))
+    )
     import io
 
     zbuf = io.BytesIO()

@@ -13,7 +13,7 @@ import markdown as _markdown
 from bs4 import BeautifulSoup
 
 from services.ebook_design_spec import EbookDesign, is_unnumbered_back_matter_title
-from services.ebook_design_system import LAYOUT_GUARDS, theme_css
+from services.ebook_design_system import LAYOUT_GUARDS, get_theme, theme_css
 from services.ebook_package import _split_chapters, _sanitize_html, fix_inline_hyphen_lists_html, _MD_TOC_LINE_RE
 
 # Visual/todo tokens: [photo], [photo: cat], [insert image] — not [photographylaunchpad.com].
@@ -930,8 +930,16 @@ def render_designed_ebook_html(
         body = _keep_chapter_last_block(body)
         parts.append("<pdf:nextpage />")
         parts.append(f'<section class="chapter-page" id="chapter-{i}">')
+        # xhtml2pdf only registers an internal link target from <a name="...">
+        # (its own tags.py: "# XXX Also support attr.id ?"), never from a
+        # section's id= -- so the TOC's href="#chapter-N" has never resolved
+        # to anything. This empty anchor is what makes it a real, clickable
+        # destination.
+        parts.append(f'<a name="chapter-{i}"></a>')
+        parts.append('<div class="chapter-opener-block">')
         parts.append(f'<p class="chapter-num">Chapter {i}</p>')
         parts.append(f'<h2 class="chapter-title">{_e(ctitle)}</h2>')
+        parts.append("</div>")
         parts.append(body)
         parts.append("</section>")
 
@@ -955,9 +963,14 @@ def render_designed_ebook_html(
     html_doc = re.sub(r"letter-spacing\s*:\s*[^;\"']+;?", "", html_doc, flags=re.I)
     html_doc = collapse_consecutive_page_breaks(html_doc)
     if visual_plan:
-        from services.ebook_visual_pipeline import insert_planned_visuals_into_html
+        from services.ebook_visual_pipeline import (
+            insert_planned_visuals_into_html,
+            theme_diagram_palette,
+        )
 
-        html_doc = insert_planned_visuals_into_html(html_doc, visual_plan)
+        html_doc = insert_planned_visuals_into_html(
+            html_doc, visual_plan, palette=theme_diagram_palette(get_theme(design.theme_id))
+        )
     return html_doc
 
 

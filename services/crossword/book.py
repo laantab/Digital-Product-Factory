@@ -122,12 +122,62 @@ def build_crossword_puzzles(
                     "Please correct the theme or provide a custom word list."
                 )
         else:
+            # UNIVERSAL TOPIC PUZZLE ENGINE — adaptive sizing (2026-09-08):
+            # a real topic pack (e.g. 30-40 curated words) is plenty for a
+            # single puzzle or a small book, but was still being split
+            # across whatever puzzle_count the customer's dropdown asked
+            # for (up to 20), producing chunks too thin to place -- every
+            # puzzle failed "at least 4 answers required", and the whole
+            # book was rejected even though the topic itself was perfectly
+            # valid. Mirrors the identical fix already shipped for Word
+            # Search (services/word_search/book.py): shrink the puzzle
+            # count to what the available pool can actually support,
+            # rather than fail the entire book. Never fabricates or
+            # duplicates words -- only ever builds fewer, fuller puzzles
+            # from the same real pool.
+            # Only shrink when the pool genuinely can't support the hard
+            # placement floor (4 words/puzzle -- the same floor the QA
+            # error "at least 4 answers required" already enforces
+            # elsewhere). Using an aspirational 8-word bar here over-
+            # shrank topics that had comfortably-workable pools (e.g. an
+            # 84-word pack over 12 puzzles averages 7/puzzle -- plenty --
+            # but was previously shrunk anyway because 7 < 8).
+            #
+            # When shrinking IS needed, size the result using a more
+            # comfortable per-puzzle target (up to 8 words), not the bare
+            # 4-word floor -- a chunk sized exactly at the floor demands
+            # 100% successful placement (every word must interlock) with
+            # no room for the few words that normally fail to fit a real
+            # 15x15 grid, which made small pools flaky (occasionally
+            # passing, occasionally failing) rather than reliably
+            # succeeding on the first attempt. Fewer, fuller puzzles are
+            # worth more than more, thinner ones here.
+            pool_word_count = len([w for w in pool_str.split("\n") if w.strip()])
+            floor = min(4, per_puzzle)
+            comfortable = min(8, per_puzzle)
+            if puzzle_count > 1 and pool_word_count < puzzle_count * floor:
+                adaptive_count = max(1, pool_word_count // max(1, comfortable))
+                if adaptive_count < puzzle_count:
+                    warnings.append(
+                        f'Only {pool_word_count} topic-relevant words were available for "{theme_label}" -- '
+                        f"built {adaptive_count} of the requested {puzzle_count} puzzles "
+                        f"instead of leaving the book incomplete."
+                    )
+                    puzzle_count = adaptive_count
+                    candidates_per = max(floor, pool_word_count // puzzle_count)
+
             # Split the pool ONCE into puzzle_count chunks (round-robin distribution).
             chunk_strs = _split_entries(pool_str, puzzle_count, words_per_puzzle=candidates_per)
-            min_placed = min(8, per_puzzle)
 
             for idx, chunk in enumerate(chunk_strs, start=1):
                 chunk = chunk.strip()
+                # Require placing most of THIS chunk's actual words, never
+                # more than it could mathematically supply -- a thin chunk
+                # (small pool spread over many puzzles) must not be held
+                # to the same 8-word bar as a chunk drawn from an ample
+                # pool. Still floors at 4, the shared hard minimum.
+                chunk_word_count = len([w for w in chunk.split("\n") if w.strip()]) if chunk else 0
+                min_placed = min(8, per_puzzle, max(4, chunk_word_count - 2))
                 if not chunk:
                     errors.append(
                         f"Puzzle {idx}: not enough topic-relevant words remained in the resolved pool."

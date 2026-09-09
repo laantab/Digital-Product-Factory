@@ -158,6 +158,14 @@ def simple_clue(answer: str, theme: str = "") -> str:
     """Deterministic real clue — no placeholder phrases, no OpenAI.
 
     Priority:
+      0. Clue from the shared topic-vocabulary pack (services.factory.
+         topic_vocabulary), when the theme matches one of its high-
+         confidence category aliases — the same curated clue text
+         Crossword's word list itself came from for that topic (see
+         UNIVERSAL TOPIC PUZZLE ENGINE in word_entries.py). This is what
+         keeps a topic like "American Automobiles" from ever falling
+         through to the generic "Related to X." placeholder that used to
+         produce duplicate clues across every word in the puzzle.
       1. Clue from the theme-matched crossword fallback pack (e.g. gold_rush),
          so Gold Rush words never receive generic geography/nature clues.
       2. Clue from the theme-matched pack (crossword_clues.json).
@@ -165,8 +173,16 @@ def simple_clue(answer: str, theme: str = "") -> str:
       4. Rule-based clue builder — natural description, never placeholders.
     """
     from services.crossword.crossword_fallback import _normalize_theme
+    from services.factory.topic_vocabulary import get_category_clues, resolve_topic_category
 
     answer_key = re.sub(r"[^A-Z0-9]", "", str(answer or "").strip().upper())
+
+    shared_category, _confidence = resolve_topic_category(theme)
+    if shared_category:
+        shared_clue = get_category_clues(shared_category).get(answer_key)
+        if shared_clue:
+            return shared_clue
+
     theme_pack = _normalize_theme(theme)
     if theme_pack and theme_pack in _ALL_PACKS:
         for word, clue in _ALL_PACKS[theme_pack]:
