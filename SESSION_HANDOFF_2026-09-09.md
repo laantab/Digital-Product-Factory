@@ -41,9 +41,14 @@
    `main` solved some of the same problems differently on Sep 4 ("Add ebook
    pre-manuscript actions", "Make finished ebooks visible in Saved Projects"). Go
    feature by feature, with the gate, not by file copy. Nothing is lost either way.
-2. **Which GitHub repo is real?** `Desktop\Factory Backup\BACKUP-FACTORY-TO-GITHUB.bat`
-   uploads zips to `laantab/The-Digital-Product-Factory`; this checkout pushes to
-   `laantab/Digital-Product-Factory`. Pick one and retire the other script.
+2. **Which GitHub repo is real? Decided 2026-09-09: `laantab/Digital-Product-Factory`.**
+   The other one, `laantab/The-Digital-Product-Factory`, holds a single commit from
+   2026-08-22 (a zip of the old Desktop "The Factory" scratch folder plus a
+   `claude-session-toolkit`), no history, nothing newer, and everything in it still
+   exists locally in `Desktop\Factory Backup\factory-repo`. The two scripts that pushed
+   to it are renamed `*.RETIRED-2026-09-09` with a READ-ME-FIRST.txt beside them.
+   **Owner action:** delete `The-Digital-Product-Factory` on GitHub (Settings, Danger
+   Zone, Delete this repository). Claude will not delete a repository.
 3. **Restart the 5055 server** if it has been running since before this morning's
    vocabulary edit; it caches the vocabulary file at startup.
 4. Still open from earlier handoffs: rotate Tavily and Pexels keys; real user accounts
