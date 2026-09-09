@@ -47,8 +47,8 @@
    `claude-session-toolkit`), no history, nothing newer, and everything in it still
    exists locally in `Desktop\Factory Backup\factory-repo`. The two scripts that pushed
    to it are renamed `*.RETIRED-2026-09-09` with a READ-ME-FIRST.txt beside them.
-   **Owner action:** delete `The-Digital-Product-Factory` on GitHub (Settings, Danger
-   Zone, Delete this repository). Claude will not delete a repository.
+   **Done:** the owner deleted `The-Digital-Product-Factory` on GitHub on 2026-09-09
+   (verified: HTTP 404, "Repository not found"). Only one repo exists now.
 3. **Restart the 5055 server** if it has been running since before this morning's
    vocabulary edit; it caches the vocabulary file at startup.
 4. Still open from earlier handoffs: rotate Tavily and Pexels keys; real user accounts
