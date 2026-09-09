@@ -39,6 +39,20 @@ Full Windows release gate (run before any release, uses a temporary database):
 `python scripts\run_factory_tests.py`. New test files must be added to
 `tests\acceptance_manifest.json` or the gate will not run them.
 
+## Owner's standing orders (2026-09-09)
+
+- Do not delete any repositories.
+- Do not move the live Factory.
+- Do not overwrite the live Factory with an older Desktop or OneDrive copy.
+- Do not run old repair scripts unless the current handoff says they are needed.
+- Do not merge or delete a rescued branch without reviewing it and reporting first.
+- Preservation rule: protect the working Factory first. When uncertain: inspect first,
+  back up second, make the smallest safe change, test it.
+- The goal: a beginner-friendly, one-click system for high-quality, sellable digital
+  products. Idea → Market Research → Title → Outline → Manuscript → Visuals → Cover →
+  Design → Preview → Editor-in-Chief Quality Check → Preflight → Export →
+  Ready-to-Sell PDF + ZIP. Easy for beginners, Designrr-level quality.
+
 ## Rules that are not optional
 
 - `Documents\Product-Pipeline\Factory Control Center\FACTORY_STABILITY_RULES.md` is
