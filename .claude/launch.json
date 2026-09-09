@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "factory-5077",
+      "runtimeExecutable": "C:\\Users\\user\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+      "runtimeArgs": ["-c", "import os; os.environ.setdefault('PORT','5077'); from app import app; app.run(host='127.0.0.1', port=5077, debug=False, use_reloader=False, threaded=True)"],
+      "port": 5077
+    },
+    {
       "name": "digital-product-factory",
       "runtimeExecutable": "python",
       "runtimeArgs": ["app.py"],
