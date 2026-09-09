@@ -1,5 +1,7 @@
 {
   "tests": [
+    "tests/test_warm_wellness_template.py",
+    "tests/test_template_system_v1.py",
     "tests/test_db_path_isolation.py",
     "tests/test_no_hardcoded_production_paths.py",
     "tests/test_product_qa_agent.py",
@@ -10,12 +12,26 @@
     "tests/test_word_search_stability.py",
     "tests/test_crossword_controlled_repair.py",
     "tests/test_crossword_typography_repair.py",
+    "tests/test_crossword_customer_options_restored.py",
+    "tests/test_crossword_cover_selection_repair.py",
+    "tests/test_crossword_single_format_answer_key_repair.py",
+    "tests/test_math_worksheet_cover_selection_repair.py",
+    "tests/test_word_search_short_topic_repair.py",
+    "tests/test_word_search_puzzle_count_dropdown.py",
+    "tests/test_universal_topic_puzzle_engine.py",
+    "tests/test_crossword_scope_answerkey_zip_repair.py",
+    "tests/factory_golden_customer_path_smoke_suite.py",
+    "tests/test_spelling_worksheet_topic_relevance.py",
+    "tests/test_spelling_worksheet_release_readiness.py",
+    "tests/test_spelling_worksheet_semantic_scope.py",
+    "tests/test_african_animals_topic_repair.py",
     "tests/test_gold_rush_acceptance.py",
     "tests/test_coloring_book_download_availability.py",
     "tests/test_coloring_book_thunder_volt_repair.py",
     "tests/test_coloring_book_thunder_volt_consistency.py",
     "tests/test_coloring_book_thunder_volt_quality_gate.py",
     "tests/test_coloring_book_sea_creatures_customer_path.py",
+    "tests/test_coloring_book_local_fallback_theme_classification.py",
     "tests/test_paid_image_authorization_guard.py",
     "tests/test_paid_image_budget_controls.py",
     "tests/test_coloring_open_skin_and_text_rules.py",
@@ -99,6 +115,9 @@
     "tests/test_visual_routing_outcomes.py",
     "tests/test_version_management.py",
     "tests/test_unique_chapter_photographs.py",
-    "tests/test_printable_source_urls.py"
+    "tests/test_printable_source_urls.py",
+    "tests/test_database_identity_is_not_leaked.py",
+    "tests/test_interior_visual_editorial_standard.py",
+    "tests/test_export_revision_identity.py"
   ]
 }

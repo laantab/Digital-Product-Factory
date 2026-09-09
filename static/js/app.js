@@ -153,7 +153,16 @@ const PRODUCT_TYPES = [
       { name: "output_format", label: "Output format", type: "select", options: ["Single page", "Single Worksheet", "Full Book"] },
       { name: "creation_mode", label: "Word source", type: "select", options: ["Topic (AI generates words)", "Custom word list"] },
       { name: "custom_words", label: "Custom words (one per line)", type: "textarea" },
-      { name: "puzzles", label: "Number of puzzles", type: "number", value: "5" },
+      {
+        // Dropdown, not free text: only shown for Full Book (see
+        // _wordSearchSetupForm). WORD_SEARCH_BOOK_PUZZLE_COUNTS in
+        // services/factory/puzzle_plan.py must be kept in sync with this list.
+        name: "puzzles",
+        label: "Number of puzzles",
+        type: "select",
+        options: ["6", "8", "10", "12", "15", "20"],
+        default: "10",
+      },
       { name: "words_per_puzzle", label: "Words per puzzle", type: "number", value: "10" },
       { name: "grid_size", label: "Grid size", type: "select", options: ["12x12 (fewer words)", "15x15 (standard)", "18x18 (more words)"] },
       { name: "difficulty", label: "Difficulty level", type: "select", options: ["Easy", "Medium", "Hard"] },
@@ -170,16 +179,19 @@ const PRODUCT_TYPES = [
       { name: "book_title", label: "Book title", type: "text", required: true, autocomplete: "off" },
       { name: "theme", label: "Theme / niche", type: "text", required: true, autocomplete: "off" },
       { name: "audience", label: "Target age group", type: "text", autocomplete: "off" },
-      { name: "output_format", label: "Output format", type: "select", options: ["Full Book", "Single Worksheet", "Single page"], default: "Full Book" },
+      { name: "output_format", label: "Output format", type: "select", options: ["Single page", "Single Worksheet", "Full Book"] },
       { name: "creation_mode", label: "Word source", type: "select", options: ["Topic (AI generates words)", "Custom word list"] },
       { name: "custom_words", label: "Custom words (one per line)", type: "textarea" },
       {
+        // Dropdown, not free text: only shown for Full Book (see
+        // _crosswordSetupForm). CROSSWORD_BOOK_PUZZLE_COUNTS in
+        // services/factory/puzzle_plan.py must be kept in sync with this list.
         name: "puzzles",
         label: "Number of puzzles",
-        type: "number",
-        value: "12",
-        autocomplete: "off",
-        hint: "Full Book is fixed at 12 puzzles (1 cover + 12 puzzles + 12 answer keys = 25 pages).",
+        type: "select",
+        options: ["6", "8", "10", "12", "15", "20"],
+        default: "12",
+        hint: "Each puzzle gets its own answer key, plus one cover.",
       },
       { name: "difficulty", label: "Difficulty level", type: "select", options: ["Easy", "Medium", "Hard"] },
       { name: "clue_style", label: "Clue style", type: "select", options: ["Easy", "Educational", "Trivia", "Bible-based", "Vocabulary"] },
@@ -233,6 +245,7 @@ const PRODUCT_TYPES = [
       { name: "difficulty", label: "Difficulty level", type: "select", options: ["Easy", "Medium", "Hard"] },
       { name: "include_answer_key", label: "Include answer key", type: "select", options: YN, default: "Yes" },
       { name: "include_challenge", label: "Include challenge problems", type: "select", options: YN, default: "No" },
+      { name: "include_cover", label: "Include cover page", type: "select", options: YN, default: "Yes" },
       { name: "page_size", label: "Page size", type: "select", options: ["US Letter", "A4", "6x9", "8.5x11"] },
     ],
   },
@@ -241,12 +254,15 @@ const PRODUCT_TYPES = [
     label: "Spelling Worksheet",
     icon: "M3 5h18M3 9h18M3 13h18M3 17h18",
     desc: "Themed spelling practice sheets",
-    // No passing end-to-end acceptance contract in acceptance_manifest.json
-    // (lifecycle/handoff mapping only). Keep code; hide from public picker.
-    hidden: true,
+    // Released 2026-09-09: now uses the shared Universal Topic Vocabulary
+    // Engine (the same word/clue resolver Crossword and Word Search use)
+    // for topic-relevant vocabulary, has a real end-to-end acceptance
+    // contract (tests/test_customer_journey_every_product_type.py,
+    // tests/test_spelling_worksheet_release_readiness.py), and never
+    // reaches OpenAI, Tavily, or Pexels -- fully local, zero-cost.
     fields: [
       { name: "worksheet_title", label: "Worksheet title", type: "text", required: true },
-      { name: "creation_mode", label: "Word source", type: "select", options: ["Themed (AI generates words)", "My custom word list"] },
+      { name: "creation_mode", label: "Word source", type: "select", options: ["Topic (local word bank)", "My custom word list"] },
       { name: "theme", label: "Theme / topic", type: "text", required: true },
       { name: "custom_words", label: "Custom words (one per line)", type: "textarea" },
       { name: "grade", label: "Grade level", type: "select", options: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6", "Grade 7", "Grade 8"] },
@@ -3620,18 +3636,14 @@ function resolveFactoryTypeFromPlan(plan) {
   if (pt.includes("color")) return { status: "active", factoryId: "coloring_book" };
   if (pt.includes("word search")) return { status: "active", factoryId: "word_search" };
   if (pt.includes("crossword")) return { status: "active", factoryId: "crossword" };
-  if (pt.includes("math") || (pt.includes("worksheet") && !pt.includes("spelling"))) {
+  // Spelling Worksheet released 2026-09-09 -- checked before the generic
+  // "worksheet" -> math_worksheet heuristic below.
+  if (pt.includes("spelling")) return { status: "active", factoryId: "spelling_worksheet" };
+  if (pt.includes("math") || pt.includes("worksheet")) {
     return { status: "active", factoryId: "math_worksheet" };
   }
 
   // 4. Heuristic detection for hidden builders.
-  if (pt.includes("spelling")) {
-    return {
-      status: "hidden",
-      factoryId: "spelling_worksheet",
-      hiddenReason: hiddenReasonFor("spelling_worksheet"),
-    };
-  }
   if (pt.includes("flip")) return { status: "hidden", factoryId: "flip_book", hiddenReason: hiddenReasonFor("flip_book") };
   if (pt.includes("cover")) return { status: "hidden", factoryId: "cover_design", hiddenReason: hiddenReasonFor("cover_design") };
   if (pt.includes("marketing") || pt.includes("sales copy") || pt.includes("ad script")) {
@@ -3931,9 +3943,14 @@ function selectFactoryType(id) {
     _coloringBookSetupForm();
   }
 
-  // ── CROSSWORD: Full Book is locked to 12 puzzles (25-page book) ───────────
+  // ── CROSSWORD: show "Number of puzzles" only for Full Book ────────────────
   if (id === "crossword") {
     _crosswordSetupForm();
+  }
+
+  // ── WORD SEARCH: show "Number of puzzles" only for Full Book ──────────────
+  if (id === "word_search") {
+    _wordSearchSetupForm();
   }
 
   if (id === "ebook") {
@@ -3986,30 +4003,53 @@ function _ebookVisualCostSetup() {
   refresh();
 }
 
+// "Number of puzzles" only makes sense for Full Book -- Single page and
+// Single Worksheet are always exactly one puzzle. Show/hide the control
+// (never lock a fixed value into it) so a beginner only ever sees a choice
+// that applies to what they picked. Backend contract: services.product
+// honors whatever value ships here (see CROSSWORD_BOOK_PUZZLE_COUNTS in
+// services/factory/puzzle_plan.py) instead of silently forcing 12.
 function _crosswordSetupForm() {
   const form = document.getElementById("factoryForm");
   if (!form) return;
   const outputEl = form.elements["output_format"];
   const puzzlesEl = form.elements["puzzles"];
+  const puzzlesWrap = puzzlesEl && puzzlesEl.closest("div");
 
-  function enforceFullBookCount() {
+  function syncPuzzleCountVisibility() {
     if (!puzzlesEl || !outputEl) return;
     const isBook = String(outputEl.value || "").toLowerCase().includes("book");
+    if (puzzlesWrap) puzzlesWrap.classList.toggle("hidden", !isBook);
     if (isBook) {
-      puzzlesEl.value = "12";
-      puzzlesEl.readOnly = true;
-      puzzlesEl.style.opacity = "0.85";
-      puzzlesEl.style.cursor = "not-allowed";
-    } else {
-      puzzlesEl.value = "1";
-      puzzlesEl.readOnly = true;
-      puzzlesEl.style.opacity = "0.85";
-      puzzlesEl.style.cursor = "not-allowed";
+      // Restore a real default the first time Full Book is chosen; leave a
+      // deliberate customer selection alone on later toggles.
+      if (!puzzlesEl.value) puzzlesEl.value = "12";
     }
   }
 
-  enforceFullBookCount();
-  if (outputEl) outputEl.onchange = enforceFullBookCount;
+  syncPuzzleCountVisibility();
+  if (outputEl) outputEl.onchange = syncPuzzleCountVisibility;
+}
+
+// Word Search's own "Number of puzzles" -- identical pattern to
+// _crosswordSetupForm above (see WORD_SEARCH_BOOK_PUZZLE_COUNTS in
+// services/factory/puzzle_plan.py).
+function _wordSearchSetupForm() {
+  const form = document.getElementById("factoryForm");
+  if (!form) return;
+  const outputEl = form.elements["output_format"];
+  const puzzlesEl = form.elements["puzzles"];
+  const puzzlesWrap = puzzlesEl && puzzlesEl.closest("div");
+
+  function syncPuzzleCountVisibility() {
+    if (!puzzlesEl || !outputEl) return;
+    const isBook = String(outputEl.value || "").toLowerCase().includes("book");
+    if (puzzlesWrap) puzzlesWrap.classList.toggle("hidden", !isBook);
+    if (isBook && !puzzlesEl.value) puzzlesEl.value = "10";
+  }
+
+  syncPuzzleCountVisibility();
+  if (outputEl) outputEl.onchange = syncPuzzleCountVisibility;
 }
 
 // Keep Single Sheet pages locked to 1 and in sync with output_format.
@@ -4056,13 +4096,17 @@ function collectFactoryFields() {
   const form = document.getElementById("factoryForm");
   const fields = {};
   new FormData(form).forEach((v, k) => { fields[k] = v; });
-  // Crossword Full Book is always 12 puzzles (25 pages). Enforce on submit so
-  // browser autofill / stale restored values (e.g. "10") cannot thin the book.
+  // Crossword: Single page / Single Worksheet are always exactly one
+  // puzzle (the "Number of puzzles" dropdown is hidden for them, so its
+  // value is meaningless here regardless of what it still holds). Full
+  // Book honors whatever the customer picked from the dropdown -- the
+  // backend (services.product / CROSSWORD_BOOK_PUZZLE_COUNTS) is the one
+  // place that still falls back to 12 for a missing/invalid value, so this
+  // never needs to force a specific count on a deliberate choice.
   if (factoryType === "crossword") {
     const fmt = String(fields.output_format || "").toLowerCase();
     if (fmt.includes("book")) {
       fields.output_format = "Full Book";
-      fields.puzzles = "12";
     } else {
       fields.puzzles = "1";
     }
@@ -7717,18 +7761,33 @@ function showEbookWorkspaceStage(stageId) {
       ${downloadUrl && (coverGuidedStep === "review" || coverGuidedStep === "approved") ? `<p class="mt-2 mb-3"><a data-ws-cover-download class="text-sm text-brand-700 underline" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener">Download / full-size preview</a></p>` : ""}
     `;
   } else if (stageId === "design") {
+    // CHOOSE YOUR EBOOK STYLE (Step 8). Customer-facing names and plain
+    // language only -- no theme_id, no design digest, no rail terminology.
+    // See design_public_view() in ebook_design_workspace.py for
+    // recommended_theme_id / theme_samples.
     const d = ws.design || {};
-    const themes = (d.themes || []).map((t) => `
-      <button type="button" class="rounded-xl border p-3 text-left ${d.selected_theme === t.theme_id ? "border-brand-400 ring-2 ring-brand-300" : "border-slate-200"}" data-ws-select-theme="${escapeHtml(t.theme_id)}">
+    const selectedTheme = (d.themes || []).find((t) => t.theme_id === d.selected_theme);
+    const themes = (d.themes || []).map((t) => {
+      const isSelected = d.selected_theme === t.theme_id;
+      const isRecommended = d.recommended_theme_id === t.theme_id;
+      return `
+      <div class="rounded-xl border p-3 text-left ${isSelected ? "border-brand-400 ring-2 ring-brand-300" : "border-slate-200"}" data-ws-theme-card="${escapeHtml(t.theme_id)}">
+        ${isRecommended ? `<p class="text-[11px] font-bold uppercase tracking-wide text-brand-700 mb-1">Recommended for Your Ebook</p>` : ""}
         <div class="font-semibold text-slate-900">${escapeHtml(t.display_name)}</div>
         <p class="text-xs text-slate-600 mt-1">${escapeHtml(t.summary || "")}</p>
-      </button>`).join("");
+        ${t.best_for ? `<p class="text-xs text-slate-500 mt-1"><span class="font-semibold">Best for:</span> ${escapeHtml(t.best_for)}</p>` : ""}
+        <div class="flex gap-2 mt-2">
+          <button type="button" class="btn-secondary text-xs" data-ws-preview-theme="${escapeHtml(t.theme_id)}">Preview</button>
+          <button type="button" class="${isSelected ? "btn-secondary" : "btn-primary"} text-xs" data-ws-select-theme="${escapeHtml(t.theme_id)}">${isSelected ? "Selected" : "Use This Template"}</button>
+        </div>
+      </div>`;
+    }).join("");
     body = `
-      <h3 class="text-sm font-bold text-slate-900 mb-2">Design · ${escapeHtml(stage.status_label || "")}</h3>
-      <p class="text-sm text-slate-600 mb-3">Preview and select a professional theme. Theme changes do not rewrite the manuscript.</p>
-      <div class="grid gap-2 sm:grid-cols-3 mb-3">${themes || "<p class='text-sm text-slate-500'>Themes unlock after cover approval.</p>"}</div>
-      <p class="text-xs text-slate-500 mb-3">Selected: ${escapeHtml(d.selected_theme || "—")} · Design digest: ${escapeHtml((d.design_digest || "").slice(0, 16) || "—")}</p>
-      ${d.selected_theme && stage.status !== "approved" ? `<button type="button" class="btn-primary text-sm" data-ws-approve-design>Approve design</button>` : ""}
+      <h3 class="text-sm font-bold text-slate-900 mb-2">Choose Your Ebook Style</h3>
+      <p class="text-sm text-slate-600 mb-3">Preview a style, then use it. Changing styles never rewrites your book's text.</p>
+      <div class="grid gap-2 sm:grid-cols-3 mb-3">${themes || "<p class='text-sm text-slate-500'>Styles unlock after your cover is set.</p>"}</div>
+      ${selectedTheme ? `<p class="text-xs text-slate-500 mb-3">Selected style: ${escapeHtml(selectedTheme.display_name)}</p>` : ""}
+      ${d.selected_theme && stage.status !== "approved" ? `<button type="button" class="btn-primary text-sm" data-ws-approve-design>Confirm This Style</button>` : ""}
     `;
   } else if (stageId === "preview") {
     const d = ws.design || {};
@@ -8063,10 +8122,24 @@ function showEbookWorkspaceStage(stageId) {
     btn.onclick = () => postEbookWorkspaceAction(
       `/ebook-workspace/${ws.project_id}/design`,
       { theme_id: btn.getAttribute("data-ws-select-theme") },
-      "Theme selected."
+      "Style selected."
     );
   });
-  bind("[data-ws-approve-design]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "design" }, "Design approved."));
+  // Preview (Step 10): a deterministic, project-independent sample page for
+  // this style -- chapter opening, typography, table, checklist, callout.
+  // Opens in a new tab; never touches the live project, so comparing all six
+  // costs nothing and creates nothing.
+  panel.querySelectorAll("[data-ws-preview-theme]").forEach((btn) => {
+    btn.onclick = () => {
+      const themeId = btn.getAttribute("data-ws-preview-theme");
+      const sampleHtml = (ws.design && ws.design.theme_samples && ws.design.theme_samples[themeId]) || "";
+      if (!sampleHtml) return;
+      const blob = new Blob([sampleHtml], { type: "text/html" });
+      const previewUrl = URL.createObjectURL(blob);
+      window.open(previewUrl, "_blank", "noopener");
+    };
+  });
+  bind("[data-ws-approve-design]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/approve`, { stage: "design" }, "Style confirmed."));
   bind("[data-ws-build-preview]", () => postEbookWorkspaceAction(`/ebook-workspace/${ws.project_id}/preview`, {}, "Preview built."));
   bind("[data-ws-open-full-preview]", async () => {
     try {

@@ -179,10 +179,10 @@ ACTIVE_BUILDERS = {
     "math worksheet": "math_worksheet",
     "faith planner": "faith_planner",
     "budget planner": "budget_planner",
+    "spelling worksheet": "spelling_worksheet",
 }
 
 HIDDEN_BUILDERS = {
-    "spelling worksheet": "spelling_worksheet",
     "flip book": "flip_book",
     "cover design": "cover_design",
     "planner": "planner",

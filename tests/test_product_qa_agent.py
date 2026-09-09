@@ -128,9 +128,20 @@ class TestPlanFieldConflicts(unittest.TestCase):
         self.assertFalse(fixes)
 
     def test_single_page_answer_key_disabled(self):
+        # A hypothetical product type NOT in _SINGLE_PAGE_ANSWER_KEY_SUPPORTED:
+        # the Single-Format Answer Key repair (tests/
+        # test_crossword_single_format_answer_key_repair.py) scoped this
+        # auto-fix out for crossword/word_search/math_worksheet/
+        # spelling_worksheet -- their single-page renderers correctly
+        # support a separate answer-key page, so the customer's own
+        # selection is honored instead of silently discarded. Any OTHER
+        # product type keeps this safer default (disable rather than risk
+        # an answer key page a renderer can't actually build) until it is
+        # specifically inspected and added to the allowlist, same as
+        # spelling_worksheet was on 2026-09-09.
         fields = {}
         plan = {"output_type": "single_page", "include_answer_key": True}
-        fixed_plan, fixes = safe_fix_plan("word_search", fields, plan)
+        fixed_plan, fixes = safe_fix_plan("some_future_worksheet_type", fields, plan)
         self.assertTrue(any("answer key" in f.lower() for f in fixes))
         self.assertFalse(fixed_plan.get("include_answer_key"))
 

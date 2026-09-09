@@ -1816,7 +1816,10 @@ class DescribedProductTypeRoutingTests(unittest.TestCase):
             ("Word Search Book", ("active", "Word Search Book")),
             ("Crossword Puzzle Book", ("active", "Crossword Puzzle Book")),
             ("Math Worksheet", ("active", "Math Worksheet")),
-            ("Spelling Worksheet", ("hidden", "Spelling Worksheet")),
+            # Released 2026-09-09: real acceptance contract, shared topic
+            # engine integration, zero-cost -- see
+            # tests/test_spelling_worksheet_release_readiness.py.
+            ("Spelling Worksheet", ("active", "Spelling Worksheet")),
             ("Flip Book", ("hidden", "Flip Book")),
             ("Marketing Kit", ("hidden", "Marketing Kit")),
         ):

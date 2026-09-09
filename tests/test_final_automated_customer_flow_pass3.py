@@ -478,21 +478,22 @@ class FinalAutomatedCustomerFlowPass3Tests(unittest.TestCase):
     # Public product readiness
     # ------------------------------------------------------------------ //
     def test_11_unready_public_product_types_hidden(self):
-        # spelling_worksheet lacks e2e acceptance contract → hidden
-        self.assertRegex(
-            self.app_js,
-            re.compile(
-                r'id:\s*"spelling_worksheet"[\s\S]*?hidden:\s*true',
-                re.M,
-            ),
-        )
+        # spelling_worksheet released 2026-09-09: real e2e acceptance
+        # contract (tests/test_customer_journey_every_product_type.py),
+        # shared Universal Topic Vocabulary Engine integration, zero-cost
+        # generation -- see tests/test_spelling_worksheet_release_readiness.py.
+        # It moved from the "still hidden" group below into the "ready"
+        # group.
         for already in ("marketing_kit", "cover_design", "flip_book", "planner"):
             self.assertRegex(
                 self.app_js,
                 re.compile(rf'id:\s*"{already}"[\s\S]*?hidden:\s*true', re.M),
             )
         # Ready types remain visible (no hidden: true on their card)
-        for ready in ("ebook", "coloring_book", "word_search", "crossword", "math_worksheet"):
+        for ready in (
+            "ebook", "coloring_book", "word_search", "crossword", "math_worksheet",
+            "spelling_worksheet",
+        ):
             block = re.search(
                 rf'id:\s*"{ready}",([\s\S]*?)(?=\n  \{{|\n\];)',
                 self.app_js,
@@ -500,13 +501,29 @@ class FinalAutomatedCustomerFlowPass3Tests(unittest.TestCase):
             self.assertIsNotNone(block, ready)
             self.assertNotIn("hidden: true", block.group(1), ready)
 
-        # Backend generate guard
+        # Backend generate guard: the still-hidden types stay refused...
+        for still_hidden in ("marketing_kit", "cover_design", "flip_book", "planner"):
+            resp = self.client.post(
+                "/generate-product",
+                json={"product_type": still_hidden, "fields": {"pages": "4"}},
+            )
+            self.assertEqual(resp.status_code, 400, still_hidden)
+            self.assertIn("not ready", (resp.get_json() or {}).get("error", "").lower())
+
+        # ...while spelling_worksheet is now accepted.
         resp = self.client.post(
             "/generate-product",
-            json={"product_type": "spelling_worksheet", "fields": {"worksheet_title": "x"}},
+            json={
+                "product_type": "spelling_worksheet",
+                "fields": {
+                    "worksheet_title": "Ocean Animals Spelling Practice",
+                    "theme": "Ocean Animals",
+                    "grade": "Grade 3",
+                    "word_count": "10",
+                },
+            },
         )
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn("not ready", (resp.get_json() or {}).get("error", "").lower())
+        self.assertEqual(resp.status_code, 200, resp.data[:400])
 
 
 if __name__ == "__main__":

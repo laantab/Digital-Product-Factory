@@ -61,9 +61,11 @@ import database  # noqa: E402
 #                 unreviewed. Ebooks and planners get the Editor-in-Chief;
 #                 puzzles and worksheets get the product QA agent's qa_report.
 #
-# Hidden/not-yet-public types (spelling_worksheet, planner, flip_book,
-# cover_design, marketing_kit) are deliberately absent -- /generate-product
-# refuses them, which HiddenProductTypesStayHiddenTests pins separately.
+# Hidden/not-yet-public types (planner, flip_book, cover_design,
+# marketing_kit) are deliberately absent -- /generate-product refuses
+# them, which test_hidden_product_types_are_refused_to_customers pins
+# separately. spelling_worksheet released 2026-09-09 and has its own
+# entry above.
 PRODUCT_JOURNEYS: dict[str, dict] = {
     "word_search": {
         "fields": {
@@ -117,6 +119,23 @@ PRODUCT_JOURNEYS: dict[str, dict] = {
         "fields": {"pages": "24"},
         "review_key": "editor_in_chief",
     },
+    # Released 2026-09-09: real acceptance contract (this entry), shared
+    # Universal Topic Vocabulary Engine integration, zero-cost generation.
+    # See tests/test_spelling_worksheet_release_readiness.py for the
+    # deeper topic/grade/word-count/nonsense-topic coverage.
+    "spelling_worksheet": {
+        "fields": {
+            "worksheet_title": "Ocean Animals Spelling Practice",
+            "creation_mode": "Topic (local word bank)",
+            "theme": "Ocean Animals",
+            "grade": "Grade 3",
+            "word_count": "10",
+            "activity_type": "Word List",
+            "difficulty": "Medium",
+            "include_answer_key": "Yes",
+        },
+        "review_key": "qa_report",
+    },
 }
 
 # Refused by /generate-product until they are finished. Listed so that quietly
@@ -126,7 +145,6 @@ HIDDEN_PRODUCT_TYPES = (
     "cover_design",
     "flip_book",
     "planner",
-    "spelling_worksheet",
 )
 
 

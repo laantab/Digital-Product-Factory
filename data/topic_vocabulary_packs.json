@@ -1,0 +1,1009 @@
+{
+  "automobiles": {
+    "aliases": [
+      "automobiles",
+      "automobile",
+      "cars",
+      "car",
+      "american cars",
+      "american automobiles",
+      "american made cars",
+      "us cars",
+      "car brands",
+      "classic cars",
+      "vehicles",
+      "vehicle",
+      "auto",
+      "autos",
+      "motor vehicles",
+      "car models",
+      "detroit cars",
+      "car parts",
+      "automotive parts",
+      "auto mechanics",
+      "car maintenance",
+      "automotive components",
+      "car mechanics"
+    ],
+    "entries": {
+      "ALTERNATOR": {
+        "clue": "Part that recharges the battery while the engine runs",
+        "scope": "PART"
+      },
+      "BARRACUDA": {
+        "clue": "Plymouth's pony car, a rival to the Mustang",
+        "scope": "BRAND_MODEL"
+      },
+      "BRONCO": {
+        "clue": "Ford's off-road SUV, revived in 2021",
+        "scope": "BRAND_MODEL"
+      },
+      "BUICK": {
+        "clue": "GM's near-luxury brand, especially popular in China",
+        "scope": "BRAND_MODEL"
+      },
+      "BUMPER": {
+        "clue": "Protective bar at the front or back of a vehicle",
+        "scope": "PART"
+      },
+      "CADILLAC": {
+        "clue": "GM's flagship luxury vehicle brand",
+        "scope": "BRAND_MODEL"
+      },
+      "CAMARO": {
+        "clue": "Chevrolet's answer to the Mustang",
+        "scope": "BRAND_MODEL"
+      },
+      "CARBURETOR": {
+        "clue": "Older device that mixed air and fuel for the engine",
+        "scope": "PART"
+      },
+      "CHALLENGER": {
+        "clue": "Dodge's muscle car coupe",
+        "scope": "BRAND_MODEL"
+      },
+      "CHARGER": {
+        "clue": "Dodge's muscle car sedan",
+        "scope": "BRAND_MODEL"
+      },
+      "CHASSIS": {
+        "clue": "A vehicle's underlying structural frame",
+        "scope": "PART"
+      },
+      "CHEROKEE": {
+        "clue": "Jeep's midsize SUV",
+        "scope": "BRAND_MODEL"
+      },
+      "CHEVROLET": {
+        "clue": "GM division nicknamed \"Chevy\"",
+        "scope": "BRAND_MODEL"
+      },
+      "CHRYSLER": {
+        "clue": "Automaker founded by Walter P. Chrysler in 1925",
+        "scope": "BRAND_MODEL"
+      },
+      "COMET": {
+        "clue": "Mercury's compact car",
+        "scope": "BRAND_MODEL"
+      },
+      "CONTINENTAL": {
+        "clue": "Lincoln's flagship luxury sedan",
+        "scope": "BRAND_MODEL"
+      },
+      "CONVERTIBLE": {
+        "clue": "Car with a roof that folds down or removes",
+        "scope": "GENERAL"
+      },
+      "CORVETTE": {
+        "clue": "Chevrolet's iconic sports car, \"America's sports car\"",
+        "scope": "BRAND_MODEL"
+      },
+      "COUGAR": {
+        "clue": "Mercury's sporty coupe",
+        "scope": "BRAND_MODEL"
+      },
+      "COUPE": {
+        "clue": "Two-door car with a sportier profile",
+        "scope": "GENERAL"
+      },
+      "CUTLASS": {
+        "clue": "Oldsmobile's best-selling midsize car",
+        "scope": "BRAND_MODEL"
+      },
+      "DASHBOARD": {
+        "clue": "Panel in front of the driver holding gauges and controls",
+        "scope": "PART"
+      },
+      "DEALERSHIP": {
+        "clue": "Business that sells new or used vehicles",
+        "scope": "GENERAL"
+      },
+      "DESOTO": {
+        "clue": "Discontinued Chrysler brand named after the explorer",
+        "scope": "BRAND_MODEL"
+      },
+      "DETROIT": {
+        "clue": "Michigan city nicknamed \"Motor City\" for its car industry",
+        "scope": "GENERAL"
+      },
+      "DEVILLE": {
+        "clue": "Cadillac's full-size flagship sedan",
+        "scope": "BRAND_MODEL"
+      },
+      "DODGE": {
+        "clue": "Stellantis brand known for trucks and muscle cars",
+        "scope": "BRAND_MODEL"
+      },
+      "DURANGO": {
+        "clue": "Dodge's midsize/full-size SUV",
+        "scope": "BRAND_MODEL"
+      },
+      "EDSEL": {
+        "clue": "Ford's famously unsuccessful late-1950s brand",
+        "scope": "BRAND_MODEL"
+      },
+      "ENGINE": {
+        "clue": "The power source that drives a vehicle forward",
+        "scope": "PART"
+      },
+      "ESCALADE": {
+        "clue": "Cadillac's full-size luxury SUV",
+        "scope": "BRAND_MODEL"
+      },
+      "EXPEDITION": {
+        "clue": "Ford's full-size SUV",
+        "scope": "BRAND_MODEL"
+      },
+      "EXPLORER": {
+        "clue": "Ford's popular midsize SUV",
+        "scope": "BRAND_MODEL"
+      },
+      "FENDER": {
+        "clue": "Body panel that covers the area above a wheel",
+        "scope": "PART"
+      },
+      "FIREBIRD": {
+        "clue": "Pontiac's sporty coupe, sibling to the Camaro",
+        "scope": "BRAND_MODEL"
+      },
+      "FORD": {
+        "clue": "American automaker founded by Henry Ford in 1903",
+        "scope": "BRAND_MODEL"
+      },
+      "GARAGE": {
+        "clue": "Structure or shop where vehicles are kept or repaired",
+        "scope": "GENERAL"
+      },
+      "GASOLINE": {
+        "clue": "Common liquid fuel that powers most car engines",
+        "scope": "GENERAL"
+      },
+      "GLADIATOR": {
+        "clue": "Jeep's pickup truck based on the Wrangler",
+        "scope": "BRAND_MODEL"
+      },
+      "GMC": {
+        "clue": "GM's truck and SUV division",
+        "scope": "BRAND_MODEL"
+      },
+      "HATCHBACK": {
+        "clue": "Car with a rear door that swings upward",
+        "scope": "GENERAL"
+      },
+      "HORSEPOWER": {
+        "clue": "Unit used to measure an engine's power",
+        "scope": "PART"
+      },
+      "HUBCAP": {
+        "clue": "Decorative cover for the center of a wheel",
+        "scope": "PART"
+      },
+      "HUDSON": {
+        "clue": "Historic automaker that merged to form AMC in 1954",
+        "scope": "BRAND_MODEL"
+      },
+      "HUMMER": {
+        "clue": "Brand born from the military Humvee, now a GMC EV",
+        "scope": "BRAND_MODEL"
+      },
+      "HYBRID": {
+        "clue": "Vehicle powered by both gas and electric motors",
+        "scope": "GENERAL"
+      },
+      "IGNITION": {
+        "clue": "System that starts a vehicle's engine",
+        "scope": "PART"
+      },
+      "IMPALA": {
+        "clue": "Chevrolet's classic full-size sedan",
+        "scope": "BRAND_MODEL"
+      },
+      "JEEP": {
+        "clue": "Brand famous for off-road SUVs like the Wrangler",
+        "scope": "BRAND_MODEL"
+      },
+      "LINCOLN": {
+        "clue": "Ford's luxury vehicle division",
+        "scope": "BRAND_MODEL"
+      },
+      "LUCID": {
+        "clue": "Electric luxury sedan maker, known for the \"Air\"",
+        "scope": "BRAND_MODEL"
+      },
+      "MALIBU": {
+        "clue": "Chevrolet's midsize sedan",
+        "scope": "BRAND_MODEL"
+      },
+      "MECHANIC": {
+        "clue": "Person trained to repair and service vehicles",
+        "scope": "GENERAL"
+      },
+      "MERCURY": {
+        "clue": "Discontinued Ford brand positioned above Ford, below Lincoln",
+        "scope": "BRAND_MODEL"
+      },
+      "MUFFLER": {
+        "clue": "Part that quiets the sound of the exhaust",
+        "scope": "PART"
+      },
+      "MUSTANG": {
+        "clue": "Ford's iconic pony car, launched in 1964",
+        "scope": "BRAND_MODEL"
+      },
+      "NAVIGATOR": {
+        "clue": "Lincoln's full-size luxury SUV",
+        "scope": "BRAND_MODEL"
+      },
+      "ODOMETER": {
+        "clue": "Gauge that shows total miles driven",
+        "scope": "PART"
+      },
+      "OLDSMOBILE": {
+        "clue": "Discontinued GM brand, one of America's oldest",
+        "scope": "BRAND_MODEL"
+      },
+      "PACKARD": {
+        "clue": "Historic luxury automaker known for fine engineering",
+        "scope": "BRAND_MODEL"
+      },
+      "PICKUP": {
+        "clue": "Truck with an open cargo bed",
+        "scope": "GENERAL"
+      },
+      "PISTON": {
+        "clue": "Cylinder part that moves up and down to power the engine",
+        "scope": "PART"
+      },
+      "PLYMOUTH": {
+        "clue": "Discontinued Chrysler budget brand",
+        "scope": "BRAND_MODEL"
+      },
+      "PONTIAC": {
+        "clue": "Discontinued GM brand known for performance cars",
+        "scope": "BRAND_MODEL"
+      },
+      "RADIATOR": {
+        "clue": "Part that cools the engine using circulating fluid",
+        "scope": "PART"
+      },
+      "RAM": {
+        "clue": "Stellantis pickup truck brand, once part of Dodge",
+        "scope": "BRAND_MODEL"
+      },
+      "RANGER": {
+        "clue": "Ford's compact pickup truck",
+        "scope": "BRAND_MODEL"
+      },
+      "RIVIAN": {
+        "clue": "Electric truck and SUV startup",
+        "scope": "BRAND_MODEL"
+      },
+      "SEDAN": {
+        "clue": "Enclosed passenger car with four doors",
+        "scope": "GENERAL"
+      },
+      "SEVILLE": {
+        "clue": "Cadillac's smaller luxury sedan",
+        "scope": "BRAND_MODEL"
+      },
+      "SHELBY": {
+        "clue": "Carroll Shelby's high-performance Mustang and Cobra brand",
+        "scope": "BRAND_MODEL"
+      },
+      "SILVERADO": {
+        "clue": "Chevrolet's full-size pickup truck",
+        "scope": "BRAND_MODEL"
+      },
+      "SKYLARK": {
+        "clue": "Buick's compact car",
+        "scope": "BRAND_MODEL"
+      },
+      "SPEEDOMETER": {
+        "clue": "Gauge that shows how fast a vehicle is moving",
+        "scope": "PART"
+      },
+      "STUDEBAKER": {
+        "clue": "Historic independent automaker that closed in 1966",
+        "scope": "BRAND_MODEL"
+      },
+      "SUBURBAN": {
+        "clue": "Chevrolet's extra-long full-size SUV",
+        "scope": "BRAND_MODEL"
+      },
+      "SUSPENSION": {
+        "clue": "System of springs and shocks that smooths the ride",
+        "scope": "PART"
+      },
+      "TAHOE": {
+        "clue": "Chevrolet's full-size SUV",
+        "scope": "BRAND_MODEL"
+      },
+      "TESLA": {
+        "clue": "Electric automaker founded in 2003, led by Elon Musk",
+        "scope": "BRAND_MODEL"
+      },
+      "THUNDERBIRD": {
+        "clue": "Ford's classic personal luxury car",
+        "scope": "BRAND_MODEL"
+      },
+      "TRANSMISSION": {
+        "clue": "System that transfers engine power to the wheels",
+        "scope": "PART"
+      },
+      "VIPER": {
+        "clue": "Dodge's high-performance sports car",
+        "scope": "BRAND_MODEL"
+      },
+      "WINDSHIELD": {
+        "clue": "Front glass panel that shields the driver from wind",
+        "scope": "PART"
+      },
+      "WRANGLER": {
+        "clue": "Jeep's iconic off-road 4x4",
+        "scope": "BRAND_MODEL"
+      }
+    },
+    "default_scope": "BRAND_MODEL",
+    "scope_by_alias": {
+      "car parts": "PART",
+      "automotive parts": "PART",
+      "auto mechanics": "PART",
+      "car maintenance": "PART",
+      "automotive components": "PART",
+      "car mechanics": "PART"
+    }
+  },
+  "baking": {
+    "aliases": [
+      "baking",
+      "home baking",
+      "baking bread",
+      "baking cookies",
+      "cake baking",
+      "pastry",
+      "baking recipes"
+    ],
+    "entries": {
+      "BAKINGPOWDER": "Leavening agent combining an acid and a base",
+      "BAKINGSODA": "Leavening agent that helps baked goods rise",
+      "BATTER": "A pourable mixture used to make cakes and pancakes",
+      "BREAD": "Baked staple food made mainly from flour and water",
+      "BUTTER": "Dairy fat used to add richness to baked goods",
+      "CAKE": "Sweet baked dessert, often layered and frosted",
+      "CINNAMON": "Warm spice often used in baked goods",
+      "COOKIE": "Small, flat sweet baked treat",
+      "COOLINGRACK": "Wire rack used to let baked goods cool evenly",
+      "CRUST": "The outer baked layer of bread or pie",
+      "DOUGH": "A soft mixture of flour and liquid before baking",
+      "FLOUR": "Ground grain that forms the base of most baked goods",
+      "FROSTING": "Sweet coating spread over cakes and cupcakes",
+      "GLAZE": "Thin, glossy coating brushed over baked goods",
+      "GLUTEN": "Protein in wheat flour that gives dough its structure",
+      "ICING": "Sweet decorative coating for cakes and cookies",
+      "KNEAD": "To work dough by hand to develop its texture",
+      "MEASURINGCUP": "Tool used to measure baking ingredients accurately",
+      "MIXER": "Appliance used to blend baking ingredients",
+      "MUFFIN": "Small, individually baked cake, often for breakfast",
+      "OVEN": "Appliance used to bake food with heat",
+      "PARCHMENTPAPER": "Non-stick paper used to line baking pans",
+      "PASTRY": "Baked dough used for pies and tarts",
+      "PIE": "Baked dish with a pastry crust and sweet or savory filling",
+      "PREHEAT": "Warming an oven before baking begins",
+      "RISE": "When dough expands as yeast produces gas",
+      "ROLLINGPIN": "Cylindrical tool used to flatten dough",
+      "SOURDOUGH": "Bread made using a naturally fermented starter",
+      "SUGAR": "Sweetener commonly used in cakes and cookies",
+      "TIMER": "Device used to track a baked good's cooking time",
+      "VANILLA": "Popular flavoring extract used in many baked goods",
+      "WHISK": "Kitchen tool used to beat ingredients together",
+      "YEAST": "Living organism used to make bread dough rise"
+    }
+  },
+  "baseball": {
+    "aliases": [
+      "baseball",
+      "baseball game",
+      "major league baseball",
+      "mlb",
+      "little league",
+      "baseball terms",
+      "playing baseball",
+      "baseball players",
+      "baseball positions"
+    ],
+    "entries": {
+      "BASE": "One of four stations a runner must touch to score",
+      "BASEBALLCAP": "Cap worn by players and fans, part of the uniform",
+      "BATTER": {
+        "clue": "Player who swings to hit the pitched ball",
+        "scope": "PLAYER_POSITION"
+      },
+      "BATTINGCAGE": "Enclosed area used for practicing hitting",
+      "BULLPEN": "Area where relief pitchers warm up",
+      "BUNT": "A softly tapped hit meant to advance a runner",
+      "CATCHER": {
+        "clue": "Player positioned behind home plate to receive pitches",
+        "scope": "PLAYER_POSITION"
+      },
+      "CURVEBALL": "Pitch that breaks downward and to the side",
+      "DIAMOND": "The infield's four-base playing area",
+      "DOUBLE": "A hit that allows the batter to reach second base",
+      "DOUBLEPLAY": "A defensive play that records two outs at once",
+      "DUGOUT": "Sheltered bench area where players sit during a game",
+      "FASTBALL": "Pitch thrown at high speed with little movement",
+      "FOULBALL": "A batted ball that lands outside the field of play",
+      "GLOVE": "Padded leather equipment used to catch the ball",
+      "GRANDSLAM": "Home run hit with all three bases loaded",
+      "HOMERUN": "Hit that allows the batter to round all bases and score",
+      "INFIELD": "The dirt and grass area enclosed by the bases",
+      "INNING": "One of nine standard periods of play in a game",
+      "MOUND": "Raised dirt area where the pitcher stands",
+      "OUTFIELD": "The grass area beyond the infield",
+      "OUTFIELDER": {
+        "clue": "Player who covers the grass area of the field",
+        "scope": "PLAYER_POSITION"
+      },
+      "PITCHER": {
+        "clue": "Player who throws the ball toward home plate",
+        "scope": "PLAYER_POSITION"
+      },
+      "ROOKIE": {
+        "clue": "A player in their first year of professional play",
+        "scope": "PLAYER_POSITION"
+      },
+      "SCOREBOARD": "Display showing the score and game information",
+      "SHORTSTOP": {
+        "clue": "Infield position between second and third base",
+        "scope": "PLAYER_POSITION"
+      },
+      "SINGLE": "A hit that allows the batter to reach first base",
+      "STADIUM": "Large venue where baseball games are played",
+      "STRIKE": "A pitch swung at and missed, or thrown in the zone",
+      "STRIKEOUT": "Out recorded after a batter accumulates three strikes",
+      "TRIPLE": "A hit that allows the batter to reach third base",
+      "UMPIRE": {
+        "clue": "Official who enforces the rules of the game",
+        "scope": "PLAYER_POSITION"
+      },
+      "WALK": "When a batter reaches base after four balls",
+      "WORLDSERIES": "Championship series that ends the MLB season"
+    },
+    "scope_by_alias": {
+      "baseball players": "PLAYER_POSITION",
+      "baseball positions": "PLAYER_POSITION"
+    }
+  },
+  "camping": {
+    "aliases": [
+      "camping",
+      "campsite",
+      "car camping",
+      "tent camping",
+      "wilderness camping",
+      "backpacking",
+      "camping trip"
+    ],
+    "entries": {
+      "BACKPACK": "Bag worn on the back to carry camping gear",
+      "BUGSPRAY": "Repellent applied to keep insects away outdoors",
+      "CAMPFIRE": "Outdoor fire built for warmth and cooking",
+      "CAMPGROUND": "Designated area set up for camping",
+      "CAMPSITE": "A specific spot chosen for setting up camp",
+      "CANTEEN": "Container used to carry drinking water outdoors",
+      "COMPASS": "Tool used to find direction in the outdoors",
+      "COOLER": "Insulated container used to keep food and drinks cold",
+      "FIREWOOD": "Wood gathered and burned for a campfire",
+      "FLASHLIGHT": "Handheld light used to see in the dark",
+      "GRILL": "Metal rack used to cook food over a fire",
+      "HAMMOCK": "Hanging bed made of fabric or netting",
+      "HIKING": "Walking outdoors on trails, often for long distances",
+      "KNOT": "A method of tying rope, useful for camping tasks",
+      "LANTERN": "Portable light used to see at a campsite after dark",
+      "MAP": "Printed guide used to navigate camping trails",
+      "MARSHMALLOW": "Sweet treat often roasted over a campfire",
+      "MATCHES": "Small sticks used to start a campfire",
+      "OUTDOORS": "The natural environment away from buildings",
+      "RAINFLY": "Waterproof cover placed over a tent",
+      "RANGER": "Official who manages and protects a park's land",
+      "SLEEPINGBAG": "Insulated, zippered bag used for sleeping outdoors",
+      "SMORE": "Campfire treat made of chocolate, marshmallow, and crackers",
+      "STARGAZING": "Watching the night sky, often clear at a campsite",
+      "STOVE": "Portable cooking device used at a campsite",
+      "TARP": "Waterproof sheet used to shelter gear from rain",
+      "TENT": "Portable shelter used to sleep outdoors",
+      "TRAIL": "A marked path used for hiking",
+      "WILDERNESS": "A large area of untouched natural land",
+      "WILDLIFE": "Wild animals encountered while camping outdoors"
+    }
+  },
+  "dinosaurs": {
+    "aliases": [
+      "dinosaurs",
+      "dinosaur",
+      "prehistoric animals",
+      "paleontology",
+      "fossils"
+    ],
+    "entries": {
+      "AMBER": "Fossilized tree resin that can preserve ancient insects",
+      "ARCHAEOLOGIST": "Scientist who studies ancient remains and artifacts",
+      "BONES": "Hard skeletal remains studied to learn about dinosaurs",
+      "BRACHIOSAURUS": "Enormous long-necked plant-eating dinosaur",
+      "CARNIVORE": "Meat-eating dinosaur that hunted other animals",
+      "CRETACEOUS": "Final period of the dinosaur age",
+      "EVOLUTION": "Gradual change in species over generations",
+      "EXCAVATION": "Careful digging to uncover buried fossils",
+      "EXTINCT": "No longer existing anywhere on Earth",
+      "EXTINCTION": "The complete dying out of a species",
+      "FOSSIL": "Preserved remains or impression of an ancient organism in rock",
+      "HERBIVORE": "Plant-eating dinosaur",
+      "JURASSIC": "Geologic period known for giant dinosaurs",
+      "MAMMOTH": "Large extinct relative of the elephant with long tusks",
+      "OMNIVORE": "Animal that eats both plants and meat",
+      "PALEONTOLOGIST": "Scientist who studies fossils and prehistoric life",
+      "PREDATOR": "Animal that hunts and eats other animals",
+      "PREHISTORIC": "From a time before written human history",
+      "PTERODACTYL": "Flying reptile that lived alongside the dinosaurs",
+      "REPTILE": "Cold-blooded animal with scales, including dinosaurs",
+      "SKELETON": "The full framework of bones in a body",
+      "STEGOSAURUS": "Plant-eating dinosaur with back plates and a spiked tail",
+      "TREX": "Massive carnivorous dinosaur with tiny arms",
+      "TRICERATOPS": "Three-horned plant-eating dinosaur",
+      "VELOCIRAPTOR": "Small, fast, intelligent predatory dinosaur"
+    }
+  },
+  "dog_training": {
+    "aliases": [
+      "dog training",
+      "training dogs",
+      "puppy training",
+      "puppy obedience",
+      "obedience training",
+      "dog obedience",
+      "housebreaking",
+      "canine training",
+      "training your dog"
+    ],
+    "entries": {
+      "AGILITY": "Sport where dogs navigate obstacle courses",
+      "BARKING": "Vocal behavior dogs use to communicate or alert",
+      "BEHAVIOR": "How a dog acts in a given situation",
+      "BREED": "A specific type of dog, like a Labrador or Poodle",
+      "CHEWING": "Common puppy behavior often redirected during training",
+      "CLICKER": "Small device that makes a sound to mark good behavior",
+      "COLLAR": "Band worn around a dog's neck, often holding tags",
+      "COME": "Command that calls a dog back to its owner",
+      "COMMAND": "A word or signal used to direct a dog's behavior",
+      "CONSISTENCY": "Using the same commands and rules every time",
+      "CRATE": "Enclosed space used to safely house or train a dog",
+      "DOWN": "Command asking a dog to lie flat on the ground",
+      "FETCH": "Game where a dog retrieves a thrown object",
+      "GROOMING": "Bathing and brushing a dog to keep it clean",
+      "HARNESS": "Body strap used instead of a collar for walking",
+      "HEEL": "Command asking a dog to walk closely beside its owner",
+      "HOUSEBREAKING": "Teaching a dog to relieve itself outside",
+      "KENNEL": "Structure or facility where dogs are housed",
+      "LEASH": "Strap used to keep a dog under control while walking",
+      "LEAVEIT": "Command teaching a dog to ignore something",
+      "MUZZLE": "Guard placed over a dog's mouth for safety",
+      "OBEDIENCE": "A dog's ability to follow trained commands",
+      "PATIENCE": "A trainer's calm persistence during training sessions",
+      "POSITIVE": "Reward-based approach favored in modern dog training",
+      "PUPPY": "A young dog, typically under one year old",
+      "RECALL": "A dog's trained response to come when called",
+      "REINFORCEMENT": "Response that increases the chance a behavior repeats",
+      "REWARD": "Something positive given to encourage repeated behavior",
+      "SHAKE": "Trick where a dog offers its paw",
+      "SIT": "Basic command asking a dog to lower into a seated position",
+      "SOCIALIZATION": "Exposing a puppy to new people, pets, and places",
+      "STAY": "Command asking a dog to remain in place",
+      "TRAINER": "Person who teaches dogs commands and good behavior",
+      "TREAT": "Small reward given to reinforce good behavior",
+      "VET": "Doctor who cares for a dog's health",
+      "WALK": "Regular outdoor exercise that also builds discipline"
+    }
+  },
+  "gardening": {
+    "aliases": [
+      "gardening",
+      "container gardening",
+      "vegetable gardening",
+      "flower gardening",
+      "backyard gardening",
+      "urban gardening",
+      "growing vegetables",
+      "home gardening",
+      "planting"
+    ],
+    "entries": {
+      "ANNUAL": "A plant that completes its life cycle in one year",
+      "BASIL": "Fragrant herb popular in container gardens",
+      "BULB": "Underground plant part that stores food for regrowth",
+      "COMPOST": "Decayed organic matter used to enrich soil",
+      "DEADHEAD": "To remove spent flowers to encourage new blooms",
+      "DRAINAGE": "How well water flows out of soil or a pot",
+      "FERTILIZER": "Substance added to soil to help plants grow",
+      "GERANIUM": "Popular flowering plant for pots and window boxes",
+      "GERMINATE": "When a seed begins to sprout and grow",
+      "GREENHOUSE": "Glass structure used to grow plants year-round",
+      "HARVEST": "To gather ripe crops from a garden",
+      "HERBS": "Plants like basil and mint often grown in small pots",
+      "HOSE": "Flexible tube used to carry water to a garden",
+      "LETTUCE": "Leafy green that grows quickly in containers",
+      "MARIGOLD": "Bright flower often planted to deter garden pests",
+      "MULCH": "Material spread over soil to retain moisture",
+      "PEPPER": "Common vegetable easily grown in a pot",
+      "PERENNIAL": "A plant that lives and blooms for many years",
+      "PLANTER": "A container specifically used for growing plants",
+      "POLLINATOR": "Creature like a bee that helps plants reproduce",
+      "POTTING": "The soil mix used to fill a container for growing",
+      "PRUNING": "Trimming a plant to remove dead or overgrown parts",
+      "RAISEDBED": "Garden bed built above ground level",
+      "RAKE": "Tool with tines used to gather leaves or smooth soil",
+      "ROOTBOUND": "When roots have filled and outgrown their pot",
+      "SEEDLING": "A young plant grown from seed",
+      "SHADE": "An area sheltered from direct sunlight",
+      "SOIL": "Loose material in which plants grow their roots",
+      "SPADE": "Flat-bladed tool used for digging",
+      "SUCCULENT": "Plant that stores water in thick, fleshy leaves",
+      "SUNLIGHT": "Light plants need to carry out photosynthesis",
+      "TERRACOTTA": "Common reddish clay material used for garden pots",
+      "TOMATO": "Popular container-garden vegetable, actually a fruit",
+      "TRANSPLANT": "To move a plant from one spot to another",
+      "TROWEL": "Small hand tool used for digging in a garden",
+      "WATERING": "The act of giving plants the moisture they need",
+      "WATERINGCAN": "Container with a spout used to water plants by hand",
+      "WEEDING": "Removing unwanted plants from a garden bed"
+    }
+  },
+  "geography": {
+    "aliases": [
+      "world geography",
+      "geography",
+      "countries",
+      "continents",
+      "maps and geography",
+      "global geography",
+      "physical geography"
+    ],
+    "entries": {
+      "ARCHIPELAGO": "A group or chain of islands",
+      "ATLAS": "A book of maps",
+      "BORDER": "The line separating one country or region from another",
+      "CAPITAL": "The city that serves as a country's seat of government",
+      "COASTLINE": "The boundary where land meets the sea",
+      "CONTINENT": "One of Earth's seven major landmasses",
+      "DELTA": "Landform where a river deposits sediment near its mouth",
+      "DESERT": "Extremely dry region with little rainfall",
+      "EQUATOR": "Imaginary line dividing Earth into north and south",
+      "GLACIER": "A slow-moving mass of ice",
+      "HEMISPHERE": "Half of the Earth, divided by the equator or a meridian",
+      "ISTHMUS": "A narrow strip of land connecting two larger areas",
+      "LATITUDE": "Lines that measure distance north or south of the equator",
+      "LONGITUDE": "Lines that measure distance east or west of the prime meridian",
+      "METROPOLIS": "A very large and important city",
+      "MOUNTAINRANGE": "A connected series of mountains",
+      "OCEAN": "One of Earth's five major bodies of salt water",
+      "PENINSULA": "Land surrounded by water on three sides",
+      "PLAIN": "A large area of flat, often fertile land",
+      "PLATEAU": "A large flat area of elevated land",
+      "POPULATION": "The number of people living in a place",
+      "PRIMEMERIDIAN": "The zero-degree line of longitude",
+      "RAINFOREST": "Dense, humid forest that receives heavy rainfall",
+      "SAVANNA": "Grassy plain typical of tropical regions",
+      "STRAIT": "A narrow channel of water connecting two larger bodies",
+      "TERRITORY": "An area of land under the control of a government",
+      "TIMEZONE": "A region that follows a uniform standard time",
+      "TROPICS": "The warm region near the equator",
+      "TUNDRA": "Cold, treeless region near the polar ice caps",
+      "VALLEY": "Low area of land between hills or mountains"
+    }
+  },
+  "healthy_eating": {
+    "aliases": [
+      "healthy eating",
+      "nutrition",
+      "healthy diet",
+      "eating healthy",
+      "clean eating",
+      "balanced diet",
+      "healthy food",
+      "wellness eating",
+      "healthy nutrition",
+      "meal planning"
+    ],
+    "entries": {
+      "ALMONDS": "Nutrient-dense nut often eaten as a healthy snack",
+      "ANTIOXIDANT": "Compound that helps protect cells from damage",
+      "AVOCADO": "Creamy fruit rich in healthy fats",
+      "BALANCEDDIET": "Eating pattern that includes all needed nutrient groups",
+      "CALORIE": "Unit used to measure the energy in food",
+      "CARBOHYDRATE": "Nutrient that serves as the body's main energy source",
+      "CHOLESTEROL": "Fatty substance monitored for heart health",
+      "DIETITIAN": "Professional trained to give expert nutrition advice",
+      "FIBER": "Plant nutrient that aids digestion",
+      "FRUIT": "Sweet plant food that is a natural source of vitamins",
+      "GROCERY": "Store where healthy ingredients are typically purchased",
+      "HYDRATION": "Keeping the body supplied with enough fluids",
+      "KALE": "Leafy green vegetable known for its nutrient density",
+      "LABEL": "Package information listing a food's nutrition facts",
+      "LENTILS": "Small legume rich in protein and fiber",
+      "MEALPREP": "Preparing meals in advance to support healthy eating",
+      "METABOLISM": "The rate the body converts food into energy",
+      "MINERAL": "Inorganic nutrient like calcium or iron the body needs",
+      "MODERATION": "Eating treats and rich foods in reasonable amounts",
+      "OATMEAL": "Whole-grain breakfast food high in fiber",
+      "OMEGA3": "Healthy fat found in fish like salmon",
+      "ORGANIC": "Food grown without most synthetic pesticides or fertilizers",
+      "PORTION": "The amount of food served or eaten at one time",
+      "PROCESSED": "Describes food altered significantly from its natural state",
+      "PROTEIN": "Nutrient that builds and repairs muscle tissue",
+      "QUINOA": "Protein-rich grain often used in healthy meals",
+      "SALMON": "Fatty fish rich in omega-3s",
+      "SMOOTHIE": "Blended drink often made with fruit and vegetables",
+      "SODIUM": "Mineral often limited to support healthy blood pressure",
+      "SPINACH": "Leafy green vegetable rich in iron",
+      "SUGAR": "Sweet carbohydrate often limited in a healthy diet",
+      "SUPERFOOD": "Nutrient-dense food believed to offer health benefits",
+      "VEGETABLE": "Plant food, often low in calories and rich in nutrients",
+      "VITAMIN": "Essential nutrient the body needs in small amounts",
+      "WHOLEGRAIN": "Grain that keeps its bran, germ, and endosperm intact"
+    }
+  },
+  "personal_finance": {
+    "aliases": [
+      "personal finance",
+      "finance",
+      "budgeting",
+      "saving money",
+      "money management",
+      "financial planning",
+      "personal budgeting"
+    ],
+    "entries": {
+      "ALLOWANCE": "A set amount of money given regularly",
+      "ASSET": "Something owned that holds financial value",
+      "BANKRUPTCY": "Legal process for people unable to repay debts",
+      "BOND": "A loan investors make to a government or company",
+      "BUDGET": "A plan for how income will be spent and saved",
+      "COMPOUNDING": "Growth of savings earning returns on prior returns",
+      "CREDIT": "Ability to borrow money based on trust to repay it",
+      "CREDITSCORE": "Number that reflects a person's borrowing reliability",
+      "DEBT": "Money owed to another person or institution",
+      "DEPOSIT": "Money placed into a bank account",
+      "DIVIDEND": "A payment made to shareholders from company profits",
+      "EMERGENCYFUND": "Savings set aside for unexpected expenses",
+      "EQUITY": "The value of ownership in property or a company",
+      "EXPENSE": "Money spent on goods or services",
+      "FINANCIALGOAL": "A specific target set for saving or spending",
+      "INCOME": "Money earned or received on a regular basis",
+      "INFLATION": "The general rise in prices over time",
+      "INTEREST": "Cost of borrowing money, or earnings on savings",
+      "INVESTMENT": "Money put into an asset expecting future growth",
+      "LIABILITY": "A financial obligation or debt that is owed",
+      "LOAN": "Money borrowed that must be repaid, often with interest",
+      "MORTGAGE": "Loan used specifically to purchase a home",
+      "NETWORTH": "Total assets minus total liabilities",
+      "PAYCHECK": "Payment an employee receives for work performed",
+      "PENSION": "Regular income paid to a retired worker",
+      "PORTFOLIO": "A collection of an investor's financial assets",
+      "PREMIUM": "Regular payment made to keep an insurance policy active",
+      "RETIREMENT": "The stage of life after leaving regular work",
+      "SAVINGS": "Money set aside rather than spent",
+      "STOCK": "A share of ownership in a company",
+      "TAXES": "Mandatory payments made to fund government services",
+      "WITHDRAWAL": "Taking money out of an account"
+    }
+  },
+  "photography": {
+    "aliases": [
+      "photography",
+      "taking photos",
+      "photographs",
+      "digital photography",
+      "camera",
+      "photo editing",
+      "picture taking"
+    ],
+    "entries": {
+      "APERTURE": "Lens opening that controls how much light enters",
+      "BACKLIGHT": "Light source positioned behind the subject",
+      "CAMERA": "Device used to capture photographs",
+      "COMPOSITION": "How elements are arranged within a photo's frame",
+      "CROPPING": "Trimming the edges of a photo to reframe it",
+      "DEPTHOFFIELD": "Range of a photo that appears sharply in focus",
+      "EDITING": "Adjusting a photo after it has been taken",
+      "EXPOSURE": "The overall brightness of a captured photo",
+      "FILTER": "Tool or lens attachment that alters a photo's look",
+      "FLASH": "Burst of artificial light used in low light",
+      "FOCUS": "Adjusting a lens so the subject appears sharp",
+      "FRAMING": "Deciding what appears inside a photo's edges",
+      "GOLDENHOUR": "Warm, soft light shortly after sunrise or before sunset",
+      "ISO": "Camera setting that controls sensitivity to light",
+      "LANDSCAPE": "Photo capturing a wide outdoor scene",
+      "LENS": "Camera part that focuses light onto the sensor",
+      "LIGHTING": "Arrangement of light sources in a photograph",
+      "MEGAPIXEL": "Unit used to measure a camera's image resolution",
+      "NEGATIVE": "Film image with reversed colors used before printing",
+      "PHOTOGRAPHER": "Person who takes photographs, often professionally",
+      "PORTRAIT": "Photo focused on a person's face or figure",
+      "RAWFILE": "Unprocessed image format that preserves the most detail",
+      "RESOLUTION": "The amount of detail an image can show",
+      "SHUTTER": "Camera mechanism that opens to expose the sensor",
+      "SHUTTERSPEED": "How long a camera's shutter stays open",
+      "SILHOUETTE": "Dark outline of a subject against a bright background",
+      "SNAPSHOT": "A casual, quickly taken photograph",
+      "STUDIO": "Indoor space set up for controlled photography",
+      "TELEPHOTO": "Lens designed to photograph distant subjects closely",
+      "TRIPOD": "Three-legged stand used to steady a camera",
+      "TRIPODMOUNT": "Fitting on a camera used to attach it to a tripod",
+      "VIEWFINDER": "Part of a camera used to frame a shot before taking it",
+      "WIDEANGLE": "Lens that captures a broader view than normal",
+      "ZOOM": "Lens function that makes a subject appear closer"
+    }
+  },
+  "space_exploration": {
+    "aliases": [
+      "space exploration",
+      "space",
+      "outer space",
+      "solar system",
+      "astronomy",
+      "space travel",
+      "space race",
+      "nasa",
+      "the cosmos",
+      "planets",
+      "the universe"
+    ],
+    "entries": {
+      "ASTEROID": "Small rocky body orbiting the sun, mostly in a belt",
+      "ASTRONAUT": "Person trained to travel and work in space",
+      "BLACKHOLE": "Region of space with gravity so strong nothing escapes",
+      "COMET": "Icy body with a glowing tail as it nears the sun",
+      "COSMOS": "The universe as a whole",
+      "COUNTDOWN": "Timed sequence leading up to a rocket launch",
+      "CRATER": "Bowl-shaped depression caused by impact or volcano",
+      "EARTH": "The only planet known to support life",
+      "ECLIPSE": "Event when one celestial body blocks another",
+      "GALAXY": "Huge collection of stars, gas, and dust bound by gravity",
+      "GRAVITY": "Force that pulls objects toward each other",
+      "JUPITER": "Largest planet in our solar system",
+      "LAUNCH": "The moment a rocket lifts off the ground",
+      "LUNAR": "Relating to the moon",
+      "MARS": "Red planet fourth from the sun",
+      "MERCURY": "Closest planet to the sun",
+      "METEOR": "Streak of light from a rock burning in Earth's atmosphere",
+      "MILKYWAY": "Galaxy that contains our solar system",
+      "MISSION": "A planned spaceflight with a specific goal",
+      "NEBULA": "Cloud of gas and dust in space",
+      "NEPTUNE": "Farthest major planet from the sun",
+      "ORBIT": "The curved path an object follows around another body",
+      "PLANET": "Large body that orbits a star and has cleared its path",
+      "ROCKET": "Vehicle built to travel through space",
+      "SATELLITE": "Object placed in orbit around a celestial body",
+      "SATURN": "Ringed planet in our outer solar system",
+      "SHUTTLE": "Reusable spacecraft once used to carry crews to orbit",
+      "SOLAR": "Relating to the sun",
+      "SPACESUIT": "Protective suit worn by astronauts outside a spacecraft",
+      "STATION": "Orbiting outpost where astronauts live and work",
+      "SUNLIGHT": "Light that travels from the sun to Earth",
+      "TELESCOPE": "Tool used to see distant objects in space",
+      "URANUS": "Ice giant that spins nearly on its side",
+      "VENUS": "Hottest planet in our solar system",
+      "ZEROGRAVITY": "Condition of weightlessness experienced in orbit"
+    }
+  },
+  "ocean_animals": {
+    "aliases": [
+      "ocean animals",
+      "sea animals",
+      "ocean creatures",
+      "sea creatures",
+      "marine animals",
+      "marine life",
+      "deep sea animals",
+      "deep sea creatures",
+      "ocean life",
+      "underwater animals",
+      "sea life"
+    ],
+    "entries": {
+      "DOLPHIN": "Playful, intelligent marine mammal known for jumping out of the water",
+      "WHALE": "The largest animal in the ocean",
+      "SHARK": "A fish with rows of sharp teeth, feared by many swimmers",
+      "OCTOPUS": "Eight-armed sea creature that can change color to hide",
+      "SQUID": "Fast-swimming ocean animal with ten arms and a soft body",
+      "STARFISH": "Star-shaped ocean animal that can regrow a lost arm",
+      "JELLYFISH": "Soft, see-through ocean animal with a sting",
+      "SEAHORSE": "Small ocean fish shaped like a horse's head",
+      "CRAB": "Sideways-walking ocean animal with a hard shell and claws",
+      "LOBSTER": "Ocean animal with large claws, prized as seafood",
+      "SHRIMP": "Small, curved shellfish found on the ocean floor",
+      "CLAM": "Ocean animal with two hinged shells",
+      "OYSTER": "Shelled ocean animal that can make a pearl",
+      "SEAL": "Whiskered ocean mammal that barks and slides on its belly",
+      "WALRUS": "Large ocean mammal with long tusks",
+      "OTTER": "Playful ocean mammal that floats on its back and cracks shells with rocks",
+      "PENGUIN": "Flightless seabird that swims well in cold ocean water",
+      "TURTLE": "Ocean reptile with a hard shell that can live for decades",
+      "EEL": "Long, snake-shaped fish that lives in the ocean",
+      "STINGRAY": "Flat ocean fish with a whip-like tail",
+      "CORAL": "Colorful ocean structure built by tiny animals",
+      "ANEMONE": "Colorful ocean animal that looks like an underwater flower",
+      "TUNA": "Large, fast-swimming ocean fish",
+      "SALMON": "Ocean fish that swims upstream to lay its eggs",
+      "CLOWNFISH": "Orange and white fish that lives among sea anemones",
+      "MANATEE": "Slow, gentle ocean mammal sometimes called a sea cow",
+      "PLANKTON": "Tiny floating ocean organisms that feed many sea animals",
+      "BARNACLE": "Small shelled animal that attaches itself to rocks and boats",
+      "PELICAN": "Seabird with a large throat pouch for catching fish",
+      "KRILL": "Tiny shrimp-like animal that whales eat by the millions"
+    }
+  },
+  "african_animals": {
+    "aliases": [
+      "african animals",
+      "african animals in the wild",
+      "african wildlife",
+      "wild animals of africa",
+      "safari animals",
+      "african savanna animals",
+      "animals of africa",
+      "african safari",
+      "safari"
+    ],
+    "entries": {
+      "LION": "King of the African savanna, known for its mane and roar",
+      "ELEPHANT": "The largest land animal, known for its long trunk",
+      "GIRAFFE": "Tallest land animal, known for its very long neck",
+      "ZEBRA": "African animal with black-and-white stripes",
+      "LEOPARD": "Spotted big cat that often rests in trees",
+      "CHEETAH": "Fastest land animal, known for its speed across the savanna",
+      "HYENA": "Animal known for its distinctive laughing call",
+      "RHINO": "Large, thick-skinned animal with one or two horns on its nose",
+      "HIPPO": "Large river animal that spends most of the day in water",
+      "GORILLA": "Largest of the great apes, lives in African forests",
+      "CHIMPANZEE": "Highly intelligent great ape closely related to humans",
+      "BABOON": "Large monkey that lives in troops on the ground",
+      "MEERKAT": "Small, social animal that stands upright to watch for danger",
+      "WARTHOG": "Wild pig with tusks and bumps on its face",
+      "WILDEBEEST": "Large antelope known for its massive yearly migration",
+      "BUFFALO": "Large, horned animal that travels in herds across the savanna",
+      "GAZELLE": "Graceful, fast antelope often hunted by big cats",
+      "IMPALA": "Slender antelope known for its powerful leaping",
+      "ANTELOPE": "Horned, hooved grazing animal found across the savanna",
+      "JACKAL": "Wild dog that often scavenges after larger predators",
+      "MONGOOSE": "Small, quick animal known for fighting snakes",
+      "OSTRICH": "Tall, flightless bird and the fastest animal on two legs",
+      "FLAMINGO": "Pink wading bird often seen standing on one leg",
+      "CROCODILE": "Large reptile that waits in rivers to ambush prey",
+      "VULTURE": "Large scavenger bird that circles above the savanna",
+      "AARDVARK": "Nocturnal animal with a long snout that digs up ants",
+      "PANGOLIN": "Scaly mammal that curls into a ball when threatened",
+      "OKAPI": "Forest animal related to the giraffe, with striped legs",
+      "SERVAL": "Small wild cat with large ears and long legs",
+      "ELAND": "The largest species of antelope in Africa"
+    }
+  }
+}

@@ -383,6 +383,33 @@ def validate_generated_product(
 # ---------------------------------------------------------------------------
 # Auto-fix helpers — called by product.py before PDF generation
 # ---------------------------------------------------------------------------
+# Product types whose single-page/single-worksheet renderer is confirmed
+# (by direct code inspection, 2026-09-08 Word Search/Crossword answer-key
+# repair) to correctly build a second, separate answer-key page:
+#   - crossword: services.crossword.direct_pdf_renderer.build_single_crossword_pdf_bytes
+#   - word_search: services.word_search.direct_pdf_renderer.build_single_worksheet_pdf_bytes
+#   - math_worksheet: services.math_worksheet.renderer.build_math_worksheet_pdf_bytes
+#     (its answer-key page count was never conditioned on output_type at all)
+# Fix 2 below used to apply unconditionally to every product type sharing
+# this function, silently discarding a valid "Include answer key: Yes" for
+# any single-page product -- confirmed live for both Crossword and Word
+# Search (a real customer product, "American Cars", generated Single
+# Worksheet + Answer Key: Yes, shipped with no answer key). Scoped to only
+# the product types actually proven safe here rather than removed
+# globally, so any NOT listed here keeps the safer prior behavior --
+# see PROTECTED_GENERATOR_RULE.md.
+#
+# "spelling_worksheet" added 2026-09-09 during its release-readiness task:
+# its "single_worksheet" output is already 2 pages (word-list practice +
+# dictation practice), not a literal single printed sheet, and its own
+# renderer (services/spelling_worksheet/pdf_builder.py) was directly
+# confirmed to build a real, separate answer-key page correctly when
+# asked -- this rule was silently discarding the customer's own
+# "Include answer key: Yes" choice for a product genuinely capable of
+# honoring it.
+_SINGLE_PAGE_ANSWER_KEY_SUPPORTED = {"crossword", "word_search", "math_worksheet", "spelling_worksheet"}
+
+
 def safe_fix_plan(
     product_type: str,
     fields: dict,
@@ -392,7 +419,9 @@ def safe_fix_plan(
 
     Safe fixes:
       - Strip cover from single worksheet / single page
-      - Ensure answer_key setting matches output format
+      - Ensure answer_key setting matches output format (for product types
+        whose single-page renderer cannot render one -- see
+        _SINGLE_PAGE_ANSWER_KEY_SUPPORTED)
       - Clear legacy conflicting generator field
 
     Returns:
@@ -405,6 +434,7 @@ def safe_fix_plan(
 
     output_type = str(plan.get("output_type") or "single_worksheet")
     single = output_type in {"single_page", "single_worksheet"}
+    product_type_norm = str(product_type or "").strip().lower()
 
     # Fix 1: Remove cover from single worksheet / single page
     if single and fixed_plan.get("include_cover"):
@@ -415,11 +445,16 @@ def safe_fix_plan(
             "(include_cover set to False)."
         )
 
-    # Fix 2: A single-page artifact cannot contain a separate answer-key page.
-    if single and (
-        fixed_plan.get("include_answer_key")
-        or str(fixed_fields.get("include_answer_key") or "").strip().lower()
-        in {"yes", "true", "1", "on"}
+    # Fix 2: A single-page artifact cannot contain a separate answer-key page
+    # -- only for product types whose renderer genuinely cannot build one.
+    if (
+        single
+        and product_type_norm not in _SINGLE_PAGE_ANSWER_KEY_SUPPORTED
+        and (
+            fixed_plan.get("include_answer_key")
+            or str(fixed_fields.get("include_answer_key") or "").strip().lower()
+            in {"yes", "true", "1", "on"}
+        )
     ):
         fixed_plan["include_answer_key"] = False
         fixed_fields["include_answer_key"] = False

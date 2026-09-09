@@ -809,16 +809,35 @@ def normalize_crossword_project_data(data: dict) -> dict:
     if not fields.get("generator"):
         fields["generator"] = "Book Generator" if is_book else "Worksheet Generator"
 
-    # Full Book sellable standard: always 12 puzzles / 25 pages.
-    # Rewrite legacy saved fields (puzzles=5/10) so export/rebuild cannot
-    # re-serve a thin book from stale form values.
+    # Full Book puzzle count: preserve a saved, valid customer choice from
+    # the dropdown (CROSSWORD_BOOK_PUZZLE_COUNTS), OR a valid server-
+    # computed adaptive count (UNIVERSAL TOPIC PUZZLE ENGINE: a topic whose
+    # real local word pool cannot support the requested count is built
+    # smaller instead of failing -- see services.crossword.book -- and
+    # that actual count, which need not be one of the six dropdown values,
+    # is what gets stored). Accept any count from 1 up to the largest
+    # dropdown value; only rewrite to the 12-puzzle default when the
+    # stored value is missing, non-numeric, zero/negative, or absurdly
+    # large -- e.g. genuinely stale/legacy free-text data saved before
+    # "Number of puzzles" was a dropdown, or a corrupted record. This still
+    # stops export/rebuild from re-serving a thin book off stale form
+    # values, without discarding a deliberate saved (or adaptively built)
+    # choice.
+    from services.factory.puzzle_plan import CROSSWORD_BOOK_PUZZLE_COUNTS, DEFAULT_BOOK_COUNTS
+
     if is_book or "book" in output_format:
         fields["output_format"] = fields.get("output_format") or "Full Book"
         if "book" not in str(fields.get("output_format")).lower():
             fields["output_format"] = "Full Book"
-        fields["puzzles"] = "12"
-        fields["worksheets"] = "12"
-        puzzle_count = 12
+        raw_puzzles = fields.get("puzzles") or fields.get("worksheets") or data.get("puzzle_count")
+        try:
+            candidate = int(str(raw_puzzles).strip())
+        except (TypeError, ValueError):
+            candidate = None
+        max_count = max(CROSSWORD_BOOK_PUZZLE_COUNTS)
+        puzzle_count = candidate if candidate and 1 <= candidate <= max_count else DEFAULT_BOOK_COUNTS["crossword"]
+        fields["puzzles"] = str(puzzle_count)
+        fields["worksheets"] = str(puzzle_count)
         is_book = True
     else:
         puzzle_count = 1
@@ -861,8 +880,17 @@ def normalize_crossword_project_data(data: dict) -> dict:
     return data
 
 
-def crossword_full_book_pdf_is_valid(pdf_bytes: bytes, *, expected_puzzles: int = 12) -> bool:
-    """Return True only for a Full Book PDF with cover + N puzzles + N keys."""
+def crossword_full_book_pdf_is_valid(
+    pdf_bytes: bytes, *, expected_puzzles: int = 12, expect_cover: bool = True
+) -> bool:
+    """Return True only for a Full Book PDF with N puzzles + N answer keys,
+    plus a cover page when one was requested (expect_cover=True, the
+    default -- preserves this function's prior contract for every existing
+    caller). Include Cover repair: a customer may legitimately request a
+    Full Book with no cover, which is one page shorter and carries the
+    puzzle-count subject text without a cover page building it -- see
+    services.crossword.direct_pdf_renderer.build_crossword_book_pdf_bytes.
+    """
     import io
 
     try:
@@ -873,7 +901,7 @@ def crossword_full_book_pdf_is_valid(pdf_bytes: bytes, *, expected_puzzles: int 
         reader = PdfReader(io.BytesIO(pdf_bytes))
     except Exception:
         return False
-    expected_pages = 1 + (expected_puzzles * 2)
+    expected_pages = (1 if expect_cover else 0) + (expected_puzzles * 2)
     if len(reader.pages) != expected_pages:
         return False
     subject = ""
@@ -889,6 +917,22 @@ _GOAL_RUSH_TITLE_RE = re.compile(r"(?i)\bGoal\s+Rush\b")
 def _normalize_crossword_theme_title(text: str) -> str:
     """Correct the known Gold Rush near-match typo in titles/themes only."""
     return _GOAL_RUSH_TITLE_RE.sub("Gold Rush", str(text or ""))
+
+
+def crossword_include_cover_choice(fields: dict, *, is_book: bool) -> bool:
+    """The customer's actual Include Cover choice for a crossword: explicit
+    form override > default to True for books. Single source of truth for
+    both _crossword_pdf_payload (which builds the PDF) and
+    services.packaging (which validates it against the SAME choice) so the
+    two can never silently drift apart. Mirrors the identical, already-
+    shipped pattern in _word_search_pdf_payload for this sister product.
+    """
+    form_include_cover = _f(fields, "include_cover", "")
+    if form_include_cover.lower() in {"yes", "true"}:
+        return True
+    if form_include_cover.lower() in {"no", "false"}:
+        return False
+    return is_book
 
 
 def _crossword_plan(fields: dict) -> dict:
@@ -914,10 +958,26 @@ def _crossword_plan(fields: dict) -> dict:
     normalized_output = output_type
     if output_type == OUTPUT_BOOK:
         normalized_output = "book"
-        # Full Book sellable standard: always 12 puzzles → 25 pages
-        # (1 cover + 12 puzzles + 12 answer keys). Legacy UI values of 5/10
-        # and browser autofill must not silently produce a thin book.
-        worksheets = 12
+        # Full Book puzzle count: honor a customer-selected value from the
+        # form's curated dropdown (CROSSWORD_BOOK_PUZZLE_COUNTS). Fall back
+        # to the 12-puzzle sellable standard (1 cover + 12 puzzles + 12
+        # answer keys = 25 pages) only when the submitted value is missing
+        # or not one of those options -- e.g. a forged request, or a stale
+        # free-text value from before "Number of puzzles" was a dropdown.
+        # A dropdown value can never arrive as one of those forbidden
+        # stale-autofill numbers unless it is itself an allowed choice, so
+        # this no longer silently discards a deliberate customer selection
+        # the way an unconditional "worksheets = 12" did. UNIVERSAL TOPIC
+        # PUZZLE ENGINE: also accepts a server-computed adaptive count
+        # (need not be one of the six dropdown values -- see
+        # normalize_crossword_project_data's matching comment) so a
+        # rebuild of an adaptively-sized book requests the same size it
+        # was actually built at, not the customer's original ask.
+        from services.factory.puzzle_plan import CROSSWORD_BOOK_PUZZLE_COUNTS, DEFAULT_BOOK_COUNTS
+
+        _max_count = max(CROSSWORD_BOOK_PUZZLE_COUNTS)
+        if not (worksheets and 1 <= worksheets <= _max_count):
+            worksheets = DEFAULT_BOOK_COUNTS["crossword"]
         words_per_puzzle = max(8, words_per_puzzle)
     elif output_type == "single_page":
         normalized_output = "single_page"
@@ -1058,8 +1118,22 @@ def _crossword_pdf_payload(
 
     pkg = package_id or uuid.uuid4().hex
     is_book = plan["output_type"] == "book"
+    # include_cover: explicit form override > default to True for books.
+    # Root cause (CROSSWORD GENERATOR PROTECTED BASELINE): this function
+    # used to decide whether to build a cover from is_book alone and never
+    # read the customer's own "Include cover page" selection, so "No"
+    # silently produced the same book as "Yes" -- confirmed end-to-end
+    # (both produced a 13-page book for a 6-puzzle Full Book). Word Search's
+    # sister function (_word_search_pdf_payload, same file) already has this
+    # exact override; mirrored here (crossword_include_cover_choice) rather
+    # than touching the shared services.factory.puzzle_plan.
+    # parse_puzzle_output_plan() every worksheet-type product uses, which
+    # would have a wider blast radius. Single Page / Single Worksheet never
+    # get a cover regardless of this field -- that constraint is unchanged
+    # and still comes from is_book.
+    include_cover = crossword_include_cover_choice(fields, is_book=is_book)
     cover = None
-    if is_book:
+    if is_book and include_cover:
         cover = cover_design
         if cover is None:
             cover = _build_crossword_cover(fixed_fields, plan, pkg)
@@ -1082,7 +1156,7 @@ def _crossword_pdf_payload(
         number_of_puzzles=plan["worksheets"],
         words_per_puzzle=plan["words_per_puzzle"],
         include_answer_key=plan["include_answer_key"],
-        include_cover=is_book and bool(cover),
+        include_cover=is_book and include_cover,
         cover_design=cover if is_book else None,
         custom_words=custom_words,
         mode=mode,
@@ -1094,6 +1168,18 @@ def _crossword_pdf_payload(
         raise RuntimeError(f"Failed to generate Crossword PDF: {result.errors}")
 
     pdf_bytes = result.pdf_bytes
+
+    # UNIVERSAL TOPIC PUZZLE ENGINE — adaptive sizing: build_crossword_pdf
+    # may have legitimately built fewer puzzles than plan["worksheets"]
+    # requested (a limited topic word pool -- see services.crossword.book).
+    # Persist the count that is ACTUALLY in this PDF, not the original
+    # request, or a later reopen/export would validate the stored project
+    # against a puzzle count the PDF was never built with (see
+    # crossword_full_book_pdf_is_valid in this same module).
+    if is_book:
+        actual_puzzle_count = len([p for p in result.puzzles if not p.errors and p.clues]) or plan["worksheets"]
+    else:
+        actual_puzzle_count = plan["worksheets"]
     pdf_has_cover_page = bool(cover) and is_book
 
     # Aggregate word placement stats across all puzzles for user feedback
@@ -1139,8 +1225,8 @@ def _crossword_pdf_payload(
     # reintroduces a stale UI value such as puzzles=10 for Full Book.
     out_fields = dict(fixed_fields)
     if plan["output_type"] == "book":
-        out_fields["puzzles"] = str(plan["worksheets"])
-        out_fields["worksheets"] = str(plan["worksheets"])
+        out_fields["puzzles"] = str(actual_puzzle_count)
+        out_fields["worksheets"] = str(actual_puzzle_count)
         if "book" not in str(out_fields.get("output_format") or "").lower():
             out_fields["output_format"] = "Full Book"
     else:
@@ -1155,7 +1241,7 @@ def _crossword_pdf_payload(
         "content": "",
         "pdf_bytes": base64.b64encode(pdf_bytes).decode("utf-8"),
         "filename": result.filename,
-        "puzzle_count": plan["worksheets"],
+        "puzzle_count": actual_puzzle_count,
         "is_pdf": True,
         "is_book": is_book,
         "custom_words": custom_words,
@@ -1165,7 +1251,7 @@ def _crossword_pdf_payload(
         "image_jobs": image_jobs,
         "crossword_meta": {
             "output_type": plan["output_type"],
-            "worksheets": plan["worksheets"],
+            "worksheets": actual_puzzle_count,
             "words_per_puzzle": plan["words_per_puzzle"],
             "difficulty": plan["difficulty"],
             "grid_size": plan["grid_size"],
@@ -1810,7 +1896,17 @@ def _math_worksheet_pdf_payload(fields: dict, *, package_id: str = "") -> dict:
         product_mode=plan.get("output_type", "book"),
     )
     cover_eligible_fields = apply_cover_eligibility_to_fields(eligibility, fixed_fields)
-    cover_allowed = eligibility.cover_allowed
+    # Root cause (MATH WORKSHEET COVER SELECTION REPAIR): this used to be
+    # `include_cover = eligibility.cover_allowed` alone -- the customer's own
+    # "Include cover page" selection was never read here at all, so Yes and
+    # No produced identical PDFs. eligibility.cover_allowed remains a hard
+    # ceiling (Single Worksheet, and any format under the universal 5-page
+    # minimum, still cannot manufacture a cover -- that valid business rule
+    # is unchanged); an explicit customer choice now decides within that
+    # ceiling, defaulting to Yes only when the field is missing (matches the
+    # prior effective default, and Crossword/Word Search's own pattern).
+    customer_wants_cover = _yes_default(fixed_fields, "include_cover", True)
+    cover_allowed = eligibility.cover_allowed and customer_wants_cover
 
     request = MathWorksheetPdfRequest(
         worksheet_title=title,
@@ -1900,11 +1996,14 @@ def _spelling_worksheet_pdf_payload(fields: dict, *, package_id: str = "") -> di
     except (ValueError, TypeError):
         word_count = 10
     word_count = max(1, min(word_count, 20))  # cap between 1 and 20
-    # Map creation_mode from form → use_custom_words
+    # Map creation_mode from form → use_custom_words. "Themed (AI generates
+    # words)" is the pre-2026-09-09 label kept here for any stale saved
+    # project payload; the current form now correctly says "Topic (local
+    # word bank)" since this generator has never made an AI call.
     creation_mode = str(fixed_fields.get("creation_mode", "")).strip()
     if creation_mode == "My custom word list":
         use_custom = True
-    elif creation_mode == "Themed (AI generates words)":
+    elif creation_mode in {"Topic (local word bank)", "Themed (AI generates words)"}:
         use_custom = False
     else:
         use_custom = str(fixed_fields.get("use_custom_words", "")).lower() in {"yes", "true", "1"}

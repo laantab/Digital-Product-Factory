@@ -90,9 +90,25 @@ def _draw_line_art(
     Falls back gracefully if the theme is not recognized.
     """
     topic_lower = topic.lower()
-    prompt_lower = line_art_prompt.lower()
-    combined = f"{topic_lower} {prompt_lower}"
-    theme = f"{topic} {line_art_prompt}"
+    # FACTORY STABILITY AUDIT (2026-09-09): classify by the actual topic
+    # only -- never by the full line_art_prompt. Every prompt this Factory
+    # generates carries the same fixed negative-constraints boilerplate
+    # ("No superheroes... No Thunder Volt... villains, guns, or crime
+    # scenes unless the user theme explicitly asks for them"), and a
+    # plain substring check matched "hero" inside "superheroes" and
+    # "volt"/"thunder"/"villain" inside that same boilerplate on EVERY
+    # theme -- so the superhero branch fired first regardless of what the
+    # customer actually asked for (reproduced live: "Cute ocean animals
+    # for kids ages 4-8" rendered a generic stick-figure hero/city-skyline
+    # page, on every interior page). This path is used both by the
+    # zero-cost "Basic Test Fallback" mode and as the emergency fallback
+    # for any page whose paid AI image failed to generate, so a real
+    # customer's sellable book could silently receive a wrong-theme page.
+    # The topic string alone (e.g. "Cute ocean animals for kids ages 4-8
+    # in the Rainforest") carries real theme signal without that
+    # boilerplate noise, and still classifies a genuine superhero theme
+    # correctly since the customer's own words would say so.
+    combined = topic_lower
 
     is_kids = any(w in age_group.lower() for w in ["kids", "children", "6-8", "8-10", "all ages"])
     is_adult = "adult" in age_group.lower()

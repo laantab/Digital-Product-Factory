@@ -134,18 +134,35 @@ _TOPIC_BANKS: dict[str, list[str]] = {
 
 
 def _match_topic_bank(theme: str) -> list[str] | None:
-    """Return the matching topic bank, or None if no match."""
+    """Return the matching topic bank, or None if no match.
+
+    SPELLING WORKSHEET RELEASE (2026-09-09): the substring scan used to
+    return the FIRST key (in dict-insertion order) that appeared as a
+    substring of the theme, rather than the most specific one -- e.g.
+    "Ocean Animals" contains both "animals" (a generic safari-word bank,
+    defined earlier in the dict) and "ocean" (a real, specific ocean-word
+    bank, defined later) as substrings, so the generic one always won
+    regardless of relevance. Now picks the LONGEST matching key, the same
+    "longest alias wins" principle the shared Universal Topic Vocabulary
+    Engine already uses (services/factory/topic_vocabulary.py), so a more
+    specific bank always beats a more generic one that happens to also
+    match. This function is only reached for themes the shared engine
+    itself doesn't cover (see _select_words) -- most common topics resolve
+    through the shared engine first now.
+    """
     if not theme:
         return None
     theme_lower = str(theme).lower().strip()
-    # Exact match
+    # Exact match beats everything.
     if theme_lower in _TOPIC_BANKS:
         return _TOPIC_BANKS[theme_lower]
-    # Substring match
+    # Substring match: prefer the longest (most specific) matching key.
+    best_key = None
     for key in _TOPIC_BANKS:
         if key in theme_lower or theme_lower in key:
-            return _TOPIC_BANKS[key]
-    return None
+            if best_key is None or len(key) > len(best_key):
+                best_key = key
+    return _TOPIC_BANKS[best_key] if best_key else None
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +293,35 @@ _DICTATION_BANK: dict[str, str] = {
     "nebula": "The colorful nebula is a cloud of gas and dust in space.",
     "satellite": "The weather satellite sends pictures of cloud patterns.",
     "telescope": "We use a telescope to see stars that are very far away.",
+    # Ocean animals (2026-09-09, added alongside the shared topic engine
+    # integration so words drawn from the shared "ocean_animals" category
+    # get a real dictation sentence instead of the generic fallback).
+    "octopus": "The octopus squeezed its soft body through a tiny gap in the rocks.",
+    "squid": "The squid shot a cloud of ink to escape from a hungry shark.",
+    "starfish": "The starfish can slowly regrow an arm that it loses.",
+    "jellyfish": "The jellyfish drifted through the water, trailing its long tentacles.",
+    "seahorse": "The tiny seahorse wrapped its tail around a piece of coral.",
+    "crab": "The crab scuttled sideways across the wet sand.",
+    "lobster": "The lobster used its large claws to crack open a shell.",
+    "shrimp": "A school of shrimp darted along the sandy ocean floor.",
+    "clam": "The clam closed its two shells tightly when the tide went out.",
+    "oyster": "Inside the oyster, a grain of sand slowly became a pearl.",
+    "seal": "The seal barked and clapped its flippers on the rocky shore.",
+    "walrus": "The walrus used its long tusks to haul itself onto the ice.",
+    "otter": "The otter floated on its back and cracked open a shell with a rock.",
+    "penguin": "The penguin waddled across the ice before diving into the cold water.",
+    "turtle": "The sea turtle swam gracefully through the warm ocean current.",
+    "eel": "The eel slithered out from a crack between the coral rocks.",
+    "stingray": "The stingray glided silently over the sandy sea floor.",
+    "anemone": "The clownfish hid safely among the stinging arms of the anemone.",
+    "tuna": "The tuna swam swiftly through the open ocean in a large school.",
+    "salmon": "Every year, the salmon swims upstream to lay its eggs.",
+    "clownfish": "The bright orange clownfish darted between the anemone's arms.",
+    "manatee": "The gentle manatee grazed slowly on grass at the bottom of the bay.",
+    "plankton": "Tiny plankton floats near the ocean's surface, feeding many larger animals.",
+    "barnacle": "A barnacle attached itself firmly to the bottom of the old boat.",
+    "pelican": "The pelican dove into the water and scooped up a fish in its pouch.",
+    "krill": "A humpback whale can eat millions of tiny krill in a single day.",
 }
 
 
@@ -573,6 +619,79 @@ def _capitalize_word(word: str) -> str:
     return w
 
 
+def _grade_max_word_length(grade: str) -> int:
+    """Deterministic, explainable per-grade word-length ceiling.
+
+    Only applied to topic/shared-engine vocabulary, which has no inherent
+    grade tier of its own (unlike _GRADE_BANKS, which is already hand-
+    curated per grade). A simple length cap is enough to keep "Grade 2"
+    from getting the same word complexity as "Grade 8" without building an
+    elaborate linguistic/readability system.
+    """
+    g = re.sub(r"^Grade\s*", "", str(grade or "3").strip(), flags=re.IGNORECASE)
+    g = re.split(r"[-,]", g)[0].strip()
+    try:
+        n = int(g)
+    except ValueError:
+        n = 3
+    if n <= 2:
+        return 6
+    if n <= 4:
+        return 8
+    if n <= 6:
+        return 10
+    return 99  # Grades 7+ : no practical cap.
+
+
+def _filter_topic_words_for_grade(words: list[str], grade: str, word_count: int) -> list[str]:
+    """Clean, dedupe, and grade-length-filter a topic word list.
+
+    Never lets grade filtering starve the worksheet: if the cap would
+    leave fewer than a small usable minimum, it relaxes back to the full
+    deduplicated pool rather than under-deliver on the customer's
+    requested word count. Never pads with unrelated words -- a topic pool
+    smaller than word_count simply returns fewer words.
+    """
+    max_len = _grade_max_word_length(grade)
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for w in words:
+        wl = re.sub(r"[^A-Za-z]", "", str(w or "")).lower()
+        if not wl or wl in seen:
+            continue
+        seen.add(wl)
+        cleaned.append(wl)
+    filtered = [w for w in cleaned if len(w) <= max_len]
+    pool = filtered if len(filtered) >= min(4, word_count) else cleaned
+    return pool[:word_count]
+
+
+def _looks_like_real_topic(theme: str) -> bool:
+    """Local, deterministic nonsense-topic guard for the grade-bank
+    fallback (Step 12 of the 2026-09-09 Spelling Worksheet release: a
+    theme that matches no pack must not silently receive random
+    grade-level words that have nothing to do with what the customer
+    typed -- "the Factory must not pretend it understands nonsense").
+
+    A theme containing any bare number/symbol token, or where most of its
+    alphabetic tokens don't look like real words (too short or no vowel),
+    is treated as nonsense. A real topic phrase not covered by any pack
+    (e.g. "Medieval History") still passes this check and keeps the
+    existing graceful grade-bank fallback -- this guard is deliberately
+    narrow, not a general profanity/quality filter.
+    """
+    tokens = re.findall(r"[A-Za-z]+|[0-9]+", str(theme or ""))
+    if not tokens:
+        return False
+    if any(t.isdigit() for t in tokens):
+        return False
+    alpha_tokens = [t for t in tokens if t.isalpha()]
+    if not alpha_tokens:
+        return False
+    real_looking = [t for t in alpha_tokens if len(t) >= 3 and re.search(r"[aeiouAEIOU]", t)]
+    return len(real_looking) >= max(1, (len(alpha_tokens) + 1) // 2)
+
+
 def _select_words(
     theme: str,
     grade: str,
@@ -580,12 +699,19 @@ def _select_words(
     custom_words: str,
 ) -> tuple[list[str], list[str]]:
     """
-    Select words using ONLY local banks — no AI, no network calls.
+    Select words using ONLY local banks and the shared topic engine — no
+    AI, no network calls.
 
     Priority:
       1. custom_words (user-supplied list, local)
-      2. topic bank (theme matched to local topic bank)
-      3. grade-level bank (local fallback)
+      2. the shared Universal Topic Vocabulary Engine (services.factory.
+         topic_vocabulary) -- the SAME resolver Crossword and Word Search
+         use, so all three products agree on what a topic means. Falls
+         through unchanged when the theme isn't one of its categories.
+      3. local topic bank (theme matched to this module's own bank, for
+         topics outside the shared engine's current category list)
+      4. grade-level bank (local fallback) -- but a genuinely nonsense
+         theme fails safely here instead (see _looks_like_real_topic)
 
     Returns (selected_words, dictation_sentences).
     """
@@ -598,15 +724,31 @@ def _select_words(
         ]
         return words[:word_count], []
 
-    # 2. Topic bank match — fully local
+    # 2. Shared Universal Topic Vocabulary Engine — fully local, zero-cost.
+    from services.factory.topic_vocabulary import resolve_topic_vocabulary
+
+    shared = resolve_topic_vocabulary(theme, max(word_count * 3, 30))
+    if shared.matched:
+        selected = _filter_topic_words_for_grade(shared.words, grade, word_count)
+        if selected:
+            sentences = [_get_dictation_sentence(w) for w in selected]
+            return selected, sentences
+
+    # 3. Local topic bank match — fully local
     topic_words = _match_topic_bank(theme)
     if topic_words:
-        selected = topic_words[:word_count]
-        # Build dictation sentences for topic words
-        sentences = [_get_dictation_sentence(w) for w in selected]
-        return selected, sentences
+        selected = _filter_topic_words_for_grade(topic_words, grade, word_count)
+        if selected:
+            sentences = [_get_dictation_sentence(w) for w in selected]
+            return selected, sentences
 
-    # 3. Grade-level bank — fully local fallback
+    # 4. No topic match at all. A genuinely nonsense theme must not
+    # silently fall through to random grade-level words.
+    if theme and theme.strip() and not _looks_like_real_topic(theme):
+        return [], []
+
+    # 5. Grade-level bank — fully local fallback (no theme given, or a
+    # real-looking topic phrase with no matching pack).
     grade_words = _get_grade_bank(grade)
     selected = grade_words[:word_count]
     sentences = [_get_dictation_sentence(w) for w in selected]
@@ -648,7 +790,10 @@ def build_spelling_worksheet(
             title=title,
             theme=theme_val,
             grade=grade_val,
-            errors=["No spelling words available for this topic and grade."],
+            errors=[
+                f'We could not build a strong enough word set for "{theme_val}" yet. '
+                "Try a broader topic or add your own words."
+            ],
         )
 
     # Apply activity transformation

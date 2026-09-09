@@ -101,7 +101,7 @@ def build_crossword_pdf(request: CrosswordPdfRequest) -> CrosswordPdfResult:
         output_type=output_type,
         use_ai_words=bool(request.use_ai_words),
         seed=request.seed,
-        include_answer_key=bool(request.include_answer_key) and output_type != "single_page",
+        include_answer_key=bool(request.include_answer_key),
         exports_dir=exports_dir,
     )
     result.puzzles = puzzles
@@ -119,10 +119,26 @@ def build_crossword_pdf(request: CrosswordPdfRequest) -> CrosswordPdfResult:
         result.errors.append("No crossword puzzles could be rendered.")
         return result
 
-    # Full Book must not silently shrink below the requested puzzle count.
-    if output_type == "book" and len(valid) < puzzle_count:
+    # UNIVERSAL TOPIC PUZZLE ENGINE — adaptive sizing: if the word pool
+    # legitimately couldn't support the full requested puzzle_count,
+    # build_crossword_puzzles already shrank it and said so via a warning
+    # (see services.crossword.book.build_crossword_puzzles -- the same
+    # pattern already shipped for Word Search). Validate against what was
+    # actually, deliberately built in that case, not the original request
+    # -- otherwise a correctly-sized smaller book is rejected as if it
+    # were a defect. A shortfall with no such warning is still a real
+    # failure, unchanged.
+    effective_puzzle_count = puzzle_count
+    if output_type == "book" and len(valid) < puzzle_count and any(
+        "instead of leaving the book incomplete" in w for w in warnings
+    ):
+        effective_puzzle_count = len(valid)
+
+    # Full Book must not silently shrink below the requested puzzle count
+    # (unless it was a deliberate, warned-about adaptation -- see above).
+    if output_type == "book" and len(valid) < effective_puzzle_count:
         result.errors.append(
-            f"Crossword Full Book requires {puzzle_count} puzzles, but only {len(valid)} passed validation. "
+            f"Crossword Full Book requires {effective_puzzle_count} puzzles, but only {len(valid)} passed validation. "
             "No PDF was produced. Please try again or provide a custom word list."
         )
         return result
@@ -143,7 +159,7 @@ def build_crossword_pdf(request: CrosswordPdfRequest) -> CrosswordPdfResult:
             valid[0],
             product_title=request.product_title,
             subtitle=book_subtitle or request.subtitle,
-            include_answer_key=bool(request.include_answer_key) and output_type != "single_page",
+            include_answer_key=bool(request.include_answer_key),
             cover_design=None,
         )
     else:
@@ -162,7 +178,7 @@ def build_crossword_pdf(request: CrosswordPdfRequest) -> CrosswordPdfResult:
     if output_type == "book":
         final_qa = run_crossword_book_qa(
             valid,
-            expected_puzzle_count=puzzle_count,
+            expected_puzzle_count=effective_puzzle_count,
             include_answer_key=bool(request.include_answer_key),
             pdf_bytes=pdf_bytes,
             words_per_puzzle=int(request.words_per_puzzle or 10),
@@ -170,7 +186,7 @@ def build_crossword_pdf(request: CrosswordPdfRequest) -> CrosswordPdfResult:
     else:
         final_qa = run_crossword_qa(
             valid[0],
-            include_answer_key=bool(request.include_answer_key) and output_type != "single_page",
+            include_answer_key=bool(request.include_answer_key),
             pdf_bytes=pdf_bytes,
             expected_word_count=int(request.words_per_puzzle or 10),
         )
@@ -179,11 +195,7 @@ def build_crossword_pdf(request: CrosswordPdfRequest) -> CrosswordPdfResult:
     result.qa_report = final_qa
 
     # QA gate: if answer key was requested but layout shows no answer key pages, block export.
-    # For single_worksheet/single_page: include_answer_key is conditioned on output_type != "single_page"
-    ak_requested_for_type = (
-        bool(request.include_answer_key)
-        and output_type not in {"single_page"}
-    )
+    ak_requested_for_type = bool(request.include_answer_key)
     if ak_requested_for_type and layout.answer_key_page_count == 0:
         final_qa.errors.append(
             "Answer key was requested but the PDF contains no answer key page. "

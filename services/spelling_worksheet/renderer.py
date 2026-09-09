@@ -18,6 +18,7 @@ from services.spelling_worksheet.builder import SpellingSection, SpellingWord, S
 
 _MARGIN = 0.5 * 72.0
 _HEADER_H = 60
+_WORD_ROW_H = 54.0   # height of one numbered activity row (see _draw_word_row)
 
 
 @dataclass
@@ -51,18 +52,40 @@ def _paint_white(pdf: canvas.Canvas) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Word bank — drawn at bottom of each practice page
 # ─────────────────────────────────────────────────────────────────────────────
+_BANK_ROW_H = 13.0
+_BANK_HEADER_H = 26.0   # label + top padding, above the first row
+_BANK_MIN_H = 70.0      # never smaller than the original fixed box
+
+
+def _word_bank_height(word_count: int) -> float:
+    """Return the word-bank box height needed to show every word.
+
+    The box used to be a fixed 70pt regardless of word count, which fit
+    at most ~4 rows per column (8 words total) -- any worksheet with more
+    words (the customer form's own default is 10) silently dropped the
+    rest of the words from the printed reference bank while the practice
+    rows and answer key still covered all of them. Sizing the box to the
+    actual row count fixes that; a 2-column layout needs
+    ceil(word_count / 2) rows.
+    """
+    rows = max(1, -(-max(0, word_count) // 2))  # ceil(word_count / 2)
+    return max(_BANK_MIN_H, _BANK_HEADER_H + rows * _BANK_ROW_H + 6.0)
+
+
 def _draw_word_bank(
     pdf: canvas.Canvas,
     all_words: list[str],
     page_w: float,
     page_h: float,
+    bank_h: float | None = None,
 ) -> None:
     """Draw the spelling word bank at the bottom of a practice page.
 
     Words appear in a lightly-shaded box in columns.
     Students use this to find the correct spelling for each activity.
     """
-    BANK_H = 70.0       # height reserved for word bank
+    words = [w.upper() for w in all_words if w]
+    BANK_H = bank_h if bank_h is not None else _word_bank_height(len(words))
     BOTTOM_Y = _MARGIN
     x_left = _MARGIN
     x_right = page_w - _MARGIN
@@ -77,14 +100,13 @@ def _draw_word_bank(
     pdf.drawString(x_left + 4, BOTTOM_Y + BANK_H - 12, "WORD BANK:")
 
     # Two columns of words
-    words = [w.upper() for w in all_words if w]
     mid = len(words) // 2
     col_a = words[:mid]
     col_b = words[mid:]
 
     col_w = (x_right - x_left) / 2.0
-    row_h = 13
-    start_y = BOTTOM_Y + BANK_H - 26
+    row_h = _BANK_ROW_H
+    start_y = BOTTOM_Y + BANK_H - _BANK_HEADER_H
 
     pdf.setFont("Helvetica", 8)
     pdf.setFillColor(colors.black)
@@ -123,7 +145,7 @@ def _draw_word_row(
     Shows only the prompt/clue/blank for the student to work from.
     The word bank at the bottom of the page provides the word list.
     """
-    row_h = 54
+    row_h = _WORD_ROW_H
 
     # Alternating background
     if row_num % 2 == 0:
@@ -220,25 +242,31 @@ def _draw_practice_page(
         pdf.drawString(_MARGIN, page_h - _MARGIN - 52, section.instruction[:120])
 
     # ── Word rows ─────────────────────────────────────────────────────────────
-    BANK_H = 70.0
+    BANK_H = _word_bank_height(len(all_words))
     WORD_BANK_CUTOFF = _MARGIN + BANK_H + 6   # stop drawing rows before word bank
 
     top_y = page_h - _MARGIN - _HEADER_H
     x_right = page_w - _MARGIN
 
     for i, word in enumerate(section.words):
+        # Check BEFORE drawing, not after: a row about to be drawn (54pt
+        # tall) can still intrude on the word-bank box even when its own
+        # starting y is above the cutoff, once the box has grown past its
+        # original fixed size (see _word_bank_height). Stopping one row
+        # early here is what correctly pushes the overflow word onto the
+        # next practice page instead of overlapping the bank.
+        if top_y - _WORD_ROW_H < WORD_BANK_CUTOFF:
+            break
         top_y = _draw_word_row(
             pdf, word, i + 1,
             y=top_y,
             x_left=_MARGIN, x_right=x_right,
             activity_type=section.activity_type,
         )
-        if top_y < WORD_BANK_CUTOFF:
-            break
 
     # ── Word bank at bottom ────────────────────────────────────────────────────
     if all_words:
-        _draw_word_bank(pdf, all_words, page_w, page_h)
+        _draw_word_bank(pdf, all_words, page_w, page_h, bank_h=BANK_H)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
