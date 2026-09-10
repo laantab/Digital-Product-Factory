@@ -165,10 +165,20 @@ server if it predates this morning's vocabulary edit.
    A pre-existing flaky ebook browser test was made case-insensitive
    (`tests/test_ebook_real_browser_customer_path.py`, "Preparing your ebook").
 
+### Released
+
+- **Planner Engine v1.7.0 is released.** Commit `e82d48c` pushed to
+  `laantab/Digital-Product-Factory`, branch `main`, on 2026-09-09 after the
+  owner inspected the review gallery. Final full release gate on that commit:
+  1716 passed, 0 failed, 0 skipped, 879 subtests. Local `main` matches
+  `origin/main`. The four commits pushed together: `58c7aa1` (checklist scope),
+  `e9dd93b` (logo), `7759baa` (v1.6.0 design system), `e82d48c` (v1.7.0
+  picker and rating).
+
 ### Still open
 
 - The plain-language manuscript panel from the rescued branch (held by the owner).
-- The release commit is local only; the owner decides on the push after
-  inspecting `Factory Control Center\Reviews\Planner Design System 2026-09-09\`.
+- The rescued branch `onedrive-workspace-phase-a` can now be archived or deleted
+  at the owner's discretion; both useful pieces have been ported and released.
 - The cover editor page loads the main bundle and logs one harmless console
   error (it expects the home page's research button).
