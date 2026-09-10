@@ -126,3 +126,37 @@ Rotate Tavily and Pexels keys; real user accounts before live payments; enforce 
 limits in `/generate-product`; make the Cloudflare tunnel a Windows service; sweep
 Farm / Rainforest / Arctic Animals topics for the vocabulary gap; restart the 5055
 server if it predates this morning's vocabulary edit.
+
+---
+
+## Evening (written by Claude, 2026-09-09)
+
+### Done this evening
+
+1. **Rescued-branch review.** `onedrive-workspace-phase-a` compared against main:
+   almost everything on it was re-solved on main between Sep 4 and 9. Two pieces
+   were worth porting and were ported by hand, each as its own commit: the
+   per-chapter duplicate-checklist fix (`58c7aa1`) and the Factory logo
+   (`e9dd93b`, visible on the home page, both builders and the cover editor).
+   The branch is untouched and can be archived once the plain-language
+   manuscript panel has been considered separately.
+2. **Planner design system, v1.6.0.** The Faith Planner engine now renders
+   through themes (`services/planner/themes.py`), a component library
+   (`components.py`) and a cover-art engine with an image slot (`cover.py`).
+   Five faith themes are selectable from the builder form (Design theme,
+   Cover style). The Editor-in-Chief gained design checks (page furniture,
+   print safety, truncation, cover artwork resolution, theme consistency,
+   design richness) and reports a visually weak planner as "needs improvement".
+   Tests: `tests/test_planner_design_system.py` (new) and
+   `tests/test_planner_products.py` (unchanged behaviour, one expectation
+   updated because image resolution is now a real check). Demo outputs:
+   `Factory Control Center\Reviews\Planner Design System 2026-09-09\`.
+
+### Still open
+
+- The plain-language manuscript panel from the rescued branch (held by the owner).
+- A Pexels picker for the planner cover image slot in the UI. The engine accepts
+  `cover_image_path` and `cover_image_source="pexels"` today; the form does not
+  yet expose them. No Pexels call was made this session.
+- The cover editor page loads the main bundle and logs one harmless console
+  error (it expects the home page's research button).

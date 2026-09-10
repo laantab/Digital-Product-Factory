@@ -5,6 +5,83 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.6.0 — 2026-09-09
+
+**Faith planners are now built by a design system, so every one of them looks
+like a product you would be happy to pay for — and the reviewer checks that.**
+
+### What changed
+
+- **Five design themes, chosen from a menu.** Warm Grace (burgundy and gold),
+  Modern Minimal Faith (black, grey and taupe), Floral Devotion (blush and
+  sage botanicals), Family Heritage (walnut and amber) and Joyful Light (sky
+  blue and sun gold). A theme sets the colours, the type pairing, the header
+  style, the ornament, the writing-line style and the cover artwork for every
+  page at once. Picking one is a form field; no code changes.
+- **Covers have artwork now.** The old cover was a flat block of colour with
+  a title on it. Each theme paints its own hero artwork locally (light, glow,
+  linen, botanicals, sky) in one of four cover styles: full photo, photo with
+  a text panel, soft image with overlay, or elegant minimal. A photograph can
+  be dropped into the cover image slot, and the Pexels workflow can fill that
+  slot when a key is installed; nothing is fetched unless you ask.
+- **Interior pages read as a guided devotional, not a school worksheet.**
+  Reflection questions sit in soft cards with numbered badges; the weekly page
+  opens with a reading card and pairs the prayer focus with gratitude; tables
+  have rounded frames and gentle zebra rows; the belongs-to page is a proper
+  title page; the contents page tells a beginner where to start; the 52-week
+  plan reads in seasons; every page carries the same footer with an ornament
+  and a page number.
+- **The Budget Planner keeps its teal-and-brass identity** and gains the same
+  page furniture, without any change to what its pages contain.
+- **The Editor-in-Chief now judges design, not only content.** It checks that
+  every page carries its heading, footer and the right page number; that no
+  text sits inside the print-safe margin or runs off the page; that nothing
+  the plan asked for was silently dropped; that the cover artwork will print
+  sharp; that page colours stay on the chosen theme's palette; and that the
+  working pages are not bare forms. A planner that is technically valid but
+  visually weak is reported as needing improvement instead of passing.
+
+### What was fixed
+
+- **A finished manuscript could be sent back over grocery items.** The
+  duplicate-checklist rule counted repeated bullets across the whole book, so
+  "frozen vegetables" listed once in three different chapters read as padding
+  and demoted an 11,000-word manuscript that had passed every other check. It
+  now counts inside each chapter, where repetition really is padding.
+- **The Factory had no logo.** The Digital Product Factory mark now appears on
+  the home page, the two standalone builders and the cover editor, served
+  from the Factory's own files.
+- **Long worksheet labels could run off the page.** Labels now wrap.
+- **The 52-week reading plan could lose its last week** on themes with a
+  taller header. It always fits all 52 rows now.
+
+### Do the steps change for you?
+
+No. Generate a Faith Planner exactly as before. Two new menus appear on the
+form, Design theme and Cover style, both with sensible defaults, so leaving
+them alone still produces a finished planner. Budget Planner is unchanged
+apart from the refreshed page furniture.
+
+### Release gate
+
+Full Windows release gate run once with a temporary database before this
+release; the fast Stability Gate and both planner suites re-run on the final
+code. Results are recorded with the release commit. No OpenAI, Tavily or
+Pexels call was made.
+
+### Files
+
+- New: `services/planner/themes.py`, `services/planner/components.py`,
+  `services/planner/cover.py`, `tests/test_planner_design_system.py`,
+  `tests/test_duplicate_checklist_chapter_scope.py`,
+  `tests/test_factory_logo_branding.py`.
+- Changed: `services/planner/renderer.py` (rewritten on the component
+  library), `builder.py`, `pdf_builder.py`, `services/product.py`,
+  `services/editor_in_chief_planner.py`, `services/ebook_document.py`,
+  `static/js/app.js`, `app.py`, the four templates.
+
+---
+
 ## 1.5.0 — 2026-09-06
 
 **Books are illustrated now, not just supplied with image files — and the

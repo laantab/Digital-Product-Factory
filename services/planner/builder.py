@@ -78,6 +78,10 @@ class PlannerRequest:
     include_calendar: bool = True
     include_reflection: bool = True
     seed: int | None = None
+    # Design system (see services/planner/themes.py). Keys, not code edits.
+    design_theme: str = ""          # e.g. "warm_grace"; "" = planner type default
+    cover_style: str = ""           # full_photo | photo_panel | soft_overlay | minimal_texture
+    cover_image_path: str = ""      # optional hero photograph for the cover image slot
 
 
 @dataclass
@@ -87,6 +91,9 @@ class PlannerPlan:
     subtitle: str
     pages: list[PlannerPage] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    design_theme: str = ""
+    cover_style: str = ""
+    cover_image_path: str = ""
 
     @property
     def page_count(self) -> int:
@@ -481,12 +488,29 @@ def build_planner_plan(req: PlannerRequest) -> PlannerPlan:
             f"{len(pages)} PAGES  -  {size_label}  -  PRINT AT HOME OR ON DEMAND"
         )
 
+    # Resolve the design theme once, here, so the plan carries a real key and
+    # the renderer, the reviewer, and the package metadata all agree on it.
+    from services.planner.themes import normalize_cover_style, resolve_theme
+
+    theme, theme_warning = resolve_theme(req.design_theme, req.planner_type)
+    if theme_warning:
+        warnings.append(theme_warning)
+    cover_style, style_warning = normalize_cover_style(req.cover_style, theme)
+    if style_warning:
+        warnings.append(style_warning)
+    if pages and pages[0].kind == "cover":
+        pages[0].spec["design_theme"] = theme.key
+        pages[0].spec["cover_style"] = cover_style
+
     return PlannerPlan(
         planner_type=req.planner_type,
         title=title,
         subtitle=subtitle,
         pages=pages,
         warnings=warnings,
+        design_theme=theme.key,
+        cover_style=cover_style,
+        cover_image_path=str(req.cover_image_path or ""),
     )
 
 

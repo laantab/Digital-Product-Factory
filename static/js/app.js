@@ -283,6 +283,8 @@ const PRODUCT_TYPES = [
     fields: [
       { name: "planner_title", label: "Planner title", type: "text", placeholder: "Leave blank for 'Faith Planner'" },
       { name: "theme", label: "Theme / niche", type: "text", placeholder: "e.g. Women's, Family, New Believer" },
+      { name: "design_theme", label: "Design theme", type: "select", options: ["Warm Grace", "Modern Minimal Faith", "Floral Devotion", "Family Heritage", "Joyful Light"], default: "Warm Grace", hint: "Colours, type and cover artwork. Every page follows the theme you pick." },
+      { name: "cover_style", label: "Cover style", type: "select", options: ["Theme default", "Full photo", "Photo + text panel", "Soft image with overlay", "Elegant minimal"], default: "Theme default", hint: "Artwork is painted locally. A Pexels photo can be dropped into the cover image slot later." },
       { name: "audience", label: "Target audience", type: "text", placeholder: "Printed on the cover as a small label" },
       { name: "author", label: "Author / brand name", type: "text" },
       { name: "pages", label: "Number of pages", type: "number", value: "60", hint: "12-200. Rounded to keep whole weekly units intact." },

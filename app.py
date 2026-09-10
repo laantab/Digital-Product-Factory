@@ -3312,6 +3312,8 @@ def export_product_route():
                     author=str(_pf.get("author") or ""),
                     pages=int(data.get("declared_pages") or 60),
                     page_size=str(_pf.get("page_size") or "US Letter"),
+                    design_theme=str(_pf.get("design_theme") or data.get("design_theme") or ""),
+                    cover_style=str(_pf.get("cover_style") or data.get("cover_style") or ""),
                 ))
                 # Review the PDF the customer will actually receive. Only fall
                 # back to the rebuilt copy when no exported file can be found —
@@ -3351,6 +3353,7 @@ def export_product_route():
                     package_dir=_pkg_dir or rebuilt.package_dir,
                     page_images=page_images,
                     author=str((data.get("fields") or {}).get("author") or ""),
+                    layout_info=data.get("layout_info") or rebuilt.layout_info,
                 )
                 report = review_planner(candidate)
                 eic_ok = report.verdict == VERDICT_PASS

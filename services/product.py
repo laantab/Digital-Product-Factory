@@ -259,18 +259,29 @@ def _planner_pdf_payload(planner_type: str, fields: dict, *,
         include_calendar=_yes_default(fields, "include_calendar", True),
         include_reflection=_yes_default(fields, "include_reflection", True),
         package_id=pkg,
+        design_theme=_f(fields, "design_theme"),
+        cover_style=_f(fields, "cover_style"),
+        cover_image_path=_f(fields, "cover_image_path"),
+        cover_image_source=_f(fields, "cover_image_source"),
     )
     result = build_planner_pdf(request)
     if result.errors or not result.pdf_bytes:
         raise RuntimeError(f"Failed to generate {label} PDF: {result.errors}")
 
     plan = result.plan
+    # Record the resolved theme key on the saved fields so a reopen, a rebuild
+    # and the reviewer all use the design the customer actually received.
+    fixed_fields["design_theme"] = result.layout_info.get("design_theme", "")
+    fixed_fields["cover_style"] = result.layout_info.get("cover_style", "")
     return {
         "product_type": planner_type,
         "product_label": label,
         "title": plan.title if plan else title,
         "subtitle": plan.subtitle if plan else "",
         "fields": fixed_fields,
+        "design_theme": result.layout_info.get("design_theme", ""),
+        "design_theme_label": result.layout_info.get("design_theme_label", ""),
+        "cover_style": result.layout_info.get("cover_style", ""),
         "content": "",
         "pdf_bytes": base64.b64encode(result.pdf_bytes).decode("utf-8"),
         "filename": result.filename,

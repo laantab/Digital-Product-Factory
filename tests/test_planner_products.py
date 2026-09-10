@@ -242,10 +242,13 @@ class PlannerEditorInChiefTests(unittest.TestCase):
 
     def test_skipped_checks_are_declared_with_a_reason(self):
         report = self._review(BUDGET)
-        for key in ("image_resolution", "photo_cover_verification",
-                    "external_plagiarism", "accessibility"):
+        for key in ("photo_cover_verification", "external_plagiarism", "accessibility"):
             self.assertIn(key, report.checks_skipped)
             self.assertTrue(report.checks_skipped[key].strip())
+        # Since the cover engine paints a raster artwork layer, image
+        # resolution is a real check rather than a declared gap.
+        self.assertIn("image_resolution", report.checks_run)
+        self.assertNotIn("image_resolution", report.checks_skipped)
 
     def test_repeated_worksheet_pages_are_not_reported_as_duplication(self):
         # Seven identical monthly expense-log pages is the design, not a defect.

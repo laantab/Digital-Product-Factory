@@ -47,6 +47,12 @@ class PlannerPdfRequest:
     include_calendar: bool = True
     include_reflection: bool = True
     package_id: str = ""
+    # Design system: selectable by key, no code edit needed.
+    design_theme: str = ""
+    cover_style: str = ""
+    cover_image_path: str = ""
+    # "" | "file" | "pexels". "pexels" opts in to the live sourcing path.
+    cover_image_source: str = ""
 
 
 @dataclass
@@ -62,9 +68,36 @@ class PlannerPdfResult:
     errors: list[str] = field(default_factory=list)
 
 
+def _resolve_cover_image(request: PlannerPdfRequest, result: PlannerPdfResult,
+                         pkg: str) -> str:
+    """The cover image slot. A local path is used as-is; "pexels" sources one
+    through the Factory's Pexels workflow when that is allowed, and otherwise
+    records why the procedural hero was painted instead."""
+    path = str(request.cover_image_path or "").strip()
+    if path or request.cover_image_source != "pexels":
+        return path
+    try:
+        from services.planner.cover import source_pexels_cover
+        from services.planner.themes import resolve_theme
+
+        theme, _w = resolve_theme(request.design_theme, request.planner_type)
+        dest = os.path.join(EXPORTS_DIR, pkg)
+        found = source_pexels_cover(theme, dest)
+        result.warnings.append(
+            f"Cover photo sourced from Pexels ({found.get('query')}); "
+            "credit the photographer in the listing if the platform asks.")
+        return str(found.get("path") or "")
+    except Exception as exc:  # noqa: BLE001
+        result.warnings.append(
+            f"Pexels cover photo not used ({type(exc).__name__}); painted a themed cover instead.")
+        return ""
+
+
 def build_planner_pdf(request: PlannerPdfRequest) -> PlannerPdfResult:
     result = PlannerPdfResult()
     try:
+        pkg = request.package_id or uuid.uuid4().hex
+        cover_image = _resolve_cover_image(request, result, pkg)
         pages = clamp_pages(request.pages, request.planner_type)
         plan_req = PlannerRequest(
             planner_type=request.planner_type,
@@ -80,6 +113,9 @@ def build_planner_pdf(request: PlannerPdfRequest) -> PlannerPdfResult:
             include_habit_tracker=request.include_habit_tracker,
             include_calendar=request.include_calendar,
             include_reflection=request.include_reflection,
+            design_theme=request.design_theme,
+            cover_style=request.cover_style,
+            cover_image_path=cover_image,
         )
         plan = build_planner_plan(plan_req)
         pdf_bytes, info = build_planner_pdf_bytes(
@@ -89,7 +125,6 @@ def build_planner_pdf(request: PlannerPdfRequest) -> PlannerPdfResult:
         result.errors.append(str(exc))
         return result
 
-    pkg = request.package_id or uuid.uuid4().hex
     slug = _slugify(plan.title, request.planner_type)
     filename = f"{slug}.pdf"
     package_dir = os.path.join(EXPORTS_DIR, pkg)
@@ -110,6 +145,12 @@ def build_planner_pdf(request: PlannerPdfRequest) -> PlannerPdfResult:
         "cover_page_count": info.cover_page_count,
         "page_kinds": info.kinds or {},
         "declared_pages": plan.page_count,
+        "design_theme": info.design_theme,
+        "design_theme_label": info.design_theme_label,
+        "cover_style": info.cover_style,
+        "cover_image_source": info.cover_image_source,
+        "cover_image_dpi": info.cover_image_dpi,
+        "render_notes": list(info.render_notes),
     }
-    result.warnings = list(plan.warnings)
+    result.warnings = result.warnings + list(plan.warnings)
     return result

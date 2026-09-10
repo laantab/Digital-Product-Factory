@@ -16,10 +16,24 @@ from services.planner.pdf_builder import (
     PlannerPdfResult,
     build_planner_pdf,
 )
+from services.planner.themes import (
+    COVER_STYLES,
+    DEFAULT_THEME,
+    THEMES,
+    PlannerTheme,
+    resolve_theme,
+    theme_choices,
+)
 
 __all__ = [
     "BUDGET",
+    "COVER_STYLES",
+    "DEFAULT_THEME",
     "FAITH",
+    "THEMES",
+    "PlannerTheme",
+    "resolve_theme",
+    "theme_choices",
     "PLANNER_LABELS",
     "PLANNER_TYPES",
     "PlannerPage",
