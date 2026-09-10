@@ -284,7 +284,12 @@ const PRODUCT_TYPES = [
       { name: "planner_title", label: "Planner title", type: "text", placeholder: "Leave blank for 'Faith Planner'" },
       { name: "theme", label: "Theme / niche", type: "text", placeholder: "e.g. Women's, Family, New Believer" },
       { name: "design_theme", label: "Design theme", type: "select", options: ["Warm Grace", "Modern Minimal Faith", "Floral Devotion", "Family Heritage", "Joyful Light"], default: "Warm Grace", hint: "Colours, type and cover artwork. Every page follows the theme you pick." },
-      { name: "cover_style", label: "Cover style", type: "select", options: ["Theme default", "Full photo", "Photo + text panel", "Soft image with overlay", "Elegant minimal"], default: "Theme default", hint: "Artwork is painted locally. A Pexels photo can be dropped into the cover image slot later." },
+      { name: "cover_style", label: "Cover style", type: "select", options: ["Theme default", "Full photo", "Photo + text panel", "Soft image with overlay", "Elegant minimal"], default: "Theme default", hint: "How the cover image and title sit together." },
+      { name: "cover_image_choice", label: "Cover image", type: "radio", options: [
+          { value: "factory", label: "Let the Factory choose" },
+          { value: "pexels", label: "Choose a Pexels photo" },
+          { value: "artwork", label: "Use theme artwork" },
+        ], default: "factory", hint: "Free photographs come from Pexels. If none is available, the Factory paints a themed cover and tells you." },
       { name: "audience", label: "Target audience", type: "text", placeholder: "Printed on the cover as a small label" },
       { name: "author", label: "Author / brand name", type: "text" },
       { name: "pages", label: "Number of pages", type: "number", value: "60", hint: "12-200. Rounded to keep whole weekly units intact." },
@@ -3890,6 +3895,18 @@ function fieldControl(f) {
   if (f.type === "textarea") {
     return `<textarea name="${f.name}" rows="3" ${base}${ac}${ph}></textarea>`;
   }
+  if (f.type === "radio") {
+    const opts = f.options.map((o) => {
+      const value = typeof o === "object" && o ? o.value : o;
+      const label = typeof o === "object" && o ? (o.label || o.value) : o;
+      const checked = f.default === value ? " checked" : "";
+      return `<label class="flex items-center gap-2 text-sm text-slate-700 py-0.5">
+        <input type="radio" name="${f.name}" value="${escapeHtml(value)}"${checked} class="text-brand-600" />
+        ${escapeHtml(label)}
+      </label>`;
+    }).join("");
+    return `<div class="rounded-xl border border-slate-300 px-3 py-2" data-radio-group="${f.name}">${opts}</div>`;
+  }
   if (f.type === "select") {
     const opts = f.options.map((o) => {
       const value = typeof o === "object" && o ? o.value : o;
@@ -3957,6 +3974,10 @@ function selectFactoryType(id) {
 
   if (id === "ebook") {
     _ebookVisualCostSetup();
+  }
+
+  if (id === "faith_planner") {
+    _plannerCoverPhotoSetup();
   }
 
   // Scroll form into view so beginners see the next step immediately.
@@ -4092,6 +4113,143 @@ function resetFactory() {
   buildFactoryTypes();
   document.getElementById("factoryFormWrap").classList.add("hidden");
   document.getElementById("factoryOutput").innerHTML = "";
+}
+
+// ── PLANNER COVER PHOTO PICKER ──────────────────────────────────────────────
+// Beginner flow: pick "Choose a Pexels photo", press Find photos, click one,
+// press Use This Photo. The chosen asset id travels with the form as a hidden
+// field, so the saved project rebuilds the same cover every time. The Factory
+// composes the title itself; the photograph is only the background.
+function _plannerCoverPhotoSetup() {
+  const form = document.getElementById("factoryForm");
+  if (!form) return;
+  const group = form.querySelector('[data-radio-group="cover_image_choice"]');
+  if (!group) return;
+  const holder = group.parentElement;
+  const panel = document.createElement("div");
+  panel.className = "mt-3 hidden";
+  panel.setAttribute("data-planner-photo-panel", "1");
+  panel.innerHTML = `
+    <input type="hidden" name="cover_asset_id" value="" />
+    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Search phrase</label>
+        <div class="flex gap-2">
+          <input type="text" data-planner-photo-query class="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="The Factory fills this in for you" />
+          <button type="button" class="btn-secondary text-sm whitespace-nowrap" data-planner-photo-search>Find photos</button>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-1" data-planner-photo-suggest></div>
+      </div>
+      <p class="text-sm text-slate-600" data-planner-photo-status>Press Find photos to see six free photographs that suit your planner.</p>
+      <div class="grid grid-cols-3 gap-2" data-planner-photo-grid></div>
+      <div class="flex items-center justify-between gap-3 hidden" data-planner-photo-actions>
+        <p class="text-xs text-slate-600" data-planner-photo-picked></p>
+        <button type="button" class="btn-primary text-sm" data-planner-photo-use>Use This Photo</button>
+      </div>
+      <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 hidden" data-planner-photo-chosen></div>
+    </div>`;
+  holder.appendChild(panel);
+
+  const q = () => panel.querySelector("[data-planner-photo-query]");
+  const status = (msg, tone) => {
+    const el = panel.querySelector("[data-planner-photo-status]");
+    el.textContent = msg;
+    el.className = "text-sm " + (tone === "warn" ? "text-amber-800" : "text-slate-600");
+  };
+  const fieldValue = (name) => {
+    const el = form.querySelector(`[name="${name}"]`);
+    return el ? el.value : "";
+  };
+  let picked = null;
+  let photos = [];
+
+  const renderGrid = () => {
+    const grid = panel.querySelector("[data-planner-photo-grid]");
+    grid.innerHTML = photos.map((ph) => `
+      <button type="button" class="relative rounded-lg overflow-hidden border-2 ${picked === ph.photo_id ? "border-brand-600" : "border-transparent"} bg-white" data-planner-photo-pick="${escapeHtml(ph.photo_id)}" title="${escapeHtml(ph.attribution || "")}">
+        <img alt="${escapeHtml(ph.alt || ph.attribution || "Photo")}" class="w-full h-32 object-cover" src="${escapeHtml(ph.preview_url)}" referrerpolicy="no-referrer" loading="lazy" />
+        <span class="block px-1 py-0.5 text-[10px] text-slate-500 truncate">${escapeHtml(ph.photographer || "Pexels")}</span>
+      </button>`).join("");
+    grid.querySelectorAll("[data-planner-photo-pick]").forEach((btn) => {
+      btn.onclick = () => {
+        picked = btn.getAttribute("data-planner-photo-pick");
+        renderGrid();
+        const actions = panel.querySelector("[data-planner-photo-actions]");
+        actions.classList.remove("hidden");
+        const ph = photos.find((x) => x.photo_id === picked) || {};
+        panel.querySelector("[data-planner-photo-picked]").textContent = ph.attribution || "Photo selected";
+      };
+    });
+  };
+
+  const search = async (page) => {
+    status("Looking for photographs…");
+    try {
+      const data = await api("/planner/cover-photos", {
+        method: "POST",
+        body: JSON.stringify({
+          title: fieldValue("planner_title") || fieldValue("theme"),
+          planner_type: "faith_planner",
+          design_theme: fieldValue("design_theme"),
+          query: q().value,
+          page: page || 1,
+        }),
+      });
+      q().value = data.query || "";
+      const sug = panel.querySelector("[data-planner-photo-suggest]");
+      sug.innerHTML = (data.suggested || []).map((sq) =>
+        `<button type="button" class="text-xs rounded-full border border-slate-300 px-2 py-0.5 bg-white" data-planner-photo-suggestion="${escapeHtml(sq)}">${escapeHtml(sq)}</button>`).join("");
+      sug.querySelectorAll("[data-planner-photo-suggestion]").forEach((b) => {
+        b.onclick = () => { q().value = b.getAttribute("data-planner-photo-suggestion"); search(1); };
+      });
+      photos = data.photos || [];
+      picked = null;
+      panel.querySelector("[data-planner-photo-actions]").classList.add("hidden");
+      renderGrid();
+      if (!data.configured || !photos.length) {
+        status(data.message || "No photographs are available right now. The Factory will paint a themed cover instead.", "warn");
+      } else {
+        status("Click a photograph, then press Use This Photo.");
+      }
+    } catch (e) {
+      status("Free photo search is not available right now. The Factory will paint a themed cover instead.", "warn");
+    }
+  };
+
+  panel.querySelector("[data-planner-photo-search]").onclick = () => search(1);
+  panel.querySelector("[data-planner-photo-use]").onclick = async () => {
+    if (!picked) return toast("Click a photograph first", "error");
+    const btn = panel.querySelector("[data-planner-photo-use]");
+    btn.disabled = true;
+    status("Saving your photograph…");
+    try {
+      const data = await api("/planner/cover-photo/select", {
+        method: "POST",
+        body: JSON.stringify({ photo_id: picked }),
+      });
+      if (!data.ok) {
+        status(data.message || "That photograph could not be used. Please pick another.", "warn");
+        return;
+      }
+      panel.querySelector('[name="cover_asset_id"]').value = data.asset_id || "";
+      const chosen = panel.querySelector("[data-planner-photo-chosen]");
+      chosen.textContent = `Cover photo saved: ${data.attribution || "Photo from Pexels"}. The Factory will place your title on it.`;
+      chosen.classList.remove("hidden");
+      status("Ready. Generate your planner when you like.");
+    } catch (e) {
+      status("That photograph could not be saved right now. The Factory will paint a themed cover instead.", "warn");
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  const sync = () => {
+    const choice = (form.querySelector('[name="cover_image_choice"]:checked') || {}).value || "factory";
+    panel.classList.toggle("hidden", choice !== "pexels");
+    if (choice !== "pexels") panel.querySelector('[name="cover_asset_id"]').value = "";
+  };
+  form.querySelectorAll('[name="cover_image_choice"]').forEach((r) => { r.onchange = sync; });
+  sync();
 }
 
 function collectFactoryFields() {
@@ -4457,6 +4615,15 @@ function renderProduct(d) {
            Quality checks are not complete yet. Your cover and generated pages are still here. Save stays disabled until the complete coloring book passes quality checks.
          </div>`
       : "";
+  const plannerNotes = [];
+  if (d.product_type === "faith_planner" || d.product_type === "budget_planner") {
+    (d.warnings || []).forEach((w) => { if (w) plannerNotes.push(String(w)); });
+    const credit = (d.fields || {}).cover_photo_attribution;
+    if (credit) plannerNotes.push(`Cover photograph: ${credit}. Credit the photographer in your listing if the marketplace asks.`);
+  }
+  const plannerNote = plannerNotes.length
+    ? `<div class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">${plannerNotes.map(escapeHtml).join("<br />")}</div>`
+    : "";
   const out = document.getElementById("factoryOutput");
   out.innerHTML = card(
     // Title row: product type badge + title on the left, "Download PDF" on the
@@ -4472,7 +4639,7 @@ function renderProduct(d) {
          ${d.product_type === "coloring_book" && _productAuthor(d) ? `<span class="truncate text-slate-500">by ${escapeHtml(_productAuthor(d))}</span>` : ""}
        </div>
        <button data-preview-dl-pdf class="${NS_BTN}">Download PDF</button>
-     </div>${placementNote}${coloringQaNote}${coloringCoverPreview}<div class="prose-out">${md(d.content)}</div>`
+     </div>${placementNote}${coloringQaNote}${plannerNote}${coloringCoverPreview}<div class="prose-out">${md(d.content)}</div>`
   );
   // Wire the preview-card "Download PDF" button. Lazy: only calls /export-product
   // when the user actually clicks, not on render. Reuses d.product_exports if the

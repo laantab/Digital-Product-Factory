@@ -437,6 +437,18 @@ def table(pdf: canvas.Canvas, T: PlannerTheme, x: float, y_top: float, width: fl
 # --------------------------------------------------------------------------- #
 # Page chrome
 # --------------------------------------------------------------------------- #
+def _hex_contrast(a: str, b: str) -> float:
+    """WCAG contrast ratio between two hex colours."""
+    def lum(value: str) -> float:
+        v = str(value or "").lstrip("#")
+        rgb = [int(v[i:i + 2], 16) / 255.0 for i in (0, 2, 4)] if len(v) == 6 else [0, 0, 0]
+        lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+    la, lb = lum(a), lum(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
 def page_header(pdf: canvas.Canvas, T: PlannerTheme, size: tuple[float, float], *,
                 title: str, subtitle: str = "", eyebrow: str = "") -> float:
     """Draw the page title chrome in the theme's style. Returns the y
@@ -460,8 +472,12 @@ def page_header(pdf: canvas.Canvas, T: PlannerTheme, size: tuple[float, float], 
         ts = fit_text_size(pdf, title, f.display, 16.0, inner - 120, min_size=11)
         text(pdf, m, h - band_h + 15, title, font=f.display, size=ts, fill=T.rgb("paper"))
         if eyebrow:
+            # Small type on the band needs 4.5:1; the accent is used only when
+            # it clears that, otherwise the paper colour does.
+            eyebrow_fill = ("cover_accent" if _hex_contrast(T.cover_accent, T.primary) >= 4.5
+                            else "paper")
             small_caps(pdf, T, w - m, h - band_h + 17, eyebrow, size=7,
-                       fill=T.rgb("cover_accent"), align="right")
+                       fill=T.rgb(eyebrow_fill), align="right")
         y = h - band_h - 24
     elif style == "soft":
         band_h = 52.0

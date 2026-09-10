@@ -112,11 +112,26 @@ def _vignette(img: Image.Image, strength: float = 0.35,
     return Image.composite(Image.new("RGB", (w, h), color), img, mask)
 
 
+def _seeded_noise(size: tuple[int, int], seed: int, amount: float) -> Image.Image:
+    """Deterministic grain: a seeded 256px tile, repeated. PIL's effect_noise
+    is unseeded, which made two renders of the same cover differ pixel for
+    pixel and broke the rebuild-is-identical promise."""
+    rng = random.Random(seed)
+    span = max(1, int(amount))
+    tile = Image.frombytes("L", (256, 256), bytes(
+        128 + rng.randint(-span, span) for _ in range(256 * 256)))
+    w, h = size
+    out = Image.new("L", size, 128)
+    for y in range(0, h, 256):
+        for x in range(0, w, 256):
+            out.paste(tile, (x, y))
+    return out
+
+
 def _grain(img: Image.Image, amount: float = 6.0, seed: int = 7) -> Image.Image:
     """Fine paper / linen grain. Keeps the cover from reading as a flat fill."""
     w, h = img.size
-    noise = Image.effect_noise((w, h), max(1.0, amount)).convert("L")
-    noise = noise.point(lambda v: 128 + (v - 128) // 3)
+    noise = _seeded_noise((w, h), seed, amount)
     grain = Image.merge("RGB", (noise, noise, noise))
     # img + (grain - 128): adds +/- a few levels of texture, never a tone shift.
     return ImageChops.add(img, grain, scale=1.0, offset=-128)
@@ -362,6 +377,19 @@ def _region_is_dark(img: Image.Image, box: tuple[float, float, float, float]) ->
     return (sum(px) / max(len(px), 1)) < 135
 
 
+def _bottom_fade(img: Image.Image, color: tuple[int, int, int], *,
+                 start_frac: float = 0.7, strength: float = 0.6) -> Image.Image:
+    """Blend `color` in from `start_frac` of the height to the bottom edge."""
+    w, h = img.size
+    y0 = int(h * start_frac)
+    mask = Image.new("L", (w, h), 0)
+    if h - y0 > 2:
+        ramp = Image.linear_gradient("L").resize((w, h - y0))
+        ramp = ramp.point(lambda v: int(v * strength))
+        mask.paste(ramp, (0, y0))
+    return Image.composite(Image.new("RGB", (w, h), color), img, mask)
+
+
 def _scrim(img: Image.Image, box: tuple[float, float, float, float],
            color: tuple[int, int, int], strength: float) -> Image.Image:
     """Soft rectangular wash with feathered edges, for type legibility."""
@@ -403,6 +431,10 @@ def build_cover_art(T: PlannerTheme, page_size_pt: tuple[float, float], *,
         dark_title_area = _region_is_dark(img, title_box)
         scrim_color = (18, 14, 12) if (dark_title_area or T.cover_is_dark) else (255, 252, 248)
         img = _scrim(img, title_box, scrim_color, 0.42)
+        # The ownership line and the caption sit near the foot of the cover;
+        # a photograph is often busiest there, so a soft fade in the same
+        # ink protects them the way the scrim protects the title.
+        img = _bottom_fade(img, scrim_color, start_frac=0.60, strength=0.80)
         img = _vignette(img, 0.22, (0, 0, 0) if scrim_color[0] < 128 else (255, 255, 255))
         text_on_dark = scrim_color[0] < 128
     elif style == "photo_panel":
@@ -425,8 +457,13 @@ def build_cover_art(T: PlannerTheme, page_size_pt: tuple[float, float], *,
         text_on_dark = T.cover_is_dark
     else:  # minimal_texture
         paper = _mix(bg, (255, 255, 255), 0.10)
-        img = _diagonal_gradient(size, _mix(paper, (255, 255, 255), 0.3), _mix(paper, (0, 0, 0), 0.06), 30)
-        img = _radial_glow(img, (w * 0.3, h * 0.25), w * 0.9, (255, 255, 255), 0.32)
+        # A dark theme keeps its depth: the light wash that gives a pale cover
+        # its paper feel would lift a deep ground into the mid-tones and cost
+        # the title its contrast.
+        light = 0.30 if not T.cover_is_dark else 0.08
+        glow = 0.32 if not T.cover_is_dark else 0.10
+        img = _diagonal_gradient(size, _mix(paper, (255, 255, 255), light), _mix(paper, (0, 0, 0), 0.06), 30)
+        img = _radial_glow(img, (w * 0.3, h * 0.25), w * 0.9, (255, 255, 255), glow)
         img = _grain(img, amount=6.0, seed=seed)
         img = _linen(img, seed=seed, alpha=8)
         if T.cover_art == "blush_botanical":

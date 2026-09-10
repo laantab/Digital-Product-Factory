@@ -208,6 +208,56 @@ def pexels_status_route():
     return payload
 
 
+def _planner_cover_asset_path(asset_id) -> str:
+    try:
+        from services.planner.cover_photos import resolve_cover_asset
+
+        return resolve_cover_asset(str(asset_id or ""))
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+@app.post("/planner/cover-photos")
+def planner_cover_photos_route():
+    """Contact sheet of free photographs for a planner cover.
+
+    Beginner-facing: the search phrase is built from the title, planner type
+    and design theme unless the customer typed one. Unavailable service (no
+    key, Safe Mode, network) is an answer with a message, never an error page.
+    Original image URLs never reach the browser.
+    """
+    body = request.get_json(silent=True) or {}
+    from services.planner.cover_photos import search_cover_photos
+
+    found = search_cover_photos(
+        title=str(body.get("title") or ""),
+        planner_type=str(body.get("planner_type") or "faith_planner"),
+        design_theme=str(body.get("design_theme") or ""),
+        query=str(body.get("query") or ""),
+        page=int(body.get("page") or 1),
+        per_page=6,
+    )
+    found.pop("_raw_photos", None)
+    found.pop("error", None)
+    return jsonify(found)
+
+
+@app.post("/planner/cover-photo/select")
+def planner_cover_photo_select_route():
+    """Store one chosen photograph and return the asset id the project keeps."""
+    body = request.get_json(silent=True) or {}
+    from services.planner.cover_photos import select_cover_photo
+
+    try:
+        asset = select_cover_photo(str(body.get("photo_id") or ""))
+    except Exception as exc:  # noqa: BLE001
+        from services.ebook_pexels import customer_pexels_message
+
+        return jsonify({"ok": False, "message": customer_pexels_message(exc)}), 200
+    asset.pop("path", None)
+    return jsonify({"ok": True, **asset})
+
+
 @app.route("/")
 def index():
     admin_on = os.environ.get("ADMIN_MODE", "").strip().lower() in {"1", "true", "yes"}
@@ -3314,6 +3364,7 @@ def export_product_route():
                     page_size=str(_pf.get("page_size") or "US Letter"),
                     design_theme=str(_pf.get("design_theme") or data.get("design_theme") or ""),
                     cover_style=str(_pf.get("cover_style") or data.get("cover_style") or ""),
+                    cover_image_path=_planner_cover_asset_path(_pf.get("cover_asset_id")),
                 ))
                 # Review the PDF the customer will actually receive. Only fall
                 # back to the rebuilt copy when no exported file can be found —

@@ -235,6 +235,34 @@ def _planner_pdf_payload(planner_type: str, fields: dict, *,
     )
     pages = clamp_pages(fields.get("pages") or fields.get("page_count"), planner_type)
 
+    # Cover image slot. Only a stored asset id chosen through the Factory's own
+    # photo picker can name a file; "factory" lets the Factory pick one now and
+    # keeps the id so a rebuild draws the same cover.
+    cover_image_path = ""
+    cover_note = ""
+    cover_choice = (_f(fields, "cover_image_choice") or "artwork").strip().lower()
+    cover_asset_id = _f(fields, "cover_asset_id")
+    cover_photo: dict = {}
+    if cover_choice in ("pexels", "factory"):
+        from services.planner.cover_photos import auto_cover_photo, resolve_cover_asset
+
+        cover_image_path = resolve_cover_asset(cover_asset_id)
+        if not cover_image_path and cover_choice == "factory":
+            try:
+                found = auto_cover_photo(
+                    title=title, planner_type=planner_type,
+                    design_theme=_f(fields, "design_theme"))
+            except Exception:  # noqa: BLE001
+                found = None
+            if found:
+                cover_image_path = found["path"]
+                cover_asset_id = found["asset_id"]
+                cover_photo = found
+        if not cover_image_path:
+            cover_note = (
+                "Free photo search was not available, so the Factory painted a "
+                "themed cover instead. You can pick a photo and rebuild later.")
+
     eligibility = determine_cover_eligibility(
         product_type=planner_type,
         fields=fields,
@@ -261,10 +289,12 @@ def _planner_pdf_payload(planner_type: str, fields: dict, *,
         package_id=pkg,
         design_theme=_f(fields, "design_theme"),
         cover_style=_f(fields, "cover_style"),
-        cover_image_path=_f(fields, "cover_image_path"),
-        cover_image_source=_f(fields, "cover_image_source"),
+        cover_image_path=cover_image_path,
+        cover_image_source="",
     )
     result = build_planner_pdf(request)
+    if cover_note:
+        result.warnings.append(cover_note)
     if result.errors or not result.pdf_bytes:
         raise RuntimeError(f"Failed to generate {label} PDF: {result.errors}")
 
@@ -273,6 +303,12 @@ def _planner_pdf_payload(planner_type: str, fields: dict, *,
     # and the reviewer all use the design the customer actually received.
     fixed_fields["design_theme"] = result.layout_info.get("design_theme", "")
     fixed_fields["cover_style"] = result.layout_info.get("cover_style", "")
+    fixed_fields["cover_image_choice"] = cover_choice
+    fixed_fields["cover_asset_id"] = cover_asset_id if cover_image_path else ""
+    fixed_fields.pop("cover_image_path", None)
+    if cover_photo:
+        fixed_fields["cover_photo_attribution"] = str(cover_photo.get("attribution") or "")
+        fixed_fields["cover_photo_page_url"] = str(cover_photo.get("page_url") or "")
     return {
         "product_type": planner_type,
         "product_label": label,

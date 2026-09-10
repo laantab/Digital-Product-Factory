@@ -281,7 +281,10 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         page.wait_for_selector("[data-ebook-build-bar]", timeout=30000)
         self._assert_screen_is_customer_safe(page, where="progress screen")
         progress_text = self._screen(page)
-        self.assertIn("Preparing your ebook", progress_text)
+        # The eyebrow is styled uppercase, and the step message replaces the
+        # plain-case copy within the first moment of a build, so the screen
+        # legitimately reads "PREPARING YOUR EBOOK" by the time we look.
+        self.assertIn("preparing your ebook", progress_text.lower())
 
         # 11 Refresh mid-generation resumes the same build safely.
         page.reload(wait_until="domcontentloaded")

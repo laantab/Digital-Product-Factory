@@ -230,8 +230,14 @@ class PlannerEditorInChiefTests(unittest.TestCase):
                 self.assertEqual(
                     report.verdict, VERDICT_PASS,
                     f"{pt} blocked by {[f.code for f in report.findings]}")
-                self.assertEqual(report.findings, [])
+                # The design rating records what keeps a painted-cover planner
+                # short of the exceptional bar; those are minor by design and
+                # the only findings a shipped planner may carry.
+                for fi in report.findings:
+                    self.assertTrue(fi.code.startswith("DESIGN_"), fi.code)
+                    self.assertEqual(fi.severity, "minor")
                 self.assertGreaterEqual(report.overall, 9.0)
+                self.assertGreaterEqual(report.evidence["design_rating"], 8)
 
     def test_only_applicable_categories_are_scored(self):
         report = self._review(FAITH)

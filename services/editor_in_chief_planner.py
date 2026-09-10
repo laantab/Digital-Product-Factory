@@ -112,6 +112,7 @@ def collect_planner_candidate(
         "declared_pages": len(getattr(plan, "pages", []) or []),
         "design_theme": str(getattr(plan, "design_theme", "") or layout_info.get("design_theme") or ""),
         "cover_style": str(getattr(plan, "cover_style", "") or layout_info.get("cover_style") or ""),
+        "cover_image_source": str(layout_info.get("cover_image_source") or ""),
         "render_notes": list(layout_info.get("render_notes") or []),
     }
 
@@ -768,6 +769,35 @@ def review_planner(
             design_stats, page_kinds, candidate.get("design_theme") or "")
         rep.checks_run.append("design_richness")
         f += check_planner_design_richness(page_stats, design_stats, page_kinds)
+        # Design rating: what separates 7 from 10. Each shortfall is a minor,
+        # objective finding in its category, so a 10 needs positive evidence on
+        # every criterion while a good planner is not failed unnecessarily.
+        rep.checks_run.append("design_rating")
+        from services.planner.design_rating import collect_design_facts, rate_planner_design
+
+        theme_obj = None
+        try:
+            from services.planner.themes import THEMES
+
+            theme_obj = THEMES.get(candidate.get("design_theme") or "")
+        except Exception:  # noqa: BLE001
+            theme_obj = None
+        cover_imgs = candidate.get("cover_images") or []
+        cover_dpi = 0.0
+        if cover_imgs and float(cover_imgs[0].get("pt_w") or 0) > 0:
+            cover_dpi = float(cover_imgs[0]["px_w"]) / (float(cover_imgs[0]["pt_w"]) / 72.0)
+        rating = rate_planner_design(
+            collect_design_facts(candidate.get("pdf_path") or ""),
+            page_kinds=page_kinds, page_images=images, page_stats=page_stats,
+            design_stats=design_stats, theme=theme_obj,
+            cover_source=str(candidate.get("cover_image_source") or ""),
+            cover_dpi=cover_dpi)
+        for category, code, reason in rating["deductions"]:
+            f.append(Finding(
+                code=code, category=category, severity=SEV_MINOR, kind=KIND_OBJECTIVE,
+                summary="Design falls short of the exceptional bar: " + reason,
+                detail=reason))
+        candidate["_design_rating"] = rating
     else:
         rep.checks_skipped["rendered_page_analysis"] = "no rendered page images supplied"
         rep.checks_skipped["theme_consistency"] = "no rendered page images supplied"
@@ -844,4 +874,13 @@ def review_planner(
                                  for fi in f)
             else "needs improvement"),
     })
+    rating = candidate.get("_design_rating") or {}
+    if rating:
+        rep.evidence["design_rating"] = int(rating.get("rating") or 0)
+        rep.evidence["design_tier"] = str(rating.get("tier") or "")
+        rep.evidence["design_cover_score"] = int(rating.get("cover") or 0)
+        rep.evidence["design_interior_score"] = int(rating.get("interior") or 0)
+        rep.evidence["design_deductions"] = [
+            f"{code}: {reason}" for _c, code, reason in rating.get("deductions") or []]
+        rep.evidence["design_measurements"] = dict(rating.get("evidence") or {})
     return rep

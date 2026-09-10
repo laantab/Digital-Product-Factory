@@ -152,11 +152,23 @@ server if it predates this morning's vocabulary edit.
    updated because image resolution is now a real check). Demo outputs:
    `Factory Control Center\Reviews\Planner Design System 2026-09-09\`.
 
+3. **Pexels cover picker and design rating, v1.7.0 (late evening).** The Faith Planner
+   form now has a Cover image choice (Factory chooses / choose a Pexels photo /
+   theme artwork) with a six-photo contact sheet, Use This Photo, and a stored
+   asset id (`exports\planner_cover_photos\pexels-<id>.jpg`) so rebuilds are
+   deterministic. Server: `services/planner/cover_photos.py`, routes
+   `/planner/cover-photos` and `/planner/cover-photo/select`, both fail closed.
+   The reviewer's design rating (`services/planner/design_rating.py`) grades
+   7/8/9/10; painted covers rate 9 premium, a real-photo cover reached 10.
+   One bounded live Pexels verification was run through the real form (one
+   search, one download: photo by Leticia Alvares, asset `pexels-31145661`).
+   A pre-existing flaky ebook browser test was made case-insensitive
+   (`tests/test_ebook_real_browser_customer_path.py`, "Preparing your ebook").
+
 ### Still open
 
 - The plain-language manuscript panel from the rescued branch (held by the owner).
-- A Pexels picker for the planner cover image slot in the UI. The engine accepts
-  `cover_image_path` and `cover_image_source="pexels"` today; the form does not
-  yet expose them. No Pexels call was made this session.
+- The release commit is local only; the owner decides on the push after
+  inspecting `Factory Control Center\Reviews\Planner Design System 2026-09-09\`.
 - The cover editor page loads the main bundle and logs one harmless console
   error (it expects the home page's research button).

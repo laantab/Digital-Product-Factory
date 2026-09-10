@@ -5,6 +5,66 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.0 — 2026-09-09
+
+**Pick a cover photograph in two clicks, and a reviewer that no longer hands
+out a 10 for free.**
+
+### What changed
+
+- **Choose a cover photograph without knowing anything about APIs.** The Faith
+  Planner form has a Cover image choice: let the Factory choose, choose a
+  Pexels photo, or use theme artwork. Choosing a photo shows six free
+  photographs found from your title and theme; click one, press Use This
+  Photo, and the Factory places your title on it. The chosen photograph is
+  kept with the project so a rebuild draws the same cover. If free photos are
+  unavailable, the Factory paints a themed cover and says so on the result.
+- **A design rating that means something.** The Editor-in-Chief now grades the
+  look on a marketplace scale: 7 functional, 8 professional, 9 premium, 10
+  exceptional. Ten needs positive evidence on every criterion, measured on the
+  finished PDF: a photographic cover with strong contrast on the title and on
+  every label, a clear type hierarchy and pairing, no bare or crowded pages,
+  no empty lower halves, writing lines with pen room, restrained ornament, and
+  cover colours from the theme's own palette. Painted covers top out at 9.
+
+### What was fixed
+
+- **Small labels on covers and tinted panels could fall under the contrast a
+  small type size needs.** Cover labels now use the cover ink, full-photo
+  covers fade softly at the foot so the ownership line and caption read, the
+  band eyebrow only uses the accent when it clears 4.5:1, and the muted label
+  colour is darker in every theme.
+- **The Budget Planner's cover lost its depth and its monthly tables stopped
+  mid-page.** Its cover uses the teal overlay, and short category tables gain
+  a notes block.
+- **Two renders of the same photo cover were not pixel-identical.** The cover
+  grain is now seeded, so a rebuild draws exactly the same cover.
+
+### Do the steps change for you?
+
+Only if you want a photograph. Pick "Choose a Pexels photo", press Find
+photos, click one, press Use This Photo, then Generate as usual. Leaving the
+default "Let the Factory choose" picks one for you when free photos are
+available and paints a themed cover when they are not.
+
+### Release gate
+
+Full Windows release gate run on the committed code with a temporary database;
+planner suites and the fast Stability Gate re-run on the final code. One live
+Pexels verification (one search, one download) was run through the real form
+after the protected tests passed; automated tests make no live call.
+
+### Files
+
+- New: `services/planner/cover_photos.py`, `services/planner/design_rating.py`,
+  `tests/test_planner_cover_photos.py`.
+- Changed: `services/planner/renderer.py`, `cover.py`, `components.py`,
+  `themes.py`, `services/editor_in_chief_planner.py`, `services/product.py`,
+  `static/js/app.js`, `app.py`, `tests/test_ebook_real_browser_customer_path.py`
+  (case-insensitive progress check).
+
+---
+
 ## 1.6.0 — 2026-09-09
 
 **Faith planners are now built by a design system, so every one of them looks
@@ -40,7 +100,6 @@ like a product you would be happy to pay for — and the reviewer checks that.**
   sharp; that page colours stay on the chosen theme's palette; and that the
   working pages are not bare forms. A planner that is technically valid but
   visually weak is reported as needing improvement instead of passing.
-
 ### What was fixed
 
 - **A finished manuscript could be sent back over grocery items.** The

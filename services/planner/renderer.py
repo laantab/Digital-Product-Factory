@@ -101,9 +101,10 @@ def _draw_cover(pdf: canvas.Canvas, ctx: _Ctx, page: PlannerPage, plan: PlannerP
         colors.Color(0.98, 0.96, 0.93) if dark else colors.Color(0.14, 0.12, 0.11))
     accent = T.rgb("cover_accent")
     muted_ink = colors.Color(ink.red, ink.green, ink.blue, alpha=0.82)
-    # Small labels: the accent on dark art, the theme's primary on light art,
-    # so an eyebrow never disappears into a pale sky.
-    label_ink = accent if dark else T.rgb("primary")
+    # Small labels take the cover ink: the accent is right for rules and
+    # ornaments, but gold on a photograph, or mid-blue on a pale sky, falls
+    # under the 4.5:1 floor that small type needs.
+    label_ink = ink
 
     inset = 0.42 * 72.0
     safe_w = w - 2 * inset - 56
@@ -417,6 +418,9 @@ def _draw_labeled_table(pdf: canvas.Canvas, ctx: _Ctx, page: PlannerPage, y: flo
     C.accent_bar(pdf, T, _MARGIN + 1, ty + 1, w=4, h=row_h - 1)
     C.text(pdf, _MARGIN + 10, ty + row_h * 0.32, total_label, font=f.display, size=9.5,
            fill=T.rgb("primary"))
+    # A short category list leaves the lower page bare; notes earn the space.
+    if ty - bottom > 110:
+        _trailing_block(pdf, ctx, ty - 26, "Notes for this month", min_lines=2)
 
 
 def _draw_snapshot(pdf: canvas.Canvas, ctx: _Ctx, page: PlannerPage, y: float) -> None:

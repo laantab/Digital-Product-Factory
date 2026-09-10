@@ -266,8 +266,12 @@ class ThemedPlannerRenderTests(unittest.TestCase):
                 self.assertEqual(
                     report.verdict, VERDICT_PASS,
                     f"{key} blocked by {[(f.code, f.location, f.detail) for f in report.findings]}")
-                self.assertEqual(report.findings, [])
+                for fi in report.findings:
+                    self.assertTrue(fi.code.startswith("DESIGN_"), (key, fi.code, fi.detail))
+                    self.assertEqual(fi.severity, "minor")
                 self.assertEqual(report.evidence["design_quality"], "premium")
+                # Painted covers are premium, never exceptional.
+                self.assertIn(report.evidence["design_rating"], (8, 9), report.evidence["design_deductions"])
                 for check in ("page_furniture", "print_safety", "render_notes",
                               "image_resolution", "theme_consistency", "design_richness"):
                     self.assertIn(check, report.checks_run)
