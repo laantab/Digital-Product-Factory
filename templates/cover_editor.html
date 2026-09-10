@@ -394,6 +394,12 @@
 <!-- Header -->
 <div class="editor-header">
   <button type="button" id="btnBackFactory" class="btn-secondary" style="padding:0.4rem 0.75rem;font-size:0.78rem;border-radius:6px;">← Back to Factory</button>
+  <img
+    src="{{ url_for('static', filename='images/branding/digital_product_factory_logo.png') }}"
+    alt="Digital Product Factory"
+    width="1200" height="269"
+    style="height:1.75rem;width:auto;max-width:11rem;object-fit:contain;flex-shrink:0;"
+  />
   <h1>Cover Editor</h1>
   <span class="badge">{{ product_type|upper }}</span>
   <div class="spacer"></div>

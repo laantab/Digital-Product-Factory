@@ -62,11 +62,14 @@
   <div class="flex h-full min-h-screen">
     <!-- Sidebar -->
     <aside class="hidden md:flex w-64 shrink-0 flex-col bg-brand-950 text-brand-100">
-      <div class="flex items-center gap-3 px-6 py-6 border-b border-white/10">
-        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500 font-extrabold text-white">DP</div>
-        <div>
-          <div class="text-sm font-bold text-white leading-tight">Digital Product</div>
-          <div class="text-xs text-brand-300 tracking-wide">FACTORY</div>
+      <div class="px-5 py-5 border-b border-white/10">
+        <div class="rounded-xl bg-white px-3 py-2 shadow-sm">
+          <img
+            src="{{ url_for('static', filename='images/branding/digital_product_factory_logo.png') }}"
+            alt="Digital Product Factory"
+            width="1200" height="269"
+            class="block w-full h-auto object-contain"
+          />
         </div>
       </div>
       <nav id="nav" class="flex-1 px-3 py-5 space-y-1"></nav>
@@ -79,6 +82,12 @@
     <div class="flex-1 flex flex-col min-w-0">
       <header class="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-5 py-3 backdrop-blur shadow-sm">
         <div class="flex items-center gap-3">
+          <img
+            src="{{ url_for('static', filename='images/branding/digital_product_factory_logo.png') }}"
+            alt="Digital Product Factory"
+            width="1200" height="269"
+            class="hidden sm:block md:hidden h-7 w-auto max-w-[7.5rem] shrink-0 object-contain"
+          />
           <select id="mobileNav" class="md:hidden rounded-lg border border-slate-300 px-2 py-1.5 text-sm"></select>
           <h1 id="pageTitle" class="text-lg font-bold text-slate-900">Dashboard</h1>
         </div>
