@@ -28,8 +28,9 @@ _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _FACTORY_TEST_MODE = str(os.environ.get("FACTORY_TEST_MODE") or "") == "1"
 load_dotenv(os.path.join(_APP_DIR, ".env"), override=not _FACTORY_TEST_MODE)
 
-from flask import Flask, Response, jsonify, make_response, render_template, request, send_file, send_from_directory
+from flask import Flask, Response, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory
 import base64
+import hmac
 from io import BytesIO
 
 import database
@@ -112,6 +113,139 @@ def _no_store_static(response):
 
 def _error(message: str, status: int = 400):
     return jsonify({"error": message}), status
+
+
+# ---------------------------------------------------------------------------
+# Invite-code gate (private beta, 2026-09-11).
+#
+# The public host (digitalproductfactorypro.com) had every route open to
+# anyone who found the domain, including the routes that spend OpenAI /
+# Tavily / Pexels credit and the /admin/* routes. Until real accounts exist,
+# one shared invite code guards the whole app on any host where
+# FACTORY_INVITE_CODE is set.
+#
+#   - FACTORY_INVITE_CODE unset or empty -> the gate is off and nothing
+#     changes (local use and the whole test suite keep today's behaviour).
+#   - Set -> every request must present the code as the `factory_invite`
+#     cookie, the `X-Factory-Invite` header, or once as `?invite=CODE` on a
+#     GET, which sets the cookie for 90 days and redirects to the same path.
+#   - Exempt: /static/*, the signature-verified billing webhooks (Lemon
+#     Squeezy and Stripe must reach them without a cookie), and /invite.
+#   - Refused browsers get a one-field invite page; refused API calls get a
+#     401 JSON error. The comparison is constant-time and a wrong code gets
+#     no hint about the right one.
+#
+# This is deliberately not a login system. Per-member codes and real
+# accounts are a Month-2 item once paying customers exist (Marketing &
+# Launch Master Plan v2, Part 11). Put the code in the HOST's environment
+# (Render -> Environment), never in the local .env, so the local Factory and
+# the test suite stay open.
+# ---------------------------------------------------------------------------
+_INVITE_COOKIE = "factory_invite"
+_INVITE_HEADER = "X-Factory-Invite"
+_INVITE_COOKIE_MAX_AGE = 90 * 24 * 60 * 60
+_INVITE_EXEMPT_PREFIXES = ("/static/", "/billing/webhook/")
+_INVITE_EXEMPT_PATHS = frozenset({"/invite"})
+_INVITE_REFUSED_MESSAGE = "Invite code required."
+
+_INVITE_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Digital Product Factory Pro — Private beta</title>
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f5f5f0;font-family:Inter,system-ui,-apple-system,sans-serif;color:#1e1b4b}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:32px;max-width:400px;width:92%;box-shadow:0 8px 24px -16px rgba(0,0,0,.25)}
+h1{font-size:22px;margin:0 0 6px}
+p{margin:0 0 18px;color:#4b5563;font-size:15px;line-height:1.5}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+input{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #c7d2fe;border-radius:10px;font-size:16px}
+button{margin-top:14px;width:100%;padding:12px;border:0;border-radius:10px;background:#4f46e5;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+.msg{color:#b91c1c;font-size:14px;margin:10px 0 0;min-height:1em}
+.foot{margin-top:18px;font-size:13px;color:#6b7280}
+</style></head>
+<body><form class="card" method="post" action="/invite">
+<h1>Digital Product Factory Pro</h1>
+<p>Private beta. Enter the invite code from your welcome email.</p>
+<label for="code">Invite code</label>
+<input id="code" name="code" autocomplete="off" autofocus required>
+<button type="submit">Enter the Factory</button>
+<p class="msg">__MESSAGE__</p>
+<p class="foot">Don't have a code? Email support@digitalproductfactorypro.com</p>
+</form></body></html>
+"""
+
+
+def _invite_code_required() -> str:
+    """The shared beta code, or "" when the gate is off.
+
+    Under FACTORY_TEST_MODE the gate is always off: the test suite must never
+    be gated by a value that leaked in from a local .env. The gate's own tests
+    patch this function directly to switch it on.
+    """
+    if _FACTORY_TEST_MODE:
+        return ""
+    return str(os.environ.get("FACTORY_INVITE_CODE") or "").strip()
+
+
+def _invite_matches(candidate) -> bool:
+    required = _invite_code_required()
+    candidate = str(candidate or "").strip()
+    if not required or not candidate:
+        return False
+    return hmac.compare_digest(candidate.encode("utf-8"), required.encode("utf-8"))
+
+
+def _set_invite_cookie(response, code: str):
+    # TLS terminates at Cloudflare/Render, so request.is_secure is usually
+    # False on the public host; honour the forwarded scheme as well.
+    secure = bool(request.is_secure) or (
+        (request.headers.get("X-Forwarded-Proto") or "").lower() == "https"
+    )
+    response.set_cookie(
+        _INVITE_COOKIE, code, max_age=_INVITE_COOKIE_MAX_AGE,
+        httponly=True, samesite="Lax", secure=secure, path="/",
+    )
+    return response
+
+
+def _invite_page(message: str = "", status: int = 200):
+    resp = make_response(_INVITE_PAGE.replace("__MESSAGE__", message), status)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@app.before_request
+def _invite_gate():
+    if not _invite_code_required():
+        return None
+    path = request.path or "/"
+    if path in _INVITE_EXEMPT_PATHS or path.startswith(_INVITE_EXEMPT_PREFIXES):
+        return None
+    if _invite_matches(request.headers.get(_INVITE_HEADER)):
+        return None
+    if _invite_matches(request.cookies.get(_INVITE_COOKIE)):
+        return None
+    query_code = str(request.args.get("invite") or "").strip()
+    if request.method == "GET" and _invite_matches(query_code):
+        return _set_invite_cookie(redirect(path), query_code)
+    accepts_html = "text/html" in (request.headers.get("Accept") or "")
+    if request.method == "GET" and accepts_html:
+        return _invite_page("", 401)
+    return _error(_INVITE_REFUSED_MESSAGE, 401)
+
+
+@app.route("/invite", methods=["GET", "POST"])
+def invite_route():
+    if not _invite_code_required():
+        return redirect("/")
+    if request.method == "POST":
+        code = str(request.form.get("code") or "").strip()
+        if _invite_matches(code):
+            return _set_invite_cookie(redirect("/"), code)
+        return _invite_page(
+            "That code didn't work. Check the email you received and try again.", 401
+        )
+    return _invite_page("", 200)
 
 
 # Internal wording that must never reach a customer's screen. Matching text is

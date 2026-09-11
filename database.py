@@ -121,6 +121,13 @@ def _now() -> str:
 
 
 def get_conn() -> sqlite3.Connection:
+    # A freshly mounted persistent disk (e.g. Render's /var/data) is empty, and
+    # sqlite3 will not create missing parent directories for us. Make the DB's
+    # directory first so the very first boot on a new volume succeeds instead
+    # of raising "unable to open database file". No-op when it already exists.
+    _db_dir = os.path.dirname(DB_PATH)
+    if _db_dir:
+        os.makedirs(_db_dir, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=10.0)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=10000")

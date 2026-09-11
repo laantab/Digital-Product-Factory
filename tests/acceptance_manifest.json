@@ -25,6 +25,8 @@
     "tests/test_spelling_worksheet_release_readiness.py",
     "tests/test_spelling_worksheet_semantic_scope.py",
     "tests/test_african_animals_topic_repair.py",
+    "tests/test_invite_gate.py",
+    "tests/test_render_persistence_patch.py",
     "tests/test_gold_rush_acceptance.py",
     "tests/test_coloring_book_download_availability.py",
     "tests/test_coloring_book_thunder_volt_repair.py",

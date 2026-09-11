@@ -5,6 +5,55 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.1 — 2026-09-11
+
+**A locked front door for the private beta, and a public host that keeps
+what you save.**
+
+### What changed
+
+- **The Factory can now ask for an invite code.** When the host sets
+  `FACTORY_INVITE_CODE`, every page and every button requires the code
+  once (typed into a one-field page, or opened from an invite link); after
+  that a 90-day cookie remembers you. Without the code, browsers see the
+  invite page and the app's own calls are refused. The code is never
+  echoed back. Static files and the payment-provider webhooks stay
+  reachable, because they must. Leave the variable unset and nothing
+  changes — the Factory on this PC, and the whole test suite, still open
+  straight away.
+
+### What was fixed
+
+- **First boot on an empty disk failed.** On a freshly mounted persistent
+  disk (the Render setup from the 28 Aug runbook) the database folder did
+  not exist yet and SQLite refused to create it, so the site could not
+  start. The Factory now creates the folder first, and
+  `FACTORY_DB_PATH=/var/data/projects.db` starts cleanly the first time.
+- **The public site was open to anyone.** Every route — including the
+  ones that spend on OpenAI, Tavily and Pexels, and the admin routes —
+  answered to whoever found the domain. With the invite code set on the
+  host, it no longer does.
+
+### Do my steps change?
+
+- **On your own PC: no.** Nothing asks for a code unless you put
+  `FACTORY_INVITE_CODE` in the environment, and it does not belong in the
+  local `.env`.
+- **On the public site: one step, once.** Enter the invite code from your
+  welcome email (or open the invite link) and you are in for 90 days.
+
+### Release gate
+
+- Fast Stability Gate: 139 passed, 595 subtests, zero paid calls.
+- Full Windows release gate on this commit: 2,613 tests, 0 failures,
+  0 errors, 0 skipped, 0 paid API calls (log:
+  `Factory Control Center/Logs/full_release_gate_v1.7.1_20260911.txt`).
+- New protection: `tests/test_invite_gate.py` (14 tests) and
+  `tests/test_render_persistence_patch.py` (2 tests), both in the
+  acceptance manifest and the fast Stability Gate.
+
+---
+
 ## 1.7.0 — 2026-09-09
 
 **Pick a cover photograph in two clicks, and a reviewer that no longer hands

@@ -49,6 +49,13 @@ os.environ["FACTORY_DB_PATH"] = _FACTORY_TEST_DB
 os.environ["FACTORY_EXPORTS_DIR"] = _FACTORY_TEST_EXPORTS
 os.environ["FLASK_EXPORTS_DIR"] = _FACTORY_TEST_EXPORTS
 
+# The private-beta invite gate (app.py, FACTORY_INVITE_CODE) must never switch
+# on for the suite because of a value in a local .env. Setting the variable to
+# "" here means python-dotenv (override=False under test mode) leaves it alone,
+# and an empty code means "gate off". tests/test_invite_gate.py switches the
+# gate on by patching the reader function, not the environment.
+os.environ["FACTORY_INVITE_CODE"] = ""
+
 
 # ---------------------------------------------------------------------------
 # Fail-closed production-database guard.
