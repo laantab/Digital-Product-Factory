@@ -17,6 +17,7 @@
     "tests/test_crossword_single_format_answer_key_repair.py",
     "tests/test_math_worksheet_cover_selection_repair.py",
     "tests/test_word_search_short_topic_repair.py",
+    "tests/test_word_search_topic_scope_contract.py",
     "tests/test_word_search_puzzle_count_dropdown.py",
     "tests/test_universal_topic_puzzle_engine.py",
     "tests/test_crossword_scope_answerkey_zip_repair.py",

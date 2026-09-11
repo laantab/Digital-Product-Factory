@@ -5,6 +5,58 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.2 — 2026-09-11
+
+**Word Search topic vocabulary now matches the subject you actually typed.**
+
+### What changed
+
+- **Word Search, in Topic mode, now always resolves its word list from
+  the Factory's own local topic library** — the same curated library
+  Crossword has used since v1.5.0 — instead of asking an outside AI
+  service. A topic that matches a real local topic (Ocean Animals,
+  American Automobiles, Flower Parts, and every other topic that library
+  already covers) gets real, on-topic words every time, with no outside
+  call and nothing to configure. A topic that matches nothing now says so
+  plainly, right away, and asks for a more specific topic or a custom
+  word list — it no longer guesses.
+
+### What was fixed
+
+- **Word Search, in Topic mode, could return words that had nothing to do
+  with your subject.** A request for "Flower Parts" could come back with
+  apple, banana, cherry, dragon, energy, forest, garden, harbor, island,
+  jungle — a leftover placeholder list with no connection to the topic.
+  The cause: the Word Search product tile asked an outside AI service for
+  the word list instead of using the local topic library, and silently
+  fell back to that placeholder list whenever the outside service could
+  not be reached — which is always true on the live website, since it has
+  no key for that service. No outside AI call is made to build a Word
+  Search word list anymore, on this PC or on the live website.
+- **"Flower Parts" specifically now returns flower anatomy** — petal,
+  sepal, stamen, pistil, stigma, style, ovary, anther, filament, pollen,
+  stem, receptacle, corolla, calyx, nectar — instead of quietly widening
+  to generic plant words (leaf, root, soil, and the like).
+
+### Do my steps change?
+
+- **No.** Word Search Topic mode works exactly as before from your side —
+  type a topic, get a book. The only difference is that the words you get
+  now genuinely match what you typed, every time.
+
+### Release gate
+
+- Fast Stability Gate: 148 passed, 603 subtests, zero paid calls.
+- Full Windows release gate on this commit: 2,647 tests, 0 failures,
+  0 errors, 0 skipped, 0 paid API calls (log:
+  `Factory Control Center/Logs/full_release_gate_v1.7.2_20260911.txt`).
+- New protection: `tests/test_word_search_topic_scope_contract.py`
+  (8 tests, 8 subtests), plus a word-list assertion added to the Word
+  Search journey in `tests/test_customer_journey_every_product_type.py`.
+  Both are in the acceptance manifest and the fast Stability Gate.
+
+---
+
 ## 1.7.1 — 2026-09-11
 
 **A locked front door for the private beta, and a public host that keeps

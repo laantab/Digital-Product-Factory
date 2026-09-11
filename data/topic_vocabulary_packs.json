@@ -623,6 +623,32 @@
       "WALK": "Regular outdoor exercise that also builds discipline"
     }
   },
+  "flower_parts": {
+    "aliases": [
+      "flower parts",
+      "flower part",
+      "parts of a flower",
+      "flower anatomy",
+      "anatomy of a flower"
+    ],
+    "entries": {
+      "PETAL": "Colorful outer part of a flower that attracts pollinators",
+      "SEPAL": "Leaf-like part that protects a flower bud before it opens",
+      "STAMEN": "Male part of a flower that produces pollen",
+      "PISTIL": "Female part of a flower where seeds develop",
+      "STIGMA": "Sticky tip of the pistil that catches pollen",
+      "STYLE": "Slender stalk connecting the stigma to the ovary",
+      "OVARY": "Part of the pistil that holds a flower's seeds",
+      "ANTHER": "Tip of the stamen that holds pollen grains",
+      "FILAMENT": "Thin stalk that holds up the anther",
+      "POLLEN": "Fine powder a flower uses to reproduce",
+      "STEM": "Stalk that supports a flower and carries water to it",
+      "RECEPTACLE": "Part of the stem where a flower's other parts attach",
+      "COROLLA": "A flower's petals considered together",
+      "CALYX": "A flower's sepals considered together",
+      "NECTAR": "Sweet liquid a flower makes to attract pollinators"
+    }
+  },
   "gardening": {
     "aliases": [
       "gardening",

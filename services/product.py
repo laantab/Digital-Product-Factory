@@ -559,49 +559,48 @@ def _resolve_word_search_words(fields: dict, plan: dict, *, stored_words: str = 
     if plan["use_custom"]:
         return custom_words
 
-    # Topic / AI mode: generate fresh words from the topic, not old saved words.
+    # Topic mode: ignore any previously saved custom words and resolve locally.
+    # Do not call paid AI word generation during topic resolution.
+    #
+    # WORD SEARCH TOPIC ROUTE REPAIR (2026-09-11): this used to call
+    # suggest_words_from_topic only as a yes/no pre-check, throw the real
+    # local words away, ask OpenAI for a fresh list, and — when that AI
+    # call failed for any reason (no key on the host, Safe Mode, network,
+    # quota) — silently substitute a hard-coded ten-word placeholder
+    # ("apple, banana, cherry, ...") that has nothing to do with the
+    # customer's topic. That placeholder shipped to production because
+    # Render has no working OpenAI key (see SESSION_HANDOFF_2026-09-11.md,
+    # "Word Search regression: root cause"). Mirrors the sister function
+    # _resolve_crossword_words in this same file, which has always
+    # resolved locally and never called the AI here.
+    from services.word_search.word_lists import suggest_words_from_topic
+
     total_words_needed = plan["words_per_puzzle"]
     if plan["output_type"] == "book":
         total_words_needed = plan["words_per_puzzle"] * plan["worksheets"]
     fetch_count = word_list_fetch_target(total_words_needed)
 
-    if not plan["use_custom"]:
-        # Pre-check: verify the topic has a confident local vocabulary pack match
-        # before spending an AI call. Topics with no local match will fall back to
-        # generic words and get blocked at export QA. Catch it here with a clear
-        # message instead.
-        from services.word_search.word_lists import suggest_words_from_topic
-
-        topic_theme = _f(fields, "theme") or ""
-        matched_words, w_warnings, w_errors, matched_pack_id = suggest_words_from_topic(
-            topic_theme,
-            max_words=max(12, fetch_count),
+    topic_theme = _f(fields, "theme") or ""
+    matched_words, w_warnings, w_errors, matched_pack_id = suggest_words_from_topic(
+        topic_theme,
+        max_words=max(12, fetch_count),
+    )
+    # matched_pack_id == "" (and no error) means no local pack matched and no
+    # usable fallback tokens were found either — the AI would have produced
+    # generic fallback words that export QA rejects anyway. Block now with a
+    # clear message instead of ever reaching for the AI or a placeholder.
+    if not matched_pack_id and not w_errors:
+        raise ValueError(
+            f'The topic "{topic_theme}" does not match any known vocabulary pack '
+            "and the AI fallback would produce generic words. "
+            "Please choose a more specific, recognizable topic "
+            "(e.g. 'Animals', 'Food', 'Science', 'Sports', 'Space')."
         )
-        # matched_pack_id == "" means no local pack matched — AI would produce
-        # generic fallback words that export QA will reject. Block now.
-        if not matched_pack_id and not w_errors:
-            raise ValueError(
-                f'The topic "{topic_theme}" does not match any known vocabulary pack '
-                "and the AI fallback would produce generic words. "
-                "Please choose a more specific, recognizable topic "
-                "(e.g. 'Animals', 'Food', 'Science', 'Sports', 'Space')."
-            )
-
-        system = "You are a word list generator. Generate only words, one per line, no explanations."
-        user = (
-            f"Generate {fetch_count} unique single words for word search puzzles about: "
-            f"{_f(fields, 'theme')}. Use only letters A-Z, one word per line, no numbers."
-        )
-        try:
-            custom_words = chat(
-                system=system,
-                user=user,
-                max_completion_tokens=max(800, fetch_count * 12),
-            )
-            custom_words = "\n".join([w.strip() for w in custom_words.split("\n") if w.strip()])
-        except Exception:
-            custom_words = "apple\nbanana\ncherry\ndragon\nenergy\nforest\ngarden\nharbor\nisland\njungle"
-    return custom_words
+    if w_errors:
+        raise ValueError(w_errors[0] or "Could not build a word list from the topic.")
+    if not matched_words:
+        raise ValueError("Could not build a word list from the topic.")
+    return "\n".join(matched_words)
 
 
 def _build_word_search_cover(fields: dict, plan: dict, package_id: str) -> dict | None:
@@ -673,12 +672,19 @@ def _word_search_pdf_payload(
             cover = dict(cover)
             cover["package_id"] = pkg
 
+    # WORD SEARCH TOPIC ROUTE REPAIR (2026-09-11): mode was always
+    # "custom_word_list", even in Topic mode, so the topic-relevance QA
+    # gate in services.word_search.qa_agent._check_topic_relevance (which
+    # returns immediately unless mode == "topic") never inspected the
+    # words. Mirrors _crossword_pdf_payload's identical mode calculation
+    # in this same file. Custom Word List mode is unchanged.
+    mode = "custom_word_list" if plan["use_custom"] and custom_words.strip() else "topic"
     pdf_request = WordSearchPdfRequest(
         product_title=plan["title"],
         subtitle=(cover or {}).get("subtitle") or _f(fields, "subtitle") or "",
         audience=_f(fields, "audience") or "",
         theme=_f(fields, "theme") or "",
-        mode="custom_word_list",
+        mode=mode,
         custom_words=custom_words,
         grid_size=plan["grid_size"],
         difficulty=plan["difficulty"],

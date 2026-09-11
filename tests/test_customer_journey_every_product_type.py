@@ -68,8 +68,17 @@ import database  # noqa: E402
 # entry above.
 PRODUCT_JOURNEYS: dict[str, dict] = {
     "word_search": {
+        # WORD SEARCH TOPIC ROUTE REPAIR (2026-09-11): this was "topic",
+        # which the real customer form and _word_search_plan/
+        # _resolve_word_search_words never read (they read "theme" --
+        # see templates/word_search_builder.html and static/js/app.js).
+        # With the old placeholder-on-any-failure bug, an empty topic
+        # silently shipped the same "apple, banana, cherry, ..." fallback
+        # as a real one, so this journey passed by accident without ever
+        # exercising real topic resolution. Fixed to match what a
+        # customer's browser actually submits.
         "fields": {
-            "topic": "Ocean Animals",
+            "theme": "Ocean Animals",
             "puzzles": "2",
             "difficulty": "Easy",
             "audience": "kids 8-12",
@@ -294,6 +303,38 @@ class CustomerJourneyPerProductTypeTests(unittest.TestCase):
                     preview = self._generate(product_type, spec["fields"])
                     project_id = self._save(product_type, preview)
                     self._export(product_type, project_id)
+
+    def test_word_search_topic_words_match_the_customers_subject(self):
+        """WORD SEARCH TOPIC ROUTE REPAIR (2026-09-11): the customer's exact
+        subject ("Ocean Animals" here) must control the vocabulary. Before
+        the repair, this journey's export QA carried a `qa_report` and
+        looked finished (see test_every_product_type_is_reviewed_before_it_
+        can_be_sold above) while the actual words were the retired
+        "apple, banana, cherry, ..." placeholder -- silence this file's own
+        docstring says is exactly the failure mode to catch. See
+        SESSION_HANDOFF_2026-09-11.md and tests/test_word_search_topic_scope_
+        contract.py for the full repair.
+        """
+        from services.factory.topic_vocabulary import resolve_topic_vocabulary
+
+        fields = PRODUCT_JOURNEYS["word_search"]["fields"]
+        preview = self._generate("word_search", fields)
+        produced = {w.strip().upper() for w in str(preview.get("custom_words") or "").splitlines() if w.strip()}
+        self.assertTrue(produced, "word_search: no words were produced for the topic")
+
+        placeholder = {"APPLE", "BANANA", "CHERRY", "DRAGON", "ENERGY", "FOREST", "GARDEN", "HARBOR", "ISLAND", "JUNGLE"}
+        self.assertFalse(
+            produced & placeholder,
+            f"word_search: the retired generic placeholder shipped instead of "
+            f"real {fields['theme']!r} vocabulary: {produced & placeholder}",
+        )
+
+        expected = set(resolve_topic_vocabulary(fields["theme"], 60).words)
+        if expected:
+            self.assertTrue(
+                produced <= expected,
+                f"word_search: words outside the resolved {fields['theme']!r} pack: {produced - expected}",
+            )
 
     def test_hidden_product_types_are_refused_to_customers(self):
         """A type that is not finished must not be buildable from the UI."""
