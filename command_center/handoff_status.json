@@ -1,16 +1,10 @@
 {
   "updated_at": "2026-09-11T22:00:00-04:00",
-  "current_task": "Ship the Word Search v1.7.2 repair to production: push the approved local commits, confirm Render deploys them, then verify the live site with a real Flower Parts test.",
-  "stopped_at": "v1.7.2 (commit a021385) is committed locally on top of the Command Center checkpoint (e35654a) and the held v1.7.1 (0a9a713). The repair is fully proven locally: Fast Stability Gate 148 passed / 603 subtests, full Windows release gate 2,647 tests / 0 failures, every Word Search (40) and Crossword (120) protected test green, and a real /generate-product request for \"Flower Parts\" now returns real rendered-PDF flower anatomy (PETAL, SEPAL, STAMEN, PISTIL, STIGMA, STYLE, OVARY, ANTHER, FILAMENT, POLLEN, STEM, RECEPTACLE, COROLLA, CALYX, NECTAR) with zero placeholder words. None of this is live yet -- origin/main and the public site are still on v1.7.0 (commit 1c86c05).",
-  "next_step": "Push a021385 together with e35654a and 0a9a713 to origin/main, confirm Render redeploys to a021385, then open digitalproductfactorypro.com and build one real Flower Parts Word Search to confirm the public PDF is correct before calling this release complete.",
-  "next_claude": "code",
-  "open_issues": [
-    {
-      "title": "Word Search production regression -- fixed locally, not yet live",
-      "detail": "Root cause and fix are both complete (v1.7.2, commit a021385): services/product.py now resolves Topic-mode Word Search words from the shared topic engine instead of calling OpenAI and falling back to a placeholder word list. Verified through the real customer path locally. The public site (digitalproductfactorypro.com) is still running v1.7.0 (origin/main at 1c86c05) and will keep producing the old apple/banana/... placeholder list for every topic until this is pushed and Render redeploys.",
-      "status": "open"
-    }
-  ],
+  "current_task": "v1.7.2 Word Search repair is shipped and verified live. Ready for the next open item -- see SESSION_HANDOFF_2026-09-11.md \"Still open\" for the rest (invite code on Render, Tavily/Pexels key rotation, v2 plan Day 3/4).",
+  "stopped_at": "v1.7.2 is fully shipped: commits 0a9a713, e35654a, a021385, e7a15fb pushed to origin/main (1c86c05..e7a15fb) and confirmed live. Render redeployed automatically; digitalproductfactorypro.com's footer now reads v1.7.2. Ran one real public customer-path test -- Word Search, Topic mode, \"Flower Parts\", via the live site's own /generate-product route -- and the actual rendered PDF's \"Words to Find\" is ANTHER, CALYX, COROLLA, FILAMENT, NECTAR, OVARY, PETAL, PISTIL, POLLEN, RECEPTACLE, SEPAL, STAMEN, STEM, STIGMA, STYLE. No placeholder words. QA passed.",
+  "next_step": "None required for Word Search -- it's fixed and confirmed live. Pick the next item from SESSION_HANDOFF_2026-09-11.md's \"Still open\" list (e.g. set FACTORY_INVITE_CODE on Render before inviting testers, or the two secondary pack-data gaps noted in that handoff's audit).",
+  "next_claude": "web",
+  "open_issues": [],
   "completed_log": [
     {
       "date": "2026-09-11",
@@ -24,7 +18,8 @@
         "Version-recovery audit complete: nothing was lost, reverted, or overwritten; the shared engine is byte-identical since commit e81298e.",
         "Built the standalone Factory Command Center (command_center/), committed as e35654a.",
         "Diagnosed why a live Flower Parts test still showed the old words: no local server was running; the public site (v1.7.0, origin/main 1c86c05) was the one tested, and the fix had never been pushed.",
-        "Implemented and committed the Word Search v1.7.2 repair (a021385): shared-engine resolution replaces the OpenAI call and placeholder fallback; added a curated flower_parts vocabulary family; fixed a latent test-fixture bug (word_search journey test used the wrong field key and never really exercised topic resolution). Fast gate, full gate, and the real customer path all verified green locally."
+        "Implemented and committed the Word Search v1.7.2 repair (a021385): shared-engine resolution replaces the OpenAI call and placeholder fallback; added a curated flower_parts vocabulary family; fixed a latent test-fixture bug (word_search journey test used the wrong field key and never really exercised topic resolution). Fast gate, full gate, and the real customer path all verified green locally.",
+        "Pushed 0a9a713, e35654a, a021385, and e7a15fb to origin/main. Render redeployed automatically; the live site now reads v1.7.2. Confirmed with a real public Word Search / Flower Parts test: the actual rendered PDF prints flower-anatomy words, no placeholder words."
       ]
     }
   ],
