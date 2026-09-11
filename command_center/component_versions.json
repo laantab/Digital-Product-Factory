@@ -2,22 +2,22 @@
   "note": "Durable version manifest. One entry per component, updated by hand at release time (same discipline as VERSION and CHANGELOG.md) so 'which version had the working Word Search generator' never requires searching old conversations.",
   "components": {
     "word_search_engine": {
-      "version": "1.7.1",
-      "status": "regression",
-      "last_known_good_commit": null,
-      "notes": "The customer-facing Word Search route (services/product.py) has never used the shared topic engine — not in any release. It calls OpenAI directly and falls back to a hard-coded placeholder word list on failure. No version of the customer route is 'last known good'. Fix targeted for 1.7.2 (not yet released)."
+      "version": "1.7.2",
+      "status": "good",
+      "last_known_good_commit": "a021385",
+      "notes": "FIXED 2026-09-11 (v1.7.2, commit a021385). The customer-facing Word Search route (services/product.py) now resolves Topic-mode words from the shared topic engine, mirroring the Crossword route -- no outside AI call, no placeholder fallback. Verified through the real /generate-product customer path, locally and on the live site (digitalproductfactorypro.com). First last-known-good version for this route; every earlier version (through 1.7.1) called OpenAI directly and fell back to a hard-coded ten-word placeholder on failure."
     },
     "crossword_engine": {
-      "version": "1.7.1",
+      "version": "1.7.2",
       "status": "good",
       "last_known_good_commit": "e81298e",
-      "notes": "Customer-facing Crossword route has used the shared topic engine, local-only and fail-closed, since e81298e (2026-09-09). Unchanged since."
+      "notes": "Customer-facing Crossword route has used the shared topic engine, local-only and fail-closed, since e81298e (2026-09-09). Unchanged by the 1.7.2 Word Search repair; re-verified green (120/120 protected tests) alongside it."
     },
     "topic_vocabulary_resolver": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "status": "good",
-      "last_known_good_commit": "e81298e",
-      "notes": "services/factory/topic_vocabulary.py + data/topic_vocabulary_packs.json. Byte-identical from e81298e through the current commit. Backs both Crossword and Spelling Worksheet; Word Search's customer route does not call it yet (see word_search_engine above)."
+      "last_known_good_commit": "a021385",
+      "notes": "services/factory/topic_vocabulary.py + data/topic_vocabulary_packs.json. Byte-identical from e81298e through 0a9a713; a021385 (v1.7.2) added the curated flower_parts family (petal, sepal, stamen, pistil, stigma, style, ovary, anther, filament, pollen, stem, receptacle, corolla, calyx, nectar) as pure additive pack data. Backs Crossword, Word Search, and Spelling Worksheet."
     }
   }
 }

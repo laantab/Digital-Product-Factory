@@ -1,13 +1,13 @@
 {
   "updated_at": "2026-09-11T22:00:00-04:00",
-  "current_task": "Word Search / Crossword universal topic-vocabulary regression: implement and ship the customer-route fix.",
-  "stopped_at": "Both audits are complete and written up in SESSION_HANDOFF_2026-09-11.md: the Word Search regression root cause, and the version-recovery audit (nothing was lost — the shared topic engine has been intact since e81298e; the Word Search customer route was simply never wired to it). The fix itself is written out in that handoff, five steps, but not yet implemented — it is waiting on your approval.",
-  "next_step": "Approve the Word Search route fix described in SESSION_HANDOFF_2026-09-11.md (\"The approved-in-principle fix\"), then have Claude Code implement it with its regression test, run the fast and full gates, bump VERSION to 1.7.2, and ask before pushing.",
+  "current_task": "Ship the Word Search v1.7.2 repair to production: push the approved local commits, confirm Render deploys them, then verify the live site with a real Flower Parts test.",
+  "stopped_at": "v1.7.2 (commit a021385) is committed locally on top of the Command Center checkpoint (e35654a) and the held v1.7.1 (0a9a713). The repair is fully proven locally: Fast Stability Gate 148 passed / 603 subtests, full Windows release gate 2,647 tests / 0 failures, every Word Search (40) and Crossword (120) protected test green, and a real /generate-product request for \"Flower Parts\" now returns real rendered-PDF flower anatomy (PETAL, SEPAL, STAMEN, PISTIL, STIGMA, STYLE, OVARY, ANTHER, FILAMENT, POLLEN, STEM, RECEPTACLE, COROLLA, CALYX, NECTAR) with zero placeholder words. None of this is live yet -- origin/main and the public site are still on v1.7.0 (commit 1c86c05).",
+  "next_step": "Push a021385 together with e35654a and 0a9a713 to origin/main, confirm Render redeploys to a021385, then open digitalproductfactorypro.com and build one real Flower Parts Word Search to confirm the public PDF is correct before calling this release complete.",
   "next_claude": "code",
   "open_issues": [
     {
-      "title": "Word Search production regression",
-      "detail": "A Word Search requested with the topic \"Flower Parts\" produces unrelated generic vocabulary (apple, banana, cherry, dragon, energy, forest, garden, harbor, island, jungle) instead of flower-part words. Root cause: services/product.py talks to OpenAI directly for Topic-mode Word Search instead of using the shared topic engine, and falls back to a hard-coded placeholder word list when that call fails (e.g. on Render, which has no working OpenAI key). Fix is written out and awaiting approval — see SESSION_HANDOFF_2026-09-11.md.",
+      "title": "Word Search production regression -- fixed locally, not yet live",
+      "detail": "Root cause and fix are both complete (v1.7.2, commit a021385): services/product.py now resolves Topic-mode Word Search words from the shared topic engine instead of calling OpenAI and falling back to a placeholder word list. Verified through the real customer path locally. The public site (digitalproductfactorypro.com) is still running v1.7.0 (origin/main at 1c86c05) and will keep producing the old apple/banana/... placeholder list for every topic until this is pushed and Render redeploys.",
       "status": "open"
     }
   ],
@@ -21,7 +21,10 @@
         "Render env vars set: FACTORY_DB_PATH=/var/data/projects.db, FACTORY_EXPORTS_DIR=/var/data/exports, FLASK_EXPORTS_DIR=/var/data/exports.",
         "Production redeployed successfully with persistent storage; the live domain loads.",
         "Word Search regression root-caused (three stacked defects, all in services/product.py) — read-only, no code changed.",
-        "Version-recovery audit complete: nothing was lost, reverted, or overwritten; the shared engine is byte-identical since commit e81298e."
+        "Version-recovery audit complete: nothing was lost, reverted, or overwritten; the shared engine is byte-identical since commit e81298e.",
+        "Built the standalone Factory Command Center (command_center/), committed as e35654a.",
+        "Diagnosed why a live Flower Parts test still showed the old words: no local server was running; the public site (v1.7.0, origin/main 1c86c05) was the one tested, and the fix had never been pushed.",
+        "Implemented and committed the Word Search v1.7.2 repair (a021385): shared-engine resolution replaces the OpenAI call and placeholder fallback; added a curated flower_parts vocabulary family; fixed a latent test-fixture bug (word_search journey test used the wrong field key and never really exercised topic resolution). Fast gate, full gate, and the real customer path all verified green locally."
       ]
     }
   ],
