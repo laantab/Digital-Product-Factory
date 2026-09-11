@@ -46,17 +46,40 @@ the "Runtime audit" work earlier in this session's transcript if that comes up a
 lesson: after any fix, confirm which checkout and which deployed commit you are actually
 testing before concluding a fix did or didn't work.
 
+## Tester invite protection — CLOSED (2026-09-11, night)
+
+Read-only audit first, then the owner turned it on and verified it live; no code was
+touched.
+
+- **Audit result:** the invite-gate code (`app.py`, added in v1.7.1/`0a9a713`) was already
+  correct, tested (`tests/test_invite_gate.py`, 14/14), and deployed — it was simply never
+  switched on. No bypass found (only `/static/*` and the two signature-verified billing
+  webhooks are exempt; `/admin/*` is gated by design); no secret found anywhere in source,
+  git history, logs, HTML, JS, or live responses; the gate re-reads the environment on
+  every request, so it survives restarts/redeploys with no caching involved.
+- **`FACTORY_INVITE_CODE` is now active on Render.** No code release was required — this
+  was a Render dashboard/environment change only.
+- **Owner verified live, manually, in Incognito:** a fresh Incognito session is blocked by
+  the invite page; the real code is accepted; the Factory opens normally after; a
+  brand-new Incognito session asks for the code again (the 90-day cookie is per-browser-
+  profile, as designed). Owner/admin access is unaffected — the owner enters the same
+  shared code like any tester, by design (no separate admin bypass).
+- **Not part of this task, still genuinely open:** whether OPENAI / TAVILY / PEXELS keys
+  are set on Render (unrelated, unverified); whether Render's automatic health check (if
+  any) targets a path other than `/` — worth a glance now that `/` requires the code.
+
 ## TOMORROW — START HERE
 
 1. **Confirm the ground.** In `Factory-v1.3` run `git status` (expect a clean tree) and
    `git log --oneline -3` (expect `main` to match `origin/main` at `789371b`, v1.7.2).
-2. **Word Search is closed — do not reopen or re-investigate it.** See "CLOSEOUT" above
-   for the proof. If a report of bad Word Search vocabulary comes in again, first confirm
-   which site/version was actually tested (see the runtime-audit lesson above) before
-   assuming the code regressed.
-3. **Pick the next item from "Still open" below.** Nothing is mandated — Word Search was
-   the one active engineering task; everything remaining there is the owner's choice
-   (Render invite code, key rotation, the v2 marketing plan, etc.).
+2. **Word Search and tester invite protection are both closed — do not reopen or
+   re-investigate either.** See "CLOSEOUT" and "Tester invite protection — CLOSED"
+   above for the proof. If a report of bad Word Search vocabulary comes in again, first
+   confirm which site/version was actually tested (see the runtime-audit lesson above)
+   before assuming the code regressed.
+3. **Pick the next item from "Still open" below.** Nothing is mandated — both active
+   engineering tasks are closed; everything remaining there is the owner's choice
+   (key rotation, Cloudflare email routing, the v2 marketing plan, etc.).
 
 ---
 
@@ -241,9 +264,10 @@ come back empty.
   **DONE** — v1.7.2, commit `a021385`. See CLOSEOUT above.
 - ~~Push `0a9a713` and the fix together, only with the owner's go-ahead.~~ **DONE** —
   pushed and confirmed live. See CLOSEOUT above.
-- Render: set `FACTORY_INVITE_CODE` before inviting testers (not set as of tonight; the
-  live home page served with no invite prompt). Confirm whether OPENAI / TAVILY / PEXELS
-  keys are set on Render (still unverified). Word Search no longer needs a key (fixed).
+- ~~Render: set `FACTORY_INVITE_CODE` before inviting testers~~ **DONE** — see
+  "Tester invite protection — CLOSED" below. Still open from this bullet: confirm
+  whether OPENAI / TAVILY / PEXELS keys are set on Render (unrelated to the invite
+  code, still unverified). Word Search no longer needs a key (fixed).
 - ~~Verify on the live domain after deploy: create a Word Search "Flower Parts" in Topic
   mode and confirm the word list is flower-part vocabulary~~ **DONE, twice** — see
   CLOSEOUT above. Still open from this bullet: Manual Deploy → Restart still needs a

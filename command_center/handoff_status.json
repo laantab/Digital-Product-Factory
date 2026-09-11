@@ -1,8 +1,8 @@
 {
   "updated_at": "2026-09-11T22:00:00-04:00",
-  "current_task": "v1.7.2 Word Search repair is shipped and verified live. Ready for the next open item -- see SESSION_HANDOFF_2026-09-11.md \"Still open\" for the rest (invite code on Render, Tavily/Pexels key rotation, v2 plan Day 3/4).",
-  "stopped_at": "v1.7.2 is fully shipped: commits 0a9a713, e35654a, a021385, e7a15fb pushed to origin/main (1c86c05..e7a15fb) and confirmed live. Render redeployed automatically; digitalproductfactorypro.com's footer now reads v1.7.2. Ran one real public customer-path test -- Word Search, Topic mode, \"Flower Parts\", via the live site's own /generate-product route -- and the actual rendered PDF's \"Words to Find\" is ANTHER, CALYX, COROLLA, FILAMENT, NECTAR, OVARY, PETAL, PISTIL, POLLEN, RECEPTACLE, SEPAL, STAMEN, STEM, STIGMA, STYLE. No placeholder words. QA passed.",
-  "next_step": "None required for Word Search -- it's fixed and confirmed live. Pick the next item from SESSION_HANDOFF_2026-09-11.md's \"Still open\" list (e.g. set FACTORY_INVITE_CODE on Render before inviting testers, or the two secondary pack-data gaps noted in that handoff's audit).",
+  "current_task": "Tester invite protection is verified live and COMPLETE, alongside the v1.7.2 Word Search repair. Ready for the next open item -- see SESSION_HANDOFF_2026-09-11.md \"Still open\" (Cloudflare email routing, Tavily/Pexels key rotation, v2 plan Day 3/4).",
+  "stopped_at": "v1.7.2 is fully shipped and verified live (see prior log entries). Tester invite protection was then audited read-only (no code defect found, no code change needed) and the owner independently verified it live in Incognito: a fresh session is blocked by the invite page, the real code is accepted, the Factory opens normally, and a brand-new Incognito session asks for the code again. FACTORY_INVITE_CODE is now active on Render. Both the Word Search release and the invite-protection task are closed.",
+  "next_step": "Pick the next item from SESSION_HANDOFF_2026-09-11.md's \"Still open\" list -- e.g. Cloudflare Email Routing for support@digitalproductfactorypro.com, new Tavily/Pexels keys, or Day 3 of the v2 marketing plan. Nothing is mandated; both active engineering tasks (Word Search, invite protection) are closed.",
   "next_claude": "web",
   "open_issues": [],
   "completed_log": [
@@ -19,7 +19,9 @@
         "Built the standalone Factory Command Center (command_center/), committed as e35654a.",
         "Diagnosed why a live Flower Parts test still showed the old words: no local server was running; the public site (v1.7.0, origin/main 1c86c05) was the one tested, and the fix had never been pushed.",
         "Implemented and committed the Word Search v1.7.2 repair (a021385): shared-engine resolution replaces the OpenAI call and placeholder fallback; added a curated flower_parts vocabulary family; fixed a latent test-fixture bug (word_search journey test used the wrong field key and never really exercised topic resolution). Fast gate, full gate, and the real customer path all verified green locally.",
-        "Pushed 0a9a713, e35654a, a021385, and e7a15fb to origin/main. Render redeployed automatically; the live site now reads v1.7.2. Confirmed with a real public Word Search / Flower Parts test: the actual rendered PDF prints flower-anatomy words, no placeholder words."
+        "Pushed 0a9a713, e35654a, a021385, and e7a15fb to origin/main. Render redeployed automatically; the live site now reads v1.7.2. Confirmed with a real public Word Search / Flower Parts test: the actual rendered PDF prints flower-anatomy words, no placeholder words.",
+        "Audited the tester invite protection (read-only): the gate code was already correct, tested, and deployed since v1.7.1 -- it simply was not switched on. No bypass, no secret exposure, and no code defect found.",
+        "Tester invite protection is now live: FACTORY_INVITE_CODE set on Render. Owner verified manually in a fresh Incognito session -- blocked until the code is entered, opens normally after, and a brand-new Incognito session is asked for the code again. No code change was required."
       ]
     }
   ],
