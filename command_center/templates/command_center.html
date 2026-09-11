@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digital Product Factory Command Center</title>
+<style>
+  :root {
+    --ink: #1b2430; --sub: #5a6472; --bg: #f4f6f8; --card: #ffffff;
+    --border: #dde3e9; --accent: #1f6feb; --good: #1a7f4b; --good-bg: #e7f6ee;
+    --open: #a35a00; --open-bg: #fff3e0; --blocked: #b3261e; --blocked-bg: #fdeceb;
+    --next-bg: #eaf1ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.45;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 24px 20px 60px; }
+  header.top { text-align: center; margin-bottom: 6px; }
+  header.top h1 { font-size: 1.5rem; margin: 0 0 2px; letter-spacing: 0.02em; }
+  header.top .start-here {
+    display: inline-block; margin-top: 4px; font-weight: 700; letter-spacing: 0.08em;
+    color: var(--accent); font-size: 0.85rem;
+  }
+  .truth-strip {
+    display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center;
+    font-size: 0.78rem; color: var(--sub); margin: 10px 0 22px;
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    padding: 8px 0;
+  }
+  .truth-strip b { color: var(--ink); }
+  .truth-warn { color: var(--blocked); font-weight: 700; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; margin-bottom: 14px;
+  }
+  .card h2 {
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--sub); margin: 0 0 8px;
+  }
+  .card p { margin: 0; }
+  .card ul { margin: 6px 0 0; padding-left: 20px; }
+  .card li { margin-bottom: 4px; }
+
+  .badge {
+    display: inline-block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-right: 6px;
+  }
+  .badge.completed { color: var(--good); background: var(--good-bg); }
+  .badge.open { color: var(--open); background: var(--open-bg); }
+  .badge.blocked { color: var(--blocked); background: var(--blocked-bg); }
+  .badge.next { color: var(--accent); background: var(--next-bg); }
+
+  .next-card {
+    background: var(--next-bg); border: 1px solid #b9d3ff; border-radius: 10px;
+    padding: 18px; margin-bottom: 14px;
+  }
+  .next-card h2 { color: var(--accent); }
+  .next-card p.step { font-size: 1.05rem; font-weight: 600; margin-top: 4px; }
+  .env-pill {
+    display: inline-block; margin-top: 10px; font-weight: 700; font-size: 0.85rem;
+    padding: 5px 12px; border-radius: 999px; background: #1b2430; color: #fff;
+  }
+
+  .continue-box textarea {
+    width: 100%; min-height: 110px; margin-top: 8px; font-family: inherit;
+    font-size: 0.85rem; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: #fafbfc; color: var(--ink); resize: vertical;
+  }
+  .hint { color: var(--sub); font-size: 0.78rem; margin-top: 6px; }
+
+  details.view-details {
+    margin-top: 22px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--card); padding: 4px 18px 16px;
+  }
+  details.view-details > summary {
+    cursor: pointer; padding: 12px 0; font-weight: 600; font-size: 0.9rem;
+    color: var(--accent); list-style: none;
+  }
+  details.view-details > summary::-webkit-details-marker { display: none; }
+  details.view-details > summary::before { content: "\25B8  "; }
+  details.view-details[open] > summary::before { content: "\25BE  "; }
+
+  h3.detail-h { font-size: 0.8rem; text-transform: uppercase; color: var(--sub); margin: 18px 0 6px; }
+  table.versions { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  table.versions th, table.versions td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  table.versions th { color: var(--sub); font-weight: 600; }
+
+  form.update-form label { display: block; font-size: 0.78rem; color: var(--sub); margin: 10px 0 3px; }
+  form.update-form textarea, form.update-form input, form.update-form select {
+    width: 100%; font-family: inherit; font-size: 0.85rem; padding: 8px 10px;
+    border-radius: 8px; border: 1px solid var(--border);
+  }
+  form.update-form textarea { min-height: 70px; resize: vertical; }
+  form.update-form button {
+    margin-top: 12px; background: var(--accent); color: #fff; border: none;
+    padding: 9px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;
+  }
+  form.update-form button:hover { opacity: 0.9; }
+
+  footer.updated { text-align: center; color: var(--sub); font-size: 0.75rem; margin-top: 26px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>DIGITAL PRODUCT FACTORY COMMAND CENTER</h1>
+    <div class="start-here">START HERE</div>
+  </header>
+
+  <div class="truth-strip">
+    <span>Factory path: <b>{{ git.path }}</b></span>
+    <span>Branch: <b>{{ git.branch or "unknown" }}</b></span>
+    <span>Commit: <b>{{ git.commit_short }}</b>{% if git.commit_summary %} &mdash; {{ git.commit_summary }}{% endif %}</span>
+    <span>Version: <b>{{ factory_version }}</b></span>
+    {% if not git.is_expected_folder or not git.is_expected_branch %}
+      <span class="truth-warn">&#9888; This is not the expected {{ expected_folder_name }} / {{ expected_branch }} checkout &mdash; do not treat it as the source of truth.</span>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>1. What I was working on</h2>
+    <p>{{ handoff.current_task }}</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Where I stopped</h2>
+    <p>{{ handoff.stopped_at }}</p>
+  </div>
+
+  <div class="card">
+    <h2>3. What I finished{% if latest_completed %} &mdash; {{ latest_completed.label }}{% endif %}</h2>
+    {% if latest_completed and latest_completed.entries %}
+      <ul>
+        {% for item in latest_completed.entries %}<li><span class="badge completed">Completed</span>{{ item }}</li>{% endfor %}
+      </ul>
+    {% else %}
+      <p><em>Nothing logged yet.</em></p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>4. What is still open</h2>
+    {% if handoff.open_issues %}
+      <ul>
+        {% for issue in handoff.open_issues %}
+          <li>
+            <span class="badge {{ 'blocked' if issue.status == 'blocked' else 'open' }}">{{ issue.status or 'open' }}</span>
+            <strong>{{ issue.title }}</strong>
+            {% if issue.detail %}<br><span class="hint">{{ issue.detail }}</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p><em>Nothing open.</em></p>
+    {% endif %}
+  </div>
+
+  <div class="next-card">
+    <h2><span class="badge next">Next</span>5. What I do next</h2>
+    <p class="step">{{ handoff.next_step }}</p>
+    <div class="env-pill">USE CLAUDE {{ "CODE" if handoff.next_claude != "web" else "WEB" }}</div>
+  </div>
+
+  <div class="card continue-box">
+    <h2>Continue current work</h2>
+    <p class="hint">Copy this into a new Claude {{ "Code" if handoff.next_claude != "web" else "Web" }} session to pick up exactly here.</p>
+    <textarea readonly onclick="this.select()">Factory path: {{ git.path }}
+Branch: {{ git.branch or "unknown" }}  Commit: {{ git.commit_short }}  Version: {{ factory_version }}
+
+Current task: {{ handoff.current_task }}
+
+Where I stopped: {{ handoff.stopped_at }}
+
+Next step: {{ handoff.next_step }}
+
+Read the newest SESSION_HANDOFF_*.md in the Factory-v1.3 root before doing anything else.</textarea>
+  </div>
+
+  <details class="view-details">
+    <summary>View Details</summary>
+
+    <h3 class="detail-h">Version / release history</h3>
+    <table class="versions">
+      <tr><th>Component</th><th>Version</th><th>Status</th><th>Last known good</th></tr>
+      <tr>
+        <td>Factory (overall)</td><td>{{ factory_version }}</td>
+        <td><span class="badge completed">tracked</span></td>
+        <td>&mdash;</td>
+      </tr>
+      {% for key, c in components.items() %}
+      <tr>
+        <td>{{ key.replace('_', ' ') }}</td>
+        <td>{{ c.version or "unknown" }}</td>
+        <td><span class="badge {{ 'completed' if c.status == 'good' else 'open' }}">{{ c.status or 'unknown' }}</span></td>
+        <td>{{ c.last_known_good_commit or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% for key, c in components.items() %}
+      {% if c.notes %}<p class="hint"><strong>{{ key.replace('_', ' ') }}:</strong> {{ c.notes }}</p>{% endif %}
+    {% endfor %}
+
+    <h3 class="detail-h">Last full release gate</h3>
+    {% if gate %}
+      <p>
+        <span class="badge {{ 'completed' if gate.passed else 'blocked' }}">{{ "PASSED" if gate.passed else "FAILED" }}</span>
+        {{ gate.tests }} tests, {{ gate.failures }} failures, {{ gate.errors }} errors, {{ gate.skipped }} skipped
+        {% if gate.timestamp %}&mdash; {{ gate.timestamp }}{% endif %}
+      </p>
+    {% else %}
+      <p class="hint">No gate result on disk yet. Run <code>python scripts/run_factory_tests.py</code> to populate this.</p>
+    {% endif %}
+
+    <h3 class="detail-h">Recent work</h3>
+    {% if completed_buckets %}
+      {% for bucket in completed_buckets %}
+        <p><strong>{{ bucket.label }}</strong> ({{ bucket.date }})</p>
+        <ul>{% for item in bucket.entries %}<li>{{ item }}</li>{% endfor %}</ul>
+      {% endfor %}
+    {% else %}
+      <p class="hint">Nothing logged yet.</p>
+    {% endif %}
+
+    <h3 class="detail-h">Recent handoff files</h3>
+    <ul>
+      {% for h in recent_handoffs %}<li>{{ h.filename }}</li>{% endfor %}
+    </ul>
+
+    {% if handoff.notes %}
+      <h3 class="detail-h">Notes</h3>
+      <p>{{ handoff.notes }}</p>
+    {% endif %}
+
+    <h3 class="detail-h">Update handoff (do this at the end of a session)</h3>
+    <form class="update-form" method="post" action="/update">
+      <label for="current_task">What are you working on?</label>
+      <textarea id="current_task" name="current_task">{{ handoff.current_task }}</textarea>
+
+      <label for="stopped_at">Where did you stop?</label>
+      <textarea id="stopped_at" name="stopped_at">{{ handoff.stopped_at }}</textarea>
+
+      <label for="completed_today">What did you finish today? (one item per line)</label>
+      <textarea id="completed_today" name="completed_today">{% if latest_completed and latest_completed.label == "Today" %}{{ latest_completed.entries|join("\n") }}{% endif %}</textarea>
+
+      <label for="open_issue">What is still open? (the one main issue, if any)</label>
+      <textarea id="open_issue" name="open_issue">{{ handoff.open_issues[0].title if handoff.open_issues else "" }}</textarea>
+
+      <label for="next_step">What is the one next step?</label>
+      <textarea id="next_step" name="next_step">{{ handoff.next_step }}</textarea>
+
+      <label for="next_claude">Which Claude for that next step?</label>
+      <select id="next_claude" name="next_claude">
+        <option value="code" {{ "selected" if handoff.next_claude != "web" else "" }}>Claude Code</option>
+        <option value="web" {{ "selected" if handoff.next_claude == "web" else "" }}>Claude Web</option>
+      </select>
+
+      <label for="notes">Notes (optional)</label>
+      <textarea id="notes" name="notes">{{ handoff.notes }}</textarea>
+
+      <button type="submit">Save handoff</button>
+    </form>
+  </details>
+
+  <footer class="updated">
+    {% if handoff.updated_at %}Handoff last updated {{ handoff.updated_at }}{% else %}Handoff never updated{% endif %}
+    &middot; Source of truth: {{ root }} on <b>{{ expected_branch }}</b>
+  </footer>
+
+</div>
+</body>
+</html>

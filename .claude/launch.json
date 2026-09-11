@@ -12,6 +12,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["app.py"],
       "port": 5000
+    },
+    {
+      "name": "command-center",
+      "runtimeExecutable": "C:\\Users\\user\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+      "runtimeArgs": ["-m", "command_center.server"],
+      "port": 5090
     }
   ]
 }

@@ -1,0 +1,29 @@
+{
+  "updated_at": "2026-09-11T22:00:00-04:00",
+  "current_task": "Word Search / Crossword universal topic-vocabulary regression: implement and ship the customer-route fix.",
+  "stopped_at": "Both audits are complete and written up in SESSION_HANDOFF_2026-09-11.md: the Word Search regression root cause, and the version-recovery audit (nothing was lost — the shared topic engine has been intact since e81298e; the Word Search customer route was simply never wired to it). The fix itself is written out in that handoff, five steps, but not yet implemented — it is waiting on your approval.",
+  "next_step": "Approve the Word Search route fix described in SESSION_HANDOFF_2026-09-11.md (\"The approved-in-principle fix\"), then have Claude Code implement it with its regression test, run the fast and full gates, bump VERSION to 1.7.2, and ask before pushing.",
+  "next_claude": "code",
+  "open_issues": [
+    {
+      "title": "Word Search production regression",
+      "detail": "A Word Search requested with the topic \"Flower Parts\" produces unrelated generic vocabulary (apple, banana, cherry, dragon, energy, forest, garden, harbor, island, jungle) instead of flower-part words. Root cause: services/product.py talks to OpenAI directly for Topic-mode Word Search instead of using the shared topic engine, and falls back to a hard-coded placeholder word list when that call fails (e.g. on Render, which has no working OpenAI key). Fix is written out and awaiting approval — see SESSION_HANDOFF_2026-09-11.md.",
+      "status": "open"
+    }
+  ],
+  "completed_log": [
+    {
+      "date": "2026-09-11",
+      "items": [
+        "Custom domain digitalproductfactorypro.com is live; Render certificates issued and verified.",
+        "Render service upgraded from Free to the $7/month instance (0.5 CPU, 512 MB RAM).",
+        "10 GB persistent disk mounted at /var/data on Render.",
+        "Render env vars set: FACTORY_DB_PATH=/var/data/projects.db, FACTORY_EXPORTS_DIR=/var/data/exports, FLASK_EXPORTS_DIR=/var/data/exports.",
+        "Production redeployed successfully with persistent storage; the live domain loads.",
+        "Word Search regression root-caused (three stacked defects, all in services/product.py) — read-only, no code changed.",
+        "Version-recovery audit complete: nothing was lost, reverted, or overwritten; the shared engine is byte-identical since commit e81298e."
+      ]
+    }
+  ],
+  "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly — it is what the Command Center reads every time it opens."
+}
