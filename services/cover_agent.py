@@ -1760,12 +1760,30 @@ def _cover_image_regen_attempts(cover: dict) -> int:
 
 
 def regenerate_cover_image(cover: dict, package_id: str) -> tuple[dict, str | None]:
-    """Generate cover PNG and refresh HTML. Returns (updated_cover, asset_url)."""
+    """Generate cover PNG and refresh HTML. Returns (updated_cover, asset_url).
+
+    GLOBAL COVER POLICY (2026-09-12): PEXELS FIRST, paid AI only as fallback.
+    Scoped to Ebook only for this pass -- Word Search, Crossword, and Coloring
+    Book keep this function's prior AI-only behavior completely unchanged;
+    see services/cover_source_policy.py's module docstring for why extending
+    this further is a deliberate, separate decision, not part of this change.
+    """
     from services.cover_quality_agent import evaluate_cover_image_vision_qc
 
     from services.ebook_package import render_visual_image
 
     pkg = package_id or cover.get("package_id") or ""
+    engine_type = str((cover.get("topic_analysis") or {}).get("product_type") or "")
+
+    if engine_type == "ebook" and pkg:
+        from services.cover_source_policy import try_pexels_first_cover
+
+        pexels_cover, pexels_url = try_pexels_first_cover(cover, pkg)
+        if pexels_cover is not None:
+            return pexels_cover, pexels_url
+        # try_pexels_first_cover already annotated `cover` with cover_source_note
+        # explaining why it fell through -- proceed to the paid AI path below.
+
     max_attempts = _cover_image_regen_attempts(cover)
     url: str | None = None
 
@@ -1885,5 +1903,12 @@ def regenerate_cover_image(cover: dict, package_id: str) -> tuple[dict, str | No
                 cover["cover_image_qc"] = qc
             break
         cover["cover_image_qc"] = qc
+
+    # Track source and paid-AI use regardless of outcome -- an attempt was
+    # made even when it did not produce a usable image, and the existing
+    # pending-cover detection in cover_quality_agent.py already fails that
+    # case clearly rather than silently accepting it.
+    cover["cover_source"] = "ai_fallback" if engine_type == "ebook" else "ai_only"
+    cover["paid_ai_used"] = True
 
     return cover, url

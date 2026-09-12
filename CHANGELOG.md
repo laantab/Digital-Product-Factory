@@ -5,6 +5,65 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.4 — 2026-09-12
+
+**Ebook covers now try a free professional photograph first, and only use paid AI artwork if nothing suitable is found.**
+
+### What changed
+
+- **Ebook cover generation now follows a Pexels-first policy**: when you
+  generate or regenerate an ebook's cover, the Factory searches free Pexels
+  stock photography for your book's actual title/topic first. A candidate
+  photograph is only accepted if it clears a real quality and relevance
+  check — high enough resolution for print, portrait-suitable framing, and
+  genuine topic relevance based on the photo's own description — never
+  because a search simply returned something. Only when no Pexels
+  photograph passes that check does the Factory fall back to paid AI image
+  generation, exactly as before. The finished cover always uses the same
+  deterministic Factory typography for the title, subtitle, and author name
+  either way — never AI-generated lettering.
+- Every generated cover now records which source actually produced it
+  (`pexels` or `ai_fallback`) and whether a paid image-generation call was
+  made, so the Factory can report paid-cover usage going forward.
+- **Word Search, Crossword, and Coloring Book covers are unchanged** — they
+  keep their existing, heavily-tuned AI-only cover generation exactly as it
+  was. This release only adds the new policy for Ebook; extending it to the
+  other three products is a separate, deliberate decision for later, not
+  something this release does.
+
+### What was fixed
+
+- Nothing was broken before this release. This is a new capability, not a
+  bug fix: Ebook covers previously went straight to paid AI image
+  generation with no attempt to use a free, appropriate photograph first.
+
+### Do my steps change?
+
+- **No**, for every product. Ebook customers still generate and regenerate
+  a cover exactly the same way; the Factory now quietly tries a free photo
+  first behind the scenes before spending on AI artwork. Word Search,
+  Crossword, and Coloring Book customers see no difference at all.
+
+### Release gate
+
+- Fast Stability Gate: 160 passed, 666 subtests, zero paid calls.
+- Full Windows release gate on this commit: 2,761 tests, 0 failures,
+  0 errors, 0 skipped, 0 paid API calls.
+- New protection: `tests/test_cover_source_policy.py` — proves the Pexels
+  quality/relevance gate never accepts a weak or irrelevant candidate, that
+  a passing candidate is used with zero paid calls, that Ebook falls back
+  to AI only when Pexels genuinely has nothing suitable, and that Word
+  Search, Crossword, and Coloring Book never even attempt Pexels and keep
+  their prior AI-only behavior byte-for-byte. In the acceptance manifest.
+- Function Lock: `word_search`, `crossword`, and `coloring_book` were
+  explicitly unlocked (a 2026-09-12 audit found `services/cover_agent.py`,
+  `services/product_cover_agent.py`, and `services/cover_quality_agent.py`
+  were real, previously-undeclared shared dependencies of all three),
+  their full protected suites re-verified green with no behavior change,
+  and all three relocked with this commit as the new last-known-good.
+
+---
+
 ## 1.7.3 — 2026-09-12
 
 **Coloring Book interior pages no longer print unwanted text when captions are off.**
