@@ -68,18 +68,38 @@ touched.
   are set on Render (unrelated, unverified); whether Render's automatic health check (if
   any) targets a path other than `/` — worth a glance now that `/` requires the code.
 
+## Cloudflare Email Routing (support@) — CLOSED (2026-09-11, night)
+
+A read-only DNS audit earlier this session found Email Routing **not yet enabled** for
+`digitalproductfactorypro.com` (no MX/TXT records existed at all — a clean slate, no
+conflict either way). That finding is now superseded: the owner completed the setup in
+Cloudflare directly and verified it live. Current state:
+
+- Cloudflare Email Routing is **enabled** for `digitalproductfactorypro.com`; the required
+  DNS records are active.
+- The owner's private destination inbox is added and **verified** in Cloudflare (the
+  address itself is deliberately not recorded here or anywhere in this repo).
+- The routing rule exists: `support@digitalproductfactorypro.com` → that verified
+  destination.
+- **Owner sent a real test email to `support@digitalproductfactorypro.com` and it arrived
+  successfully** at the verified destination.
+- No Factory code change, no Render change, and no application deploy were required or
+  made — this was entirely Cloudflare-side DNS/account configuration, exactly as the audit
+  predicted it could be.
+
 ## TOMORROW — START HERE
 
 1. **Confirm the ground.** In `Factory-v1.3` run `git status` (expect a clean tree) and
-   `git log --oneline -3` (expect `main` to match `origin/main` at `789371b`, v1.7.2).
-2. **Word Search and tester invite protection are both closed — do not reopen or
-   re-investigate either.** See "CLOSEOUT" and "Tester invite protection — CLOSED"
-   above for the proof. If a report of bad Word Search vocabulary comes in again, first
-   confirm which site/version was actually tested (see the runtime-audit lesson above)
-   before assuming the code regressed.
-3. **Pick the next item from "Still open" below.** Nothing is mandated — both active
-   engineering tasks are closed; everything remaining there is the owner's choice
-   (key rotation, Cloudflare email routing, the v2 marketing plan, etc.).
+   `git log --oneline -3` (expect `main` to match `origin/main`, v1.7.2).
+2. **Word Search, tester invite protection, and support-email routing are all closed —
+   do not reopen or re-investigate any of them.** See "CLOSEOUT", "Tester invite
+   protection — CLOSED", and "Cloudflare Email Routing (support@) — CLOSED" above for the
+   proof. If a report of bad Word Search vocabulary comes in again, first confirm which
+   site/version was actually tested (see the runtime-audit lesson above) before assuming
+   the code regressed.
+3. **Pick the next item from "Still open" below.** Nothing is mandated — every active
+   engineering/ops task from this session is closed; everything remaining is the owner's
+   choice (key rotation, the v2 marketing plan, etc.).
 
 ---
 
@@ -273,7 +293,8 @@ come back empty.
   CLOSEOUT above. Still open from this bullet: Manual Deploy → Restart still needs a
   check; confirm Saved Projects still lists prior projects and download still serves
   from `/var/data` after this deploy.
-- Cloudflare Email Routing for `support@digitalproductfactorypro.com`.
+- ~~Cloudflare Email Routing for `support@digitalproductfactorypro.com`.~~ **DONE** —
+  see "Cloudflare Email Routing (support@) — CLOSED" above.
 - New Tavily and Pexels keys (rotation open since August).
 - Day 3 of the v2 plan: Founding Member product in Lemon Squeezy, first 10 messages.
 - Day 4: MiniMax keys into Pin Factory Pro; 50 real pins.

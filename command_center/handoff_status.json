@@ -1,8 +1,8 @@
 {
   "updated_at": "2026-09-11T22:00:00-04:00",
-  "current_task": "Tester invite protection is verified live and COMPLETE, alongside the v1.7.2 Word Search repair. Ready for the next open item -- see SESSION_HANDOFF_2026-09-11.md \"Still open\" (Cloudflare email routing, Tavily/Pexels key rotation, v2 plan Day 3/4).",
-  "stopped_at": "v1.7.2 is fully shipped and verified live (see prior log entries). Tester invite protection was then audited read-only (no code defect found, no code change needed) and the owner independently verified it live in Incognito: a fresh session is blocked by the invite page, the real code is accepted, the Factory opens normally, and a brand-new Incognito session asks for the code again. FACTORY_INVITE_CODE is now active on Render. Both the Word Search release and the invite-protection task are closed.",
-  "next_step": "Pick the next item from SESSION_HANDOFF_2026-09-11.md's \"Still open\" list -- e.g. Cloudflare Email Routing for support@digitalproductfactorypro.com, new Tavily/Pexels keys, or Day 3 of the v2 marketing plan. Nothing is mandated; both active engineering tasks (Word Search, invite protection) are closed.",
+  "current_task": "Word Search v1.7.2, tester invite protection, and Cloudflare Email Routing for support@digitalproductfactorypro.com are all verified live and COMPLETE. Ready for the next open item -- see SESSION_HANDOFF_2026-09-11.md \"Still open\" (Tavily/Pexels key rotation, v2 plan Day 3/4).",
+  "stopped_at": "v1.7.2 is fully shipped and verified live; tester invite protection is live and owner-verified (see prior log entries). Cloudflare Email Routing for support@digitalproductfactorypro.com is now enabled and verified end-to-end by the owner: the routing rule exists, a real test email sent to that address arrived at the owner's verified private destination inbox. No Factory code change, no Render change, and no application deploy were required -- this was Cloudflare-side DNS/account configuration only. All three tasks opened this session are closed.",
+  "next_step": "Pick the next item from SESSION_HANDOFF_2026-09-11.md's \"Still open\" list -- e.g. new Tavily/Pexels keys, or Day 3 of the v2 marketing plan. Nothing is mandated; every active engineering/ops task from this session (Word Search, invite protection, support email routing) is closed.",
   "next_claude": "web",
   "open_issues": [],
   "completed_log": [
@@ -21,7 +21,8 @@
         "Implemented and committed the Word Search v1.7.2 repair (a021385): shared-engine resolution replaces the OpenAI call and placeholder fallback; added a curated flower_parts vocabulary family; fixed a latent test-fixture bug (word_search journey test used the wrong field key and never really exercised topic resolution). Fast gate, full gate, and the real customer path all verified green locally.",
         "Pushed 0a9a713, e35654a, a021385, and e7a15fb to origin/main. Render redeployed automatically; the live site now reads v1.7.2. Confirmed with a real public Word Search / Flower Parts test: the actual rendered PDF prints flower-anatomy words, no placeholder words.",
         "Audited the tester invite protection (read-only): the gate code was already correct, tested, and deployed since v1.7.1 -- it simply was not switched on. No bypass, no secret exposure, and no code defect found.",
-        "Tester invite protection is now live: FACTORY_INVITE_CODE set on Render. Owner verified manually in a fresh Incognito session -- blocked until the code is entered, opens normally after, and a brand-new Incognito session is asked for the code again. No code change was required."
+        "Tester invite protection is now live: FACTORY_INVITE_CODE set on Render. Owner verified manually in a fresh Incognito session -- blocked until the code is entered, opens normally after, and a brand-new Incognito session is asked for the code again. No code change was required.",
+        "Cloudflare Email Routing enabled for digitalproductfactorypro.com: the required DNS records are active, the owner's private destination inbox is added and verified, and the routing rule support@digitalproductfactorypro.com -> that verified destination exists. A real test email sent to support@digitalproductfactorypro.com arrived successfully. No Factory code change, no Render change, no deploy."
       ]
     }
   ],
