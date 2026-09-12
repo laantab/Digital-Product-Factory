@@ -87,16 +87,46 @@ Cloudflare directly and verified it live. Current state:
   made — this was entirely Cloudflare-side DNS/account configuration, exactly as the audit
   predicted it could be.
 
+## Factory Market Advantage ("Find Top Opportunities") — RESOLVED (2026-09-11, night)
+
+Live symptom: "Find Ideas for Me" → "Find Top Opportunities" returned "We couldn't
+complete the market research. Your idea and filters have been preserved. Please try
+again." on the public site.
+
+- **Read-only diagnosis (this session) confirmed the Factory Market Advantage code itself
+  was intact** — nothing in `services/market_research.py`, `services/factory_advantage.py`,
+  or `ai_client.py` had changed since 2026-08-28/09-03, well before v1.7.1 or v1.7.2; no
+  regression from this session's own releases. `discover_top_opportunities()` calls Tavily
+  first and only reaches OpenAI if that succeeds; a missing/failing Tavily key alone is
+  enough to produce exactly this message without OpenAI ever being invoked.
+- Confirmed which environment variable names the code actually reads: `TAVILY_API_KEY`
+  for Tavily; for OpenAI, `AI_INTEGRATIONS_OPENAI_API_KEY` first, then `OPENAI_API_KEY` as
+  a fallback (`ai_client.py::_get_key_and_source`).
+- **Root cause, confirmed by the owner: both `TAVILY_API_KEY` and
+  `AI_INTEGRATIONS_OPENAI_API_KEY` were missing from Render.** Not a code defect.
+- **Fix:** added both variables on Render, preserved the existing
+  `AI_INTEGRATIONS_OPENAI_BASE_URL`, redeployed. No Factory code change.
+- **Verified live** through the actual public customer UI: Find Top Opportunities now
+  completes successfully.
+- A related but separate symptom was also investigated this session — Render logs showing
+  `401` on `/discover-products` and `/projects?factory_sources=1`, traced to the invite-gate
+  cookie layer (confirmed same-origin, confirmed `fetch()`'s credentials default, no code
+  fix identified or made). That thread was left with a decisive test for the owner to run
+  (a fresh Incognito login) and is **not itself claimed resolved here** — this entry closes
+  out only the confirmed, tested Tavily/OpenAI configuration gap above. If a 401 on those
+  routes recurs, pick that investigation back up rather than re-diagnosing from scratch.
+
 ## TOMORROW — START HERE
 
 1. **Confirm the ground.** In `Factory-v1.3` run `git status` (expect a clean tree) and
    `git log --oneline -3` (expect `main` to match `origin/main`, v1.7.2).
-2. **Word Search, tester invite protection, and support-email routing are all closed —
-   do not reopen or re-investigate any of them.** See "CLOSEOUT", "Tester invite
-   protection — CLOSED", and "Cloudflare Email Routing (support@) — CLOSED" above for the
-   proof. If a report of bad Word Search vocabulary comes in again, first confirm which
-   site/version was actually tested (see the runtime-audit lesson above) before assuming
-   the code regressed.
+2. **Word Search, tester invite protection, support-email routing, and the Factory Market
+   Advantage Tavily/OpenAI configuration gap are all closed — do not reopen or
+   re-investigate any of them.** See "CLOSEOUT", "Tester invite protection — CLOSED",
+   "Cloudflare Email Routing (support@) — CLOSED", and "Factory Market Advantage
+   ("Find Top Opportunities") — RESOLVED" above for the proof. If a report of bad Word
+   Search vocabulary comes in again, first confirm which site/version was actually tested
+   (see the runtime-audit lesson above) before assuming the code regressed.
 3. **Pick the next item from "Still open" below.** Nothing is mandated — every active
    engineering/ops task from this session is closed; everything remaining is the owner's
    choice (key rotation, the v2 marketing plan, etc.).
@@ -295,7 +325,11 @@ come back empty.
   from `/var/data` after this deploy.
 - ~~Cloudflare Email Routing for `support@digitalproductfactorypro.com`.~~ **DONE** —
   see "Cloudflare Email Routing (support@) — CLOSED" above.
-- New Tavily and Pexels keys (rotation open since August).
+- New Tavily and Pexels keys (rotation open since August). Partially addressed:
+  `TAVILY_API_KEY` and `AI_INTEGRATIONS_OPENAI_API_KEY` are now confirmed present on
+  Render (added to fix Factory Market Advantage, see "RESOLVED" above) — whether that
+  Tavily value is the intended rotated/new key, or the same one from before, was not
+  stated. Pexels key rotation is untouched and still open.
 - Day 3 of the v2 plan: Founding Member product in Lemon Squeezy, first 10 messages.
 - Day 4: MiniMax keys into Pin Factory Pro; 50 real pins.
 - Rescued branch `onedrive-workspace-phase-a`: archive at owner's discretion.
