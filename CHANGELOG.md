@@ -5,6 +5,59 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.3 — 2026-09-12
+
+**Coloring Book interior pages no longer print unwanted text when captions are off.**
+
+### What changed
+
+- Coloring Book's local fallback illustration renderer (used for the zero-cost
+  "Basic Test Fallback" quality mode, and as the emergency fallback for any
+  single page whose paid AI image fails to generate) now behaves the same way
+  for every theme: no visible text on the page unless you explicitly turned
+  captions on. Previously, one specific illustration style — the generic
+  fallback used for themes that don't match a specific animal, superhero,
+  fantasy, vehicle, or pattern illustration — printed the page's topic as a
+  visible label regardless of your captions choice. Every other illustration
+  style already had no text; this one now matches them.
+
+### What was fixed
+
+- **A Single Sheet Coloring Book with "Add short captions?" set to No could
+  fail after generation** with "Coloring Book QA failed after
+  auto-correction," for any theme that didn't match a specific illustration
+  keyword set (an example that failed live: "Sea Creatures in the Reef").
+  The cause was a leftover developer label ("Topic label") in one fallback
+  illustration routine, printed unconditionally — present in the Factory's
+  code since before version tracking began, never previously fixed. The
+  quality check that caught it was working correctly the whole time; only
+  the renderer needed the fix. Removed the label entirely.
+- **A generic "Fix any missing fields above" message appeared after this kind
+  of failure**, even though nothing was missing from the form. The retry
+  message now says so only for genuine field-validation errors; a
+  regeneration/quality-check failure gets accurate wording instead.
+
+### Do my steps change?
+
+- **No.** Nothing about filling out the Coloring Book form changes. The only
+  difference is that a captions-off book with this specific fallback
+  illustration style now generates cleanly on the first try instead of
+  failing.
+
+### Release gate
+
+- Fast Stability Gate: 151 passed, 609 subtests, zero paid calls.
+- Full Windows release gate on this commit: 2,656 tests, 0 failures,
+  0 errors, 0 skipped, 0 paid API calls (log:
+  `Factory Control Center/Logs/full_release_gate_v1.7.3_20260912.txt`).
+- New protection: `tests/test_coloring_book_interior_no_text_contract.py` —
+  proves every illustration branch draws zero text, and the real customer
+  path (Single Sheet, captions off, an affected theme) passes QA on the
+  first attempt with no auto-correction needed. In the acceptance manifest
+  and the fast Stability Gate.
+
+---
+
 ## 1.7.2 — 2026-09-11
 
 **Word Search topic vocabulary now matches the subject you actually typed.**

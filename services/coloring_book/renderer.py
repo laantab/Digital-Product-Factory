@@ -618,10 +618,17 @@ def _draw_generic_scene(
     pdf.circle(cx, cy + scale * 0.2, scale * 0.22, stroke=1, fill=0)
     pdf.circle(cx - scale * 0.15, cy + scale * 0.12, scale * 0.15, stroke=1, fill=0)
     pdf.circle(cx + scale * 0.15, cy + scale * 0.12, scale * 0.15, stroke=1, fill=0)
-    # Topic label
-    pdf.setFont("Helvetica-Oblique", max(7, scale * 0.07))
-    pdf.setFillColor(colors.black)
-    pdf.drawCentredString(cx, by + bh * 0.1, topic[:60])
+    # COLORING BOOK CAPTIONS-OFF TEXT REPAIR (2026-09-12): this used to print
+    # `topic` as a visible label here, unconditionally -- the one illustration
+    # branch (of superhero/fantasy/animal/vehicle/mandala/generic) that drew
+    # any text at all, and the only path a theme takes when it matches none
+    # of the specific keyword sets in _draw_line_art's classifier (e.g. "Sea
+    # Creatures in the Reef" matches no animal/vehicle/etc. keyword). This
+    # broke the interior-page contract _draw_coloring_page already documents
+    # ("no product title / topic / long prompt headers") regardless of the
+    # customer's own include_captions="No" choice, since none of that
+    # contract's gating ever reached this specific draw call. No label here
+    # now, matching every sibling illustration branch.
 
 
 def _polygon(

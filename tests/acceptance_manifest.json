@@ -35,6 +35,7 @@
     "tests/test_coloring_book_thunder_volt_quality_gate.py",
     "tests/test_coloring_book_sea_creatures_customer_path.py",
     "tests/test_coloring_book_local_fallback_theme_classification.py",
+    "tests/test_coloring_book_interior_no_text_contract.py",
     "tests/test_paid_image_authorization_guard.py",
     "tests/test_paid_image_budget_controls.py",
     "tests/test_coloring_open_skin_and_text_rules.py",

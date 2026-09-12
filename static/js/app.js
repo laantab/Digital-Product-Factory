@@ -6275,9 +6275,20 @@ async function runProduct() {
       _showWorkflowSaveDialog(data, () => _doWorkflowSave(data));
     }
   } catch (e) {
+    // GENERATE-ERROR MESSAGE REPAIR (2026-09-12): this subtext used to always
+    // say "Fix any missing fields above" -- correct for a genuine validation
+    // error, but wrong and misleading for a post-generation QA/regeneration
+    // failure (e.g. "Coloring Book QA failed after auto-correction: ..."),
+    // where nothing above is missing at all. Pick the wording that matches
+    // what actually failed instead of assuming every failure is a field.
+    const msg = String(e.message || "");
+    const isQaOrRegenerationFailure = /QA (failed|blocked)|violates contract|auto-correction/i.test(msg);
+    const guidance = isQaOrRegenerationFailure
+      ? "This wasn't a problem with the fields above — generation itself needs another attempt."
+      : "Fix any missing fields above, then try Generate again.";
     out.innerHTML = card(
       `<p class="text-rose-600 text-sm font-medium mb-2">${escapeHtml(e.message)}</p>
-       <p class="text-sm text-slate-600 mb-3">Fix any missing fields above, then try Generate again.</p>
+       <p class="text-sm text-slate-600 mb-3">${escapeHtml(guidance)}</p>
        <button id="factoryRetryBtn" class="btn-primary">Try again</button>`
     );
     const retry = document.getElementById("factoryRetryBtn");
