@@ -27,6 +27,7 @@ ROOT = HERE.parent
 
 HANDOFF_FILE = HERE / "handoff_status.json"
 COMPONENT_VERSIONS_FILE = HERE / "component_versions.json"
+FUNCTION_LOCK_REGISTRY_FILE = HERE / "function_lock_registry.json"
 GATE_JUNIT_FILE = ROOT / "test-results" / "factory-junit.xml"
 
 #: The name CLAUDE.md says this checkout must have, and the branch every
@@ -104,6 +105,38 @@ def load_component_versions() -> dict[str, Any]:
     """The durable component-version manifest (word search / crossword / resolver / …)."""
     data = _load_json_safe(COMPONENT_VERSIONS_FILE, {})
     return data if isinstance(data, dict) else {}
+
+
+def load_function_lock_registry() -> list[dict[str, Any]]:
+    """Per-function protection status, read-only, for the Function Lock Matrix.
+
+    See PROTECTED_GENERATOR_RULE.md and function_lock_registry.json's own
+    ``schema_note`` for what each field means. Never raises; a missing or
+    malformed registry file just yields an empty list, same as every other
+    optional Command Center data source.
+    """
+    data = _load_json_safe(FUNCTION_LOCK_REGISTRY_FILE, {})
+    functions = data.get("functions") if isinstance(data, dict) else None
+    if not isinstance(functions, dict):
+        return []
+    rows = []
+    for key, entry in functions.items():
+        if not isinstance(entry, dict):
+            continue
+        rows.append({
+            "key": key,
+            "display_name": entry.get("display_name") or key,
+            "status": entry.get("status") or "UNKNOWN",
+            "last_known_good_commit": entry.get("last_known_good_commit"),
+            "factory_version": entry.get("factory_version"),
+            "fast_gate": bool(entry.get("fast_gate")),
+            "full_gate": bool(entry.get("full_gate")),
+            "unlocked_reason": entry.get("unlocked_reason"),
+        })
+    # LOCKED first, then UNLOCKED (needs attention), then the rest alphabetically.
+    order = {"LOCKED": 0, "UNLOCKED": 1, "REGRESSION": 2, "PROTECTED": 3, "UNPROTECTED": 4}
+    rows.sort(key=lambda r: (order.get(r["status"], 9), r["display_name"]))
+    return rows
 
 
 def load_gate_result() -> dict[str, Any] | None:
@@ -256,6 +289,11 @@ def build_context() -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         log.warning("Command Center: recent handoffs failed: %s", exc)
         recent_handoffs = []
+    try:
+        function_locks = load_function_lock_registry()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Command Center: function lock registry failed: %s", exc)
+        function_locks = []
 
     completed_buckets = bucket_completed_log(handoff.get("completed_log", []))
     latest_completed = completed_buckets[0] if completed_buckets else None
@@ -270,6 +308,7 @@ def build_context() -> dict[str, Any]:
         "completed_buckets": completed_buckets,
         "latest_completed": latest_completed,
         "recent_handoffs": recent_handoffs,
+        "function_locks": function_locks,
         "root": str(ROOT),
         "expected_folder_name": EXPECTED_FOLDER_NAME,
         "expected_branch": EXPECTED_BRANCH,

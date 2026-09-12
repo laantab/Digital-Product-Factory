@@ -1,5 +1,7 @@
 {
   "tests": [
+    "tests/test_function_lock_registry_integrity.py",
+    "tests/test_function_lock_enforcement.py",
     "tests/test_warm_wellness_template.py",
     "tests/test_template_system_v1.py",
     "tests/test_db_path_isolation.py",
@@ -72,6 +74,7 @@
     "tests/test_ebook_photo_cover_engine.py",
     "tests/test_factory_ebook_pexels_route.py",
     "tests/test_ebook_customer_path.py",
+    "tests/test_ebook_saved_projects_visibility.py",
     "tests/test_duplicate_checklist_chapter_scope.py",
     "tests/test_factory_logo_branding.py",
     "tests/test_planner_design_system.py",

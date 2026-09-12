@@ -1,0 +1,267 @@
+{
+  "schema_note": "Per-function protection status for the Factory's customer-facing generators and shared systems. Seeded 2026-09-12 from a read-only audit -- see PROTECTED_GENERATOR_RULE.md and SESSION_HANDOFF_2026-09-11.md. Status values: LOCKED (proven customer-path fix + machine-checked protected test(s) + known last_known_good_commit), UNLOCKED (an explicit, reasoned, in-progress exception -- see unlocked_by/unlocked_reason), PROTECTED (real test coverage exists but no single commit has been proven as its customer-path last-known-good), UNPROTECTED (no meaningful customer-path test coverage), REGRESSION (currently known broken). last_known_good_commit is null unless a real commit was proven -- never manufactured (Rule 9, PROTECTED_GENERATOR_RULE.md). shared_code_dependencies covers both the function's own dedicated files and any file it shares with other functions -- tests/test_function_lock_enforcement.py treats a trailing '/' as a directory-prefix match.",
+  "updated_at": "2026-09-12T00:00:00-07:00",
+  "functions": {
+    "word_search": {
+      "display_name": "Word Search",
+      "status": "LOCKED",
+      "last_known_good_commit": "a021385",
+      "factory_version": "1.7.2",
+      "protected_test_files": [
+        "tests/test_word_search_topic_scope_contract.py",
+        "tests/test_universal_topic_puzzle_engine.py",
+        "tests/test_word_search_short_topic_repair.py",
+        "tests/test_word_search_stability.py"
+      ],
+      "shared_code_dependencies": [
+        "services/factory/topic_vocabulary.py",
+        "data/topic_vocabulary_packs.json",
+        "services/word_search/",
+        "services/packaging.py",
+        "static/js/app.js"
+      ],
+      "fast_gate": true,
+      "full_gate": true,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Claude Sonnet 5",
+      "relocked_after_tests": "tests/test_word_search_topic_scope_contract.py (8 tests), full Word Search suite (40 tests), Fast Stability Gate (148 passed), full Windows release gate (2647 tests)",
+      "notes": "The customer-facing route had never used the shared topic engine, in any release, until a021385. No earlier commit is a valid last-known-good for this route."
+    },
+    "coloring_book": {
+      "display_name": "Coloring Book",
+      "status": "LOCKED",
+      "last_known_good_commit": "984b268",
+      "factory_version": "1.7.3",
+      "protected_test_files": [
+        "tests/test_coloring_book_interior_no_text_contract.py",
+        "tests/test_coloring_book_sea_creatures_customer_path.py",
+        "tests/test_coloring_book_local_fallback_theme_classification.py"
+      ],
+      "shared_code_dependencies": [
+        "services/coloring_book/renderer.py",
+        "services/coloring_book/coloring_book_qa_agent.py",
+        "services/quality/user_instruction_controller.py",
+        "services/packaging.py",
+        "static/js/app.js"
+      ],
+      "fast_gate": true,
+      "full_gate": true,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Claude Sonnet 5",
+      "relocked_after_tests": "tests/test_coloring_book_interior_no_text_contract.py (3 tests/10 subtests), full coloring-book suite (74 tests), Fast Stability Gate (151 passed), full Windows release gate (2656 tests)",
+      "notes": "LOCKED for the captions-off/no-text contract proven at 984b268. Seven pre-existing *_LOCKED_STATE.md files (2026-07-11/07-12) claimed this same behavior; their manual test theme ('Farm House') never exercised the one illustration branch (_draw_generic_scene) that had the defect, and none were machine-checked. Those files are historical record now, not the source of truth -- this entry is. A separate, unrelated pair of crash bugs was found in _draw_fantasy (dragon/castle themes) during this fix and is flagged separately (not part of this lock)."
+    },
+    "crossword": {
+      "display_name": "Crossword",
+      "status": "LOCKED",
+      "last_known_good_commit": "e81298e",
+      "factory_version": "1.5.0",
+      "protected_test_files": [
+        "tests/test_crossword_scope_answerkey_zip_repair.py",
+        "tests/test_universal_topic_puzzle_engine.py",
+        "tests/test_crossword_customer_options_restored.py",
+        "tests/test_crossword_cover_selection_repair.py",
+        "tests/test_crossword_controlled_repair.py"
+      ],
+      "shared_code_dependencies": [
+        "services/factory/topic_vocabulary.py",
+        "data/topic_vocabulary_packs.json",
+        "services/crossword/",
+        "services/packaging.py",
+        "static/js/app.js"
+      ],
+      "fast_gate": true,
+      "full_gate": true,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": null,
+      "relocked_after_tests": null,
+      "notes": "The only generator formally enrolled in PROTECTED_GENERATOR_RULE.md before 2026-09-12. e81298e is the commit that both created the shared topic engine and fixed Crossword's topic-scope contamination and dropped-answer-key defects (2026-09-09)."
+    },
+    "invite_protection": {
+      "display_name": "Invite protection",
+      "status": "LOCKED",
+      "last_known_good_commit": "0a9a713",
+      "factory_version": "1.7.1",
+      "protected_test_files": [
+        "tests/test_invite_gate.py",
+        "tests/test_render_persistence_patch.py"
+      ],
+      "shared_code_dependencies": [
+        "app.py"
+      ],
+      "fast_gate": true,
+      "full_gate": true,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": null,
+      "relocked_after_tests": null,
+      "notes": "Self-contained in app.py's single before_request hook -- no shared dependency on static/js/app.js (the gate is server-rendered, no fetch/JS involvement). 14+2 real behavioral tests: gate on/off, cookie/header/query admission, wrong-code refusal (never echoed), exemptions, admin routes gated too."
+    },
+    "factory_market_advantage": {
+      "display_name": "Factory Market Advantage",
+      "status": "PROTECTED",
+      "last_known_good_commit": null,
+      "factory_version": null,
+      "protected_test_files": [
+        "tests/test_factory_market_advantage.py",
+        "tests/test_research_to_build_handoff.py",
+        "tests/test_choose_idea_build_handoff.py"
+      ],
+      "shared_code_dependencies": [
+        "services/factory_advantage.py",
+        "services/market_research.py",
+        "static/js/app.js"
+      ],
+      "fast_gate": false,
+      "full_gate": true,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": null,
+      "relocked_after_tests": null,
+      "notes": "Real, substantial test coverage exists (heavily mocked, algorithm-level: scoring, dedup, fabrication guards). Not LOCKED because: no Fast Gate coverage, no proven customer-path commit, and the 2026-09-11 incident (TAVILY_API_KEY / AI_INTEGRATIONS_OPENAI_API_KEY missing on Render) was entirely invisible to every existing test -- it was a configuration gap, not a code defect, and no test here would have caught it. Fixed by the owner via Render Environment tab; code unchanged."
+    },
+    "ebook": {
+      "display_name": "Ebook",
+      "status": "PROTECTED",
+      "last_known_good_commit": null,
+      "factory_version": null,
+      "protected_test_files": [
+        "tests/test_ebook_customer_path.py",
+        "tests/test_ebook_real_browser_customer_path.py",
+        "tests/test_ebook_saved_projects_visibility.py",
+        "tests/test_saved_projects_reopen_build.py"
+      ],
+      "shared_code_dependencies": [
+        "services/ebook_package.py",
+        "services/ebook_revision_identity.py",
+        "database.py",
+        "services/packaging.py",
+        "static/js/app.js"
+      ],
+      "fast_gate": true,
+      "full_gate": true,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": null,
+      "relocked_after_tests": null,
+      "notes": "Largest test family in the Factory (~31 files in tests/acceptance_manifest.json), but only 1-2 run in the Fast Gate. No single commit has been formally proven as this function's customer-path last-known-good -- not LOCKED until one is."
+    },
+    "math_worksheet": {
+      "display_name": "Math Worksheet",
+      "status": "PROTECTED",
+      "last_known_good_commit": null,
+      "factory_version": null,
+      "protected_test_files": [
+        "tests/test_math_worksheet_cover_selection_repair.py",
+        "tests/test_math_worksheet_final_output_pdf_link.py",
+        "tests/test_math_worksheet_pdf_visual_qa.py"
+      ],
+      "shared_code_dependencies": [
+        "services/math_worksheet/",
+        "services/packaging.py",
+        "static/js/app.js"
+      ],
+      "fast_gate": false,
+      "full_gate": true,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": null,
+      "relocked_after_tests": null,
+      "notes": "Fully independent generator (shares no product-specific code with any other Factory product). Full Gate only -- not in the Fast Gate today."
+    },
+    "faith_planner": {
+      "display_name": "Faith Planner",
+      "status": "PROTECTED",
+      "last_known_good_commit": null,
+      "factory_version": null,
+      "protected_test_files": [
+        "tests/test_planner_products.py"
+      ],
+      "shared_code_dependencies": [
+        "services/planner/",
+        "services/packaging.py",
+        "static/js/app.js"
+      ],
+      "fast_gate": false,
+      "full_gate": true,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": null,
+      "relocked_after_tests": null,
+      "notes": "Shares services/planner/ with Budget Planner -- a Faith-only change can silently affect Budget Planner; one shared test file (37 tests) covers both. The 2026-09-09 matrix noted a 'Save Product' flakiness in one manual browser trial, concluded not a generation defect, but never formally re-verified."
+    },
+    "budget_planner": {
+      "display_name": "Budget Planner",
+      "status": "PROTECTED",
+      "last_known_good_commit": null,
+      "factory_version": null,
+      "protected_test_files": [
+        "tests/test_planner_products.py"
+      ],
+      "shared_code_dependencies": [
+        "services/planner/",
+        "services/packaging.py",
+        "static/js/app.js"
+      ],
+      "fast_gate": false,
+      "full_gate": true,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": null,
+      "relocked_after_tests": null,
+      "notes": "Shares services/planner/ with Faith Planner -- see that entry. Same shared test file covers both."
+    },
+    "saved_projects": {
+      "display_name": "Saved Projects",
+      "status": "PROTECTED",
+      "last_known_good_commit": null,
+      "factory_version": null,
+      "protected_test_files": [
+        "tests/test_saved_projects_reopen_build.py",
+        "tests/test_saved_projects_last10.py",
+        "tests/test_saved_projects_hard_cleanup.py",
+        "tests/test_artifact_state_revision_primitives.py"
+      ],
+      "shared_code_dependencies": [
+        "database.py",
+        "services/quality/artifact_state.py",
+        "services/packaging.py",
+        "static/js/app.js"
+      ],
+      "fast_gate": true,
+      "full_gate": true,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": null,
+      "relocked_after_tests": null,
+      "notes": "The one function with real code-level enforcement, not just tests: services/quality/artifact_state.py's DRAFT/APPROVED/LOCKED transition rules genuinely block content mutation in code. Strong candidate for LOCKED; kept at PROTECTED because no single customer-path incident/fix commit was named for it in the 2026-09-12 audit -- upgrade it deliberately, not by default."
+    },
+    "pdf_zip_export": {
+      "display_name": "PDF/ZIP export",
+      "status": "PROTECTED",
+      "last_known_good_commit": null,
+      "factory_version": null,
+      "protected_test_files": [
+        "tests/test_reopen_packaging_identity_pass2.py",
+        "tests/test_download_slug_package_id.py",
+        "tests/test_export_revision_identity.py",
+        "tests/test_export_pointer_sync.py"
+      ],
+      "shared_code_dependencies": [
+        "services/packaging.py",
+        "services/quality/cover_eligibility_agent.py",
+        "static/js/app.js"
+      ],
+      "fast_gate": true,
+      "full_gate": true,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": null,
+      "relocked_after_tests": null,
+      "notes": "Highest-blast-radius shared file in the Factory per the Shared-Service Dependency Map -- every other product above lists services/packaging.py as a dependency too, so a change here should re-run every locked/protected function's suite, not just this one."
+    }
+  }
+}

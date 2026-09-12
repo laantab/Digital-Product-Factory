@@ -107,6 +107,53 @@ def test_distinguishes_completed_open_and_blocked_work(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Function Lock Matrix (2026-09-12)
+# ---------------------------------------------------------------------------
+
+def test_function_lock_registry_loads_and_sorts_locked_first(tmp_path, monkeypatch):
+    registry_file = tmp_path / "function_lock_registry.json"
+    registry_file.write_text(json.dumps({
+        "functions": {
+            "b_func": {"display_name": "B Func", "status": "PROTECTED"},
+            "a_func": {"display_name": "A Func", "status": "LOCKED",
+                       "last_known_good_commit": "abc1234", "fast_gate": True, "full_gate": True},
+        }
+    }), encoding="utf-8")
+    monkeypatch.setattr(status, "FUNCTION_LOCK_REGISTRY_FILE", registry_file)
+
+    rows = status.load_function_lock_registry()
+    assert [r["key"] for r in rows] == ["a_func", "b_func"]
+    assert rows[0]["status"] == "LOCKED"
+    assert rows[0]["last_known_good_commit"] == "abc1234"
+
+
+def test_missing_function_lock_registry_does_not_crash(tmp_path, monkeypatch):
+    monkeypatch.setattr(status, "FUNCTION_LOCK_REGISTRY_FILE", tmp_path / "missing.json")
+    assert status.load_function_lock_registry() == []
+    context = status.build_context()  # must not raise
+    assert context["function_locks"] == []
+
+
+def test_function_lock_matrix_renders_on_the_page(tmp_path, monkeypatch):
+    registry_file = tmp_path / "function_lock_registry.json"
+    registry_file.write_text(json.dumps({
+        "functions": {
+            "word_search": {
+                "display_name": "Word Search", "status": "LOCKED",
+                "last_known_good_commit": "a021385", "fast_gate": True, "full_gate": True,
+            }
+        }
+    }), encoding="utf-8")
+    monkeypatch.setattr(status, "FUNCTION_LOCK_REGISTRY_FILE", registry_file)
+
+    client = cc_app.test_client()
+    body = client.get("/").get_data(as_text=True)
+    assert "Function Lock Matrix" in body
+    assert "Word Search" in body
+    assert "a021385" in body
+
+
+# ---------------------------------------------------------------------------
 # Durability
 # ---------------------------------------------------------------------------
 

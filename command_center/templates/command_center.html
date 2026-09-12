@@ -205,6 +205,31 @@ Read the newest SESSION_HANDOFF_*.md in the Factory-v1.3 root before doing anyth
       {% if c.notes %}<p class="hint"><strong>{{ key.replace('_', ' ') }}:</strong> {{ c.notes }}</p>{% endif %}
     {% endfor %}
 
+    <h3 class="detail-h">Function Lock Matrix</h3>
+    {% if function_locks %}
+    <table class="versions">
+      <tr><th>Function</th><th>Status</th><th>Last known good</th><th>Fast Gate</th><th>Full Gate</th></tr>
+      {% for f in function_locks %}
+      <tr>
+        <td>{{ f.display_name }}</td>
+        <td>
+          <span class="badge {{ 'completed' if f.status == 'LOCKED' else ('blocked' if f.status in ('UNLOCKED', 'REGRESSION') else 'open') }}">{{ f.status }}</span>
+        </td>
+        <td>{{ f.last_known_good_commit or "—" }}{% if f.factory_version %} ({{ f.factory_version }}){% endif %}</td>
+        <td>{{ "yes" if f.fast_gate else "no" }}</td>
+        <td>{{ "yes" if f.full_gate else "no" }}</td>
+      </tr>
+      {% if f.status == 'UNLOCKED' and f.unlocked_reason %}
+      <tr><td colspan="5" class="hint">&nbsp;&nbsp;unlocked: {{ f.unlocked_reason }}</td></tr>
+      {% endif %}
+      {% endfor %}
+    </table>
+    <p class="hint">Source of truth: <code>command_center/function_lock_registry.json</code> — see
+      <code>PROTECTED_GENERATOR_RULE.md</code> for the unlock &rarr; change &rarr; protected tests &rarr; relock workflow.</p>
+    {% else %}
+      <p class="hint">No function lock registry found.</p>
+    {% endif %}
+
     <h3 class="detail-h">Last full release gate</h3>
     {% if gate %}
       <p>
