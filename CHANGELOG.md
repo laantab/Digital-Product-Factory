@@ -5,6 +5,58 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.8 — 2026-09-13
+
+**The previous fix (1.7.7) did not work: a new live build still failed at the manuscript step, still trying to reach the owner's home computer. This time the fix does not depend on recognizing which computer the Factory is running on at all.**
+
+### What changed
+
+- **Writing a chapter locally is now something you turn ON, not something
+  you turn OFF.** Before, the hosted Factory needed one setting to be
+  correctly present to stay off the owner's home-computer engine; if that
+  setting was ever missing, wrong, or not carried forward, hosted
+  chapter-writing would silently try that engine and fail. Now the hosted
+  Factory uses the paid cloud writer unless a person deliberately switches
+  it to local generation — there is no "missing setting" state that can
+  accidentally choose the wrong engine.
+
+### What was fixed
+
+- **1.7.7's attempted fix also did not hold up in production.** It tried to
+  recognize "am I the hosted Factory?" automatically and refuse the
+  home-computer engine when so. A brand-new live build after that fix
+  deployed hit the identical failure — the automatic recognition did not
+  reliably work in the real hosted environment. Rather than try a third
+  detection method, the underlying assumption changed: the Factory no
+  longer needs to recognize where it's running. It simply never chooses the
+  home-computer engine unless someone explicitly asks for it.
+- **The owner's own computer is unaffected** — it now has the same explicit,
+  one-line "yes, use local writing here" setting already turned on for it,
+  so nothing changes there.
+
+### Do my steps change?
+
+- **No.** Invisible to a customer either way.
+
+### Release gate
+
+- Targeted proof first (per the recovery sprint, before any broader gate):
+  `tests/test_ai_providers.py` (31 tests) and
+  `tests/test_ai_provider_render_safety.py` (10 tests, rewritten for this
+  release) prove the new default is safe with nothing configured, stays
+  safe against a mistyped setting, and still genuinely reaches local
+  writing when explicitly turned on — plus a real-call-chain proof through
+  the exact function named in both live tracebacks, and a Resume-Build
+  proof that an already-accepted chapter is never regenerated or re-billed
+  after a real provider failure.
+- 249 broader ebook/manuscript tests, then the Fast Stability Gate (160
+  passed, 698 subtests), then the Full Release Gate — in that order, per the
+  recovery sprint's required sequencing.
+- Full Windows release gate: pending this commit's own run.
+- Function Lock: no LOCKED function shares the changed files.
+
+---
+
 ## 1.7.7 — 2026-09-13
 
 **A live ebook build kept failing at the manuscript step even after the "Resume Build" fix. The real cause: the hosted Factory could still try to reach the owner's home computer to write chapters. It can no longer do that, no matter what.**

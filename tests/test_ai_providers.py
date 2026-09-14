@@ -28,13 +28,22 @@ from services.ai_providers import (
 
 @pytest.fixture(autouse=True)
 def _clean_providers(monkeypatch):
-    """Each test gets fresh providers and an explicit policy.
+    """Each test gets fresh providers and an explicit, opted-in local policy.
+
+    Local generation is opt-in as of v1.7.8 (see services/ai_providers.py's
+    module docstring): FACTORY_AI_POLICY must be explicitly set to route
+    local at all. This file's tests are specifically about the Local
+    Manuscript Pilot's own mechanism, so the baseline here is what a
+    developer who actually opted in locally would have set --
+    test_missing_policy_defaults_to_premium_not_local below explicitly
+    proves the OPPOSITE default (no opt-in) is safe, which is the real
+    contract every hosted deployment relies on.
 
     FACTORY_TEST_MODE is cleared here because these tests exercise the routing
     decision itself, which is disabled in test mode by design. Every network
     call below is still mocked -- nothing contacts a real engine.
     """
-    monkeypatch.delenv("FACTORY_AI_POLICY", raising=False)
+    monkeypatch.setenv("FACTORY_AI_POLICY", "local_first")
     monkeypatch.delenv("FACTORY_TEST_MODE", raising=False)
     monkeypatch.setenv("FACTORY_LOCAL_AI_MODEL", "qwen2.5:7b-instruct")
     monkeypatch.setenv("FACTORY_LOCAL_AI_URL", "http://127.0.0.1:11434")
@@ -108,9 +117,27 @@ def test_premium_policy_forces_openai_even_for_chapters(monkeypatch):
     assert isinstance(select_provider("chapter"), OpenAIProvider)
 
 
-def test_unknown_policy_falls_back_to_local_first(monkeypatch):
+def test_unknown_policy_falls_back_to_premium(monkeypatch):
     monkeypatch.setenv("FACTORY_AI_POLICY", "nonsense-value")
-    assert ai_providers.get_policy() == ai_providers.POLICY_LOCAL_FIRST
+    assert ai_providers.get_policy() == ai_providers.POLICY_PREMIUM
+
+
+def test_missing_policy_defaults_to_premium_not_local(monkeypatch):
+    """The actual production contract: unset must mean cloud, never local.
+
+    This is the one guarantee that matters most: a hosted deployment that
+    never sets FACTORY_AI_POLICY at all -- the normal state for a variable
+    nobody there has reason to set -- must never route a chapter to a local
+    engine. This is what stops the exact live incident this pilot caused
+    (see services/ai_providers.py's module docstring), independent of any
+    attempt to detect which platform the process happens to run on.
+    """
+    monkeypatch.delenv("FACTORY_AI_POLICY", raising=False)
+    ai_providers.reset_providers()
+    assert ai_providers.get_policy() == ai_providers.POLICY_PREMIUM
+    assert routes_local("chapter") is False
+    assert routes_local("chapter_repair") is False
+    assert isinstance(select_provider("chapter"), OpenAIProvider)
 
 
 # ------------------------------------------------------- local generation ---

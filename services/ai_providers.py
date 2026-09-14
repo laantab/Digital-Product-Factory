@@ -40,6 +40,27 @@ If a pilot task is routed local and local fails - unavailable, missing model,
 malformed output, timeout, or a failed quality gate upstream - this module
 raises. It never quietly falls back to a paid provider. Escalating to a paid
 provider is a decision for the caller and the customer, never a side effect.
+
+SAFE BY DEFAULT (v1.7.8)
+-------------------------
+Local generation is opt-in ONLY: it requires FACTORY_AI_POLICY to be
+explicitly set, on the process that will actually generate the chapter, to
+"local_first" or "local_only". Missing, empty, misspelled, or not carried
+forward on a redeploy all mean the same safe thing - the paid cloud
+provider - never a local engine. A hosted, customer-facing deployment must
+never route to a local engine merely because a variable was not set; unset
+is the deployment's normal state, not a rare edge case.
+
+An earlier version of this module instead defaulted to local-first and
+relied on FACTORY_AI_POLICY=premium being set correctly on a hosted
+deployment to opt back OUT of it, with a second layer that additionally
+tried to detect "is this a hosted platform" from a RENDER environment
+variable. In the real deployed runtime neither of those actually stopped a
+live customer's ebook build from repeatedly trying to reach
+127.0.0.1:11434 - the owner's own Windows machine - at the manuscript
+stage, even with FACTORY_AI_POLICY=premium set and the platform-detection
+check in place. Guessing about the environment, twice, was the mistake:
+the default itself had to change, not the guess.
 """
 from __future__ import annotations
 
@@ -70,11 +91,27 @@ POLICY_PREMIUM = "premium"
 
 _VALID_POLICIES = (POLICY_LOCAL_ONLY, POLICY_LOCAL_FIRST, POLICY_PREMIUM)
 
-DEFAULT_POLICY = POLICY_LOCAL_FIRST
+# SAFE BY DEFAULT (v1.7.8): the cloud provider. A hosted, customer-facing
+# deployment must never choose a local engine merely because a variable was
+# left unset -- unset is the NORMAL case for a variable nobody on that host
+# ever has reason to set, not a rare edge case. This used to default to
+# POLICY_LOCAL_FIRST, on the theory that FACTORY_AI_POLICY=premium would
+# always be set explicitly on a hosted deployment. In production that
+# variable was set correctly and the failure happened anyway; a second
+# attempt to auto-detect "is this a hosted platform" (a RENDER environment
+# variable check) was *also* not a reliable signal in the actual deployed
+# runtime. Guessing about the platform, twice, was the mistake. The default
+# itself had to change: local generation is now opt-in ONLY (see
+# routes_local docstring), never opt-out. See .env.example.
+DEFAULT_POLICY = POLICY_PREMIUM
 
 
 def get_policy() -> str:
-    """Active generation policy. Unknown values fall back to the safe default."""
+    """Active generation policy. Missing or unrecognized values mean premium/cloud.
+
+    This must fail closed to the paid cloud provider, never to a local
+    engine -- see DEFAULT_POLICY.
+    """
     raw = str(os.environ.get("FACTORY_AI_POLICY") or "").strip().lower()
     return raw if raw in _VALID_POLICIES else DEFAULT_POLICY
 
@@ -535,25 +572,24 @@ def reset_providers() -> None:
     _openai_singleton = None
 
 
-def _running_on_render() -> bool:
-    """True when this process is a Render-hosted service.
-
-    Render sets ``RENDER=true`` automatically on every deployed service --
-    unlike ``FACTORY_AI_POLICY``, the owner cannot forget to set it, and unlike
-    a hand-set custom variable it cannot be silently shadowed by a stray local
-    ``.env`` file (app.py's ``load_dotenv`` runs with ``override=True`` outside
-    test mode; see its own comment for the exact shape of failure this already
-    caused once for TAVILY_API_KEY on 2026-08-29). A hosted Render runtime
-    never has the owner's local Ollama reachable at 127.0.0.1, so this is a
-    hard, policy-independent floor under the local-routing decision below --
-    not a replacement for FACTORY_AI_POLICY, which still governs everywhere
-    this is False (including every local development machine).
-    """
-    return bool(str(os.environ.get("RENDER") or "").strip())
-
-
 def routes_local(task: str | None) -> bool:
     """True when this task should be generated locally.
+
+    Local generation is opt-in ONLY. This returns True only when
+    FACTORY_AI_POLICY is explicitly set, on THIS process, to "local_first" or
+    "local_only" (see DEFAULT_POLICY). A missing, misspelled, or
+    not-carried-forward-on-redeploy setting means the safe default --
+    premium/cloud -- never local. That is what actually stops a hosted
+    deployment from reaching the owner's own machine.
+
+    An earlier version of this function instead tried to detect "is this a
+    hosted platform" from a RENDER environment variable, on the theory that
+    Render sets it automatically. In the real deployed runtime that theory
+    was wrong -- the live manuscript stage kept trying 127.0.0.1:11434 even
+    with FACTORY_AI_POLICY=premium set and that platform-detection check in
+    place. Guessing about the environment, twice, was the mistake being
+    fixed here: the default itself is now safe, so no detection of any kind
+    is needed for correctness on any hosting platform, present or future.
 
     A task of ``None`` means a legacy call site that predates the provider
     boundary. Those always stay on OpenAI so existing behaviour is unchanged.
@@ -563,15 +599,8 @@ def routes_local(task: str | None) -> bool:
     provider: because it listens on this machine it is reachable from the test
     suite, so without this guard an automated test would silently perform a real
     generation. Tests inject their own chapter function explicitly instead.
-
-    On a Render-hosted service, nothing routes local, regardless of policy --
-    see _running_on_render(). A misconfigured, missing, or shadowed
-    FACTORY_AI_POLICY must never turn into a customer-facing manuscript build
-    that repeatedly tries to reach the owner's Windows machine.
     """
     if str(os.environ.get("FACTORY_TEST_MODE") or "") == "1":
-        return False
-    if _running_on_render():
         return False
     if not task or task not in LOCAL_PILOT_TASKS:
         return False

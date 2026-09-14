@@ -1,50 +1,63 @@
-"""The live manuscript stage kept failing after Resume Build was fixed.
+"""The live manuscript stage kept failing even after a first attempted fix.
 
-ROOT CAUSE THIS GUARDS
------------------------
+ROOT CAUSE THIS GUARDS (the full story, in order)
+--------------------------------------------------
 A real production build of "Container Gardening for Beginners" reached the
 manuscript stage and failed every time with:
 
-    urllib.error.URLError: <urlopen error [Errno 111] Connection refused>
+    services.ai_providers.ProviderUnavailable: Local engine unreachable at
+    http://127.0.0.1:11434/api/chat: [Errno 111] Connection refused
 
-via services/ebook.py::generate_one_chapter -> routes_local -> chat_with_meta
--> LocalAIProvider -> http://127.0.0.1:11434 (the owner's local Ollama, which
-does not exist on Render).
+via services/ebook.py::generate_one_chapter -> ai_client.py::chat_with_meta
+-> services/ai_providers.py::generate -> LocalAIProvider -> 127.0.0.1:11434
+(the owner's local Ollama, which does not exist on the hosted Factory).
 
-services/ai_providers.py's Local Manuscript Pilot (added 2026-09-03, ec9d3ee)
-routes chapter generation to a local engine by default (POLICY_LOCAL_FIRST)
-unless FACTORY_AI_POLICY is explicitly set to "premium". The owner set
-FACTORY_AI_POLICY=premium on Render and redeployed; the failure persisted.
+FIRST ATTEMPTED FIX (superseded -- kept here as documented history)
+---------------------------------------------------------------------
+services/ai_providers.py's Local Manuscript Pilot (added 2026-09-03,
+ec9d3ee) routed chapter generation to a local engine by default
+(POLICY_LOCAL_FIRST) unless FACTORY_AI_POLICY was explicitly "premium". The
+owner set FACTORY_AI_POLICY=premium on the host and redeployed; the failure
+persisted. A first fix added a check for a RENDER environment variable,
+assumed (not verified) to be auto-injected by the hosting platform, and
+hard-blocked local routing when present. THE OWNER RAN A NEW LIVE BUILD
+AFTER THAT FIX DEPLOYED AND GOT THE IDENTICAL FAILURE -- proving the RENDER
+signal was not reliably present in the actual deployed runtime. Guessing
+about the environment, twice, was the mistake.
 
-tests/test_ai_providers.py already proves routes_local()/select_provider()
-correctly respect FACTORY_AI_POLICY=premium when it IS read -- that logic is
-not the bug. The real gap is architectural: nothing in the hosted runtime
-ever REQUIRED that one custom variable to be set correctly. A stray .env file
-(app.py's load_dotenv runs with override=True outside test mode -- see its
-own comment describing an identical failure shape for TAVILY_API_KEY on
-2026-08-29), a typo, a stale process that never picked up the new value, or a
-future redeploy that simply forgets to carry the setting forward would all
-silently reproduce the exact same customer-facing dead end.
+THE ACTUAL FIX
+---------------
+The default itself changed. DEFAULT_POLICY is now POLICY_PREMIUM (cloud),
+not POLICY_LOCAL_FIRST. routes_local() no longer tries to detect which
+platform it is running on at all -- there is nothing left to detect.
+FACTORY_AI_POLICY must be explicitly set to "local_first" or "local_only",
+on the process that will actually generate the chapter, for local routing
+to ever happen. Missing, empty, misspelled, or not carried forward on a
+redeploy all mean the same thing: the paid cloud provider. This is safe on
+any hosting platform, present or future, without needing to recognize it.
 
-THE FIX
--------
-routes_local() now also checks _running_on_render(): Render sets RENDER=true
-automatically on every deployed service, a signal the owner cannot forget to
-set and that cannot be shadowed by a hand-edited .env file. When that signal
-is present, local routing is refused unconditionally -- independent of
-FACTORY_AI_POLICY. Local development (RENDER unset) is completely unaffected:
-FACTORY_AI_POLICY continues to govern exactly as before.
+Local development keeps working exactly as before -- it now requires one
+explicit line in .env (FACTORY_AI_POLICY=local_first) that this repository's
+own .env now carries, so nothing changed for the person actually running
+Ollama on their own machine.
 
 No external/paid call is made by any test here.
 """
 from __future__ import annotations
 
-import json
 import urllib.error
+from dataclasses import dataclass, field
 from unittest.mock import patch
 
 import pytest
 
+import ai_client  # noqa: F401 -- imported at collection time, not lazily inside a
+# test, so its one-time module-level load_dotenv(override=True) (ai_client.py)
+# fires once, now, before any test's monkeypatch.delenv runs. Deferring this
+# import (e.g. relying on patch("ai_client.get_client", ...) to trigger it
+# lazily) let that one-time dotenv load re-inject .env's FACTORY_AI_POLICY
+# mid-test, silently undoing this file's own env cleanup -- the same class of
+# hazard this whole file exists to guard production code against.
 from services import ai_providers
 from services.ai_providers import (
     LocalAIProvider,
@@ -56,10 +69,15 @@ from services.ai_providers import (
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    """Every test starts from a known, local-development-shaped environment."""
+    """Every test starts from a HOSTED-shaped environment: nothing opted in.
+
+    This is deliberately the opposite baseline from tests/test_ai_providers.py
+    (which is specifically about the Local Manuscript Pilot's own mechanism
+    and opts in by default). Here, the default is what an actual hosted
+    deployment looks like on day one: no FACTORY_AI_POLICY set at all.
+    """
     monkeypatch.delenv("FACTORY_AI_POLICY", raising=False)
     monkeypatch.delenv("FACTORY_TEST_MODE", raising=False)
-    monkeypatch.delenv("RENDER", raising=False)
     monkeypatch.setenv("FACTORY_LOCAL_AI_MODEL", "qwen2.5:7b-instruct")
     monkeypatch.setenv("FACTORY_LOCAL_AI_URL", "http://127.0.0.1:11434")
     ai_providers.reset_providers()
@@ -71,96 +89,127 @@ def _urlopen_that_refuses(*_a, **_kw):
     raise urllib.error.URLError(ConnectionRefusedError(111, "Connection refused"))
 
 
-# -------------------------------------------------------- the hosted floor ---
-
-
-def test_render_blocks_local_routing_even_with_the_default_policy(monkeypatch):
-    """Reproduces the exact live bug: RENDER set, no explicit policy at all."""
-    monkeypatch.setenv("RENDER", "true")
-    assert ai_providers.get_policy() == ai_providers.POLICY_LOCAL_FIRST, (
-        "the default policy is still local-first -- Render must override it structurally"
-    )
-    assert routes_local("chapter") is False
-    assert isinstance(select_provider("chapter"), OpenAIProvider)
-
-
-def test_render_blocks_local_routing_even_if_policy_is_explicitly_local(monkeypatch):
-    """A misconfigured/mistaken policy on Render must not be able to reach it."""
-    monkeypatch.setenv("RENDER", "true")
-    monkeypatch.setenv("FACTORY_AI_POLICY", "local_only")
-    assert routes_local("chapter") is False
-    assert routes_local("chapter_repair") is False
-    assert isinstance(select_provider("chapter"), OpenAIProvider)
-
-
-def test_render_blocks_local_routing_with_premium_policy_too(monkeypatch):
-    """premium already worked in isolation; this proves the belt-and-braces floor agrees."""
-    monkeypatch.setenv("RENDER", "true")
-    monkeypatch.setenv("FACTORY_AI_POLICY", "premium")
-    assert routes_local("chapter") is False
-    assert isinstance(select_provider("chapter"), OpenAIProvider)
-
-
-def test_the_hosted_path_never_opens_a_socket_to_127_0_0_1(monkeypatch):
-    """The actual customer-facing proof: no network call is even attempted."""
-    monkeypatch.setenv("RENDER", "true")
-
+def _openai_client(content: str = "text", *, on_call=None):
     class _Msg:
-        content = "text"
+        pass
 
     class _Choice:
-        message = _Msg()
+        pass
 
     class _Resp:
-        choices = [_Choice()]
+        pass
 
     class _Client:
         class chat:  # noqa: N801
             class completions:  # noqa: N801
                 @staticmethod
-                def create(**_kwargs):
-                    return _Resp()
+                def create(**kwargs):
+                    if on_call is not None:
+                        on_call(**kwargs)
+                    msg = _Msg()
+                    msg.content = content
+                    choice = _Choice()
+                    choice.message = msg
+                    resp = _Resp()
+                    resp.choices = [choice]
+                    return resp
 
-    with patch("ai_client.get_client", return_value=_Client()), \
+    return _Client()
+
+
+# ------------------------------------------------ safe by default (hosted) ---
+
+
+def test_missing_policy_never_routes_local():
+    """The exact production shape: nothing set. Must never reach 127.0.0.1."""
+    assert ai_providers.get_policy() == ai_providers.POLICY_PREMIUM
+    assert routes_local("chapter") is False
+    assert routes_local("chapter_repair") is False
+    assert isinstance(select_provider("chapter"), OpenAIProvider)
+
+
+def test_unknown_policy_value_also_stays_safe():
+    """A typo'd or corrupted value must fail closed to cloud, not local."""
+    import os
+
+    os.environ["FACTORY_AI_POLICY"] = "loca1_first"  # a plausible typo
+    try:
+        assert ai_providers.get_policy() == ai_providers.POLICY_PREMIUM
+        assert routes_local("chapter") is False
+    finally:
+        del os.environ["FACTORY_AI_POLICY"]
+
+
+def test_explicit_premium_still_stays_on_openai(monkeypatch):
+    monkeypatch.setenv("FACTORY_AI_POLICY", "premium")
+    assert routes_local("chapter") is False
+    assert isinstance(select_provider("chapter"), OpenAIProvider)
+
+
+def test_no_socket_is_opened_toward_the_local_engine_by_default():
+    """The actual customer-facing proof: no network call is even attempted."""
+    with patch("ai_client.get_client", return_value=_openai_client()), \
          patch("urllib.request.urlopen", side_effect=_urlopen_that_refuses) as mocked:
         result = ai_providers.generate("sys", "user", 512, task="chapter")
     mocked.assert_not_called()
     assert result.provider == "openai"
 
 
-def test_render_variable_being_blank_does_not_count_as_hosted(monkeypatch):
-    """RENDER="" (unset-but-present in some shells) must not falsely trip the floor."""
-    monkeypatch.setenv("RENDER", "")
-    assert ai_providers._running_on_render() is False
-    assert routes_local("chapter") is True, "local development must be unaffected"
-
-
-# --------------------------------------------------- local dev is unaffected ---
-
-
-def test_local_development_still_routes_local_by_default(monkeypatch):
-    """RENDER unset (every local dev machine): existing behaviour is unchanged."""
-    assert ai_providers._running_on_render() is False
-    assert routes_local("chapter") is True
-    assert isinstance(select_provider("chapter"), LocalAIProvider)
-
-
-def test_local_development_still_honors_an_explicit_premium_choice(monkeypatch):
-    monkeypatch.setenv("FACTORY_AI_POLICY", "premium")
-    assert routes_local("chapter") is False
-    assert isinstance(select_provider("chapter"), OpenAIProvider)
-
-
-def test_unrelated_tasks_are_unaffected_by_the_render_floor(monkeypatch):
-    monkeypatch.setenv("RENDER", "true")
+def test_unrelated_tasks_are_unaffected():
     assert routes_local("research") is False
     assert routes_local(None) is False
 
 
-# --------------------------------------------------- the real call chain ---
+# ----------------------------------------------- local is opt-in, and works ---
 
 
-from dataclasses import dataclass, field
+def test_local_first_requires_explicit_opt_in(monkeypatch):
+    monkeypatch.setenv("FACTORY_AI_POLICY", "local_first")
+    assert routes_local("chapter") is True
+    assert isinstance(select_provider("chapter"), LocalAIProvider)
+
+
+def test_local_only_also_opts_in(monkeypatch):
+    monkeypatch.setenv("FACTORY_AI_POLICY", "local_only")
+    assert routes_local("chapter_repair") is True
+    assert isinstance(select_provider("chapter_repair"), LocalAIProvider)
+
+
+def test_local_opt_in_genuinely_still_reaches_ollama(monkeypatch):
+    """Windows/local Ollama support is not removed -- only made opt-in."""
+    import json
+
+    monkeypatch.setenv("FACTORY_AI_POLICY", "local_first")
+
+    class _FakeResp:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def read(self):
+            return self._payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    body = json.dumps({"message": {"role": "assistant", "content": "local chapter text"},
+                       "done_reason": "stop"}).encode("utf-8")
+
+    def _fake_urlopen(req, timeout=None):
+        assert "127.0.0.1:11434" in req.full_url
+        return _FakeResp(body)
+
+    with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+        result = ai_providers.generate("sys", "user", 256, task="chapter")
+
+    assert result.provider == "local"
+    assert result.text == "local chapter text"
+    assert result.billable_calls == 0
+
+
+# ------------------------------------------------------- the real call chain ---
 
 
 class _FakeBook:
@@ -174,10 +223,7 @@ class _FakeChapter:
     unresolved_findings: list = field(default_factory=list)
 
 
-def test_generate_one_chapter_uses_openai_on_render_never_touching_local(monkeypatch):
-    """Exercises the exact production function named in the live traceback."""
-    monkeypatch.setenv("RENDER", "true")
-
+def _patch_manuscript_engine_helpers(monkeypatch):
     monkeypatch.setattr(
         "services.ebook_manuscript_engine.assigned_research_for_chapter",
         lambda book, chapter: "research",
@@ -191,23 +237,12 @@ def test_generate_one_chapter_uses_openai_on_render_never_touching_local(monkeyp
         lambda findings: findings,
     )
 
-    class _Msg:
-        content = "Chapter text."
 
-    class _Choice:
-        message = _Msg()
+def test_generate_one_chapter_uses_openai_by_default_never_touching_local(monkeypatch):
+    """Exercises the exact production function named in the live traceback."""
+    _patch_manuscript_engine_helpers(monkeypatch)
 
-    class _Resp:
-        choices = [_Choice()]
-
-    class _Client:
-        class chat:  # noqa: N801
-            class completions:  # noqa: N801
-                @staticmethod
-                def create(**_kwargs):
-                    return _Resp()
-
-    with patch("ai_client.get_client", return_value=_Client()), \
+    with patch("ai_client.get_client", return_value=_openai_client("Chapter text.")), \
          patch("urllib.request.urlopen", side_effect=_urlopen_that_refuses) as mocked:
         from services.ebook import generate_one_chapter
 
@@ -222,29 +257,16 @@ def test_generate_one_chapter_uses_openai_on_render_never_touching_local(monkeyp
 # ------------------------------------------- resume after a real provider ---
 # failure, through the real chapter engine (not the fixture generate_fn used
 # by tests/test_local_manuscript_pilot.py). This is the exact shape of the
-# live incident: one or more chapters already accepted, the next one fails at
-# the provider boundary, and Resume Build must continue without re-billing or
-# regenerating what already passed.
+# live incident: one or more chapters already accepted, the next one fails,
+# and Resume Build must continue without re-billing or regenerating what
+# already passed -- true for the default (cloud) path just as it always was
+# for the local path.
 
 
 def test_resume_after_a_real_provider_failure_never_regenerates_accepted_chapters(monkeypatch):
-    from dataclasses import asdict
-
     from services.ebook_manuscript_engine import BookContract, ChapterContract, run_chapter_pipeline
 
-    monkeypatch.setenv("RENDER", "true")
-    monkeypatch.setattr(
-        "services.ebook_manuscript_engine.assigned_research_for_chapter",
-        lambda book, chapter: "research",
-    )
-    monkeypatch.setattr(
-        "services.ebook_manuscript_engine.chapter_contract_prompt",
-        lambda book, chapter: "prompt",
-    )
-    monkeypatch.setattr(
-        "services.ebook_manuscript_engine.format_unresolved_findings_for_prompt",
-        lambda findings: findings,
-    )
+    _patch_manuscript_engine_helpers(monkeypatch)
 
     book = BookContract(
         title="Container Gardening for Beginners", subtitle="", author="Author",
@@ -257,34 +279,20 @@ def test_resume_after_a_real_provider_failure_never_regenerates_accepted_chapter
         ],
     )
 
-    class _Msg:
-        content = "Chapter body text, long enough to stand in for real prose."
-
-    class _Choice:
-        message = _Msg()
-
-    class _Resp:
-        choices = [_Choice()]
-
     calls: list[str] = []
     chapter_two_attempts = {"n": 0}
 
-    def _client_that_fails_on_chapter_two(**kwargs):
+    def _on_call(**kwargs):
         content = kwargs["messages"][1]["content"]
         calls.append(content)
         if "Chapter 2" in content:
             chapter_two_attempts["n"] += 1
             if chapter_two_attempts["n"] == 1:
-                # The original live failure: the provider was unreachable.
-                raise ai_providers.ProviderUnavailable("simulated provider outage")
-        return _Resp()
+                # A transient cloud-provider outage -- nothing to do with Ollama.
+                raise RuntimeError("simulated cloud provider outage")
 
-    class _Client:
-        class chat:  # noqa: N801
-            class completions:  # noqa: N801
-                @staticmethod
-                def create(**kwargs):
-                    return _client_that_fails_on_chapter_two(**kwargs)
+    client = _openai_client("Chapter body text, long enough to stand in for real prose.",
+                             on_call=_on_call)
 
     from services.ebook import generate_one_chapter
 
@@ -293,8 +301,8 @@ def test_resume_after_a_real_provider_failure_never_regenerates_accepted_chapter
     def _capture(accepted):
         saved["chapters"] = list(accepted)
 
-    with patch("ai_client.get_client", return_value=_Client()):
-        with pytest.raises(ai_providers.ProviderUnavailable):
+    with patch("ai_client.get_client", return_value=client):
+        with pytest.raises(RuntimeError):
             run_chapter_pipeline(
                 book, generate_chapter_fn=generate_one_chapter, on_chapter_accepted=_capture,
             )
@@ -304,7 +312,7 @@ def test_resume_after_a_real_provider_failure_never_regenerates_accepted_chapter
     calls.clear()
 
     # --- Resume Build: the same call, with what was already accepted ---
-    with patch("ai_client.get_client", return_value=_Client()):
+    with patch("ai_client.get_client", return_value=client):
         pipeline = run_chapter_pipeline(
             book, generate_chapter_fn=generate_one_chapter, accepted_chapters=resumed_from,
         )
