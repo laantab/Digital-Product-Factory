@@ -5,6 +5,59 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.10 — 2026-09-14
+
+**Found the deeper cause behind this week's build failures: writing a whole book inside one web request was long enough to be killed by the server itself. Chapters are now written one at a time, the way every other step already works.**
+
+### What changed
+
+- **A book is now written one chapter at a time**, the same way the
+  Factory already handles every other step. Each check-in writes (or
+  fixes) one chapter, saves it, and reports progress; the next check-in
+  picks up exactly where the last one left off. A ten-chapter book that
+  used to be written inside a single, several-minutes-long request now
+  takes several short check-ins instead — invisible to the customer,
+  who just sees "Writing your chapters" continue to completion.
+
+### What was fixed
+
+- **The web server was killing the process partway through a book.**
+  Writing an entire manuscript inside one request could take minutes;
+  the production server has its own time limit on how long any one
+  request may run, and a long manuscript could exceed it, killing the
+  in-progress request outright — which is what the customer experienced
+  as the build losing its place and needing to restart.
+- Because a legitimate book now needs many check-ins to finish, the
+  manuscript step alone is allowed many more check-ins before the
+  Factory gives up on it — every other step's limit is unchanged.
+
+### Do my steps change?
+
+- **No.** A finished book looks identical either way. This only changes
+  how long the Factory pauses to check in with itself while writing it.
+
+### Release gate
+
+- Targeted proof first (per the recovery sprint, before any broader
+  gate): a real 10-chapter book proves each check-in writes at most one
+  chapter, progress never regresses, and a chapter that already exists
+  is never rewritten or re-billed — including a version of the same test
+  with a real, measurable delay on every chapter, proving no single
+  check-in ever waits for more than about one chapter's worth of that
+  delay, no matter how many remain.
+- 195 + 176 broader manuscript/ebook tests re-run green, then the Fast
+  Stability Gate (160 passed, 698 subtests), then the Full Release Gate
+  — in that order, per the recovery sprint's required sequencing.
+- Full Windows release gate: pending this commit's own run.
+- Function Lock: no LOCKED function shares the changed files.
+- Known follow-up (not part of this change): the exact production web
+  server timeout could not be confirmed from this repository -- it is
+  configured on the hosting platform, not in code. Confirming and, if
+  useful, raising it further is a reasonable additional safety margin,
+  but this release no longer depends on that number to work correctly.
+
+---
+
 ## 1.7.9 — 2026-09-13
 
 **The provider-routing fix held. The very next thing a live build hit: a manuscript with a fixable issue was treated as a dead end instead of being fixed automatically, and a failed check was silently throwing away already-written chapters.**

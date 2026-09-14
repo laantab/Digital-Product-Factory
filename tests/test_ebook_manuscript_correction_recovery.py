@@ -45,6 +45,30 @@ the same persist_progress support execute_generate_manuscript() already had,
 so a correction interrupted partway through cannot lose repaired chapters
 either.
 
+A LATER, DEEPER ROOT CAUSE (same live incident, next layer down)
+------------------------------------------------------------------
+Even with the fixes above, a real production build later showed the actual
+web worker dying mid-manuscript: Render/Gunicorn logs showed a worker
+blocked in a network read, then killed by the timeout handler
+(gunicorn/workers/base.py::handle_abort -> sys.exit(1) -> "Worker exiting"),
+because execute_generate_manuscript() wrote an ENTIRE manuscript -- every
+chapter -- inside one synchronous HTTP request. A real multi-chapter book
+can take minutes; a web server's request timeout does not know or care that
+the work is legitimate.
+
+THE FIX (this layer)
+---------------------
+services/ebook_build_orchestrator.py::MANUSCRIPT_CHAPTERS_PER_ADVANCE bounds
+generation and correction to one chapter per /advance call via the new
+max_chapters_per_call parameter on execute_generate_manuscript and
+execute_correct_manuscript. When that bound stops chapter writing with
+nothing having actually failed, the manuscript stage is reported IN_PROGRESS
+(not a failure) and the existing checkpoint/resume loop -- unchanged --
+continues it on the next call. Because a real book now legitimately needs
+many /advance calls to finish this way, the manuscript stage alone got a
+much higher attempt ceiling (_max_attempts); every other stage's ceiling is
+unchanged.
+
 No external/paid call is made by any test here.
 """
 from __future__ import annotations
@@ -72,7 +96,14 @@ from services.ebook_project_workspace import upsert_acceptance_project
 
 
 def test_orchestrator_auto_corrects_and_advances_past_manuscript(monkeypatch):
-    """The end-to-end proof: 30% -> manuscript approved -> 40%, one repair only."""
+    """The end-to-end proof: bounded, repeated /advance calls carry 30% -> 40%.
+
+    services/ebook_build_orchestrator.py::MANUSCRIPT_CHAPTERS_PER_ADVANCE
+    bounds each call to one chapter (or one repair), so a real 10-chapter
+    book needs multiple /advance calls to finish -- exactly the contract a
+    production web server's request timeout requires: no single HTTP
+    request writes an entire manuscript.
+    """
     project = upsert_acceptance_project(database, preserve_live_manuscript=False)
     pid = project["id"]
 
@@ -91,11 +122,28 @@ def test_orchestrator_auto_corrects_and_advances_past_manuscript(monkeypatch):
 
     monkeypatch.setattr("services.ebook.generate_one_chapter", _fake_chapter)
 
-    status = orch.advance_build(pid)
+    percents: list[int] = []
+    status = {"failed": False, "finished": False, "percent": 30}
+    for _ in range(20):  # generous safety cap: 10 chapters + one repair + margin
+        status = orch.advance_build(pid)
+        assert status["failed"] is False, status
+        percents.append(status["percent"])
+        if status["percent"] > 30:
+            break
 
-    assert status["failed"] is False, status
-    assert status["finished"] is False
-    assert status["percent"] == 40, "research/title/outline/manuscript = 4 of 10 stages"
+    assert len(percents) > 1, (
+        "a real book must take more than one /advance call -- if this is 1, "
+        "the whole manuscript is still being written inside a single request"
+    )
+    # Progress cannot fall from 30% back to 0% (or below 30% at all) merely
+    # because one bounded request ends -- every intermediate call must
+    # report at least what was already reached.
+    assert all(p >= 30 for p in percents), percents
+    assert percents[-1] == 40, "research/title/outline/manuscript = 4 of 10 stages"
+    assert all(p == 30 for p in percents[:-1]), (
+        "manuscript stays at 30% while chapters are still being written, "
+        "then advances to 40% only once it is actually approved"
+    )
 
     counts = Counter(call_log)
     # Already-good chapters (1-9) are never regenerated: exactly one call each.
@@ -110,6 +158,68 @@ def test_orchestrator_auto_corrects_and_advances_past_manuscript(monkeypatch):
     assert len(ws.get("accepted_chapters") or []) == 10
     assert not ws.get("manuscript_qa")
     assert not ws.get("manuscript_structure_findings")
+
+
+def test_slow_chapter_generation_never_blocks_one_advance_call_for_the_whole_book(monkeypatch):
+    """The exact production symptom, reproduced with real timing.
+
+    A web server's request timeout does not know a slow manuscript is
+    legitimate -- it only measures how long ONE request took. This gives
+    every chapter a real, measurable delay and proves no single
+    advance_build() call ever waits for more than about one chapter's
+    worth of that delay, no matter how many chapters remain.
+    """
+    import time
+
+    project = upsert_acceptance_project(database, preserve_live_manuscript=False)
+    pid = project["id"]
+
+    good_fn = chapter_fn_from_full_manuscript(build_event_photo_strong_manuscript())
+    per_chapter_delay = 0.15
+    call_log: list[int] = []
+
+    def _slow_chapter(book, chapter):
+        time.sleep(per_chapter_delay)
+        call_log.append(chapter.order)
+        return good_fn(book, chapter)
+
+    monkeypatch.setattr("services.ebook.generate_one_chapter", _slow_chapter)
+
+    call_durations: list[float] = []
+    accepted_counts: list[int] = []
+    status = {"percent": 30}
+    for _ in range(20):
+        started = time.perf_counter()
+        status = orch.advance_build(pid)
+        call_durations.append(time.perf_counter() - started)
+        assert status["failed"] is False, status
+        row = database.get_project(pid)
+        accepted_counts.append(len(row["data"]["ebook_workspace"].get("accepted_chapters") or []))
+        if status["percent"] > 30:
+            break
+
+    # A single unbounded call would need ~10 * per_chapter_delay seconds for
+    # a fresh book; a bounded call needs about one chapter's worth, however
+    # many chapters remain. This margin comfortably separates the two.
+    unbounded_threshold = 4 * per_chapter_delay
+    for i, duration in enumerate(call_durations):
+        assert duration < unbounded_threshold, (
+            f"advance_build call {i + 1} took {duration:.3f}s -- a single call "
+            f"must not wait for more than roughly one chapter's generation time"
+        )
+
+    # Persisted checkpoints between advances: the accepted count only ever
+    # goes up, one chapter at a time, and survives between separate calls.
+    assert accepted_counts == sorted(accepted_counts)
+    assert accepted_counts[-1] == 10
+    for prev, nxt in zip(accepted_counts, accepted_counts[1:]):
+        assert nxt - prev <= 1, "no single call may accept more than one new chapter"
+
+    # No accepted chapter is regenerated; no duplicate paid calls.
+    counts = Counter(call_log)
+    assert counts == {order: 1 for order in range(1, 11)}, counts
+
+    assert status["percent"] == 40
 
 
 # ==================================================== orchestrator wiring ===

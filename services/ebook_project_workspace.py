@@ -2382,6 +2382,7 @@ def execute_generate_manuscript(
     generate_fn=None,
     generate_chapter_fn=None,
     persist_progress=None,
+    max_chapters_per_call: int | None = None,
 ) -> dict:
     """Server-authoritative manuscript generation after explicit cost confirmation.
 
@@ -2393,6 +2394,15 @@ def execute_generate_manuscript(
     dict. When supplied it is invoked after every chapter that passes
     validation, so completed chapters survive an interruption mid-generation.
     Callers that do not pass it keep the previous behaviour exactly.
+
+    ``max_chapters_per_call``, when supplied, bounds how many NEW chapters
+    this one call may write, on top of the dollar-based cap already in
+    force -- the smaller of the two governs. When the cap stops chapter
+    writing with nothing having actually failed validation, this returns
+    early with the manuscript stage left IN_PROGRESS rather than running
+    QA against a deliberately incomplete draft: the caller is expected to
+    call again to continue. Callers that omit it keep the previous
+    behaviour of writing every remaining chapter in this one call.
     """
     if generate_fn is not None and generate_chapter_fn is None:
         raise ValueError(ONESHOT_WORKSPACE_BLOCKED)
@@ -2563,6 +2573,8 @@ def execute_generate_manuscript(
             )
         )
     max_calls = max(1, int(auth_max / CHAPTER_UNIT_USD + 1e-9))
+    if max_chapters_per_call is not None:
+        max_calls = max(1, min(max_calls, int(max_chapters_per_call)))
 
     def _persist_accepted(accepted_now) -> None:
         """Save each chapter the moment it passes validation.
@@ -2608,6 +2620,63 @@ def execute_generate_manuscript(
         "assembled_complete": pipeline.get("assembled_complete"),
         "provider_payloads": pipeline.get("provider_payloads"),
     }
+
+    # Still writing chapters: the per-call bound (max_chapters_per_call)
+    # stopped chapter writing before every chapter was attempted, and
+    # nothing that WAS attempted actually failed validation. This is normal,
+    # bounded progress -- not a finished draft and not a failure -- so it
+    # must not run QA against a deliberately incomplete manuscript, and must
+    # not be mistaken for one that needs correction. The caller (the build
+    # orchestrator) is expected to call again to continue; every chapter
+    # already accepted stays persisted and is never regenerated or re-billed
+    # on that next call (see stored_accepted above).
+    if pipeline.get("skipped_ungenerated") and not pipeline.get("failed_orders"):
+        chapter_calls = int(pipeline.get("chapter_calls") or 0)
+        billable_calls = int(pipeline.get("billable_chapter_calls", chapter_calls) or 0)
+        charge = round(min(billable_calls * CHAPTER_UNIT_USD, auth_max, remaining), 4)
+        ledger["spent_usd"] = round(spent + charge, 4)
+        ledger["remaining_usd"] = round(cap - float(ledger["spent_usd"]), 4)
+        ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + chapter_calls
+        ledger.setdefault("calls", []).append(
+            {
+                "ts": _now(),
+                "provider": "openai",
+                "purpose": "generate_manuscript",
+                "estimated_cost_usd": charge,
+                "idempotency_key": key,
+                "meta": {"title": data.get("title"), "outline_digest": current_od,
+                         "chapter_calls": chapter_calls, "partial_round": True},
+            }
+        )
+        # NOT idem_store[key] -- this round is partial, and marking the fixed
+        # per-stage key used here would make every later call replay this
+        # same partial result forever instead of writing the next chapter.
+        ledger["pending_estimate"] = None
+        done = len(ws["accepted_chapters"])
+        total = len(book_contract.chapters)
+        set_stage_status(
+            ws, "manuscript", STATUS_IN_PROGRESS,
+            note=f"Writing chapters ({done}/{total})",
+        )
+        data["ebook_workspace"] = ws
+        _append_history(ws, "generate_manuscript", charge_usd=charge, partial_round=True,
+                        chapters_done=done, chapters_total=total)
+        return {
+            "ok": True,
+            "duplicate": False,
+            "data": data,
+            "in_progress": True,
+            "result": {
+                "manuscript_status": STATUS_IN_PROGRESS,
+                "chapter_calls": chapter_calls,
+                "charge_usd": charge,
+                "spent_usd": ledger.get("spent_usd"),
+                "remaining_usd": ledger.get("remaining_usd"),
+                "chapters_done": done,
+                "chapters_total": total,
+            },
+        }
+
     if not manuscript_md:
         raise ValueError("Manuscript generator returned empty content.")
 
@@ -2767,6 +2836,7 @@ def execute_correct_manuscript(
     correct_fn=None,
     correct_chapter_fn=None,
     persist_progress=None,
+    max_chapters_per_call: int | None = None,
 ) -> dict:
     """Correct an existing manuscript against the token-bound approved outline.
 
@@ -2778,6 +2848,12 @@ def execute_correct_manuscript(
     same name: when supplied, it is invoked after every repaired chapter that
     passes validation, so a correction interrupted partway through does not
     lose the chapters it had already fixed.
+
+    ``max_chapters_per_call`` mirrors execute_generate_manuscript's parameter
+    of the same name: bounds how many chapters this one call may repair. When
+    that bound stops repair before every flagged chapter is fixed, this
+    returns early with the manuscript stage left IN_PROGRESS rather than
+    running QA against a still-incomplete correction.
     """
     from services.ebook_document import (
         find_customer_content_defects,
@@ -2964,6 +3040,8 @@ def execute_correct_manuscript(
             persist_progress(data)
 
     max_calls = max(1, int(auth_max / CHAPTER_UNIT_USD + 1e-9))
+    if max_chapters_per_call is not None:
+        max_calls = max(1, min(max_calls, int(max_chapters_per_call)))
     pipeline = run_chapter_pipeline(
         book_contract,
         generate_chapter_fn=correct_chapter_fn,
@@ -2988,6 +3066,54 @@ def execute_correct_manuscript(
         "assembled_complete": pipeline.get("assembled_complete"),
         "provider_payloads": pipeline.get("provider_payloads"),
     }
+
+    # Still repairing chapters: see the identical branch and rationale in
+    # execute_generate_manuscript. The bound stopped repair before every
+    # flagged chapter was fixed, and nothing attempted actually failed.
+    if pipeline.get("skipped_ungenerated") and not pipeline.get("failed_orders"):
+        chapter_calls = int(pipeline.get("chapter_calls") or 0)
+        charge = round(min(chapter_calls * CHAPTER_UNIT_USD, auth_max, remaining), 4)
+        ledger["spent_usd"] = round(spent + charge, 4)
+        ledger["remaining_usd"] = round(cap - float(ledger["spent_usd"]), 4)
+        ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + chapter_calls
+        ledger.setdefault("calls", []).append(
+            {
+                "ts": _now(),
+                "provider": "openai",
+                "purpose": "correct_manuscript",
+                "estimated_cost_usd": charge,
+                "idempotency_key": key,
+                "meta": {"outline_digest": current_od, "chapter_calls": chapter_calls,
+                         "partial_round": True},
+            }
+        )
+        # NOT idem_store[key] -- see execute_generate_manuscript's identical note.
+        ledger["pending_estimate"] = None
+        done = len(ws["accepted_chapters"])
+        total = len(book_contract.chapters)
+        set_stage_status(
+            ws, "manuscript", STATUS_IN_PROGRESS,
+            note=f"Correcting chapters ({done}/{total})",
+        )
+        data["ebook_workspace"] = ws
+        _append_history(ws, "correct_manuscript", charge_usd=charge, partial_round=True,
+                        chapters_done=done, chapters_total=total)
+        return {
+            "ok": True,
+            "duplicate": False,
+            "data": data,
+            "in_progress": True,
+            "result": {
+                "manuscript_status": STATUS_IN_PROGRESS,
+                "chapter_calls": chapter_calls,
+                "charge_usd": charge,
+                "spent_usd": ledger.get("spent_usd"),
+                "remaining_usd": ledger.get("remaining_usd"),
+                "chapters_done": done,
+                "chapters_total": total,
+            },
+        }
+
     if not manuscript_md:
         raise ValueError("Correction generator returned empty content.")
 

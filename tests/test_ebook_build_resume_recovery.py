@@ -76,7 +76,9 @@ def _stalled_manuscript_state():
         "stages": {
             "manuscript": {
                 "status": orch.FAILED_FINAL,
-                "attempts": orch.MAX_STAGE_ATTEMPTS,
+                # Manuscript has its own, much higher ceiling (see
+                # _max_attempts) now that it does bounded, incremental work.
+                "attempts": orch._max_attempts("manuscript"),
                 "error": "internal detail the customer never sees",
                 "running_since": 0,
             }

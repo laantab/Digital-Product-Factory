@@ -107,6 +107,17 @@ def _held_after_manuscript(data: dict, state: dict) -> bool:
 STALE_RUNNING_SECONDS = 900
 #: Attempts per stage before it is treated as unrecoverable.
 MAX_STAGE_ATTEMPTS = 3
+#: Manuscript now does bounded, incremental chapter-by-chapter work -- one
+#: chapter (or one repair) per /advance call -- instead of writing an entire
+#: book inside one request (see MANUSCRIPT_CHAPTERS_PER_ADVANCE). A real
+#: book legitimately needs many /advance calls to finish this way, and none
+#: of that incremental progress is a failure, so this stage alone gets a
+#: much higher ceiling. Every other stage keeps MAX_STAGE_ATTEMPTS unchanged.
+STAGE_MAX_ATTEMPTS: dict[str, int] = {"manuscript": 60}
+
+
+def _max_attempts(stage: str) -> int:
+    return STAGE_MAX_ATTEMPTS.get(stage, MAX_STAGE_ATTEMPTS)
 
 
 def _now() -> str:
@@ -324,16 +335,53 @@ def _run_outline(data: dict, pid: int) -> dict:
     return approve_stage(out["data"], "outline")
 
 
+#: A manuscript used to be written entirely inside one /advance request --
+#: for a real book, potentially minutes of one blocking HTTP call, long
+#: enough to trip a production web server's request timeout and kill the
+#: worker mid-write. Bounding each call to one chapter keeps every single
+#: /advance request roughly "one chapter's writing time" long, no matter how
+#: long the book is, reusing the existing checkpoint/resume loop to cover the
+#: rest -- the same contract every other stage already follows.
+MANUSCRIPT_CHAPTERS_PER_ADVANCE = 1
+
+
+def _mark_stage_still_working(data: dict, result: dict, *, verb: str) -> None:
+    """Keep the plain-language progress message when a stage reports 'not
+    finished yet, nothing wrong' -- not the generic retry wording, which is
+    for when something actually needed a second attempt. Sets a marker
+    advance_build checks (and clears) so this stays scoped to exactly this
+    call; it is never persisted or shown to the customer directly.
+    """
+    state = data.setdefault("ebook_build", {})
+    done = result.get("chapters_done")
+    total = result.get("chapters_total")
+    if isinstance(done, int) and isinstance(total, int) and total > 0:
+        state["customer_message"] = f"{verb} your chapters ({done} of {total})"
+    else:
+        state["customer_message"] = f"{verb} your chapters"
+    state["_no_retry_message"] = True
+
+
 def _run_manuscript(data: dict, pid: int) -> dict:
     """Write and validate chapters, auto-correct if needed, then approve.
 
-    A manuscript with real structural/content findings is not a customer-
-    facing dead end: this runs the Factory's existing correction pass -- the
-    same system a human triggers via "Request Correction" in the guided
-    workspace, services.ebook_project_workspace.execute_correct_manuscript --
-    automatically, once, before giving up. Only a manuscript that still fails
-    after that one correction attempt stops the build; the customer is never
-    asked to resolve internal QA findings themselves.
+    Bounded, incremental work: this call writes or repairs at most
+    MANUSCRIPT_CHAPTERS_PER_ADVANCE chapters, then returns. If chapters
+    remain, the manuscript stage is left IN_PROGRESS (not a failure) and the
+    browser's ordinary polling loop calls /advance again to continue -- the
+    same resumable checkpoint pattern every other stage already uses.
+    Already-accepted chapters are read back from persistence and skipped,
+    never regenerated or re-billed (services.ebook_project_workspace.
+    execute_generate_manuscript / execute_correct_manuscript).
+
+    A manuscript with real structural/content findings, once fully written,
+    is not a customer-facing dead end either: this runs the Factory's
+    existing correction pass -- the same system a human triggers via
+    "Request Correction" in the guided workspace,
+    services.ebook_project_workspace.execute_correct_manuscript --
+    automatically before giving up. Only a manuscript that still fails after
+    that correction stops the build; the customer is never asked to resolve
+    internal QA findings themselves.
     """
     from services.ebook_project_workspace import (
         STATUS_NEEDS_CORRECTION,
@@ -363,6 +411,7 @@ def _run_manuscript(data: dict, pid: int) -> dict:
         out = execute_generate_manuscript(
             data,
             persist_progress=lambda partial: database.update_project(pid, None, partial),
+            max_chapters_per_call=MANUSCRIPT_CHAPTERS_PER_ADVANCE,
             **kwargs,
         )
         data = out["data"]
@@ -373,6 +422,12 @@ def _run_manuscript(data: dict, pid: int) -> dict:
         # persist_progress above only covers chapter-by-chapter progress
         # during generation, not this final assembly step.
         database.update_project(pid, None, data)
+        if out.get("in_progress"):
+            # More chapters remain, nothing failed -- report progress and
+            # let the next /advance call continue. Never call approve_stage
+            # against a manuscript that is deliberately still incomplete.
+            _mark_stage_still_working(data, out.get("result") or {}, verb="Writing")
+            return data
         ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
 
     if stage_status(ws, "manuscript") == STATUS_NEEDS_CORRECTION:
@@ -382,12 +437,16 @@ def _run_manuscript(data: dict, pid: int) -> dict:
         cout = execute_correct_manuscript(
             data,
             persist_progress=lambda partial: database.update_project(pid, None, partial),
+            max_chapters_per_call=MANUSCRIPT_CHAPTERS_PER_ADVANCE,
             **ckwargs,
         )
         data = cout["data"]
         # Same reasoning as above: persist the corrected assembly before
         # approve_stage gets a chance to reject it.
         database.update_project(pid, None, data)
+        if cout.get("in_progress"):
+            _mark_stage_still_working(data, cout.get("result") or {}, verb="Correcting")
+            return data
 
     # approve_stage runs outline fidelity and the manuscript quality gate; it
     # raises if either still fails after the correction attempt above, which
@@ -803,7 +862,7 @@ def advance_build(project_id: int) -> dict:
             return status_payload(data, project_id)
 
     rec = _stage_record(state, stage)
-    if int(rec.get("attempts") or 0) >= MAX_STAGE_ATTEMPTS and rec.get("status") != COMPLETE:
+    if int(rec.get("attempts") or 0) >= _max_attempts(stage) and rec.get("status") != COMPLETE:
         _release_stage(state, stage, FAILED_FINAL, rec.get("error") or "attempt ceiling reached")
         state["failed"] = True
         state["customer_message"] = MSG_FINAL
@@ -825,6 +884,12 @@ def advance_build(project_id: int) -> dict:
         updated = runner(dict(data), project_id)
         updated["_project_id"] = project_id
         new_state = build_state(updated)
+        # A runner (currently only _run_manuscript) can mark a normal, no-error
+        # return as "still working, not a retry" -- captured here before the
+        # update() below overwrites customer_message with the claim-time
+        # default, and popped so it is never persisted or shown as-is.
+        still_working = bool(new_state.pop("_no_retry_message", False))
+        still_working_message = str(new_state.get("customer_message") or "")
         new_state.update({k: v for k, v in state.items() if k not in ("stages",)})
         new_state["stages"] = state["stages"]
 
@@ -834,7 +899,7 @@ def advance_build(project_id: int) -> dict:
         else:
             # The code ran but the validator is not satisfied. That is not done.
             _release_stage(new_state, stage, FAILED_RECOVERABLE, "stage output did not validate")
-            new_state["customer_message"] = MSG_RETRY
+            new_state["customer_message"] = still_working_message if still_working else MSG_RETRY
         new_state["updated_at"] = _now()
         database.update_project(project_id, None, updated)
         return status_payload(updated, project_id)
@@ -860,7 +925,7 @@ def advance_build(project_id: int) -> dict:
         fresh_data["_project_id"] = project_id
         fresh_state = build_state(fresh_data)
         fresh_rec = _stage_record(fresh_state, stage)
-        final = int(fresh_rec.get("attempts") or 0) >= MAX_STAGE_ATTEMPTS
+        final = int(fresh_rec.get("attempts") or 0) >= _max_attempts(stage)
         _release_stage(fresh_state, stage, FAILED_FINAL if final else FAILED_RECOVERABLE, str(exc)[:500])
         fresh_state["customer_message"] = MSG_FINAL if final else MSG_RETRY
         fresh_state["failed"] = final
@@ -936,7 +1001,7 @@ def status_payload(data: dict, project_id: int) -> dict:
         rec = (state.get("stages") or {}).get(stage)
         if isinstance(rec, dict):
             retrying = str(rec.get("status") or "") == FAILED_RECOVERABLE
-            attempts_left = max(0, MAX_STAGE_ATTEMPTS - int(rec.get("attempts") or 0))
+            attempts_left = max(0, _max_attempts(stage) - int(rec.get("attempts") or 0))
 
     return {
         "ok": True,
