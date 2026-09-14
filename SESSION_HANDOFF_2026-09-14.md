@@ -40,9 +40,11 @@ clean. `VERSION` = `1.7.13`; plain-language `CHANGELOG.md` entry present.
   derived `https://{account}.r2.cloudflarestorage.com`, region `auto`, private
   bucket, credentials from the environment only. Fail-closed: missing/incomplete
   config raises `R2ConfigurationError`, never silently falls back. Credential
-  redaction keeps secrets out of errors/logs. `probe()` does a round-trip – but it
-  is never wired to customer data and no bucket/credentials exist. **Not switched
-  on.**
+  redaction keeps secrets out of errors/logs. `probe()` does a round-trip – it is
+  never wired to customer data. The bucket and a scoped token now exist and the
+  probe has passed (see below), but the driver is still **not switched on**:
+  `FACTORY_STORAGE_DRIVER` is unset, so the Factory uses local storage exactly as
+  before.
 - **Canonical key rule** (`services/storage/keys.py` + `resolve.py`): a storage key
   is derived from the artifact's **real stored path**
   (`projects/{id}/exports/{path}`), never from `package_id` — because 38 of 114
@@ -67,10 +69,32 @@ clean. `VERSION` = `1.7.13`; plain-language `CHANGELOG.md` entry present.
 
 ### What 0B-3B1 did NOT do (deliberate, and still true)
 
-- No bucket provisioned, no R2 credentials created, no `FACTORY_STORAGE_DRIVER=r2`
-  set anywhere, no connectivity probe run, no Render change, no Postgres, no
-  worker. `FACTORY_STORAGE_DRIVER` is documented in `.env.example` as **unset =
-  local = exactly today's behaviour**.
+- No customer artifact was uploaded, no `FACTORY_STORAGE_DRIVER=r2` set anywhere,
+  no Render change, no Postgres, no worker. `FACTORY_STORAGE_DRIVER` is documented
+  in `.env.example` as **unset = local = exactly today's behaviour**.
+- Asset rows remain **0**, **73** project rows still retain `pdf_bytes`, and all
+  **3,224** files under `exports/` are unchanged.
+
+### R2 provisioning and connectivity — DONE (2026-09-14, after the release)
+
+Recorded here because the section above originally said no bucket or credentials
+existed. That is no longer true; the rest of that section still is.
+
+- Cloudflare R2 bucket **`digital-product-factory`** exists and **remains
+  private** (no public access, no r2.dev URL, no custom domain).
+- A **scoped Account API token** exists with **Object Read & Write** permission
+  for that one bucket.
+- The four `FACTORY_R2_*` values are stored **locally in the Factory `.env`**
+  (gitignored). They are **not** in this repository and are **not** on Render.
+  No Account ID, Access Key ID or Secret Access Key value is recorded anywhere in
+  this document or in any tracked file.
+- **Synthetic connectivity probe passed**: connection succeeded, upload succeeded,
+  readback succeeded, byte count verified, SHA-256 verified, delete succeeded,
+  bucket clean afterward.
+  - Probe object: `_factory_probe/connectivity.txt`, **43 bytes**, Factory-generated.
+  - **No customer artifact was uploaded.** The bucket held 0 objects before the
+    probe and 0 after.
+- **Phase 0B-3B2 has NOT started.**
 
 ## START HERE next session
 
@@ -82,9 +106,12 @@ clean. `VERSION` = `1.7.13`; plain-language `CHANGELOG.md` entry present.
 3. **Upgrade 0's next step is 0B-3B2 — the approved real migration.** It is a
    customer-data move: it will actually COPY the 73 embedded PDFs and the export
    files into R2 and only then, per the 0B-3B1 executor's rules, decide on legacy
-   data. It needs: (a) an R2 bucket + credentials on the host (Render secrets or
-   local `.env`), (b) `FACTORY_STORAGE_DRIVER=r2`, (c) the owner's explicit
-   approval to migrate real customer artifacts. **Nothing here auto-fires.** Read
+   data. Prerequisite (a) — an R2 bucket and scoped credentials — is **already
+   satisfied locally**, and the connectivity probe has passed. What remains is:
+   (b) `FACTORY_STORAGE_DRIVER=r2`, and (c) the owner's explicit approval to
+   migrate real customer artifacts. Note that the credentials currently live only
+   in the local `.env`; migrating on the host would additionally need them set in
+   Render → Environment. **Nothing here auto-fires.** Read
    the harness gate/safety notes in `services/storage/executor.py` and the
    blueprint's § on the copy/verify/record/keep sequence before starting it.
 4. **Nothing in this phase is a regression or reopened item** — do not re-investigate
