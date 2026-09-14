@@ -5,6 +5,57 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.14 — 2026-09-14
+
+**Upgrade 0, Phase 0B-3B2B: the part of the Factory that builds a customer's download can now read a product's PDF from cloud storage. Still only one PDF has been moved.**
+
+### What changed
+
+- **The Factory now looks in cloud storage first when it builds a
+  customer's download**, and uses the copy stored inside the project
+  record when it does not find a good one there. Before this, the code
+  that packages a product only ever read the copy inside the project
+  record, so moving a file to cloud storage had no effect on what the
+  customer actually received.
+- This applies to every product that stores its PDF this way: word
+  search, crossword, coloring book, spelling worksheet, math worksheet,
+  and both planners.
+- **Nothing about the packages themselves changed** — same files, same
+  names, same layout, same quality checks. Only where the PDF is read
+  from can differ, and only for a product that has already been moved
+  and verified.
+
+### What was fixed
+
+- **A product whose cloud copy is missing, damaged, the wrong size, or
+  unreachable now quietly uses the copy in the project record instead.**
+  This was the whole point of the change: a customer must never lose
+  access to something they own because a second copy went wrong
+  somewhere else. Every failure was tested one at a time — storage
+  switched off, storage unreachable, the stored file replaced with
+  rubbish, the stored file deleted, and a move that was never finished —
+  and in every single case the customer still got the correct product,
+  byte for byte.
+- **A half-finished move is no longer trusted.** A file is only used once
+  the Factory has finished checking it and marked it good. Until then the
+  original copy stays in charge.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. With cloud storage
+switched off — which is how it is set up today — every product is built
+exactly as it was in 1.7.13. The original copy of all 73 PDFs is still in
+place, and all 3,224 export files are untouched.
+
+### Release gate
+
+18 new checks on the packaging path, plus every protected test for word
+search, coloring book, crossword, the ebook, math worksheet, both
+planners, Saved Projects and the export pipeline. Full Windows release
+gate: green, with no paid API calls.
+
+---
+
 ## 1.7.13 — 2026-09-14
 
 **Upgrade 0, Phase 0B-3B1: the Factory can now talk to cloud storage, and knows exactly where every existing file really lives. Still nothing has been moved.**

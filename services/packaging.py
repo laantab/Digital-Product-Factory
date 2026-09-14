@@ -291,6 +291,45 @@ def _finalize_export_result(
     return {"package_id": package_id, "exports": exports_out}
 
 
+def _verified_embedded_pdf(project: dict | None, data: dict | None) -> bytes | None:
+    """VERIFIED stored-asset bytes for this project's embedded PDF, or None.
+
+    Upgrade 0, Phase 0B-3B2B. Packaging is the real consumer of the
+    embedded `pdf_bytes` blob, so this is where the storage cutover has to
+    happen for a customer read to actually come from shared storage.
+
+    None ALWAYS means "use the legacy pdf_bytes exactly as before". Every
+    failure path returns None: no asset record, unverified asset, missing
+    object, wrong byte count, wrong checksum, storage misconfigured, or
+    storage unreachable. A broken or absent new copy can therefore never
+    cost a customer access to a product that is sitting right there in
+    `projects.data`.
+
+    Bytes that come back are byte-identical to the legacy blob by
+    construction -- the migration records the SHA-256 of the very blob it
+    copied, and services/storage/compat.py re-verifies size and checksum on
+    every read before returning anything.
+
+    With zero verified assets this is a no-op guarded by a single-row
+    probe, which is the state for 72 of the 73 embedded PDFs today.
+    """
+    try:
+        import database
+
+        if not database.list_assets_exist():
+            return None  # fast path: nothing migrated, nothing to check
+        project_id = int((project or {}).get("id") or 0)
+        if project_id <= 0 or not (data or {}).get("pdf_bytes"):
+            return None
+        from services.storage.compat import verified_asset_bytes
+        from services.storage.keys import KIND_PDF, embedded_key
+
+        return verified_asset_bytes(embedded_key(project_id, "pdf_bytes", KIND_PDF))
+    except Exception:
+        # Any failure at all falls back to the legacy blob.
+        return None
+
+
 def build_product_export(project: dict, publishing_layout: dict | None = None) -> dict:
     """Render a self-contained HTML + TXT + PDF + ZIP export for any product."""
     data = project.get("data") or {}
@@ -531,7 +570,10 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
             # (e.g. different word placement that fails the answer-key path validator).
             # Only unstamped DRAFT may rebuild for export bytes; never persist content.
             if data.get("pdf_bytes"):
-                pdf_bytes = base64.b64decode(data["pdf_bytes"])
+                # 0B-3B2B: verified stored asset first, else the original decode.
+                pdf_bytes = _verified_embedded_pdf(project, data)
+                if pdf_bytes is None:
+                    pdf_bytes = base64.b64decode(data["pdf_bytes"])
             elif packaging_may_rebuild_content(data) and (
                 data.get("fields") or data.get("custom_words")
             ):
@@ -636,7 +678,10 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
         needs_rebuild = not data.get("pdf_bytes")
         if data.get("pdf_bytes"):
             try:
-                pdf_bytes = base64.b64decode(data["pdf_bytes"])
+                # 0B-3B2B: verified stored asset first, else the original decode.
+                pdf_bytes = _verified_embedded_pdf(project, data)
+                if pdf_bytes is None:
+                    pdf_bytes = base64.b64decode(data["pdf_bytes"])
             except Exception as exc:
                 raise ValueError(f"Crossword PDF decode failed: {exc}") from exc
             if is_full_book and not crossword_full_book_pdf_is_valid(
@@ -777,7 +822,10 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
         if not data.get("pdf_bytes"):
             raise ValueError(f"{label} PDF is not available on this project.")
         try:
-            pdf_bytes = base64.b64decode(data["pdf_bytes"])
+            # 0B-3B2B: verified stored asset first, else the original decode.
+            pdf_bytes = _verified_embedded_pdf(project, data)
+            if pdf_bytes is None:
+                pdf_bytes = base64.b64decode(data["pdf_bytes"])
         except Exception as exc:
             raise ValueError(f"{label} PDF decode failed: {exc}") from exc
         if not pdf_bytes.startswith(b"%PDF"):
@@ -855,7 +903,10 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
         if not data.get("pdf_bytes"):
             raise ValueError("Spelling Worksheet PDF is not available on this project.")
         try:
-            pdf_bytes = base64.b64decode(data["pdf_bytes"])
+            # 0B-3B2B: verified stored asset first, else the original decode.
+            pdf_bytes = _verified_embedded_pdf(project, data)
+            if pdf_bytes is None:
+                pdf_bytes = base64.b64decode(data["pdf_bytes"])
         except Exception as exc:
             raise ValueError(f"Spelling Worksheet PDF decode failed: {exc}") from exc
         if not pdf_bytes.startswith(b"%PDF"):
@@ -934,7 +985,10 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
         if not data.get("pdf_bytes"):
             raise ValueError("Math Worksheet PDF is not available on this project.")
         try:
-            pdf_bytes = base64.b64decode(data["pdf_bytes"])
+            # 0B-3B2B: verified stored asset first, else the original decode.
+            pdf_bytes = _verified_embedded_pdf(project, data)
+            if pdf_bytes is None:
+                pdf_bytes = base64.b64decode(data["pdf_bytes"])
         except Exception as exc:
             raise ValueError(f"Math Worksheet PDF decode failed: {exc}") from exc
         if not pdf_bytes.startswith(b"%PDF"):
@@ -1116,7 +1170,10 @@ def build_product_export(project: dict, publishing_layout: dict | None = None) -
 
         if stored_pdf_bytes:
             try:
-                decoded = base64.b64decode(stored_pdf_bytes)
+                # 0B-3B2B: verified stored asset first, else the original decode.
+                decoded = _verified_embedded_pdf(project, data)
+                if decoded is None:
+                    decoded = base64.b64decode(stored_pdf_bytes)
             except Exception:
                 decoded = b""
         else:

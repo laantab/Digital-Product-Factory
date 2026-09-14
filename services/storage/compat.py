@@ -81,6 +81,12 @@ def verified_asset_bytes(storage_key: str) -> bytes | None:
     if not record:
         return None
 
+    if not record.get("approved"):
+        # Not yet marked verified. An asset row exists but the migration
+        # never completed its readback check, so the copy is not usable
+        # even if it happens to hash correctly right now. Fall back.
+        return None
+
     expected_size = int(record.get("byte_size") or 0)
     expected_sum = str(record.get("checksum") or "")
     if expected_size <= 0 or not expected_sum:
