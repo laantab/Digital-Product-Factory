@@ -5,6 +5,59 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.9 — 2026-09-13
+
+**The provider-routing fix held. The very next thing a live build hit: a manuscript with a fixable issue was treated as a dead end instead of being fixed automatically, and a failed check was silently throwing away already-written chapters.**
+
+### What changed
+
+- **A manuscript with a real, fixable quality issue is no longer a dead
+  end.** The Factory already had a correction step for exactly this
+  situation — the same one used when a customer asks for a manuscript to
+  be corrected by hand — and it now runs automatically, once, before
+  giving up. Only a manuscript that still has a real problem after that
+  automatic correction stops the build.
+
+### What was fixed
+
+- **A failed quality check was silently discarding already-written
+  chapters.** When the Factory found something wrong with a finished
+  manuscript, the recovery step was saving the OLD, incomplete version of
+  the project over the new one — throwing away chapters that had already
+  been written and paid for. The next attempt then had to write the whole
+  book over again, and because writing isn't perfectly identical every
+  time, that second attempt could come out worse, not better. Both odd
+  error messages a build could show ("needs correction" on one attempt,
+  then "empty" on the very next) came from this one underlying mistake,
+  not two separate problems.
+- **Fixed at the source**: finished work is now saved as soon as it's
+  produced, a failed check can only ever add information, never erase
+  saved work, and a project that already needs a fix now goes straight to
+  fixing it instead of starting over.
+
+### Do my steps change?
+
+- **No.** A book that needed no correction looks identical. A book that
+  needed one now gets it automatically instead of getting stuck.
+
+### Release gate
+
+- Targeted proof first, using the Factory's own real generation pipeline
+  (not just mocks): a real 10-chapter book where one chapter genuinely
+  needs a rewrite proves the 9 good chapters are never regenerated or
+  re-billed, the one flawed chapter is repaired automatically, and the
+  build advances from 30% to 40%. Plus 4 more tests pinning the exact
+  failure this release fixes: a rejected manuscript's content survives,
+  a resumed attempt goes straight to repair instead of starting over, and
+  a genuinely empty manuscript still fails clearly and honestly.
+- 189 + 188 broader manuscript/ebook tests re-run green, then the Fast
+  Stability Gate (160 passed, 698 subtests), then the Full Release Gate —
+  in that order, per the recovery sprint's required sequencing.
+- Full Windows release gate: pending this commit's own run.
+- Function Lock: no LOCKED function shares the changed files.
+
+---
+
 ## 1.7.8 — 2026-09-13
 
 **The previous fix (1.7.7) did not work: a new live build still failed at the manuscript step, still trying to reach the owner's home computer. This time the fix does not depend on recognizing which computer the Factory is running on at all.**

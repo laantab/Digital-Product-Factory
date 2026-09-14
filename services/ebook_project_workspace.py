@@ -2766,12 +2766,18 @@ def execute_correct_manuscript(
     idempotency_key: str,
     correct_fn=None,
     correct_chapter_fn=None,
+    persist_progress=None,
 ) -> dict:
     """Correct an existing manuscript against the token-bound approved outline.
 
     Does not repeat research. Requires Needs correction + preserved draft.
     ``correct_fn`` is injectable for tests (zero paid calls). Accepted chapters
     are preserved; only failed chapters are replaced.
+
+    ``persist_progress`` mirrors execute_generate_manuscript's parameter of the
+    same name: when supplied, it is invoked after every repaired chapter that
+    passes validation, so a correction interrupted partway through does not
+    lose the chapters it had already fixed.
     """
     from services.ebook_document import (
         find_customer_content_defects,
@@ -2943,6 +2949,20 @@ def execute_correct_manuscript(
         for ch in accepted_keep:
             ch.accepted = True
 
+    def _persist_repaired(accepted_now) -> None:
+        """Save each repaired chapter the moment it passes validation.
+
+        Mirrors execute_generate_manuscript's _persist_accepted: without this,
+        an interruption partway through a correction pass would discard every
+        chapter the repair had already fixed, exactly as an interrupted first
+        generation would without the equivalent guard there.
+        """
+        ws["accepted_chapters"] = [
+            {"order": c.order, "title": c.title, "body": c.body} for c in accepted_now
+        ]
+        if persist_progress is not None:
+            persist_progress(data)
+
     max_calls = max(1, int(auth_max / CHAPTER_UNIT_USD + 1e-9))
     pipeline = run_chapter_pipeline(
         book_contract,
@@ -2953,6 +2973,7 @@ def execute_correct_manuscript(
         max_chapter_calls=max_calls,
         prior_manuscript_md=existing,
         findings_by_order=findings_map,
+        on_chapter_accepted=_persist_repaired,
     )
     manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
     ws["accepted_chapters"] = [

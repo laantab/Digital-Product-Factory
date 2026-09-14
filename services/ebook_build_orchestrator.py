@@ -325,22 +325,74 @@ def _run_outline(data: dict, pid: int) -> dict:
 
 
 def _run_manuscript(data: dict, pid: int) -> dict:
-    """Write and validate chapters, then approve only if the gate passes."""
-    from services.ebook_project_workspace import approve_stage, execute_generate_manuscript
+    """Write and validate chapters, auto-correct if needed, then approve.
+
+    A manuscript with real structural/content findings is not a customer-
+    facing dead end: this runs the Factory's existing correction pass -- the
+    same system a human triggers via "Request Correction" in the guided
+    workspace, services.ebook_project_workspace.execute_correct_manuscript --
+    automatically, once, before giving up. Only a manuscript that still fails
+    after that one correction attempt stops the build; the customer is never
+    asked to resolve internal QA findings themselves.
+    """
+    from services.ebook_project_workspace import (
+        STATUS_NEEDS_CORRECTION,
+        approve_stage,
+        execute_correct_manuscript,
+        execute_generate_manuscript,
+        stage_status,
+    )
 
     import database
 
-    data, est = _authorized(data, "generate_manuscript")
-    kwargs = _confirm_kwargs(est, data, f"orch-manuscript-{pid}")
-    kwargs["outline_digest_expected"] = str(est.get("outline_digest") or "")
-    out = execute_generate_manuscript(
-        data,
-        persist_progress=lambda partial: database.update_project(pid, None, partial),
-        **kwargs,
+    ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+    # A resumed attempt on a project already left needing correction (by a
+    # prior attempt of this same stage) must go straight to correction.
+    # execute_generate_manuscript refuses to run again over an existing
+    # NEEDS_CORRECTION draft by design -- calling it here would either raise
+    # that refusal or, without the guard, silently regenerate a manuscript
+    # that a customer's earlier attempt already partly paid to produce.
+    already_needs_correction = stage_status(ws, "manuscript") == STATUS_NEEDS_CORRECTION and bool(
+        data.get("content") or data.get("ebook")
     )
+
+    if not already_needs_correction:
+        data, est = _authorized(data, "generate_manuscript")
+        kwargs = _confirm_kwargs(est, data, f"orch-manuscript-{pid}")
+        kwargs["outline_digest_expected"] = str(est.get("outline_digest") or "")
+        out = execute_generate_manuscript(
+            data,
+            persist_progress=lambda partial: database.update_project(pid, None, partial),
+            **kwargs,
+        )
+        data = out["data"]
+        # Persist the assembled manuscript, QA findings and stage status now,
+        # before approve_stage runs. A real structural/content finding makes
+        # approve_stage raise by design (see its docstring), and that must
+        # never turn into losing the work this step already produced --
+        # persist_progress above only covers chapter-by-chapter progress
+        # during generation, not this final assembly step.
+        database.update_project(pid, None, data)
+        ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+
+    if stage_status(ws, "manuscript") == STATUS_NEEDS_CORRECTION:
+        data, cest = _authorized(data, "correct_manuscript")
+        ckwargs = _confirm_kwargs(cest, data, f"orch-manuscript-correct-{pid}")
+        ckwargs["outline_digest_expected"] = str(cest.get("outline_digest") or "")
+        cout = execute_correct_manuscript(
+            data,
+            persist_progress=lambda partial: database.update_project(pid, None, partial),
+            **ckwargs,
+        )
+        data = cout["data"]
+        # Same reasoning as above: persist the corrected assembly before
+        # approve_stage gets a chance to reject it.
+        database.update_project(pid, None, data)
+
     # approve_stage runs outline fidelity and the manuscript quality gate; it
-    # raises if either fails, which keeps a defective manuscript out of design.
-    return approve_stage(out["data"], "manuscript")
+    # raises if either still fails after the correction attempt above, which
+    # keeps a genuinely defective manuscript out of design.
+    return approve_stage(data, "manuscript")
 
 
 def _run_visuals(data: dict, pid: int) -> dict:
@@ -794,13 +846,27 @@ def advance_build(project_id: int) -> dict:
             project_id, state.get("build_id"), stage, rec.get("attempts"),
             exc, traceback.format_exc(),
         )
-        final = int(rec.get("attempts") or 0) >= MAX_STAGE_ATTEMPTS
-        _release_stage(state, stage, FAILED_FINAL if final else FAILED_RECOVERABLE, str(exc)[:500])
-        state["customer_message"] = MSG_FINAL if final else MSG_RETRY
-        state["failed"] = final
-        state["updated_at"] = _now()
-        database.update_project(project_id, None, data)
-        return status_payload(data, project_id)
+        # The runner may have already persisted real progress through its own
+        # persist_progress callback before raising -- chapters accepted and
+        # saved one at a time, or a full manuscript assembled and quality-
+        # checked before a later approval step rejected it. `data` here is
+        # the snapshot from BEFORE the runner ran; persisting it now would
+        # silently erase whatever the runner already saved during this same
+        # attempt, forcing a full, re-billed do-over on every retry. Re-read
+        # the database's current state first, so recording this failure only
+        # adds the failure -- it never subtracts real, already-saved work.
+        fresh_project = database.get_project(project_id)
+        fresh_data = dict(fresh_project.get("data") or {}) if fresh_project else data
+        fresh_data["_project_id"] = project_id
+        fresh_state = build_state(fresh_data)
+        fresh_rec = _stage_record(fresh_state, stage)
+        final = int(fresh_rec.get("attempts") or 0) >= MAX_STAGE_ATTEMPTS
+        _release_stage(fresh_state, stage, FAILED_FINAL if final else FAILED_RECOVERABLE, str(exc)[:500])
+        fresh_state["customer_message"] = MSG_FINAL if final else MSG_RETRY
+        fresh_state["failed"] = final
+        fresh_state["updated_at"] = _now()
+        database.update_project(project_id, None, fresh_data)
+        return status_payload(fresh_data, project_id)
 
 
 def resume_build(project_id: int) -> dict:
