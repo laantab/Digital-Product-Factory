@@ -29,6 +29,7 @@ from services.storage.base import sha256_hex
 from services.storage.compat import decode_embedded
 from services.storage.keys import (
     KIND_COVER,
+    KIND_EXPORT_FILE,
     KIND_PDF,
     KIND_PREVIEW,
     KIND_ZIP,
@@ -48,6 +49,16 @@ _CONTENT_TYPES = {
     KIND_ZIP: "application/zip",
     KIND_COVER: "image/png",
     KIND_PREVIEW: "image/png",
+}
+
+#: Export files are whatever the product engines wrote, so the kind comes
+#: from the real filename rather than from an assumed layout.
+_KIND_BY_SUFFIX = {
+    ".pdf": KIND_PDF,
+    ".zip": KIND_ZIP,
+    ".png": KIND_PREVIEW,
+    ".jpg": KIND_PREVIEW,
+    ".jpeg": KIND_PREVIEW,
 }
 
 
@@ -180,6 +191,69 @@ def plan_project(project: dict) -> tuple[list[PlannedMove], list[MigrationProble
         )
 
     return moves, problems
+
+
+def plan_exports(projects: list[dict] | None = None) -> MigrationPlan:
+    """Dry-run plan for artifacts that live on disk under EXPORTS_DIR.
+
+    Keys come from the artifact's REAL stored path, never from
+    `package_id` -- 38 of 114 local projects disagree about that, and a
+    package-id key would map back to no file at all. Every key is proved
+    to invert to the exact existing file before it enters the plan
+    (services/storage/resolve.py does that check per artifact).
+
+    Writes nothing. This is a plan, not a migration.
+    """
+    from services.storage.resolve import audit_projects
+
+    report = audit_projects(projects)
+    plan = MigrationPlan()
+    plan.projects_scanned = report.projects_scanned
+
+    for artifact in report.artifacts:
+        kind = _KIND_BY_SUFFIX.get(
+            artifact.absolute_path.suffix.lower(), KIND_EXPORT_FILE
+        )
+        plan.moves.append(
+            PlannedMove(
+                project_id=artifact.project_id,
+                project_name=artifact.project_name,
+                source_field=f"exports/{artifact.relative_path}",
+                kind=kind,
+                storage_key=artifact.storage_key,
+                content_type=_CONTENT_TYPES.get(kind, "application/octet-stream"),
+                byte_size=artifact.byte_size,
+                checksum="",  # hashing 1.8 GB is 0B-3B2 work, not planning
+                would_delete_field="",  # nothing is ever deleted in 0B-3B1
+            )
+        )
+
+    for pid, declared, dirs in report.package_id_mismatches:
+        plan.problems.append(
+            MigrationProblem(
+                pid,
+                "package_id",
+                f"declared package_id {declared!r} is not the directory the "
+                f"files live in ({', '.join(dirs[:3])}) — key taken from the real path",
+            )
+        )
+    for pid, declared, has_embedded in report.missing_path_pointers:
+        plan.problems.append(
+            MigrationProblem(
+                pid,
+                "path pointer",
+                "no resolvable artifact path"
+                + (" (embedded pdf_bytes still present)" if has_embedded else ""),
+            )
+        )
+    for pid, where, why in report.unresolved:
+        plan.problems.append(MigrationProblem(pid, str(where), why))
+    for key, first, second in report.collisions:
+        plan.problems.append(
+            MigrationProblem(second, key, f"storage key collides with project {first}")
+        )
+
+    return plan
 
 
 def plan_migration(projects: list[dict] | None = None) -> MigrationPlan:

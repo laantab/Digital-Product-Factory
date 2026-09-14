@@ -621,7 +621,65 @@ def _existing_customer_output_files(project: dict) -> list[Path]:
         for child in folder.iterdir():
             if child.is_file() and child.suffix.lower() in {".pdf", ".zip"}:
                 _add(child)
+
+    found.extend(_asset_backed_customer_outputs(project, found, exports_root))
     return found
+
+
+def _asset_backed_customer_outputs(
+    project: dict, already_found: list[Path], exports_root: Path
+) -> list[Path]:
+    """Export files this project has a VERIFIED asset for but no disk copy.
+
+    Upgrade 0, Phase 0B-3B1. Saved Projects decides whether a customer can
+    see their product by whether a real file exists on disk. Once an
+    artifact's bytes live in object storage, that test would wrongly hide
+    the product -- so a verified asset also counts as "the file exists".
+
+    Deliberately additive: the disk behaviour above is unchanged and runs
+    first, and a disk copy always wins. With zero asset rows this returns
+    nothing, so it is a no-op for every existing customer.
+
+    An asset counts only when it fully verifies (record + object + byte
+    count + SHA-256). An unverifiable asset must never make a product look
+    downloadable when it is not.
+    """
+    project_id = int(project.get("id") or 0)
+    if project_id <= 0:
+        return []
+    try:
+        if not list_assets_exist():
+            return []  # fast path: nothing migrated, so nothing to add
+        assets = list_assets(project_id)
+    except Exception:
+        return []
+    if not assets:
+        return []
+
+    try:
+        from services.storage.compat import export_asset_is_available
+        from services.storage.keys import export_key_to_relpath
+    except Exception:
+        return []
+
+    seen = {str(p) for p in already_found}
+    extra: list[Path] = []
+    for asset in assets:
+        if not asset.get("approved"):
+            continue
+        try:
+            rel = export_key_to_relpath(str(asset.get("storage_key") or ""))
+        except Exception:
+            continue  # embedded-binary assets are not export files
+        if Path(rel).suffix.lower() not in {".pdf", ".zip"}:
+            continue
+        path = exports_root / rel
+        if str(path) in seen or path.is_file():
+            continue  # a real file already covers this one
+        if export_asset_is_available(project_id, rel):
+            seen.add(str(path))
+            extra.append(path)
+    return extra
 
 
 def _has_usable_customer_output(project: dict) -> bool:
@@ -1071,6 +1129,65 @@ def record_asset(
     finally:
         conn.close()
     return _asset_row_to_dict(row) if row is not None else {}
+
+
+def list_assets_exist() -> bool:
+    """True when ANY asset row exists.
+
+    A one-row probe so the customer download path can skip all asset work
+    while nothing has been migrated -- which is the state throughout Phase
+    0B-3B1. Cheap enough to call per request and always safe: on any error
+    it reports False, which means "use the legacy source".
+    """
+    try:
+        conn = get_conn()
+        try:
+            row = conn.execute("SELECT 1 FROM assets LIMIT 1").fetchone()
+        finally:
+            conn.close()
+        return row is not None
+    except sqlite3.Error:
+        return False
+
+
+def find_asset_by_export_path(export_dir: str, filename: str) -> dict | None:
+    """The asset recorded for `exports/<export_dir>/<filename>`, if any.
+
+    A download URL names the export directory and the file, but not the
+    project. Rather than scanning every project's artifacts to work out
+    the owner -- which would read the whole filesystem on every request --
+    this matches the one part of the key that is fixed by the key rule:
+    `projects/<id>/exports/<dir>/<file>`.
+
+    Returns None when nothing matches, which means "use the legacy file".
+    """
+    directory = str(export_dir or "")
+    name = str(filename or "")
+    if not directory or not name:
+        return None
+    # The suffix is data, so LIKE wildcards in it are escaped rather than
+    # trusted -- a filename containing % must not match other assets.
+    suffix = f"/exports/{directory}/{name}"
+    escaped = suffix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    try:
+        conn = get_conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM assets WHERE storage_key LIKE ? ESCAPE '\\' "
+                "ORDER BY id LIMIT 8",
+                (f"projects/%{escaped}",),
+            ).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+
+    for row in rows:
+        record = _asset_row_to_dict(row)
+        # Confirm the match exactly rather than trusting the pattern.
+        if record["storage_key"] == f"projects/{record['project_id']}/exports/{directory}/{name}":
+            return record
+    return None
 
 
 def get_asset_by_key(storage_key: str) -> dict | None:

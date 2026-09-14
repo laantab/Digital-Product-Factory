@@ -245,16 +245,53 @@ def test_h_compat_read_falls_back_to_the_legacy_blob():
 
 
 def test_h_compat_prefers_a_stored_asset_once_one_exists(tmp_path, monkeypatch):
-    """The 0B-3B path, proven dormant-but-correct now."""
+    """The 0B-3B path, proven dormant-but-correct now.
+
+    0B-3B1 tightened what counts as a usable asset: the object alone is
+    no longer enough. There must also be an `assets` record whose byte
+    count and SHA-256 the stored bytes actually match, so a half-finished
+    or corrupted migration can never be preferred over a good legacy
+    copy. The asset is therefore recorded here, as a real migration does.
+    """
+    from services.storage import sha256_hex
+
+    monkeypatch.setenv("FACTORY_STORAGE_DIR", str(tmp_path / "assets"))
+    reset_storage()
+    try:
+        pid = _make_project(data={"pdf_bytes": base64.b64encode(b"OLD-LEGACY").decode()})
+        key = embedded_key(pid, "pdf_bytes", KIND_PDF)
+        get_storage().put(key, PDF_BYTES)
+        database.record_asset(
+            pid,
+            KIND_PDF,
+            key,
+            byte_size=len(PDF_BYTES),
+            checksum=sha256_hex(PDF_BYTES),
+            approved=True,
+        )
+        data = database.get_project(pid)["data"]
+        assert read_asset_or_legacy(pid, data) == PDF_BYTES
+        # and the legacy copy is still there underneath it
+        assert decode_embedded(_raw_blob(pid)["pdf_bytes"]) == b"OLD-LEGACY"
+    finally:
+        reset_storage()
+
+
+def test_h_a_stored_object_with_no_asset_record_is_not_trusted(tmp_path, monkeypatch):
+    """Bytes in storage that nothing vouches for must not be served.
+
+    An object can exist because a migration was interrupted after the
+    upload but before the record was written. Without a record there is
+    nothing to check its size or checksum against, so the legacy copy
+    stays authoritative.
+    """
     monkeypatch.setenv("FACTORY_STORAGE_DIR", str(tmp_path / "assets"))
     reset_storage()
     try:
         pid = _make_project(data={"pdf_bytes": base64.b64encode(b"OLD-LEGACY").decode()})
         get_storage().put(embedded_key(pid, "pdf_bytes", KIND_PDF), PDF_BYTES)
         data = database.get_project(pid)["data"]
-        assert read_asset_or_legacy(pid, data) == PDF_BYTES
-        # and the legacy copy is still there underneath it
-        assert decode_embedded(_raw_blob(pid)["pdf_bytes"]) == b"OLD-LEGACY"
+        assert read_asset_or_legacy(pid, data) == b"OLD-LEGACY"
     finally:
         reset_storage()
 
@@ -423,9 +460,17 @@ def test_the_s3_driver_is_a_contract_and_refuses_to_run():
         S3CompatibleDriver()
 
 
-def test_no_external_storage_sdk_dependency_was_added():
+def test_only_one_cloud_storage_sdk_is_declared():
+    """boto3 is the single cloud-storage client the Factory depends on.
+
+    0B-3A forbade every storage SDK, because nothing talked to a provider
+    yet. 0B-3B1 adds exactly one -- boto3, for Cloudflare R2's
+    S3-compatible API -- so the guard becomes "one, and no others"
+    rather than "none". Anything else creeping in is still a regression.
+    """
     requirements = (
         __import__("pathlib").Path(__file__).resolve().parents[1] / "requirements.txt"
     ).read_text(encoding="utf-8").lower()
-    for sdk in ("boto3", "botocore", "minio", "google-cloud-storage"):
-        assert sdk not in requirements, f"0B-3A must not add {sdk}"
+    assert "boto3" in requirements, "the R2 driver needs its client declared"
+    for unrelated in ("minio", "google-cloud-storage", "azure-storage", "dropbox"):
+        assert unrelated not in requirements, f"unrelated cloud library added: {unrelated}"

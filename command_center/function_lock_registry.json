@@ -1,6 +1,6 @@
 {
   "schema_note": "Per-function protection status for the Factory's customer-facing generators and shared systems. Seeded 2026-09-12 from a read-only audit -- see PROTECTED_GENERATOR_RULE.md and SESSION_HANDOFF_2026-09-11.md. Status values: LOCKED (proven customer-path fix + machine-checked protected test(s) + known last_known_good_commit), UNLOCKED (an explicit, reasoned, in-progress exception -- see unlocked_by/unlocked_reason), PROTECTED (real test coverage exists but no single commit has been proven as its customer-path last-known-good), UNPROTECTED (no meaningful customer-path test coverage), REGRESSION (currently known broken). last_known_good_commit is null unless a real commit was proven -- never manufactured (Rule 9, PROTECTED_GENERATOR_RULE.md). shared_code_dependencies covers both the function's own dedicated files and any file it shares with other functions -- tests/test_function_lock_enforcement.py treats a trailing '/' as a directory-prefix match.",
-  "updated_at": "2026-09-13T12:00:00-07:00",
+  "updated_at": "2026-09-14",
   "functions": {
     "word_search": {
       "display_name": "Word Search",
@@ -96,7 +96,7 @@
     },
     "invite_protection": {
       "display_name": "Invite protection",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "6391ff1",
       "factory_version": "1.7.6",
       "protected_test_files": [
@@ -108,10 +108,10 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Claude Sonnet 5",
-      "relocked_after_tests": "tests/test_invite_gate.py, tests/test_render_persistence_patch.py (all passing, unchanged), Fast Stability Gate (160 passed, 660 subtests), full Windows release gate (2815 tests, 0 failures, 0 errors, 0 skipped, 0 paid API calls) on commit 6391ff1.",
+      "unlocked_by": "Claude Opus 5",
+      "unlocked_reason": "Upgrade 0, Phase 0B-3B1. app.py is declared as a whole-file shared dependency and gained the asset-first/legacy-fallback helpers plus two call sites inside the /download/<package_id>/<filename> route. The invite gate's before_request hook is not touched by this change.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "Self-contained in app.py's single before_request hook -- no shared dependency on static/js/app.js (the gate is server-rendered, no fetch/JS involvement). 14+2 real behavioral tests: gate on/off, cookie/header/query admission, wrong-code refusal (never echoed), exemptions, admin routes gated too. Relocked at 6391ff1 (2026-09-13): unlocked only because app.py (declared as a whole shared dependency) gained a new route for the ebook build-stall fix; the invite gate hook itself is untouched."
     },
     "factory_market_advantage": {

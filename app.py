@@ -2942,6 +2942,53 @@ def save_publishing_route():
 _PACKAGE_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,127}$")
 
 
+def _verified_export_asset(export_dir: str, filename: str) -> bytes | None:
+    """Bytes from a VERIFIED stored asset for this export file, or None.
+
+    Upgrade 0, Phase 0B-3B1. None always means "use the legacy source" --
+    a missing, corrupt, wrong-sized or unreachable asset must never hide a
+    good file on disk. Every failure path here returns None.
+
+    The download URL names the export DIRECTORY, not the project, and the
+    project's `package_id` field is not reliably that directory (38 of 114
+    local projects disagree). The owning project therefore comes from the
+    asset record itself, matched on the key rule, rather than from any
+    assumption about package ids.
+
+    There are zero asset rows today, so this returns None for every
+    existing customer and the download path behaves exactly as before.
+    """
+    try:
+        import database
+
+        if not database.list_assets_exist():
+            return None  # fast path: nothing migrated, nothing to check
+        record = database.find_asset_by_export_path(export_dir, filename)
+        if not record or not record.get("approved"):
+            return None
+        from services.storage.compat import verified_asset_bytes
+
+        return verified_asset_bytes(record["storage_key"])
+    except Exception:
+        # Any failure at all falls back to the legacy file.
+        return None
+
+
+def _send_artifact_bytes(payload: bytes, filename: str):
+    """Serve artifact bytes with the same disposition rules as the disk path."""
+    import mimetypes
+
+    as_attachment = not (
+        filename.startswith("img_") or is_coloring_preview_filename(filename)
+    )
+    mimetype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    response = make_response(payload)
+    response.headers["Content-Type"] = mimetype
+    if as_attachment:
+        response.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    return response
+
+
 @app.get("/download/<package_id>/<filename>")
 def download_export_route(package_id: str, filename: str):
     """
@@ -2971,6 +3018,12 @@ def download_export_route(package_id: str, filename: str):
     except OSError:
         return _error("Export file not found.", 404)
     if not os.path.isfile(file_path):
+        # Upgrade 0, Phase 0B-3B1 — asset-first, legacy-authoritative.
+        # No disk copy: a VERIFIED stored asset may still hold these bytes.
+        # Nothing has been migrated yet, so today this never fires.
+        served = _verified_export_asset(package_id, filename)
+        if served is not None:
+            return _send_artifact_bytes(served, filename)
         if coloring_preview:
             return _error(coloring_preview_missing_message(filename), 404)
         return _error("Export file not found.", 404)
@@ -2998,7 +3051,15 @@ def download_export_route(package_id: str, filename: str):
         response.headers["Content-Disposition"] = f"attachment; filename={filename}"
         return response
 
-    # Passed: serve from disk. Preview images must display in <img>, not download.
+    # Passed the quality gate. Prefer a verified stored asset for the bytes;
+    # it is byte-identical to this file by construction (the migration
+    # records the SHA-256 of the very file it copied and the reader
+    # re-verifies it), so this changes nothing a customer can observe.
+    served = _verified_export_asset(package_id, filename)
+    if served is not None:
+        return _send_artifact_bytes(served, filename)
+
+    # Serve from disk. Preview images must display in <img>, not download.
     as_attachment = not (
         filename.startswith("img_") or is_coloring_preview_filename(filename)
     )

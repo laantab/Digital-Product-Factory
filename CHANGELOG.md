@@ -5,6 +5,65 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.13 — 2026-09-14
+
+**Upgrade 0, Phase 0B-3B1: the Factory can now talk to cloud storage, and knows exactly where every existing file really lives. Still nothing has been moved.**
+
+### What changed
+
+- **The Factory can now store customer files in Cloudflare R2**, the
+  shared storage that a future background worker will need in order to
+  reach the same files as the website. The connection is built and
+  tested, but it is switched off: no bucket has been created, no
+  credentials exist yet, and not one customer file has been sent
+  anywhere.
+- **Every place that serves a customer their file now checks the new
+  storage first, and falls back to the old copy.** Because nothing has
+  been moved, the new check finds nothing and every download behaves
+  exactly as it did before. It is the plumbing, proven in place, before
+  anything travels through it.
+- **Saved Projects can now recognise a product whose file lives in cloud
+  storage**, as well as one sitting on the server's disk. Today every
+  product is still on disk, so the list looks exactly the same.
+- **There is now a migration tool that copies a file safely** — copy,
+  check the size, check the fingerprint, write down where it went, read
+  it back, check the fingerprint again, and only then call it done. It
+  never deletes the original. It refuses to run at all until it is
+  explicitly switched on, which has not happened.
+
+### What was fixed
+
+- **A serious hazard was caught before it could do any harm.** The
+  Factory records a "package id" for each product, and the obvious
+  assumption was that this is the folder the product's files sit in. It
+  is not. Thirty-eight of the 114 local projects disagree — the id says
+  one thing and the actual PDF lives somewhere else entirely. Downloads
+  work today only because the Factory follows the real stored path.
+  Had the move been planned around the package id, those 38 products
+  would have been filed under names that point at nothing. Every
+  destination is now worked out from the real path instead, and all 292
+  of them were checked to confirm each one leads back to the exact file
+  it came from.
+- **Eight projects were found with no usable file path at all**, seven of
+  which still carry their PDF inside the project record. They are now
+  reported rather than guessed at, so nothing gets invented for them.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. Every product, every
+download, and every saved project behaves exactly as it did in 1.7.12.
+All 73 PDFs stored inside project records are still there, and all 3,224
+files in the exports folder are untouched.
+
+### Release gate
+
+Targeted storage tests: 54 new checks covering the R2 connection,
+credential safety, the fallback rules, the key rule, and every failure
+mode of the migration tool. Full Windows release gate: green, with no
+paid API calls.
+
+---
+
 ## 1.7.12 — 2026-09-14
 
 **Upgrade 0, Phase 0B-3A: the storage foundation is built and proven. Nothing has been moved yet — on purpose.**

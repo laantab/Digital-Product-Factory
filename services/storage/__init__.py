@@ -29,6 +29,8 @@ from services.storage.keys import (
     InvalidStorageKey,
     embedded_key,
     export_key,
+    export_key_to_relpath,
+    export_object_key,
     is_valid_key,
     project_prefix,
 )
@@ -46,6 +48,8 @@ __all__ = [
     "reset_storage",
     "embedded_key",
     "export_key",
+    "export_object_key",
+    "export_key_to_relpath",
     "project_prefix",
     "is_valid_key",
     "InvalidStorageKey",
@@ -74,7 +78,13 @@ def get_storage() -> StorageDriver:
         choice = str(os.environ.get("FACTORY_STORAGE_DRIVER") or "local").strip().lower()
         if choice in ("", "local", "filesystem"):
             _driver = LocalFilesystemDriver()
-        elif choice in ("s3", "r2", "b2"):
+        elif choice == "r2":
+            from services.storage.r2 import R2Driver
+
+            # Incomplete configuration raises here rather than quietly
+            # selecting something else. Fail closed, always.
+            _driver = R2Driver()
+        elif choice in ("s3", "b2"):
             from services.storage.s3 import S3CompatibleDriver
 
             _driver = S3CompatibleDriver()
