@@ -1,6 +1,6 @@
 {
   "schema_note": "Digital Product Factory Pro Competitive Upgrade Roadmap, established 2026-09-12. This is the durable strategic source of truth so a future Claude session cannot lose the strategic direction: quality/reliability/design/publishing/simplicity, NOT more product breadth, until these six upgrades are complete. Status values: NOT_STARTED, IN_PROGRESS, BLOCKED, VERIFYING, COMPLETE_LOCKED. Do not reorder upgrades without a real dependency reason (see each entry's `dependencies`). Do not begin an upgrade after the current one unless the owner explicitly approves skipping ahead.",
-  "updated_at": "2026-09-13T00:00:00-07:00",
+  "updated_at": "2026-09-14T17:00:00-07:00",
   "vision": "A beginner should go from IDEA -> MARKET OPPORTUNITY -> PRODUCT -> PROFESSIONAL DESIGN -> COVER -> VISUALS -> QA -> PREVIEW -> APPROVAL -> MULTIPLE EXPORT FORMATS -> READY-TO-SELL PACKAGE with as little technical knowledge and manual work as possible. The customer experience stays: Create -> Preview -> Approve -> Download. Digital Product Factory Pro is not a Designrr clone -- it is a complete AI-assisted digital-product production system competing on: Factory Market Advantage before creation, multiple product types, one-click production, free/local resources first with controlled paid-AI fallback, automatic QA, professional covers and interiors, protected working generators, automatic packaging, ready-to-sell outputs, and minimal technical interaction.",
   "standing_priority": "QUALITY -> RELIABILITY -> DESIGN -> PUBLISHING -> SIMPLICITY, not additional product types, until all six upgrades are COMPLETE_LOCKED. Do not add a new product generator unless the owner explicitly approves one.",
   "current_upgrade": "upgrade_1_cover_system",
@@ -21,7 +21,14 @@
       "current_foundation": "services/cover_source_policy.py (PEXELS FIRST gate + paid AI fallback), services/cover_agent.py + services/product_cover_agent.py + services/cover_quality_agent.py (shared HTML cover engine + final rendered-cover QA) for Ebook (Cover Editor route)/Word Search/Crossword; services/coloring_book/final_cover_qa.py (new, 2026-09-12 -- Coloring Book's own automatic-build final QA adapter); services/ebook_photo_cover.py + services/ebook_customer_path.py (Ebook's separate, real, raster-measurement-based guided-flow QA -- verified equivalent to final cover QA, not routed through the shared agent); services/planner/design_rating.py::rate_planner_design + services/editor_in_chief_planner.py::review_planner (Faith/Budget Planner's real, pixel-measurement-based final QA gating export_ready at /export-product -- verified equivalent, not routed through the shared agent).",
       "gap_remaining": "Ebook's PRIMARY guided-flow cover system (services/ebook_photo_cover.py) still has no AI fallback at all -- Pexels or customer upload only; bridging it to AI would mean integrating two structurally different rendering engines (PIL-raster vs HTML/CSS), a larger project deliberately not attempted yet. Coloring Book and Crossword's automatic/initial builds still do not call the paid AI cover step by design (pre-existing cost-avoidance, not a gap). The extended Pexels-first policy for Word Search/Crossword/Ebook and the Coloring Book final-QA adapter are implemented and passing all tests but NOT YET committed/pushed -- awaiting owner review.",
       "dependencies": [],
-      "affected_products_functions": ["ebook", "word_search", "crossword", "coloring_book", "faith_planner", "budget_planner"],
+      "affected_products_functions": [
+        "ebook",
+        "word_search",
+        "crossword",
+        "coloring_book",
+        "faith_planner",
+        "budget_planner"
+      ],
       "function_lock_impact": "word_search, crossword, and coloring_book are LOCKED functions; all three were explicitly UNLOCKED for this work (services/cover_agent.py, services/product_cover_agent.py, services/cover_quality_agent.py, services/cover_source_policy.py added as real shared_code_dependencies -- a previously-undeclared gap found and corrected). ebook, faith_planner, and budget_planner are PROTECTED (not LOCKED); their existing protected suites were re-verified green. None may be RELOCKED until the owner approves committing the code that becomes their new last-known-good commit (Rule 9: never manufacture a last-known-good hash).",
       "acceptance_criteria": [
         "Every image-cover product either uses the shared Pexels-first policy or has a verified-equivalent product-specific final QA authority (documented in PROTECTED_GENERATOR_RULE.md's QA contract map).",
@@ -45,8 +52,15 @@
       "why_it_matters_competitively": "Designrr's core strength is templated interior design. Matching or exceeding that with automated, theme-driven layout (rather than one-size-fits-all output) is required for the Factory to be perceived as equally or more professional, without asking beginners to make design decisions.",
       "current_foundation": "services/planner/themes.py + services/planner/cover.py already implement a working theme-driven design system for Planners (palette, typography, cover art recipe per theme) -- the closest existing precedent. Ebook has ebook_design_workspace.py/ebook_visual_pipeline.py for layout, but no equivalent named theme-family system across Business/Wellness/Faith/Education/etc.",
       "gap_remaining": "No cross-product theme-family system exists yet for Ebook/Word Search/Crossword/Coloring Book interiors matching the planner precedent's depth (only Planners have real theme families today). Target theme families (Business/Professional, Wellness, Faith, Education, Children's, Personal Development, Finance, Minimal/Modern, Luxury/Premium, Feminine, Masculine, Vintage, Bold/Contemporary) do not exist for Ebook interiors.",
-      "dependencies": ["upgrade_1_cover_system"],
-      "affected_products_functions": ["ebook", "math_worksheet", "faith_planner", "budget_planner"],
+      "dependencies": [
+        "upgrade_1_cover_system"
+      ],
+      "affected_products_functions": [
+        "ebook",
+        "math_worksheet",
+        "faith_planner",
+        "budget_planner"
+      ],
       "function_lock_impact": "Not yet started -- to be determined during Phase A (read-only audit) of this upgrade. Ebook is PROTECTED; whichever shared files a theme system introduces must be declared as dependencies for every affected function before implementation, per standing Function Lock discipline.",
       "acceptance_criteria": [
         "A customer can choose a theme and receive a professionally designed product without manual per-page design.",
@@ -69,8 +83,19 @@
       "why_it_matters_competitively": "Automation-first is the Factory's advantage, but customers still need a simple way to make it their own. Over-exposing technical controls would make the Factory feel harder than Designrr, which is explicitly the opposite of the goal.",
       "current_foundation": "The Cover Editor (/cover/*) already provides limited editing (style, palette, font, image regeneration, text position) for Ebook/Word Search/Crossword/Coloring Book, gated by the existing artifact DRAFT/APPROVED/LOCKED lifecycle (services/quality/artifact_state.py) so an edit cannot silently bypass export QA.",
       "gap_remaining": "No unified, beginner-simple editing surface exists across products yet; today's Cover Editor is the only real editing capability, and it predates the theme system Upgrade 2 will introduce.",
-      "dependencies": ["upgrade_1_cover_system", "upgrade_2_interior_themes"],
-      "affected_products_functions": ["ebook", "word_search", "crossword", "coloring_book", "faith_planner", "budget_planner", "saved_projects"],
+      "dependencies": [
+        "upgrade_1_cover_system",
+        "upgrade_2_interior_themes"
+      ],
+      "affected_products_functions": [
+        "ebook",
+        "word_search",
+        "crossword",
+        "coloring_book",
+        "faith_planner",
+        "budget_planner",
+        "saved_projects"
+      ],
       "function_lock_impact": "saved_projects (PROTECTED) and services/quality/artifact_state.py's mutation rules are central to this upgrade -- any editor must route through the existing DRAFT/APPROVED/LOCKED contract, never bypass it.",
       "acceptance_criteria": [
         "A customer can change cover, images, fonts, colors, theme, title/subtitle, author, and safe layout/spacing choices without technical knowledge.",
@@ -92,8 +117,14 @@
       "why_it_matters_competitively": "Multi-format, marketplace-ready export (KDP, EPUB/Kindle) is a concrete, checkable competitive differentiator beyond what a single-format export tool offers.",
       "current_foundation": "services/kdp/preflight.py and existing KDP-related tests (test_kdp_foundations_pass1.py, test_kdp_preflight_pass2.py) already establish some KDP-readiness checking for existing PDF export. No EPUB or Kindle-format pipeline exists yet.",
       "gap_remaining": "EPUB/Kindle export and their validation contracts do not exist. Print-ready bleed/margin/resolution validation beyond current KDP preflight is unconfirmed in scope.",
-      "dependencies": ["upgrade_1_cover_system", "upgrade_2_interior_themes"],
-      "affected_products_functions": ["ebook", "pdf_zip_export"],
+      "dependencies": [
+        "upgrade_1_cover_system",
+        "upgrade_2_interior_themes"
+      ],
+      "affected_products_functions": [
+        "ebook",
+        "pdf_zip_export"
+      ],
       "function_lock_impact": "pdf_zip_export (PROTECTED) is the highest-blast-radius shared packaging path per the Shared-Service Dependency Map -- any new export format must be additive, not a rewrite of services/packaging.py.",
       "acceptance_criteria": [
         "Each new format has its own real validation contract (e.g. EPUB must validate as EPUB; KDP/print output respects dimensions, bleed, margins, cover requirements, pagination, fonts, image resolution).",
@@ -115,7 +146,10 @@
       "why_it_matters_competitively": "A page-turning digital preview is a common, expected format for buyers evaluating a digital product before or alongside PDF delivery.",
       "current_foundation": "No Flipbook capability exists yet in this codebase.",
       "gap_remaining": "Entire feature not started.",
-      "dependencies": ["upgrade_1_cover_system", "upgrade_4_multi_format_publishing"],
+      "dependencies": [
+        "upgrade_1_cover_system",
+        "upgrade_4_multi_format_publishing"
+      ],
       "affected_products_functions": [],
       "function_lock_impact": "Must not alter or destabilize the approved PDF/product pipeline -- the Flipbook reads from an already-approved artifact, it does not produce one, so it should not need to touch any currently LOCKED generator's own code.",
       "acceptance_criteria": [
@@ -138,8 +172,25 @@
       "why_it_matters_competitively": "This is the ultimate expression of 'easier than Designrr' -- the governing design philosophy for every other upgrade, not just a final feature.",
       "current_foundation": "Factory Market Advantage already helps customers decide what to build before creation. Individual product generators, cover policy (Upgrade 1), and QA agents already exist as the pieces to orchestrate.",
       "gap_remaining": "No single orchestrated one-click flow exists yet spanning research through packaging with unified customer-friendly error handling across all product types.",
-      "dependencies": ["upgrade_1_cover_system", "upgrade_2_interior_themes", "upgrade_3_visual_editing", "upgrade_4_multi_format_publishing", "upgrade_5_flipbook"],
-      "affected_products_functions": ["factory_market_advantage", "ebook", "word_search", "crossword", "coloring_book", "math_worksheet", "faith_planner", "budget_planner", "saved_projects", "pdf_zip_export"],
+      "dependencies": [
+        "upgrade_1_cover_system",
+        "upgrade_2_interior_themes",
+        "upgrade_3_visual_editing",
+        "upgrade_4_multi_format_publishing",
+        "upgrade_5_flipbook"
+      ],
+      "affected_products_functions": [
+        "factory_market_advantage",
+        "ebook",
+        "word_search",
+        "crossword",
+        "coloring_book",
+        "math_worksheet",
+        "faith_planner",
+        "budget_planner",
+        "saved_projects",
+        "pdf_zip_export"
+      ],
       "function_lock_impact": "Touches essentially every product function as an orchestration layer -- every affected LOCKED function must go through UNLOCK -> CHANGE -> PROTECTED TESTS -> REQUIRED GATES -> CUSTOMER-PATH PROOF -> RELOCK individually; this upgrade must not become an excuse to bulk-unlock everything at once.",
       "acceptance_criteria": [
         "A customer can go from idea to downloaded, ready-to-sell product via: choose what to build, answer a few simple questions, click Create Product, review, approve, download.",
@@ -155,5 +206,35 @@
       "status_detail": "Not started. This is also the governing design philosophy for Upgrades 1-5, not only a final feature.",
       "next_step": "Do not begin until Upgrades 1-5 are COMPLETE_LOCKED (or the owner explicitly approves reordering) and Upgrade 6 is explicitly approved to start."
     }
+  },
+  "marketing_factory_track": {
+    "note": "Virtual Marketing Factory Pro is a THIRD roadmap axis, separate from upgrades 1-6 (product/design quality) and Upgrade 0 (execution infrastructure). It is DESIGN ONLY. The authoritative architecture is UPGRADE_0_PRODUCTION_ARCHITECTURE_BLUEPRINT.md sections 27-35.",
+    "north_star_pipeline": "FIND IT -> BUILD IT -> APPROVE IT -> STORE IT -> MARKET IT -> SELL IT -> IMPROVE IT",
+    "stage_owners": {
+      "find_it": "Factory Market Advantage",
+      "build_it": "Digital Product Factory Pro",
+      "approve_it": "Editor-in-Chief / product-specific QA / preflight",
+      "store_it": "assets table + shared object storage (Upgrade 0 Phase 0B-3)",
+      "market_it": "Virtual Marketing Factory Pro",
+      "sell_distribute_it": "Listing Factory + Pin Factory Pro + future Email/Social/Website",
+      "improve_it": "Marketing Command Center + Learn-and-Improve Engine"
+    },
+    "hard_precondition": "Marketing may NEVER begin before a product is COMPLETE/APPROVED: product QA, Editor-in-Chief, preflight, export, valid deliverable, approved asset records, stable storage keys and confirmed customer download availability. A marketing failure must never affect product completion, approval, PDF/ZIP availability, Saved Projects, customer downloads or artifact integrity.",
+    "infrastructure_prerequisite": "Implement ONLY after the storage/Postgres/worker migration is production-stable: 0B-3 storage -> 0B-4 Postgres -> 0B-5 job manager + worker -> 0C ebook worker migration -> 0D three successful live ebook builds -> 0E remaining workflows.",
+    "implementation_order": [
+      "MARKETING-1 Marketing Profile foundation",
+      "MARKETING-2 Virtual Marketing Manager",
+      "MARKETING-3 Listing Factory + Marketing Kit",
+      "MARKETING-4 Pin Factory Pro integration",
+      "MARKETING-5 Marketing Inspector",
+      "MARKETING-6 Launch / campaign management"
+    ],
+    "versions": {
+      "v1": "Marketing Profile; Virtual Marketing Manager recommendation; Marketplace Listing Generator; Marketing Kit Generator; Pin Factory Pro integration; Marketing Inspector / Preflight",
+      "v2": "Email campaign builder; Social campaign builder; Campaign calendar; Marketing Command Center; reusable promotional templates; bundle recommendations",
+      "v3": "Marketing analytics; performance comparison; automatic recommendations; A/B variations; Marketing Autopilot; cross-product intelligence; automatic campaign refreshes"
+    },
+    "pin_factory_pro": "An INTERNAL distribution engine under the Virtual Marketing Manager, not a separate top-level product. Consumes approved asset records, never filesystem paths. A Pinterest failure must not revert product status, remove approved assets, break downloads, alter PDF/ZIP, alter product QA state or alter Saved Projects.",
+    "status": "DESIGN_ONLY_NOT_STARTED"
   }
 }

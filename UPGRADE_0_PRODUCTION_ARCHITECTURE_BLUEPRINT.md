@@ -1,8 +1,23 @@
 # Upgrade 0 — Production Architecture Blueprint
 
-Version 3 — revised 2026-09-14 after completing the §26 verification gate.
-Documentation only. No code, dependency, Render, database, storage or
-deployment change is authorised by this document.
+Version 4 — revised 2026-09-14 to incorporate the complete end-to-end
+Factory Pro pipeline. Documentation only. No code, dependency, Render,
+database, storage or deployment change is authorised by this document.
+
+**What changed in v4:** the blueprint now covers the whole customer
+pipeline, not just the execution plumbing. New §27–§35 document the
+north-star journey (FIND IT → BUILD IT → APPROVE IT → STORE IT → MARKET
+IT → SELL IT → IMPROVE IT), the Virtual Marketing Factory Pro, the
+Marketing Profile, the Virtual Marketing Manager, the Marketing
+Inspector, and Pin Factory Pro recast as an internal distribution engine
+rather than a separate product. The former §27 (Pin Factory Pro) is
+absorbed into §32.2.
+
+The purpose is architectural alignment: marketing must be built *inside*
+this architecture — same `assets` bridge, same jobs/worker foundation,
+same failure isolation — rather than beside it as a second application.
+**Upgrade 0's own scope is unchanged by v4.** Sections 1–26 are
+untouched, and nothing in §27–§35 is authorised for implementation.
 
 **What changed in v3:** §26 verification is complete. Five facts verified,
 three remain dashboard-only unknowns, and one verified finding is a
@@ -43,6 +58,21 @@ optimisation.
 
 Scope discipline: Upgrade 0 changes **how work is executed**, never
 **what a product is supposed to be**.
+
+**Where this fits in the whole Factory.** Upgrade 0 is the plumbing for
+one stage of a longer pipeline:
+
+```
+FIND IT → BUILD IT → APPROVE IT → STORE IT → MARKET IT → SELL IT → IMPROVE IT
+```
+
+Sections 1–26 cover BUILD / APPROVE / STORE. Sections 27–35 document
+MARKET / SELL / IMPROVE — the Virtual Marketing Factory Pro and Pin
+Factory Pro — as **design only**, so that when they are built they reuse
+this same `assets` bridge, this same job/worker foundation, and this same
+failure isolation instead of becoming a second application. The customer
+must experience one Factory. Nothing in §27–§35 is authorised for
+implementation, and none of it changes Upgrade 0's scope.
 
 ---
 
@@ -760,44 +790,505 @@ no provider calls were made.
 None of these change the architecture. Items 2–5 must be resolved before
 the cost commitment and before migration scheduling.
 
-## 27. Pin Factory Pro — future distribution layer
+## 27. North-star customer pipeline
 
 **DESIGN NOW — IMPLEMENT AFTER THE CORE FACTORY IS PRODUCTION-STABLE.**
 
+Sections 27–34 describe the complete Factory Pro pipeline, including the
+Virtual Marketing Factory Pro and Pin Factory Pro. They authorise no
+implementation. They exist so that when marketing is built, it is built
+*inside* this architecture rather than beside it.
+
+The customer journey, end to end:
+
+```
+FIND IT → BUILD IT → APPROVE IT → STORE IT → MARKET IT → SELL IT → IMPROVE IT
+```
+
+| Stage | Subsystem | Status |
+|---|---|---|
+| **FIND IT** | Factory Market Advantage | Exists |
+| **BUILD IT** | Digital Product Factory Pro | Exists |
+| **APPROVE IT** | Editor-in-Chief · product-specific QA · preflight | Exists |
+| **STORE IT** | `assets` table + shared object storage | Being built (Phase 0B-3) |
+| **MARKET IT** | Virtual Marketing Factory Pro | Design only |
+| **SELL / DISTRIBUTE IT** | Listing Factory · Pin Factory Pro · future Email/Social/Website | Design only |
+| **IMPROVE IT** | Marketing Command Center · Learn-and-Improve Engine | Design only |
+
+**The customer must experience ONE Factory, not several unrelated apps.**
+Every subsystem above is a stage in one pipeline. None of them is a
+separate product the customer has to learn, log into, or reconcile by
+hand. This is an architectural constraint, not a presentation preference:
+it is why marketing reads the same `assets` table, runs on the same
+worker, and appears as one next step rather than a second application.
+
+---
+
+## 28. Core architectural rule — marketing never precedes approval
+
+**Marketing must NEVER begin before the product is COMPLETE / APPROVED.**
+
+Before any marketing work may be created or enqueued, the product must
+already have:
+
+- passed product-specific QA
+- passed Editor-in-Chief
+- passed preflight
+- completed export
+- a valid PDF/ZIP or other customer deliverable
+- approved asset records
+- stable storage keys
+- confirmed customer download availability
+
+This is the **product-completion gate**. It is the single precondition
+for every marketing job type in §32.
+
+### 28.1 Marketing lives in a separate failure domain
+
+A marketing failure must **never** affect:
+
+- product completion
+- product approval
+- PDF/ZIP availability
+- Saved Projects visibility
+- customer downloads
+- artifact integrity
+
+This isolation is **structural, not a promise**. Because a marketing job
+can only be *enqueued after* the completion gate has already passed, the
+events that matter to the customer have already happened, on a different
+job, in a different failure domain. A Pinterest outage, a listing
+generator error, an email provider rejection or an expired marketing
+credential cannot reach backwards into a finished product.
+
+The same guarantee that protects the product from marketing also protects
+the customer from the storage layer: §3's dual-read contract means a
+marketing subsystem reading an asset can fail, retry, or be switched off
+entirely without a customer ever losing access to what they own.
+
+---
+
+## 29. Assets are the bridge between Product and Marketing
+
+The `assets` table (§8, Phase 0B-3) is the **formal contract** between
+the Product Factory and the Marketing Factory. It is the reason the two
+can be separate subsystems without becoming separate applications.
+
+### 29.1 What the Marketing Factory must NOT do
+
+- search arbitrary `EXPORTS_DIR` folders
+- decode `pdf_bytes` directly
+- guess filenames
+- depend on legacy local-disk paths
+- regenerate artwork the Product Factory already created
+
+Every one of those is a coupling to *how the product happened to be
+stored*, and each is precisely what Phase 0B-3 exists to eliminate. The
+0B-3B2A pilot proved why this matters: a project's `package_id` is not
+reliably the directory its files live in — 38 of 114 local projects
+disagree — so any subsystem that guesses paths will be wrong for a third
+of the catalogue.
+
+### 29.2 What it reads instead
+
+```sql
+assets WHERE project_id = ? AND approved = TRUE
+```
+
+or the eventual equivalent contract. Approved asset kinds the Marketing
+Factory consumes:
+
+| Asset | Use |
+|---|---|
+| final PDF | listing deliverable, sample extraction |
+| package ZIP | marketplace upload |
+| cover | listing image, pin graphic, social card |
+| preview pages | carousel images, sample imagery |
+| product images | mockups, promotional graphics |
+| mockups | marketplace hero images |
+| promotional graphics | ads, pins, social |
+| thumbnails | grids, dashboards |
+| future listing images | channel-specific renditions |
+
+**Pin Factory Pro consumes approved asset records too** — never direct
+filesystem paths.
+
+### 29.3 Why this is the right bridge
+
+- **One read path.** The compatibility layer (§3) already guarantees an
+  asset is used only when its record, object, byte count and SHA-256 all
+  agree, and falls back otherwise. Marketing inherits that guarantee free.
+- **Reuse instead of regeneration.** An approved cover is an addressable
+  object. Marketing references it; it does not pay a provider to recreate
+  something the customer already approved.
+- **Approval is explicit.** `approved = TRUE` is set only after the
+  migration executor's full verify sequence. Marketing cannot consume a
+  half-finished or unverified artifact.
+- **The worker can reach it.** A Render persistent disk is visible to one
+  service instance; shared object storage is visible to the web service,
+  the background worker, and every future marketing job alike.
+
+---
+
+## 30. Marketing Profile — the marketing brain for each product
+
+The **Marketing Profile** is the durable marketing record for one
+approved product. It is created or initialised **automatically after
+product approval**, never by asking the customer to start again.
+
+### 30.1 It reuses what the Factory already knows
+
+The customer must not re-enter information the Factory has already
+gathered or generated. The profile is seeded from:
+
+Factory Market Advantage research · the product plan · product metadata ·
+title and subtitle · product type · audience · product description ·
+benefits · keywords · research evidence · pricing evidence · the approved
+cover · approved preview images · product assets.
+
+### 30.2 Contents (architecture, not schema)
+
+| Group | Fields |
+|---|---|
+| Identity | `project_id`, product title, product type, product description |
+| Audience | primary audience, secondary audience, customer problem, desired outcome |
+| Positioning | unique selling proposition, features, benefits, positioning, competition observations |
+| Discovery | keywords, search phrases |
+| Pricing | suggested pricing range, recommended price |
+| Message | primary marketing message, secondary messages, brand voice |
+| Assets | approved cover asset reference, preview asset references |
+| Channels | selected sales channels, selected promotional channels |
+| Output | marketing assets generated, campaign history, marketing status |
+
+**Do not over-design the database implementation yet.** Whether this
+becomes a table, a JSON document on the project, or a set of rows is a
+MARKETING-1 decision, not an Upgrade 0 one. What is fixed here is the
+*contract*: the profile is derived, durable, per-product, and seeded
+automatically at approval.
+
+---
+
+## 31. Customer handoff from Product to Marketing
+
+```
+PRODUCT COMPLETE / APPROVED
+        ↓
+Approved assets registered
+        ↓
+Marketing Profile created or updated
+        ↓
+Customer sees:  MARKET THIS PRODUCT
+```
+
+**Do not expose all marketing tools immediately.** The customer sees
+**one** next step — `MARKET THIS PRODUCT`. Advanced controls live behind
+`View Marketing Details`.
+
+This is the same discipline the product side already follows: the
+customer is offered the next action, not the machinery behind it.
+
+---
+
+## 32. Virtual Marketing Manager — the orchestrator
+
+The Virtual Marketing Manager is to marketing what the build orchestrator
+is to a product: it decides what happens next and in what order.
+
+It evaluates: target buyer · customer problem · product promise ·
+positioning · price recommendation · best sales channel · best traffic
+channel · keywords · required listing assets · required promotional
+assets · campaign readiness · next best action.
+
+The customer sees a **recommendation, not a control panel**:
+
+```
+YOUR MARKETING PLAN IS READY
+
+Product:                    ...
+Primary Customer:           ...
+Recommended Sales Channel:  ...
+Recommended Traffic Channel:...
+Recommended Price:          ...
+Primary Message:            ...
+Campaign Readiness:         READY
+
+           [ LAUNCH MY MARKETING ]
+```
+
+**One recommendation before many choices.**
+
+### 32.1 Channel selection
+
+```
+Virtual Marketing Manager
+        ↓
+Marketing Profile
+        ↓
+Channel selection
+        ├── Pinterest        → Pin Factory Pro
+        ├── Etsy / marketplace → Listing Factory
+        ├── Email            → Email Marketing Factory
+        ├── Social           → Social Marketing Factory
+        └── Website          → Sales-page / promotional assets
+```
+
+### 32.2 Pin Factory Pro — an internal distribution engine
+
+Pin Factory Pro is **a distribution engine under the Virtual Marketing
+Factory, not a separate top-level product the customer must learn.**
+
+It receives: approved product cover · approved product images · audience ·
+keywords · headline ideas · benefits · calls to action · destination URL ·
+campaign theme.
+
+It produces: pin concepts · headlines · descriptions · keyword variations ·
+pin graphics · campaign variations · posting schedule.
+
+The customer eventually sees:
+
+```
+PINTEREST CAMPAIGN
+12 PINS READY
+```
+
+— not a separate Pin Factory application workflow.
+
 Do not migrate, merge, or implement Pin Factory Pro during Upgrade 0. Do
-not change Pin Factory Pro code. Do not change Pinterest configuration.
-Do not start Pinterest approval work. Do not add infrastructure solely
-for Pin Factory Pro during Upgrade 0.
+not change Pin Factory Pro code, Pinterest configuration, or Pinterest
+approval status. Do not add infrastructure solely for it during Upgrade 0.
 
-Target flow:
+### 32.3 Same job and worker architecture — no second scheduler
+
+**Marketing does not get its own infrastructure.** It uses the same
+approved foundation:
 
 ```
-PRODUCT COMPLETE / APPROVED → MARKETING JOB → PIN FACTORY PRO → PINTEREST
+projects → jobs → work_units → job_events → assets → object storage → worker
 ```
 
-The new architecture makes this *cleaner*, not harder:
+Product jobs and marketing jobs are **separate job types on the same
+machinery**:
 
-- **It is just another job type.** `CREATE_MARKETING_ASSETS` /
-  `SEND_TO_PIN_FACTORY` are rows in the same `jobs` table, enqueued only
-  when the product's job is `SUCCEEDED` and the artifact is APPROVED.
-  Same claim, lease, retry, idempotency and observability.
-- **It consumes shared storage.** It reads `assets WHERE approved = TRUE`
-  by `storage_key` — which is exactly why binary extraction (§8.1b)
-  benefits it directly: approved artifacts become addressable objects
-  rather than base64 buried in a project row.
-- **Failure isolation is structural, not promised.** Because a marketing
-  job can only be *enqueued* after COMPLETE/APPROVED, a Pinterest or Pin
-  Factory failure cannot prevent **product completion**, **product
-  approval**, **product download**, or **PDF/ZIP export** — those events
-  have already happened, on a different job, in a different failure
-  domain. It additionally must never invalidate the finished product,
-  force regeneration, or alter the approved PDF or cover.
-- **Separate credentials, separate failure domain** (§11).
-- **Idempotent** via `jobs.idempotency_key` + `work_units` — a reclaimed
-  marketing job cannot create duplicate Pinterest posts.
-- **Customer-facing later, operationally separate always.**
-- **Same hook serves Etsy, KDP marketing and other channels.** No
-  channel-specific design now.
+```
+PROJECT
+│
+├── PRODUCT JOBS
+│   ├── research
+│   ├── build
+│   ├── render
+│   ├── QA
+│   ├── preflight
+│   └── export
+│
+├── APPROVED ASSETS
+│   ├── PDF
+│   ├── ZIP
+│   ├── cover
+│   └── previews
+│
+└── MARKETING JOBS
+    ├── marketing_profile
+    ├── marketing_strategy
+    ├── marketplace_listing
+    ├── marketing_kit
+    ├── pinterest_campaign
+    ├── marketing_preflight
+    └── future publish / schedule jobs
+```
+
+Marketing jobs may only be enqueued **after the product-completion gate
+of §28 has passed**. They inherit the same claim, lease, heartbeat,
+retry, idempotency and observability guarantees — including
+`jobs.idempotency_key` + `work_units`, so a reclaimed marketing job
+cannot create duplicate Pinterest posts or duplicate listings. Marketing
+providers keep **separate credentials and a separate failure domain**
+(§11).
+
+---
+
+## 33. Marketing Inspector — Editor-in-Chief for marketing
+
+The Marketing Inspector is the marketing equivalent of Editor-in-Chief.
+Nothing reaches `READY TO LAUNCH` without passing it.
+
+It verifies:
+
+- product and marketing copy agree
+- claims are supported
+- no misleading guarantees
+- correct audience
+- relevant keywords
+- no accidental competitor promotion
+- correct destination links
+- consistent pricing
+- consistent product title
+- images represent the actual product
+- spelling and grammar
+- clear calls to action
+- marketing does not sound spammy
+- campaign assets are not unnecessarily repetitive
+
+```
+MARKETING PREFLIGHT: PASS
+        ↓
+READY TO LAUNCH
+```
+
+This matters for more than tone. The Factory's existing QA gates exist
+because a bad product must never reach a customer; the Marketing
+Inspector exists because a bad *claim* must never reach a customer's
+buyer. An unsupported guarantee is a liability the customer inherits.
+
+---
+
+## 34. Customer navigation and brand architecture
+
+### 34.1 Long-term top-level navigation
+
+```
+CREATE   → Find a Product Idea
+BUILD    → Create My Product
+MARKET   → Market My Product
+RESULTS  → See What's Working
+```
+
+**Individual engines are never the primary navigation.** The complexity
+stays behind the scenes.
+
+### 34.2 Brand architecture
+
+```
+DIGITAL PRODUCT FACTORY PRO
+Find It. Build It. Market It. Sell It.
+
+  Factory Market Advantage     → Find the opportunity
+  Digital Product Factory      → Build the product
+  Virtual Marketing Factory Pro→ Create and manage the marketing
+  Pin Factory Pro              → Pinterest distribution engine
+```
+
+The customer experiences **one Factory**.
+
+### 34.3 North-star end-to-end flow
+
+```
+CUSTOMER IDEA
+        ↓
+FACTORY MARKET ADVANTAGE
+        ↓
+YOUR BEST OPPORTUNITY
+        ↓
+BUILD THIS PRODUCT
+        ↓
+DIGITAL PRODUCT FACTORY
+        ↓
+PRODUCT-SPECIFIC QA
+        ↓
+EDITOR-IN-CHIEF
+        ↓
+PREFLIGHT
+        ↓
+EXPORT
+        ↓
+APPROVED PRODUCT
+        ↓
+ASSETS / OBJECT STORAGE          ← the bridge (§29)
+        ↓
+MARKETING PROFILE                ← §30
+        ↓
+MARKET THIS PRODUCT              ← the one next step (§31)
+        ↓
+VIRTUAL MARKETING MANAGER        ← §32
+        ↓
+MARKETING STRATEGY
+        ↓
+LISTING + MARKETING KIT
+        ↓
+PIN FACTORY / EMAIL / SOCIAL     ← §32.2
+        ↓
+MARKETING INSPECTOR              ← §33
+        ↓
+READY TO LAUNCH
+        ↓
+DISTRIBUTION
+        ↓
+MARKETING COMMAND CENTER
+        ↓
+RESULTS
+        ↓
+KEEP / IMPROVE / STOP / TRY NEXT
+```
+
+### 34.4 Product philosophy (binding on every marketing decision)
+
+- One recommendation before many choices.
+- One next step instead of a complicated dashboard.
+- Reuse everything the Factory already knows.
+- Reuse approved assets instead of paying to regenerate them.
+- Automate repetitive work without hiding important decisions.
+- Help the customer **make money**, not merely make files or marketing
+  content.
+- Do not expose infrastructure, providers, prompts, queue mechanics, SEO
+  formulas, or scheduling machinery unless the customer asks.
+
+---
+
+## 35. Marketing roadmap and implementation order
+
+**DESIGN NOW. IMPLEMENT ONLY AFTER THE STORAGE / POSTGRES / WORKER
+MIGRATION IS PRODUCTION-STABLE.**
+
+### 35.1 Virtual Marketing Factory versions
+
+| Version | Contents |
+|---|---|
+| **V1** | Marketing Profile · Virtual Marketing Manager recommendation · Marketplace Listing Generator · Marketing Kit Generator · Pin Factory Pro integration · Marketing Inspector / Preflight |
+| **V2** | Email campaign builder · Social campaign builder · Campaign calendar · Marketing Command Center · reusable promotional templates · bundle recommendations |
+| **V3** | Marketing analytics · performance comparison · automatic recommendations · A/B variations · Marketing Autopilot · cross-product intelligence · automatic campaign refreshes |
+
+### 35.2 Ordering — infrastructure first, without exception
+
+```
+CURRENT INFRASTRUCTURE WORK
+
+  0B-3  Storage / R2 stabilisation
+    ↓
+  0B-4  Postgres cutover
+    ↓
+  0B-5  Job manager + background worker
+    ↓
+  0C    Ebook worker migration
+    ↓
+  0D    Three successful live ebook builds
+    ↓
+  0E    Remaining long-running product workflows
+
+ONLY AFTER PRODUCTION STABILITY
+
+  MARKETING-1  Marketing Profile foundation
+    ↓
+  MARKETING-2  Virtual Marketing Manager
+    ↓
+  MARKETING-3  Listing Factory + Marketing Kit
+    ↓
+  MARKETING-4  Pin Factory Pro integration
+    ↓
+  MARKETING-5  Marketing Inspector
+    ↓
+  MARKETING-6  Launch / campaign management
+```
+
+**Marketing implementation must not interfere with current Upgrade 0
+work.** The dependency is real, not procedural: MARKETING-1 needs the
+`assets` bridge (0B-3), MARKETING-2 onwards need the job/worker
+foundation (0B-5), and every marketing job is a long-running provider
+call of exactly the kind that must never again run inside a synchronous
+HTTP request.
+
+### 35.3 What remains DESIGN NOW / IMPLEMENT LATER
+
+Everything in §27–§35 is design only. No marketing table, job type, UI,
+route, credential or provider integration is authorised by this document.
 
 ---
 
