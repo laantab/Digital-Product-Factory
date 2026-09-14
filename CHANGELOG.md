@@ -5,6 +5,60 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.7 — 2026-09-13
+
+**A live ebook build kept failing at the manuscript step even after the "Resume Build" fix. The real cause: the hosted Factory could still try to reach the owner's home computer to write chapters. It can no longer do that, no matter what.**
+
+### What changed
+
+- **The hosted Factory now recognizes it is hosted** and refuses to reach
+  the owner's home-computer writing engine for any reason, in any
+  configuration — closing the gap that a single setting used to be
+  responsible for on its own.
+
+### What was fixed
+
+- **The manuscript step was trying to contact a writing engine that only
+  exists on the owner's own computer, from the hosted Factory.** This has
+  nothing to do with content, research, or the customer's topic — it is a
+  configuration gap that made chapter-writing fail every single time on the
+  hosted Factory, while every other step (research, title, outline) kept
+  working normally because they never depended on that engine.
+- **The hosted Factory can no longer reach that home-computer engine at
+  all, under any configuration.** Previously, one specific setting had to be
+  entered correctly for the hosted Factory to stay off it; if that setting
+  was ever missing, mistyped, or not applied, hosted chapter-writing would
+  silently try the home-computer engine and fail. Now the hosted Factory
+  recognizes itself as hosted and refuses that engine outright — the setting
+  is no longer the only thing standing between customers and this failure.
+- **The owner's own computer is unaffected.** Local writing there still
+  works exactly as it did; nothing about that setup changed.
+
+### Do my steps change?
+
+- **No.** This is invisible to a customer either way — it only changes
+  which engine writes chapters behind the scenes on the hosted Factory,
+  never on the owner's own computer.
+
+### Release gate
+
+- Targeted proof first, before broader gates (per the recovery sprint):
+  `tests/test_ai_provider_render_safety.py` (10 tests, including the exact
+  production chapter-writing function and a real Resume-Build-style retry
+  that proves an already-written chapter is never regenerated or re-billed
+  after a provider failure), plus the full existing `test_ai_providers.py`
+  and `test_local_manuscript_pilot.py` suites (43 tests) — all green,
+  unchanged behavior confirmed for local development.
+- 207 broader ebook/manuscript-adjacent tests re-run green.
+- Fast Stability Gate: 160 passed, 698 subtests.
+- Full Windows release gate: pending this commit's own run.
+- Function Lock: `ebook` (PROTECTED, unchanged classification) gained
+  `services/ai_providers.py` and `services/ebook.py` as declared, real
+  shared dependencies. No LOCKED function shares either file, so none
+  needed to be unlocked for this fix.
+
+---
+
 ## 1.7.6 — 2026-09-13
 
 **A stalled ebook build no longer strands a paying customer. "Try again" is gone — the Factory now offers Resume Build, and Resume Build actually works.**

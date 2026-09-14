@@ -535,6 +535,23 @@ def reset_providers() -> None:
     _openai_singleton = None
 
 
+def _running_on_render() -> bool:
+    """True when this process is a Render-hosted service.
+
+    Render sets ``RENDER=true`` automatically on every deployed service --
+    unlike ``FACTORY_AI_POLICY``, the owner cannot forget to set it, and unlike
+    a hand-set custom variable it cannot be silently shadowed by a stray local
+    ``.env`` file (app.py's ``load_dotenv`` runs with ``override=True`` outside
+    test mode; see its own comment for the exact shape of failure this already
+    caused once for TAVILY_API_KEY on 2026-08-29). A hosted Render runtime
+    never has the owner's local Ollama reachable at 127.0.0.1, so this is a
+    hard, policy-independent floor under the local-routing decision below --
+    not a replacement for FACTORY_AI_POLICY, which still governs everywhere
+    this is False (including every local development machine).
+    """
+    return bool(str(os.environ.get("RENDER") or "").strip())
+
+
 def routes_local(task: str | None) -> bool:
     """True when this task should be generated locally.
 
@@ -546,8 +563,15 @@ def routes_local(task: str | None) -> bool:
     provider: because it listens on this machine it is reachable from the test
     suite, so without this guard an automated test would silently perform a real
     generation. Tests inject their own chapter function explicitly instead.
+
+    On a Render-hosted service, nothing routes local, regardless of policy --
+    see _running_on_render(). A misconfigured, missing, or shadowed
+    FACTORY_AI_POLICY must never turn into a customer-facing manuscript build
+    that repeatedly tries to reach the owner's Windows machine.
     """
     if str(os.environ.get("FACTORY_TEST_MODE") or "") == "1":
+        return False
+    if _running_on_render():
         return False
     if not task or task not in LOCAL_PILOT_TASKS:
         return False
