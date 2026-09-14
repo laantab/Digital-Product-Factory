@@ -5,6 +5,79 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.12 — 2026-09-14
+
+**Upgrade 0, Phase 0B-3A: the storage foundation is built and proven. Nothing has been moved yet — on purpose.**
+
+### What changed
+
+- **There is now one place the Factory can put a customer file**, instead
+  of the two different places it uses today (files on the server's own
+  disk, and files packed inside the project record itself). For now it
+  writes to the same disk everything already uses, so nothing external is
+  needed and nothing about the Factory's behaviour changes.
+- **The Factory can now record where a file lives** — its size, a
+  fingerprint to prove it is intact, and its type — without putting the
+  file itself in the project record.
+- **A dry-run report** can now show exactly what a future move would do,
+  without doing any of it.
+
+### What was fixed
+
+- **The Factory had no single way to store a customer file.** PDFs for
+  most product types were packed inside the project record itself, which
+  meant saving any small detail about a project rewrote the entire PDF
+  along with it — for the largest project, about 40 MB rewritten every
+  time. Ebooks used a different approach again, writing files to the
+  server's own disk. Neither can be reached by anything except the one
+  server process, which is what blocks the reliability work this upgrade
+  exists to deliver. There is now one place to put a file, and one way to
+  prove it arrived intact.
+
+### What was NOT changed, deliberately
+
+- **No customer file was moved.** Not one.
+- **Nothing was deleted from any existing project.** Products that keep
+  their PDF inside the project record still do, untouched.
+- **Downloads work exactly as before**, reading from exactly where they
+  read yesterday. The old path stays as a permanent fallback.
+- No external storage account, bucket, or provider was created or chosen.
+
+### Why do it this way?
+
+The eventual move affects **73 of 114 projects and about 49 MB** of
+customer PDFs. Moving customer files is the kind of work that must never
+be half-done, so the rule is: copy, check the copy is byte-for-byte
+identical, record it, read it back, and only then remove the original —
+never move-and-hope. This release builds and proves the machinery for
+that, so the actual move happens on a foundation that has already been
+tested.
+
+### Do my steps change?
+
+- **No.** Nothing about creating, previewing, approving or downloading a
+  product changes in any way.
+
+### Release gate
+
+- `tests/test_storage_foundation.py` (29 tests) proves put/get is
+  byte-identical, checksums are preserved and detect corruption, `exists`
+  and deletion behave, assets map to the right project and do not leak
+  between projects, keys are deterministic across retries, repeated
+  recording never duplicates, legacy files and embedded PDFs remain
+  untouched, downloads and Saved Projects do not regress,
+  APPROVED/LOCKED is unaffected, a storage failure falls back to the
+  legacy copy rather than destroying it, and the dry run makes zero
+  persistent changes.
+- Dry run against the real local Factory: 114 projects scanned, 73
+  affected, 73 binaries / 51,727,628 bytes proposed, largest 39.83 MB,
+  **0 malformed or conflicting rows**.
+- Fast Stability Gate and Full Windows release gate: see this commit's run.
+- Function Lock: `database.py` is a declared dependency of `ebook` and
+  `saved_projects`, both PROTECTED. No LOCKED function declares it.
+
+---
+
 ## 1.7.11 — 2026-09-14
 
 **Upgrade 0, Phase 0B-2: two things saving the same project at once can no longer erase each other's work.**

@@ -198,6 +198,35 @@ def init_db() -> None:
             )
         except sqlite3.OperationalError:
             pass  # column already exists
+
+    # Asset metadata (Upgrade 0, Phase 0B-3A). The database records WHERE a
+    # customer binary lives and how to prove it is intact; the bytes live in
+    # the storage layer. Additive: creating this table changes nothing about
+    # existing rows, and no artifact is migrated into it during 0B-3A.
+    #
+    # storage_key is UNIQUE, which is what makes recording an asset
+    # idempotent -- a restarted or repeated migration re-records the same
+    # key instead of creating a duplicate.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS assets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            storage_key TEXT NOT NULL UNIQUE,
+            content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+            byte_size INTEGER NOT NULL DEFAULT 0,
+            checksum TEXT NOT NULL DEFAULT '',
+            approved INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS assets_project_kind_idx "
+        "ON assets (project_id, kind, approved)"
+    )
     conn.commit()
     conn.close()
 
@@ -959,6 +988,118 @@ def update_project(
     if isinstance(data, dict) and saved is not None:
         data[ROW_VERSION_KEY] = saved["data"].get(ROW_VERSION_KEY, 0)
     return saved
+
+
+def _asset_row_to_dict(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"],
+        "project_id": row["project_id"],
+        "kind": row["kind"],
+        "storage_key": row["storage_key"],
+        "content_type": row["content_type"],
+        "byte_size": row["byte_size"],
+        "checksum": row["checksum"],
+        "approved": bool(row["approved"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def record_asset(
+    project_id: int,
+    kind: str,
+    storage_key: str,
+    *,
+    content_type: str = "application/octet-stream",
+    byte_size: int = 0,
+    checksum: str = "",
+    approved: bool | None = None,
+) -> dict:
+    """Record (or refresh) where a customer artifact lives.
+
+    Idempotent by storage_key: re-recording the same key updates its
+    metadata in place and never creates a second row. That is what makes
+    the future migration restartable -- running it twice produces one
+    asset, not two.
+
+    The database stores metadata and the key only. Bytes belong in the
+    storage layer; a 56 MB row is what Phase 0B-3 exists to end.
+    """
+    now = _now()
+    conn = get_conn()
+    try:
+        existing = conn.execute(
+            "SELECT * FROM assets WHERE storage_key=?", (storage_key,)
+        ).fetchone()
+        if existing is not None:
+            conn.execute(
+                "UPDATE assets SET project_id=?, kind=?, content_type=?, "
+                "byte_size=?, checksum=?, approved=?, updated_at=? "
+                "WHERE storage_key=?",
+                (
+                    int(project_id),
+                    str(kind),
+                    str(content_type),
+                    int(byte_size),
+                    str(checksum),
+                    int(bool(existing["approved"]) if approved is None else bool(approved)),
+                    now,
+                    storage_key,
+                ),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO assets (project_id, kind, storage_key, content_type, "
+                "byte_size, checksum, approved, created_at, updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (
+                    int(project_id),
+                    str(kind),
+                    str(storage_key),
+                    str(content_type),
+                    int(byte_size),
+                    str(checksum),
+                    int(bool(approved)),
+                    now,
+                    now,
+                ),
+            )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM assets WHERE storage_key=?", (storage_key,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return _asset_row_to_dict(row) if row is not None else {}
+
+
+def get_asset_by_key(storage_key: str) -> dict | None:
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM assets WHERE storage_key=?", (str(storage_key),)
+        ).fetchone()
+    finally:
+        conn.close()
+    return _asset_row_to_dict(row) if row is not None else None
+
+
+def list_assets(project_id: int, kind: str | None = None) -> list[dict]:
+    conn = get_conn()
+    try:
+        if kind:
+            rows = conn.execute(
+                "SELECT * FROM assets WHERE project_id=? AND kind=? ORDER BY id",
+                (int(project_id), str(kind)),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM assets WHERE project_id=? ORDER BY id",
+                (int(project_id),),
+            ).fetchall()
+    finally:
+        conn.close()
+    return [_asset_row_to_dict(r) for r in rows]
 
 
 # NOTE: _exports_root() is defined once, near the top of this file (it must

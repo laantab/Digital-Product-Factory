@@ -127,6 +127,7 @@
     "tests/test_ai_provider_render_safety.py",
     "tests/test_ebook_manuscript_correction_recovery.py",
     "tests/test_project_optimistic_concurrency.py",
+    "tests/test_storage_foundation.py",
     "tests/test_chapter_photo_queries.py",
     "tests/test_visual_relevance_strategy.py",
     "tests/test_database_isolation.py",
