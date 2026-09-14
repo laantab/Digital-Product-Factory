@@ -112,8 +112,36 @@ _BROAD_DECISION_RE = re.compile(
 _TABLE_COLS = (
     "id", "name", "type", "data",
     "user_saved", "system_test", "temporary",
-    "created_at", "updated_at",
+    "created_at", "updated_at", "version",
 )
+
+#: Key under which a read stamps the row's version into the returned `data`
+#: dict. In-memory bookkeeping only -- never persisted into the stored blob.
+ROW_VERSION_KEY = "_row_version"
+
+
+class StaleProjectWrite(RuntimeError):
+    """A write was rejected because the row changed after it was read.
+
+    The whole of a project's state lives in one JSON blob, so a write
+    replaces everything. A caller holding a copy read before someone
+    else's write would erase that write -- the mechanism behind the
+    v1.7.9 production data loss. Rejecting is the safe outcome.
+
+    Deliberately NOT retried inside this module: a blind retry would
+    re-apply the same stale blob and reintroduce the lost update. The
+    caller must re-read, re-apply its change, and save again.
+    """
+
+    def __init__(self, project_id: int, expected: int, actual: int | None = None):
+        self.project_id = int(project_id)
+        self.expected_version = int(expected)
+        self.actual_version = actual
+        super().__init__(
+            f"Project {project_id} changed since it was read "
+            f"(expected version {expected}, found {actual}). "
+            "Re-read the project, re-apply the change, and save again."
+        )
 
 
 def _now() -> str:
@@ -148,7 +176,8 @@ def init_db() -> None:
             system_test INTEGER NOT NULL DEFAULT 0,
             temporary INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 0
         )
         """
     )
@@ -158,6 +187,10 @@ def init_db() -> None:
         ("user_saved", "1"),
         ("system_test", "0"),
         ("temporary", "0"),
+        # Optimistic-concurrency counter (Upgrade 0, Phase 0B-2). Existing
+        # rows start at 0; every write increments it. Additive and
+        # backward-compatible: an older database simply gains the column.
+        ("version", "0"),
     ]:
         try:
             conn.execute(
@@ -173,6 +206,18 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
     data = json.loads(row["data"] or "{}")
     if not isinstance(data, dict):
         data = {}
+    # Stamp the row version the caller just read, so that when this dict is
+    # handed back to update_project() we can prove nobody else wrote in the
+    # meantime. In-memory only: update_project() strips it before storing,
+    # because a version persisted inside the blob would go stale and could
+    # then be trusted wrongly. Every read path funnels through here, so every
+    # read is protected, not just get_project().
+    try:
+        data[ROW_VERSION_KEY] = int(row["version"] or 0)
+    except (IndexError, KeyError, TypeError):
+        # A database created before the version column existed. Leave the
+        # dict unstamped; writes from it are treated as unversioned.
+        pass
     return {
         "id": row["id"],
         "name": row["name"],
@@ -796,7 +841,23 @@ def update_project(
     user_confirmed_save: bool = False,
 ) -> dict | None:
     """Update an existing project. Only non-None values are changed; flags
-    are only updated when explicitly passed (None = keep existing)."""
+    are only updated when explicitly passed (None = keep existing).
+
+    Optimistic concurrency (Upgrade 0, Phase 0B-2): this replaces the whole
+    `data` blob, so a caller holding a copy read before someone else's write
+    would erase that write. When the supplied dict carries the row version it
+    was read at (every read stamps it -- see _row_to_dict), this write becomes
+    a compare-and-swap and raises StaleProjectWrite if the row moved on.
+    Data built from scratch carries no version and is written unconditionally,
+    exactly as before: there is no earlier read for it to be stale against.
+    """
+    expected_version = None
+    if isinstance(data, dict) and ROW_VERSION_KEY in data:
+        try:
+            expected_version = int(data[ROW_VERSION_KEY])
+        except (TypeError, ValueError):
+            expected_version = None
+
     existing = get_project(project_id)
     if not existing:
         return None
@@ -846,25 +907,58 @@ def update_project(
             elif user_confirmed_save:
                 new_data = _stamp_visible_metadata(new_data)
 
-    conn = get_conn()
-    conn.execute(
-        f"UPDATE projects SET name=?, type=?, data=?, "
-        f"user_saved=?, system_test=?, temporary=?, updated_at=? "
-        f"WHERE id=?",
-        (
-            new_name,
-            new_type,
-            json.dumps(new_data),
-            int(new_user_saved),
-            int(new_system_test),
-            int(new_temporary),
-            _now(),
-            project_id,
-        ),
+    # The version is in-memory bookkeeping between a read and its write. It
+    # must never reach the stored blob: a persisted version goes stale the
+    # moment the next write lands, and a later reader could trust it wrongly.
+    new_data.pop(ROW_VERSION_KEY, None)
+
+    params = [
+        new_name,
+        new_type,
+        json.dumps(new_data),
+        int(new_user_saved),
+        int(new_system_test),
+        int(new_temporary),
+        _now(),
+        project_id,
+    ]
+    sql = (
+        "UPDATE projects SET name=?, type=?, data=?, "
+        "user_saved=?, system_test=?, temporary=?, updated_at=?, "
+        "version=version+1 WHERE id=?"
     )
-    conn.commit()
-    conn.close()
-    return get_project(project_id)
+    if expected_version is not None:
+        sql += " AND version=?"
+        params.append(expected_version)
+
+    conn = get_conn()
+    try:
+        cur = conn.execute(sql, tuple(params))
+        if expected_version is not None and cur.rowcount == 0:
+            # The row still exists (checked above), so the only way to match
+            # nothing is that its version moved: somebody wrote after this
+            # caller read. Refuse rather than overwrite their work. No retry
+            # here by design -- re-applying this same blob is precisely the
+            # lost update being prevented.
+            conn.rollback()
+            actual = conn.execute(
+                "SELECT version FROM projects WHERE id=?", (project_id,)
+            ).fetchone()
+            raise StaleProjectWrite(
+                project_id, expected_version, int(actual["version"]) if actual else None
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    saved = get_project(project_id)
+    # Re-stamp the caller's own dict with the version it now sits at, so a
+    # caller that saves the same evolving dict repeatedly (the build
+    # orchestrator's checkpoint pattern) stays protected on every write
+    # instead of silently dropping to unversioned after the first one.
+    if isinstance(data, dict) and saved is not None:
+        data[ROW_VERSION_KEY] = saved["data"].get(ROW_VERSION_KEY, 0)
+    return saved
 
 
 # NOTE: _exports_root() is defined once, near the top of this file (it must
@@ -1225,6 +1319,9 @@ def hide_internal_records_from_customers() -> dict:
     internal_hidden = 0
     needs_decision: list[dict] = []
     skipped_protected: list[int] = []
+    # Rows that changed underneath this sweep and were left alone rather than
+    # overwritten (Phase 0B-2 compare-and-swap).
+    skipped_stale: list[int] = []
     for row in rows:
         pid = int(row["id"])
         name = row["name"] or ""
@@ -1260,15 +1357,40 @@ def hide_internal_records_from_customers() -> dict:
             internal_record=bool(vis.get("internal_record")),
             system_test=bool(vis.get("system_test")),
         )
-        conn.execute(
-            "UPDATE projects SET user_saved=0, system_test=?, temporary=1, data=? "
-            "WHERE id=?",
-            (
-                int(bool(vis.get("system_test")) or bool(row["system_test"])),
-                json.dumps(data),
-                pid,
-            ),
-        )
+        # This sweep reads every row up front, then writes in a loop, so a
+        # build running concurrently could have written between the two.
+        # Compare-and-swap on the version read with the row: skip anything
+        # that moved rather than clobbering newer state (Phase 0B-2).
+        try:
+            row_version = int(row["version"] or 0)
+        except (IndexError, KeyError, TypeError):
+            row_version = None
+        stamped = dict(data)
+        stamped.pop(ROW_VERSION_KEY, None)
+        if row_version is None:
+            cur = conn.execute(
+                "UPDATE projects SET user_saved=0, system_test=?, temporary=1, data=? "
+                "WHERE id=?",
+                (
+                    int(bool(vis.get("system_test")) or bool(row["system_test"])),
+                    json.dumps(stamped),
+                    pid,
+                ),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE projects SET user_saved=0, system_test=?, temporary=1, data=?, "
+                "version=version+1 WHERE id=? AND version=?",
+                (
+                    int(bool(vis.get("system_test")) or bool(row["system_test"])),
+                    json.dumps(stamped),
+                    pid,
+                    row_version,
+                ),
+            )
+        if cur.rowcount == 0:
+            skipped_stale.append(pid)
+            continue
         hidden_ids.append(pid)
         if vis.get("system_test"):
             test_hidden += 1
@@ -1283,4 +1405,5 @@ def hide_internal_records_from_customers() -> dict:
         "internal_hidden": internal_hidden,
         "needs_decision": needs_decision,
         "skipped_protected": skipped_protected,
+        "skipped_stale": skipped_stale,
     }

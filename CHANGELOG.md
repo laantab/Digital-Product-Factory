@@ -5,6 +5,59 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.11 — 2026-09-14
+
+**Upgrade 0, Phase 0B-2: two things saving the same project at once can no longer erase each other's work.**
+
+### What changed
+
+- **Each project now carries a version number that goes up every time it
+  is saved.** When the Factory saves, it checks that nobody else saved
+  first. If someone did, the save is refused instead of quietly wiping
+  out the newer work.
+
+### What was fixed
+
+- **A save could silently erase newer work.** Everything about a project
+  — its chapters, its quality findings, what has been paid for — is
+  stored together as one record, and saving replaced that whole record.
+  Anything holding an older copy would overwrite whatever had been saved
+  in the meantime. This is exactly what went wrong in 1.7.9, where a
+  failure step wrote back an older copy and erased chapters that had
+  already been written and paid for.
+- This lands now, ahead of the rest of the Upgrade 0 work, because the
+  planned background worker will be a second thing saving projects. What
+  used to be an occasional bug would have become a guaranteed one.
+
+### Do my steps change?
+
+- **No.** Nothing about creating, previewing, approving or downloading a
+  product changes. This only affects what happens when two saves collide,
+  which previously lost work silently and now does not.
+
+### Release gate
+
+- Targeted proof first: the lost update was reproduced on a throwaway
+  database before the fix (one writer's two chapters erased by another's
+  stale copy), then confirmed prevented afterwards.
+- `tests/test_project_optimistic_concurrency.py` (15 tests) covers the
+  full contract: two readers at the same version, a successful save, a
+  stale save rejected, the first writer's work intact, normal saves
+  unaffected, repeated saves from the same working copy staying
+  protected, freshly built data still saving, the version never being
+  stored inside the record, no silent retry, the 1.7.9 failure shape
+  specifically, APPROVED/LOCKED protections intact, and customer routes
+  unaffected.
+- 106 persistence/lifecycle/orchestrator tests re-run green, then the
+  Fast Stability Gate (160 passed, 698 subtests), then the Full Release
+  Gate.
+- Full Windows release gate: pending this commit's own run.
+- Function Lock: `database.py` is a declared dependency of `ebook` and
+  `saved_projects`, both PROTECTED. No LOCKED function declares it, so
+  none needed unlocking.
+
+---
+
 ## 1.7.10 — 2026-09-14
 
 **Found the deeper cause behind this week's build failures: writing a whole book inside one web request was long enough to be killed by the server itself. Chapters are now written one at a time, the way every other step already works.**
