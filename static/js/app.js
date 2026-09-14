@@ -7264,22 +7264,25 @@ function renderEbookBuild(status) {
   }
 
   if (s.failed) {
-    // Neutral, final, and honest: the completed work really is saved.
+    // The Factory owns recovery. A stalled stage is never a customer-facing
+    // dead end: Resume Build clears it and continues, it never restarts the
+    // book. Technical wording and blunt failure language stay out of this
+    // screen on purpose.
     root.innerHTML = card(
       `<div data-ebook-build-failed>
          <h2 class="text-xl font-bold text-slate-900">${escapeHtml(bookTitle)}</h2>
          <p class="text-sm text-slate-700 mt-2 mb-4" data-ebook-build-message>${escapeHtml(
-           s.message || "We couldn't finish your ebook. Your completed work has been saved."
+           s.message || "Your project is safely saved. We couldn't complete this step automatically."
          )}</p>
          ${_ebookBuildBar(s.percent)}
          <div class="mt-5 flex flex-wrap gap-2">
-           <button type="button" data-ebook-retry class="btn-primary">Try again</button>
+           <button type="button" data-ebook-resume class="btn-primary">Resume Build</button>
            <button type="button" data-ebook-changes class="${NS_BTN}">Make Changes</button>
          </div>
        </div>`
     );
-    const retry = root.querySelector("[data-ebook-retry]");
-    if (retry) retry.onclick = () => openEbookBuild(pid);
+    const resume = root.querySelector("[data-ebook-resume]");
+    if (resume) resume.onclick = () => resumeEbookBuild(pid);
     const changes = root.querySelector("[data-ebook-changes]");
     if (changes) changes.onclick = () => openEbookWorkspace(pid);
     return;
@@ -7371,7 +7374,7 @@ async function startEbookBuild(fields) {
       body: JSON.stringify({ fields }),
     });
     const pid = started.project_id;
-    if (!pid) throw new Error("We couldn't start your ebook. Please try again.");
+    if (!pid) throw new Error("We couldn't start your ebook. Please check the fields above.");
     _ebookBuildRemember(pid);
     go("ebook-build");
     renderEbookBuild(started);
@@ -7387,8 +7390,8 @@ async function startEbookBuild(fields) {
     if (out) {
       out.innerHTML = card(
         `<p class="text-rose-600 text-sm font-medium mb-2">${escapeHtml(e.message || String(e))}</p>
-         <p class="text-sm text-slate-600 mb-3">Check the fields above, then try again.</p>
-         <button id="factoryRetryBtn" class="btn-primary">Try again</button>`
+         <p class="text-sm text-slate-600 mb-3">Check the fields above, then start your ebook again.</p>
+         <button id="factoryRetryBtn" class="btn-primary">Start My Ebook</button>`
       );
       const retry = document.getElementById("factoryRetryBtn");
       if (retry) retry.onclick = () => runProduct();
@@ -7416,6 +7419,33 @@ async function openEbookBuild(projectId) {
         `<p class="text-sm text-slate-700">We couldn't open this ebook right now. Your work is saved.</p>`
       );
     }
+    return;
+  }
+  if (runToken !== _ebookBuildRun) return;
+  renderEbookBuild(status);
+  if (!status.finished && !status.failed) {
+    await _ebookBuildLoop(projectId, runToken);
+  }
+}
+
+//: The customer's explicit "Resume Build" action after a stalled stage.
+//: Distinct from reopening: reopening only reads status, so once a build had
+//: failed it would just show the same failed screen again. Resume tells the
+//: server to clear that one stalled stage's attempt count, then continues the
+//: same checkpoint loop reopening uses -- it never restarts the book and
+//: never re-runs a stage that already completed.
+async function resumeEbookBuild(projectId) {
+  if (!projectId) return;
+  const root = document.getElementById("ebookBuildRoot");
+  const btn = root ? root.querySelector("[data-ebook-resume]") : null;
+  setBusyEl(btn, true);
+  const runToken = _ebookBuildRun;
+  let status;
+  try {
+    status = await api(`/ebook/build/${projectId}/resume`, { method: "POST", body: "{}" });
+  } catch (e) {
+    setBusyEl(btn, false);
+    toast("We couldn't reach the Factory. Your project is safely saved -- please try Resume Build again.", "error");
     return;
   }
   if (runToken !== _ebookBuildRun) return;

@@ -90,7 +90,7 @@ MSG_WORKING = "Preparing your ebook"
 MSG_READY = "Your ebook is ready"
 MSG_RESUMED = "We're continuing from your last completed step."
 MSG_RETRY = "We couldn't complete this step yet. The Factory saved your progress and will try again."
-MSG_FINAL = "We couldn't finish your ebook. Your completed work has been saved."
+MSG_FINAL = "Your project is safely saved. We couldn't complete this step automatically."
 MSG_MANUSCRIPT_READY = "Your manuscript is written and ready to read."
 
 
@@ -801,6 +801,55 @@ def advance_build(project_id: int) -> dict:
         state["updated_at"] = _now()
         database.update_project(project_id, None, data)
         return status_payload(data, project_id)
+
+
+def resume_build(project_id: int) -> dict:
+    """The customer's explicit "Resume Build" action.
+
+    This is distinct from the poller's automatic per-checkpoint retries: those
+    stop on their own once a stage exhausts MAX_STAGE_ATTEMPTS and the build
+    reports failed, which used to leave the customer at a dead end with no way
+    forward. Resume clears that one stalled stage's attempt count and hands the
+    build straight back to advance_build's normal checkpoint loop -- it never
+    runs a stage itself.
+
+    Nothing here touches a stage that already validated, so no completed work
+    is redone: research/title/outline stay approved, and inside the manuscript
+    stage specifically, already-accepted chapters are never regenerated or
+    re-billed (services.ebook_project_workspace.execute_generate_manuscript
+    reloads and skips them). Resume only ever gives the one stalled stage a
+    fresh set of attempts.
+    """
+    import database
+
+    project = database.get_project(project_id)
+    if not project:
+        return {"ok": False, "message": MSG_FINAL, "finished": False, "failed": True}
+
+    data = dict(project.get("data") or {})
+    data["_project_id"] = project_id
+    state = build_state(data)
+
+    stage = next_incomplete_stage(data)
+    if stage is None:
+        # Finished by the time the customer clicked Resume; nothing to do.
+        state["failed"] = False
+        state["updated_at"] = _now()
+        database.update_project(project_id, None, data)
+        return status_payload(data, project_id)
+
+    rec = _stage_record(state, stage)
+    if rec.get("status") != COMPLETE:
+        rec["status"] = NOT_STARTED
+        rec["attempts"] = 0
+        rec["running_since"] = 0
+        rec["error"] = ""
+    state["failed"] = False
+    state["customer_message"] = MSG_RESUMED
+    state["updated_at"] = _now()
+    database.update_project(project_id, None, data)
+    log.info("build %s stage %s resumed by customer action", project_id, stage)
+    return status_payload(data, project_id)
 
 
 def status_payload(data: dict, project_id: int) -> dict:

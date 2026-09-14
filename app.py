@@ -3844,6 +3844,22 @@ def ebook_build_advance_route(project_id: int):
         return _customer_error(exc, 500, log="ebook build advance failed")
 
 
+@app.post("/ebook/build/<int:project_id>/resume")
+def ebook_build_resume_route(project_id: int):
+    """The customer's explicit Resume Build action after a stalled stage.
+
+    Distinct from /advance: this clears the one stalled stage's attempt count
+    so the normal checkpoint loop can continue, instead of running a stage
+    itself. See services.ebook_build_orchestrator.resume_build.
+    """
+    try:
+        from services.ebook_build_orchestrator import resume_build
+
+        return jsonify(resume_build(project_id))
+    except Exception as exc:  # noqa: BLE001
+        return _customer_error(exc, 500, log="ebook build resume failed")
+
+
 @app.get("/ebook/build/<int:project_id>/status")
 def ebook_build_status_route(project_id: int):
     """Read-only progress for the customer's screen."""

@@ -5,6 +5,70 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.6 — 2026-09-13
+
+**A stalled ebook build no longer strands a paying customer. "Try again" is gone — the Factory now offers Resume Build, and Resume Build actually works.**
+
+### What changed
+
+- **"Try again" is gone.** A stalled one-click ebook build now offers
+  **Resume Build** and **Make Changes** instead — no technical wording, no
+  dead-end button.
+- **Resume Build actually resumes.** It gives the one stalled step a fresh
+  chance and continues the build from exactly where it stopped, using the
+  Factory's existing, unchanged checkpoint system.
+
+### What was fixed
+
+- **A live customer build of "Container Gardening for Beginners" stopped at
+  30% and stayed stuck**, showing "We couldn't finish your ebook" with a
+  "Try again" button that did nothing. Two real defects caused this, both
+  now fixed:
+  - Once a build stage failed three times, the Factory never gave it another
+    chance — every later attempt failed instantly without even trying,
+    forever.
+  - The "Try again" button only re-checked status; it never actually asked
+    the Factory to continue the build. Clicking it repeatedly just showed
+    the same stuck screen.
+- **A new "Resume Build" action replaces "Try again"** and genuinely works:
+  it gives the one stalled step a fresh chance and continues the build from
+  exactly where it stopped. Nothing already finished is redone, and nothing
+  already paid for is charged again — the chapters the Factory had already
+  written stay written.
+- **The wording on a stalled build changed**: "Your project is safely saved.
+  We couldn't complete this step automatically," with "Resume Build" and
+  "Make Changes" as the two things you can do next. No technical language.
+
+### Do my steps change?
+
+- **No.** A one-click build looks and works the same when everything
+  succeeds. This only changes what happens on the rare step that needs a
+  second try, and there is nothing to figure out — one button, and the
+  Factory picks up where it left off.
+
+### Release gate
+
+- Fast Stability Gate: 160 passed, 660 subtests, zero paid calls.
+- Full Windows release gate: 1868 passed, 946 subtests passed, 0 real
+  failures (one VERSION-bump-required failure was expected and resolved by
+  this entry).
+- New tests: `tests/test_ebook_build_resume_recovery.py` (17 tests) — proves
+  a stalled build cannot advance on its own, Resume Build clears the stalled
+  step without ever calling a stage runner (no paid call, no regeneration),
+  Resume followed by the normal poll makes real progress, a transient
+  failure still recovers automatically with no customer action at all, and
+  a normal successful build is unaffected.
+- Function Lock: `word_search`, `crossword`, `coloring_book`, and
+  `invite_protection` were explicitly UNLOCKED for this change because they
+  share `static/js/app.js` / `app.py` with the fix; all four had their own
+  protected tests re-run green and were relocked at this release's commit.
+  `ebook` (PROTECTED, not LOCKED) gained `services/ebook_build_orchestrator.py`,
+  `services/ebook_project_workspace.py`, and `services/ebook_manuscript_engine.py`
+  as declared, real shared dependencies — they always were, this just makes
+  the registry tell the truth about it.
+
+---
+
 ## 1.7.5 — 2026-09-12
 
 **Coloring Book covers now get a final quality check before a book is considered finished, and the free-photo-first policy is extended to Word Search and Crossword covers.**

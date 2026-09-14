@@ -4,7 +4,7 @@
   "functions": {
     "word_search": {
       "display_name": "Word Search",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "ab6b923",
       "factory_version": "1.7.5",
       "protected_test_files": [
@@ -26,15 +26,15 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Claude Sonnet 5",
-      "relocked_after_tests": "tests/test_word_search_topic_scope_contract.py, tests/test_universal_topic_puzzle_engine.py, tests/test_word_search_short_topic_repair.py, tests/test_word_search_stability.py (all passing, unchanged), tests/test_cover_source_policy.py (33 tests, proves Word Search genuinely attempts Pexels and falls back correctly), Fast Stability Gate (160 passed, 666 subtests, x2 independent runs), full Windows release gate (2804 tests, 0 failures, x2 independent runs on 2026-09-12 and 2026-09-13).",
+      "unlocked_by": "Claude Sonnet 5",
+      "unlocked_reason": "2026-09-13: static/js/app.js (a declared shared dependency) is being edited to fix the live ebook build-failure dead end (the 'Try again' button never called /advance again once a build had failed). Word Search's own code and tests are untouched; unlocking only because it shares this file. Will relock once Word Search's protected tests are proven green after the edit.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "The customer-facing route had never used the shared topic engine, in any release, until a021385. No earlier commit is a valid last-known-good for this route. Relocked at ab6b923 (2026-09-13): Word Search's cover now genuinely attempts Pexels first (via is_photo_realistic_cover), falling back to the existing AI path unchanged when no suitable photo is found. Word Search's puzzle-generation/topic-vocabulary behavior is untouched."
     },
     "coloring_book": {
       "display_name": "Coloring Book",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "ab6b923",
       "factory_version": "1.7.5",
       "protected_test_files": [
@@ -57,15 +57,15 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Claude Sonnet 5",
-      "relocked_after_tests": "tests/test_coloring_book_interior_no_text_contract.py, tests/test_coloring_book_sea_creatures_customer_path.py, tests/test_coloring_book_local_fallback_theme_classification.py (all passing, unchanged), tests/test_coloring_book_final_cover_qa.py (13 tests, new final-cover QA gate), tests/test_cover_qa_contract_map.py (9 tests), Fast Stability Gate (160 passed, 666 subtests, x2 independent runs), full Windows release gate (2804 tests, 0 failures, x2 independent runs on 2026-09-12 and 2026-09-13).",
+      "unlocked_by": "Claude Sonnet 5",
+      "unlocked_reason": "2026-09-13: static/js/app.js (a declared shared dependency) is being edited to fix the live ebook build-failure dead end (the 'Try again' button never called /advance again once a build had failed). Coloring Book's own code and tests are untouched; unlocking only because it shares this file. Will relock once Coloring Book's protected tests are proven green after the edit.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "LOCKED for the captions-off/no-text contract proven at 984b268. Relocked at ab6b923 (2026-09-13): the automatic build previously had NO final-cover QA at all -- a real gap, now closed by services/coloring_book/final_cover_qa.py, a small adapter that reads the actual rendered PDF page back and blocks on a missing title, placeholder/gibberish text, malformed characters, or an unrecognized cover source. Coloring Book itself still never attempts Pexels (explicitly excluded by product type in cover_agent.py, since its cover must stay branded illustrated artwork, not a photograph). Seven pre-existing *_LOCKED_STATE.md files (2026-07-11/07-12) claimed the captions-off behavior; their manual test theme ('Farm House') never exercised the one illustration branch (_draw_generic_scene) that had the defect, and none were machine-checked. Those files are historical record now, not the source of truth -- this entry is. A separate, unrelated pair of crash bugs was found in _draw_fantasy (dragon/castle themes) during the 984b268 fix and is flagged separately (not part of this lock)."
     },
     "crossword": {
       "display_name": "Crossword",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "ab6b923",
       "factory_version": "1.7.5",
       "protected_test_files": [
@@ -88,15 +88,15 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Claude Sonnet 5",
-      "relocked_after_tests": "tests/test_crossword_scope_answerkey_zip_repair.py, tests/test_universal_topic_puzzle_engine.py, tests/test_crossword_customer_options_restored.py, tests/test_crossword_cover_selection_repair.py, tests/test_crossword_controlled_repair.py (all passing, unchanged), tests/test_cover_source_policy.py (33 tests, proves Crossword genuinely attempts Pexels and falls back correctly), Fast Stability Gate (160 passed, 666 subtests, x2 independent runs), full Windows release gate (2804 tests, 0 failures, x2 independent runs on 2026-09-12 and 2026-09-13).",
+      "unlocked_by": "Claude Sonnet 5",
+      "unlocked_reason": "2026-09-13: static/js/app.js (a declared shared dependency) is being edited to fix the live ebook build-failure dead end (the 'Try again' button never called /advance again once a build had failed). Crossword's own code and tests are untouched; unlocking only because it shares this file. Will relock once Crossword's protected tests are proven green after the edit.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "The only generator formally enrolled in PROTECTED_GENERATOR_RULE.md before 2026-09-12. e81298e is the commit that both created the shared topic engine and fixed Crossword's topic-scope contamination and dropped-answer-key defects (2026-09-09). Relocked at ab6b923 (2026-09-13): Crossword's cover now genuinely attempts Pexels first (via is_photo_realistic_cover), falling back to the existing AI path unchanged when no suitable photo is found. Crossword's puzzle-generation/topic-vocabulary behavior is untouched."
     },
     "invite_protection": {
       "display_name": "Invite protection",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "0a9a713",
       "factory_version": "1.7.1",
       "protected_test_files": [
@@ -108,8 +108,8 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
+      "unlocked_by": "Claude Sonnet 5",
+      "unlocked_reason": "2026-09-13: app.py (declared as a whole shared dependency, since the invite gate is a single before_request hook there) is being edited to add the new POST /ebook/build/<id>/resume route for the ebook build-failure fix. The invite gate hook itself is untouched. Will relock once tests/test_invite_gate.py and tests/test_render_persistence_patch.py are proven green after the edit.",
       "relocked_by": null,
       "relocked_after_tests": null,
       "notes": "Self-contained in app.py's single before_request hook -- no shared dependency on static/js/app.js (the gate is server-rendered, no fetch/JS involvement). 14+2 real behavioral tests: gate on/off, cookie/header/query admission, wrong-code refusal (never echoed), exemptions, admin routes gated too."
@@ -146,7 +146,9 @@
         "tests/test_ebook_customer_path.py",
         "tests/test_ebook_real_browser_customer_path.py",
         "tests/test_ebook_saved_projects_visibility.py",
-        "tests/test_saved_projects_reopen_build.py"
+        "tests/test_saved_projects_reopen_build.py",
+        "tests/test_ebook_build_browser_routing.py",
+        "tests/test_ebook_build_resume_recovery.py"
       ],
       "shared_code_dependencies": [
         "services/ebook_package.py",
@@ -159,7 +161,10 @@
         "services/cover_quality_agent.py",
         "services/cover_source_policy.py",
         "services/ebook_photo_cover.py",
-        "services/ebook_pexels.py"
+        "services/ebook_pexels.py",
+        "services/ebook_build_orchestrator.py",
+        "services/ebook_project_workspace.py",
+        "services/ebook_manuscript_engine.py"
       ],
       "fast_gate": true,
       "full_gate": true,
@@ -167,7 +172,7 @@
       "unlocked_reason": null,
       "relocked_by": null,
       "relocked_after_tests": null,
-      "notes": "Largest test family in the Factory (~31 files in tests/acceptance_manifest.json), but only 1-2 run in the Fast Gate. No single commit has been formally proven as this function's customer-path last-known-good -- not LOCKED until one is. 2026-09-12: added the Global Cover Policy files -- Ebook's cover is the primary product this policy applies to, and it also has its own separate guided Pexels/upload cover system (ebook_photo_cover.py/ebook_pexels.py) which shares Pexels infrastructure with cover_source_policy.py."
+      "notes": "Largest test family in the Factory (~31 files in tests/acceptance_manifest.json), but only 1-2 run in the Fast Gate. No single commit has been formally proven as this function's customer-path last-known-good -- not LOCKED until one is. 2026-09-12: added the Global Cover Policy files -- Ebook's cover is the primary product this policy applies to, and it also has its own separate guided Pexels/upload cover system (ebook_photo_cover.py/ebook_pexels.py) which shares Pexels infrastructure with cover_source_policy.py. 2026-09-13: added services/ebook_build_orchestrator.py, services/ebook_project_workspace.py and services/ebook_manuscript_engine.py -- the One-Click Build state machine and its resume/idempotency logic -- as real, previously-undeclared shared dependencies; a live production build got stuck at a 'Try again' dead end because of two bugs in this exact code, fixed this session (see tests/test_ebook_build_resume_recovery.py). Still PROTECTED, not LOCKED: no single commit had been proven as this function's customer-path last-known-good before this fix either, so this does not change that classification."
     },
     "math_worksheet": {
       "display_name": "Math Worksheet",
