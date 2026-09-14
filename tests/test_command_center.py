@@ -154,6 +154,98 @@ def test_function_lock_matrix_renders_on_the_page(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Competitive Upgrade Roadmap (2026-09-12)
+# ---------------------------------------------------------------------------
+
+def _write_roadmap(path, *, current="upgrade_1_cover_system"):
+    path.write_text(json.dumps({
+        "current_upgrade": current,
+        "upgrade_order": ["upgrade_1_cover_system", "upgrade_2_interior_themes"],
+        "standing_priority": "QUALITY before more product types.",
+        "upgrades": {
+            "upgrade_1_cover_system": {
+                "number": 1, "name": "Global Professional Cover System",
+                "status": "VERIFYING", "status_detail": "Gates running.",
+                "next_step": "Report the Full Release Gate result.",
+                "dependencies": [], "affected_products_functions": ["ebook"],
+            },
+            "upgrade_2_interior_themes": {
+                "number": 2, "name": "Designrr-Quality Interior Themes and Templates",
+                "status": "NOT_STARTED", "status_detail": "Waiting on Upgrade 1.",
+                "next_step": "Do not begin until Upgrade 1 is COMPLETE_LOCKED.",
+                "dependencies": ["upgrade_1_cover_system"], "affected_products_functions": [],
+            },
+        },
+    }), encoding="utf-8")
+
+
+def test_roadmap_loads_current_upgrade_and_preserves_order(tmp_path, monkeypatch):
+    roadmap_file = tmp_path / "roadmap.json"
+    _write_roadmap(roadmap_file)
+    monkeypatch.setattr(status, "ROADMAP_FILE", roadmap_file)
+
+    roadmap = status.load_roadmap()
+    assert roadmap["current_upgrade"] == "upgrade_1_cover_system"
+    assert roadmap["current"]["name"] == "Global Professional Cover System"
+    assert [u["key"] for u in roadmap["upgrades"]] == [
+        "upgrade_1_cover_system", "upgrade_2_interior_themes",
+    ]
+    assert roadmap["upgrades"][1]["dependencies"] == ["upgrade_1_cover_system"]
+
+
+def test_missing_roadmap_file_does_not_crash(tmp_path, monkeypatch):
+    monkeypatch.setattr(status, "ROADMAP_FILE", tmp_path / "missing.json")
+    roadmap = status.load_roadmap()
+    assert roadmap["current"] is None
+    assert roadmap["upgrades"] == []
+    context = status.build_context()  # must not raise
+    assert context["roadmap"]["upgrades"] == []
+
+
+def test_roadmap_main_screen_shows_only_current_upgrade_status_and_next_step(tmp_path, monkeypatch):
+    """The START HERE screen must stay uncluttered: only the current upgrade,
+    its status, and one next step -- not every upgrade's detail."""
+    roadmap_file = tmp_path / "roadmap.json"
+    _write_roadmap(roadmap_file)
+    monkeypatch.setattr(status, "ROADMAP_FILE", roadmap_file)
+
+    client = cc_app.test_client()
+    body = client.get("/").get_data(as_text=True)
+    assert "Competitive Upgrade Roadmap" in body
+    assert "Global Professional Cover System" in body
+    assert "Report the Full Release Gate result." in body
+    # The main next-step text appears once at the top; the full table (with
+    # this same text repeated as a status_detail row) lives in View Details --
+    # so this just confirms the summary card rendered, not that it is unique.
+
+
+def test_roadmap_detail_table_lists_every_upgrade_with_dependencies(tmp_path, monkeypatch):
+    roadmap_file = tmp_path / "roadmap.json"
+    _write_roadmap(roadmap_file)
+    monkeypatch.setattr(status, "ROADMAP_FILE", roadmap_file)
+
+    client = cc_app.test_client()
+    body = client.get("/").get_data(as_text=True)
+    assert "Designrr-Quality Interior Themes and Templates" in body
+    assert "upgrade 1 cover system" in body.lower()  # rendered dependency, underscores replaced
+
+
+def test_roadmap_survives_a_restart_reading_only_the_file(tmp_path, monkeypatch):
+    """Same durability contract as handoff_status.json: nothing but the file
+    on disk persists the roadmap between sessions."""
+    roadmap_file = tmp_path / "roadmap.json"
+    _write_roadmap(roadmap_file, current="upgrade_2_interior_themes")
+    monkeypatch.setattr(status, "ROADMAP_FILE", roadmap_file)
+
+    on_disk = json.loads(roadmap_file.read_text(encoding="utf-8"))
+    assert on_disk["current_upgrade"] == "upgrade_2_interior_themes"
+
+    reloaded = status.load_roadmap()
+    assert reloaded["current_upgrade"] == "upgrade_2_interior_themes"
+    assert reloaded["current"]["name"] == "Designrr-Quality Interior Themes and Templates"
+
+
+# ---------------------------------------------------------------------------
 # Durability
 # ---------------------------------------------------------------------------
 

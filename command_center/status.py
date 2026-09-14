@@ -28,6 +28,7 @@ ROOT = HERE.parent
 HANDOFF_FILE = HERE / "handoff_status.json"
 COMPONENT_VERSIONS_FILE = HERE / "component_versions.json"
 FUNCTION_LOCK_REGISTRY_FILE = HERE / "function_lock_registry.json"
+ROADMAP_FILE = HERE / "roadmap.json"
 GATE_JUNIT_FILE = ROOT / "test-results" / "factory-junit.xml"
 
 #: The name CLAUDE.md says this checkout must have, and the branch every
@@ -137,6 +138,50 @@ def load_function_lock_registry() -> list[dict[str, Any]]:
     order = {"LOCKED": 0, "UNLOCKED": 1, "REGRESSION": 2, "PROTECTED": 3, "UNPROTECTED": 4}
     rows.sort(key=lambda r: (order.get(r["status"], 9), r["display_name"]))
     return rows
+
+
+def load_roadmap() -> dict[str, Any]:
+    """The durable Digital Product Factory Pro Competitive Upgrade Roadmap.
+
+    See ``command_center/roadmap.json``'s own ``schema_note`` for the full
+    strategic context. Never raises; a missing or malformed roadmap file
+    yields a safe empty structure so the Command Center still renders.
+    """
+    data = _load_json_safe(ROADMAP_FILE, {})
+    if not isinstance(data, dict):
+        return {"current_upgrade": None, "current": None, "upgrades": [], "order": []}
+    upgrades_raw = data.get("upgrades") if isinstance(data.get("upgrades"), dict) else {}
+    order = data.get("upgrade_order") if isinstance(data.get("upgrade_order"), list) else list(upgrades_raw)
+    upgrades: list[dict[str, Any]] = []
+    for key in order:
+        entry = upgrades_raw.get(key)
+        if not isinstance(entry, dict):
+            continue
+        upgrades.append({
+            "key": key,
+            "number": entry.get("number"),
+            "name": entry.get("name") or key,
+            "status": entry.get("status") or "NOT_STARTED",
+            "status_detail": entry.get("status_detail") or "",
+            "next_step": entry.get("next_step") or "",
+            "objective": entry.get("objective") or "",
+            "gap_remaining": entry.get("gap_remaining") or "",
+            "dependencies": entry.get("dependencies") or [],
+            "affected_products_functions": entry.get("affected_products_functions") or [],
+            "function_lock_impact": entry.get("function_lock_impact") or "",
+            "fast_gate_requirement": bool(entry.get("fast_gate_requirement")),
+            "full_gate_requirement": bool(entry.get("full_gate_requirement")),
+            "live_verification_required": bool(entry.get("live_verification_required")),
+        })
+    current_key = data.get("current_upgrade")
+    current = next((u for u in upgrades if u["key"] == current_key), None)
+    return {
+        "current_upgrade": current_key,
+        "current": current,
+        "upgrades": upgrades,
+        "standing_priority": data.get("standing_priority") or "",
+        "updated_at": data.get("updated_at"),
+    }
 
 
 def load_gate_result() -> dict[str, Any] | None:
@@ -294,6 +339,11 @@ def build_context() -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         log.warning("Command Center: function lock registry failed: %s", exc)
         function_locks = []
+    try:
+        roadmap = load_roadmap()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Command Center: roadmap failed: %s", exc)
+        roadmap = {"current_upgrade": None, "current": None, "upgrades": [], "standing_priority": "", "updated_at": None}
 
     completed_buckets = bucket_completed_log(handoff.get("completed_log", []))
     latest_completed = completed_buckets[0] if completed_buckets else None
@@ -309,6 +359,7 @@ def build_context() -> dict[str, Any]:
         "latest_completed": latest_completed,
         "recent_handoffs": recent_handoffs,
         "function_locks": function_locks,
+        "roadmap": roadmap,
         "root": str(ROOT),
         "expected_folder_name": EXPECTED_FOLDER_NAME,
         "expected_branch": EXPECTED_BRANCH,

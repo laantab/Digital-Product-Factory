@@ -122,6 +122,17 @@
     {% endif %}
   </div>
 
+  {% if roadmap.current %}
+  <div class="next-card">
+    <h2><span class="badge next">Roadmap</span>Competitive Upgrade Roadmap</h2>
+    <p class="step">Upgrade {{ roadmap.current.number }} of 6 &mdash; {{ roadmap.current.name }}
+      <span class="badge {{ 'completed' if roadmap.current.status == 'COMPLETE_LOCKED' else ('blocked' if roadmap.current.status == 'BLOCKED' else 'open') }}">{{ roadmap.current.status.replace('_', ' ') }}</span>
+    </p>
+    <p class="hint"><strong>Next step:</strong> {{ roadmap.current.next_step }}</p>
+    <div class="env-pill">USE CLAUDE {{ "CODE" if handoff.next_claude != "web" else "WEB" }}</div>
+  </div>
+  {% endif %}
+
   <div class="card">
     <h2>1. What I was working on</h2>
     <p>{{ handoff.current_task }}</p>
@@ -204,6 +215,30 @@ Read the newest SESSION_HANDOFF_*.md in the Factory-v1.3 root before doing anyth
     {% for key, c in components.items() %}
       {% if c.notes %}<p class="hint"><strong>{{ key.replace('_', ' ') }}:</strong> {{ c.notes }}</p>{% endif %}
     {% endfor %}
+
+    <h3 class="detail-h">Competitive Upgrade Roadmap</h3>
+    {% if roadmap.upgrades %}
+    <p class="hint">{{ roadmap.standing_priority }}</p>
+    <table class="versions">
+      <tr><th>#</th><th>Upgrade</th><th>Status</th><th>Depends on</th><th>Next step</th></tr>
+      {% for u in roadmap.upgrades %}
+      <tr>
+        <td>{{ u.number }}</td>
+        <td>{{ u.name }}{% if u.key == roadmap.current_upgrade %} <span class="badge next">current</span>{% endif %}</td>
+        <td><span class="badge {{ 'completed' if u.status == 'COMPLETE_LOCKED' else ('blocked' if u.status == 'BLOCKED' else ('next' if u.status in ('IN_PROGRESS', 'VERIFYING') else 'open')) }}">{{ u.status.replace('_', ' ') }}</span></td>
+        <td>{{ u.dependencies | map('replace', '_', ' ') | join(', ') if u.dependencies else "—" }}</td>
+        <td class="hint">{{ u.next_step }}</td>
+      </tr>
+      {% if u.status_detail %}
+      <tr><td colspan="5" class="hint">&nbsp;&nbsp;{{ u.status_detail }}</td></tr>
+      {% endif %}
+      {% endfor %}
+    </table>
+    <p class="hint">Source of truth: <code>command_center/roadmap.json</code> — full objective, gap,
+      affected functions, and acceptance criteria per upgrade live there.</p>
+    {% else %}
+      <p class="hint">No roadmap found.</p>
+    {% endif %}
 
     <h3 class="detail-h">Function Lock Matrix</h3>
     {% if function_locks %}
