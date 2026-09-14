@@ -1762,20 +1762,42 @@ def _cover_image_regen_attempts(cover: dict) -> int:
 def regenerate_cover_image(cover: dict, package_id: str) -> tuple[dict, str | None]:
     """Generate cover PNG and refresh HTML. Returns (updated_cover, asset_url).
 
-    GLOBAL COVER POLICY (2026-09-12): PEXELS FIRST, paid AI only as fallback.
-    Scoped to Ebook only for this pass -- Word Search, Crossword, and Coloring
-    Book keep this function's prior AI-only behavior completely unchanged;
-    see services/cover_source_policy.py's module docstring for why extending
-    this further is a deliberate, separate decision, not part of this change.
+    GLOBAL COVER POLICY (2026-09-12, extended 2026-09-12): PEXELS FIRST, paid
+    AI only as fallback. Applies to Ebook (when its analyzed style is
+    photo-realistic, not graphic/icon), Word Search, and Crossword. It does
+    NOT apply to a Black-History-topic cover (``is_black_history_topic``)
+    regardless of product, because generic Pexels stock photography cannot
+    satisfy this Factory's specific, safety-reviewed requirements for
+    respectful representation, subject count, and composition -- those
+    covers go straight to the existing, heavily-tuned AI path, unchanged.
+
+    It also never applies to Coloring Book, EXPLICITLY (an ``engine_type``
+    check, not left to ``is_photo_realistic_cover`` alone): that classifier
+    defaults to "photo_realistic" for any topic that does not hit its
+    worksheet/report-style graphic keywords, which most coloring-book themes
+    (a dragon, a farm animal, a fairy tale) would not -- so relying on it
+    alone would have let a real photograph replace what needs to stay
+    branded illustrated artwork matching the interior character style. This
+    was found and fixed via ``tests/test_cover_source_policy.py`` before
+    shipping, not assumed. See services/cover_source_policy.py's module
+    docstring for the full reasoning and for Faith/Budget Planner, which use
+    a separate cover engine with the same quality gate wired in there
+    instead.
     """
     from services.cover_quality_agent import evaluate_cover_image_vision_qc
 
-    from services.ebook_package import render_visual_image
+    from services.ebook_package import paid_image_generation_authorized, render_visual_image
 
     pkg = package_id or cover.get("package_id") or ""
     engine_type = str((cover.get("topic_analysis") or {}).get("product_type") or "")
+    attempt_pexels = (
+        bool(pkg)
+        and engine_type != "coloring_book"
+        and is_photo_realistic_cover(cover)
+        and not is_black_history_topic(cover)
+    )
 
-    if engine_type == "ebook" and pkg:
+    if attempt_pexels:
         from services.cover_source_policy import try_pexels_first_cover
 
         pexels_cover, pexels_url = try_pexels_first_cover(cover, pkg)
@@ -1786,6 +1808,8 @@ def regenerate_cover_image(cover: dict, package_id: str) -> tuple[dict, str | No
 
     max_attempts = _cover_image_regen_attempts(cover)
     url: str | None = None
+    paid_ai_attempted = False
+    paid_ai_used = False
 
     for attempt in range(max_attempts):
         extra: dict[str, Any] = {"use_ai_image": True, "text_overlay": True}
@@ -1892,7 +1916,22 @@ def regenerate_cover_image(cover: dict, package_id: str) -> tuple[dict, str | No
             ).strip()
         cover = update_cover_design(cover, extra, package_id=pkg)
         prompt = (cover.get("image_prompt") or "").strip()
-        url = render_visual_image(pkg, "cover", prompt, size=COVER_IMAGE_SIZE) if pkg and prompt else None
+        if pkg and prompt:
+            paid_ai_attempted = True
+            # A pre-existing PNG (e.g. the cover fingerprint/dedup path skipped
+            # a real call, or a prior successful attempt already wrote one)
+            # means a truthy result here carries no NEW cost -- only count a
+            # call as billable when it is genuinely fresh AND the AI pipeline's
+            # own authorization gate (services.ebook_package.
+            # paid_image_generation_authorized) says a real provider call was
+            # permitted to run. This is the existing, exposed signal the AI
+            # pipeline itself uses to gate a real API call -- not a guess.
+            pre_existing = os.path.isfile(_cover_image_path(pkg))
+            url = render_visual_image(pkg, "cover", prompt, size=COVER_IMAGE_SIZE)
+            if url and not pre_existing and paid_image_generation_authorized():
+                paid_ai_used = True
+        else:
+            url = None
         cover = update_cover_design(cover, {"use_ai_image": True, "text_overlay": True}, package_id=pkg)
 
         if not url or max_attempts == 1:
@@ -1904,11 +1943,26 @@ def regenerate_cover_image(cover: dict, package_id: str) -> tuple[dict, str | No
             break
         cover["cover_image_qc"] = qc
 
-    # Track source and paid-AI use regardless of outcome -- an attempt was
-    # made even when it did not produce a usable image, and the existing
-    # pending-cover detection in cover_quality_agent.py already fails that
-    # case clearly rather than silently accepting it.
-    cover["cover_source"] = "ai_fallback" if engine_type == "ebook" else "ai_only"
-    cover["paid_ai_used"] = True
+    # GLOBAL COVER POLICY (2026-09-12, corrected after owner review): source
+    # must reflect what the customer actually RECEIVES, not which branch was
+    # attempted. `_has_cover_image(pkg)` is the ground truth of whether a real
+    # photo/AI image ended up on disk; if not, cover_agent.py's own template
+    # fallback (render_cover_preview_html/render_cover_pdf_html's
+    # should_use_template_cover check, unchanged by this policy) is what the
+    # customer actually sees -- a complete, professional, deterministic cover,
+    # never a blank/pending placeholder, and it is labeled honestly rather
+    # than folded into "ai_fallback"/"ai_only" as if an AI image existed.
+    #
+    # `paid_ai_attempted` records whether the code reached a point where it
+    # tried to call the paid provider at all; `paid_ai_used` is the cost
+    # signal and is true only when a call both ran freshly (not served from
+    # an existing file) and was actually authorized to reach the provider --
+    # never merely because an AI branch was entered before failing locally.
+    if _has_cover_image(pkg):
+        cover["cover_source"] = "ai_fallback" if attempt_pexels else "ai_only"
+    else:
+        cover["cover_source"] = "template_fallback"
+    cover["paid_ai_attempted"] = paid_ai_attempted
+    cover["paid_ai_used"] = paid_ai_used
 
     return cover, url

@@ -13,28 +13,71 @@ DRAFT/APPROVED/LOCKED artifact lifecycle) are unchanged — this module only
 decides the *source* of the cover background image before those existing
 steps run on whatever image was chosen.
 
-Scope of this pass (read the 2026-09-12 audit before extending this further)
+Scope (updated 2026-09-12 — extended per owner approval)
 ------------------------------------------------------------------------------
-Wired into ``services.cover_agent.regenerate_cover_image``, gated to Ebook
-only (``topic_analysis.product_type == "ebook"``). Word Search, Crossword,
-and Coloring Book keep their existing AI-only cover behavior byte-for-byte
-unchanged in this pass — their heavily-tuned, safety-critical AI prompts
-(Black History subject-matter rules, no-crossword-mislabeling, facial-quality
-retries, full-color scene requirements) are not something a generic Pexels
-stock search can satisfy today, and turning this on for them would be a real
-product redesign, not the "smallest safe shared policy" the owner asked for.
-Extending Pexels-first to those products is a deliberate, separate decision.
+Two call sites now share this module:
 
-Ebook's OWN primary cover path today is actually the separate guided
-Pexels/upload flow in ``services/ebook_photo_cover.py`` (see
+1. ``services.cover_agent.regenerate_cover_image`` — applies to Ebook (when
+   its analyzed style is photo-realistic, not graphic/icon), Word Search,
+   and Crossword. Two things are explicitly excluded, for different reasons:
+
+   - A Black-History-topic cover (``is_black_history_topic``), any product,
+     always goes straight to the existing AI path: generic Pexels stock
+     cannot satisfy this Factory's specific, safety-reviewed requirements
+     for respectful representation, subject count, and composition that the
+     AI prompt engineering in ``cover_agent.py`` exists to enforce —
+     accepting a plain stock photo there would be a real
+     quality/appropriateness regression, not a cost saving.
+   - Coloring Book is excluded by an explicit ``engine_type`` check, not by
+     relying on ``is_photo_realistic_cover`` alone. That classifier
+     (``analyze_cover_style``) defaults to "photo_realistic" for any topic
+     that does not hit its worksheet/report-style graphic keywords — which
+     most real coloring-book themes (a dragon, a farm animal, a fairy tale)
+     would not. Relying on the classifier alone would therefore have let a
+     real photograph replace what needs to stay branded illustrated artwork
+     matching the interior character style, for most real topics — this was
+     caught by a test with a realistic coloring-book-shaped cover (not
+     assumed), and fixed with the explicit exclusion.
+2. ``services.planner.cover_photos.auto_cover_photo`` — the unsupervised
+   "let the Factory choose" path for Faith/Budget Planner now runs every
+   candidate through ``evaluate_pexels_candidate`` before accepting it
+   (previously it accepted the first raw result that downloaded and met a
+   bare 900px floor). This part IS wired in and live. Planners' customer-
+   chosen procedural ("painted artwork") cover option is completely
+   untouched either way.
+
+   The paid-AI-fallback half of the policy is deliberately NOT wired in for
+   Faith/Budget Planner. ``services/product.py`` explicitly documents these
+   two products as "deterministic: no AI call, no paid image call, same
+   request in -> same PDF out ... which is why they can carry an
+   Editor-in-Chief verdict at all." Adding a paid AI cover call would break
+   that documented invariant this product family relies on for its quality
+   certification — a real conflict between the newly-requested policy and an
+   existing, deliberate architectural decision, not something to silently
+   resolve either way. ``try_ai_fallback_planner_cover`` below is fully
+   implemented and tested in isolation, ready to wire into
+   ``services/product.py``'s planner cover-choice block in one line, but is
+   not called from anywhere yet, pending the owner's explicit decision.
+
+Ebook's OWN primary cover path is actually a separate guided Pexels/upload
+flow in ``services/ebook_photo_cover.py`` (see
 ``services.ebook_package._collect_image_jobs``'s docstring: "Covers use the
 photo-cover engine"), which has no AI fallback at all. This module does not
-touch that flow. What it does improve is the older, still-reachable Cover
-Editor route (``/cover/*``, ``services/cover_agent.py``), which was
-previously AI-only with no Pexels attempt for any product, Ebook included.
-Adding an AI fallback to the primary guided flow is a larger, separate
-integration (it uses a structurally different PIL-raster rendering engine,
-not this HTML/CSS one) and has not been attempted here.
+touch that flow — bridging it would mean integrating a structurally
+different PIL-raster rendering engine with this HTML/CSS one, a much larger
+project than "smallest safe shared policy," and has not been attempted here.
+What this module does improve is the still-reachable Cover Editor route
+(``/cover/*``, any product) and Word Search's automatic cover-generation
+call (``services.product._build_word_search_cover`` calls
+``regenerate_cover_image_for_cover`` directly during product generation, so
+this is a real, live customer-path improvement, not only an editor-route
+one). Crossword's automatic build deliberately stays image-free
+(``use_ai_image=False``, a pre-existing "do not auto-call AI image
+generation" choice this module does not change) until the customer
+regenerates the cover through the editor, at which point this policy
+applies the same way. Nothing about when each product decides to first
+request an image was changed here — only what happens once a cover image
+is actually requested.
 
 Honesty about what the deterministic gate can and cannot check
 ------------------------------------------------------------------------------
@@ -317,6 +360,7 @@ def try_pexels_first_cover(
                 cover, {"use_ai_image": True, "text_overlay": True}, package_id=package_id,
             )
             updated["cover_source"] = "pexels"
+            updated["paid_ai_attempted"] = False
             updated["paid_ai_used"] = False
             updated["cover_source_note"] = (
                 f"Cover photograph by {photo.get('photographer') or 'Unknown photographer'} via Pexels."
@@ -332,3 +376,91 @@ def try_pexels_first_cover(
         else "Pexels returned no candidates for this topic; falling back to paid AI image generation."
     )
     return None, None
+
+
+# ---------------------------------------------------------------------------
+# Faith Planner / Budget Planner — a separate cover engine, same quality gate
+# ---------------------------------------------------------------------------
+#
+# Planners do not use cover_agent.py at all: they have their own procedural
+# painted-artwork engine (services/planner/cover.py) and their own Pexels
+# search UI (services/planner/cover_photos.py). This section gives that
+# separate engine the SAME real quality/relevance gate
+# (evaluate_pexels_candidate, above) for its unsupervised "let the Factory
+# choose" path, and a paid AI fallback it did not have before -- while
+# leaving the customer's explicit "painted artwork" choice completely
+# untouched (see services/planner/cover_photos.py::auto_cover_photo and
+# services/product.py's planner cover-choice block for the call sites).
+
+
+def build_planner_ai_cover_prompt(*, title: str, planner_type: str, design_theme: str) -> str:
+    """A simple, deterministic image-generation prompt for a planner cover,
+    built from the same theme/title information the Pexels query already
+    uses -- reuses the Factory's existing "background artwork only, no
+    baked-in text" rules so a planner's AI fallback cover behaves like every
+    other AI cover in the Factory (typography added separately, never
+    AI-generated lettering).
+    """
+    from services.cover_agent import AI_BACKGROUND_RULES_COMPACT, COVER_IMAGE_COLOR_RULES
+    from services.planner.cover_photos import build_cover_query
+
+    query = build_cover_query(title, planner_type, design_theme)
+    mood = "warm, reverent devotional" if planner_type == "faith_planner" else "calm, organized desk"
+    return (
+        f"Portrait background artwork for a {mood} planner cover. Theme: {query}. "
+        f"{AI_BACKGROUND_RULES_COMPACT} {COVER_IMAGE_COLOR_RULES} "
+        "Professional, calm, uncluttered composition with plenty of open, "
+        "uncluttered space in the lower third for a title overlay added separately."
+    )[:1000]
+
+
+def try_ai_fallback_planner_cover(
+    *, title: str, planner_type: str, design_theme: str, package_id: str
+) -> dict[str, Any] | None:
+    """Paid AI fallback for a planner cover, used only when the customer
+    explicitly asked for an image cover and no Pexels candidate passed the
+    quality gate. Returns the same asset shape
+    ``services.planner.cover_photos.select_cover_photo``/``auto_cover_photo``
+    already return (``path``, ``attribution``, ...), plus ``source`` and
+    ``paid_ai_used`` so the caller can record them, or None if generation is
+    unavailable or fails -- the caller falls back to the planner's painted
+    artwork exactly as it already does when Pexels is unavailable.
+    """
+    if not package_id:
+        return None
+    try:
+        from services.cover_agent import _cover_image_path
+        from services.ebook_package import paid_image_generation_authorized, render_visual_image
+
+        prompt = build_planner_ai_cover_prompt(
+            title=title, planner_type=planner_type, design_theme=design_theme
+        )
+        path = _cover_image_path(package_id)
+        pre_existing = os.path.isfile(path)
+        url = render_visual_image(package_id, "cover", prompt)
+        if not url:
+            return None
+        if not os.path.isfile(path):
+            return None
+        billable = (not pre_existing) and paid_image_generation_authorized()
+        from PIL import Image
+
+        with Image.open(path) as im:
+            width, height = im.size
+    except Exception as exc:  # noqa: BLE001
+        log.warning("cover_source_policy: planner AI fallback cover failed: %s", exc)
+        return None
+
+    return {
+        "asset_id": "",
+        "path": path,
+        "photographer": "",
+        "attribution": "",
+        "page_url": "",
+        "license_note": "Factory AI-generated artwork.",
+        "width": width,
+        "height": height,
+        "source": "ai_fallback",
+        "paid_ai_attempted": True,
+        "paid_ai_used": billable,
+    }

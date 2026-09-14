@@ -63,7 +63,15 @@ def _jpeg_bytes(size=(1400, 2000), color=(96, 128, 168)) -> bytes:
 MOCK_PHOTO = {
     "id": 4242, "width": 1400, "height": 2000,
     "photographer": "Test Photographer", "photographer_url": "https://www.pexels.com/@test",
-    "url": "https://www.pexels.com/photo/4242/", "alt": "warm window light",
+    "url": "https://www.pexels.com/photo/4242/",
+    # Realistic Pexels-style alt text that genuinely overlaps the queries this
+    # fixture is exercised against ("warm_grace"/"Warm Grace" and "Joyful
+    # Light" both resolve to sunrise/sky/soft-light imagery -- see
+    # services/planner/themes.py) so the Global Cover Policy's relevance gate
+    # (services/cover_source_policy.py::evaluate_pexels_candidate) accepts it
+    # for the same reason a real matching photo would be accepted, not
+    # because the gate was loosened to fit a stale fixture.
+    "alt": "sunrise sky with soft golden clouds over calm hills, peaceful morning light",
     "src": {"original": "https://images.pexels.com/photos/4242/original.jpeg",
             "large": "https://images.pexels.com/photos/4242/large.jpeg"},
 }

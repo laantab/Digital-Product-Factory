@@ -5,6 +5,65 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.5 — 2026-09-12
+
+**Coloring Book covers now get a final quality check before a book is considered finished, and the free-photo-first policy is extended to Word Search and Crossword covers.**
+
+### What changed
+
+- **Coloring Book's automatic cover build now passes through a real final
+  quality check** before a product is considered complete — required title,
+  no placeholder or malformed text, and a recognized cover source. Previously
+  the automatic build had no check on the actual rendered cover page at all.
+- **Word Search and Crossword covers now also try a free, appropriate Pexels
+  photograph first**, the same policy already shipped for Ebook in 1.7.4 —
+  only falling back to paid AI image generation when no suitable free photo
+  is found. A Black-History-topic cover, and Coloring Book's illustrated
+  cover style, correctly never attempt a stock photo — those keep their
+  existing, unchanged behavior.
+- **Every generated cover now records exactly what produced it** —
+  `pexels`, `ai_fallback`, `ai_only`, or `template_fallback` (the Factory's
+  existing professional deterministic cover design, used only when neither a
+  free photo nor paid AI produced an image) — and whether a paid AI call
+  actually ran, separate from whether one was merely attempted.
+- **Faith Planner and Budget Planner's free-photo auto-selection now runs
+  through the same real quality/relevance check** as every other product,
+  instead of accepting the first search result. The planner's own painted
+  cover option is unchanged.
+- Documented, in `PROTECTED_GENERATOR_RULE.md`, exactly which quality check
+  governs the final cover for every product — most products share one
+  system, and Ebook's guided cover flow and both Planners were confirmed to
+  already have an equivalent, real check of their own.
+
+### What was fixed
+
+- **Coloring Book's automatic build could ship a cover with no quality check
+  on the final rendered page at all.** This is a new protection, not a
+  response to a live customer defect — no coloring book has been confirmed
+  to ship a bad cover this way, but the gap existed and is now closed.
+
+### Do my steps change?
+
+- **No.** Every product's generation steps are identical. Word Search,
+  Crossword, and Ebook customers may occasionally see a free stock photo
+  used where a paid AI image would have been generated before — the cover
+  looks the same either way from the customer's side, and the Factory picks
+  the better option automatically.
+
+### Release gate
+
+- Fast Stability Gate: 160 passed, 666 subtests, zero paid calls.
+- Full Windows release gate: pending final confirmation on this commit.
+- New tests: `tests/test_coloring_book_final_cover_qa.py`,
+  `tests/test_cover_qa_contract_map.py`, and extensions to
+  `tests/test_cover_source_policy.py` and `tests/test_planner_cover_photos.py`.
+  In the acceptance manifest and the Fast Stability Gate.
+- Function Lock: `word_search`, `crossword`, and `coloring_book` remain
+  explicitly UNLOCKED pending this release's commit (a last-known-good
+  commit cannot be recorded before the commit exists).
+
+---
+
 ## 1.7.4 — 2026-09-12
 
 **Ebook covers now try a free professional photograph first, and only use paid AI artwork if nothing suitable is found.**

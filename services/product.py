@@ -309,6 +309,14 @@ def _planner_pdf_payload(planner_type: str, fields: dict, *,
     if cover_photo:
         fixed_fields["cover_photo_attribution"] = str(cover_photo.get("attribution") or "")
         fixed_fields["cover_photo_page_url"] = str(cover_photo.get("page_url") or "")
+    # GLOBAL COVER POLICY (2026-09-12) source/paid-use tracking. Planners have
+    # no AI-fallback cover call today (see the "no AI call, no paid image
+    # call" invariant above this function) -- cover_source is only ever
+    # "pexels" or "procedural" here, never "ai_fallback", until that is
+    # deliberately added.
+    fixed_fields["cover_source"] = "pexels" if cover_image_path else "procedural"
+    fixed_fields["paid_ai_attempted"] = False
+    fixed_fields["paid_ai_used"] = False
     return {
         "product_type": planner_type,
         "product_label": label,
@@ -1573,6 +1581,27 @@ def _coloring_book_pdf_payload(fields: dict, *, package_id: str = "") -> dict:
     if not result.pdf_bytes:
         raise RuntimeError(f"Failed to generate Coloring Book PDF: {result.errors}")
 
+    # GLOBAL COVER POLICY (2026-09-12): final rendered-cover QA. Coloring
+    # Book's own PDF-native cover render has no equivalent check today --
+    # this is the declared final-QA authority for it (see
+    # services/coloring_book/final_cover_qa.py for why an adapter, not
+    # cover_quality_agent.py directly). Evaluates the ACTUAL rendered PDF
+    # page, not just the inputs that were supposed to produce it.
+    coloring_cover_source = (
+        "ai_only" if (result.cover_image_path and os.path.isfile(result.cover_image_path))
+        else "template_fallback"
+    )
+    from services.coloring_book.final_cover_qa import validate_coloring_book_final_cover
+
+    cover_qa = validate_coloring_book_final_cover(
+        result.pdf_bytes,
+        title=product_title,
+        subtitle=subtitle,
+        cover_source=coloring_cover_source,
+    )
+    if not cover_qa.passed:
+        raise RuntimeError(f"Coloring Book final cover QA failed: {cover_qa.errors}")
+
     image_jobs = []
     cover = result.cover_design if isinstance(result.cover_design, dict) else None
     if cover:
@@ -1637,6 +1666,8 @@ def _coloring_book_pdf_payload(fields: dict, *, package_id: str = "") -> dict:
             "product_label": "Coloring Book",
             "title": product_title,
             "warnings": list(page_warnings) + list(result.warnings or []),
+            "cover_source": coloring_cover_source,
+            "cover_qa": cover_qa.as_dict(),
             "subtitle": subtitle,
             "fields": {**fields, "package_id": pkg, "generation_stage": stage},
             "content": "",

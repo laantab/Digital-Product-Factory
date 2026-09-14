@@ -3,6 +3,8 @@
     "tests/test_function_lock_registry_integrity.py",
     "tests/test_function_lock_enforcement.py",
     "tests/test_cover_source_policy.py",
+    "tests/test_coloring_book_final_cover_qa.py",
+    "tests/test_cover_qa_contract_map.py",
     "tests/test_warm_wellness_template.py",
     "tests/test_template_system_v1.py",
     "tests/test_db_path_isolation.py",

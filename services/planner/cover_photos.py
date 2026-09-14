@@ -184,11 +184,21 @@ def select_cover_photo(photo_id: str, *, photo: dict[str, Any] | None = None) ->
 
 
 def auto_cover_photo(*, title: str, planner_type: str, design_theme: str) -> dict[str, Any] | None:
-    """"Let the Factory choose": first good result for the theme's own phrase.
-    Returns the stored asset record, or None when photos are unavailable."""
+    """"Let the Factory choose": the first result that actually passes the
+    Global Cover Policy's quality/relevance gate for the theme's own phrase
+    (GLOBAL COVER POLICY, 2026-09-12) — not merely the first result Pexels
+    returned. Returns the stored asset record, or None when no candidate is
+    both available and good enough.
+    """
+    from services.cover_source_policy import evaluate_pexels_candidate
+
     found = search_cover_photos(title=title, planner_type=planner_type,
                                 design_theme=design_theme, per_page=6)
+    query = str(found.get("query") or title)
     for row in found.get("_raw_photos") or []:
+        evaluation = evaluate_pexels_candidate(row, title=title, topic=query)
+        if not evaluation.passed:
+            continue
         try:
             return select_cover_photo(str(row.get("photo_id") or ""), photo=row)
         except Exception:  # noqa: BLE001
