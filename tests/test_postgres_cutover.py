@@ -264,3 +264,166 @@ def test_rollback_is_documented_as_deleting_one_variable(monkeypatch, tmp_path):
     db = _isolated_db(monkeypatch, tmp_path)
     database.init_db()
     assert "delete" in cutover.health()["rollback"].lower()
+
+
+# ========== the defect that broke the first production cutover attempt =====
+#
+# The first attempt failed live with:
+#     psycopg.errors.SyntaxError: syntax error at or near "AUTOINCREMENT"
+# from services/billing/store.py::init_billing_db, which creates its
+# tables at app startup. 0B-4 had given database.init_db() its own
+# PostgreSQL branch -- a POINT fix covering only the module that had been
+# examined. These tests exist so no module can repeat it.
+
+
+BILLING_DDL = """
+CREATE TABLE IF NOT EXISTS billing_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account TEXT NOT NULL,
+    plan TEXT NOT NULL
+)
+"""
+
+
+def test_the_exact_statement_that_broke_production_is_now_translated():
+    translated = dialect.translate_ddl(BILLING_DDL)
+    assert "AUTOINCREMENT" not in translated.upper(), (
+        "this is the statement that took production down"
+    )
+    assert "BIGSERIAL PRIMARY KEY" in translated
+
+
+@pytest.mark.parametrize("spelling", [
+    "id INTEGER PRIMARY KEY AUTOINCREMENT,",
+    "id integer primary key autoincrement,",
+    "id  INTEGER   PRIMARY  KEY   AUTOINCREMENT ,",
+    "id BIGINTEGER PRIMARY KEY AUTOINCREMENT,",
+])
+def test_every_spelling_of_autoincrement_is_translated(spelling):
+    out = dialect.translate_ddl(f"CREATE TABLE t ({spelling} name TEXT)")
+    assert "AUTOINCREMENT" not in out.upper(), spelling
+
+
+def test_no_autoincrement_survives_translation_of_any_production_ddl():
+    """Scan the real production modules, not a sample."""
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    sources = [root / "database.py", root / "services" / "billing" / "store.py"]
+    found = 0
+    for path in sources:
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"CREATE TABLE[^;]*?\)", text, re.IGNORECASE | re.DOTALL):
+            statement = match.group(0)
+            if "AUTOINCREMENT" not in statement.upper():
+                continue
+            found += 1
+            assert "AUTOINCREMENT" not in dialect.translate_ddl(statement).upper(), (
+                f"{path.name} still emits untranslatable DDL"
+            )
+    assert found >= 3, "expected to find the real AUTOINCREMENT tables to translate"
+
+
+def test_pragma_is_skipped_rather_than_sent_to_postgres():
+    fake = _FakePgConn()
+    conn = PostgresConnection(fake)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
+    assert fake.statements == [], "PRAGMA must never reach PostgreSQL"
+
+
+@pytest.mark.parametrize("statement", ["PRAGMA foreign_keys=ON", "VACUUM", "REINDEX t"])
+def test_sqlite_only_statements_are_recognised(statement):
+    assert dialect.is_sqlite_only_statement(statement) is True
+
+
+@pytest.mark.parametrize("statement", [
+    "SELECT 1", "CREATE TABLE t (a TEXT)", "INSERT INTO t VALUES (?)",
+])
+def test_ordinary_statements_are_not_treated_as_sqlite_only(statement):
+    assert dialect.is_sqlite_only_statement(statement) is False
+
+
+def test_billing_ddl_reaches_postgres_without_autoincrement_or_pragma():
+    """The startup path that actually failed, end to end through the wrapper."""
+    fake = _FakePgConn()
+    conn = PostgresConnection(fake)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(BILLING_DDL)
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_billing_account"
+        " ON billing_subscriptions (account)")
+
+    sent = " ".join(s for s, _ in fake.statements).upper()
+    assert "AUTOINCREMENT" not in sent
+    assert "PRAGMA" not in sent
+    assert "BIGSERIAL" in sent
+    assert "CREATE UNIQUE INDEX" in sent, "ordinary DDL must still pass through"
+
+
+def test_billing_insert_gets_lastrowid_on_postgres():
+    """store.py reads cur.lastrowid straight after inserting a subscription."""
+    fake = _FakePgConn(returning_id=555)
+    conn = PostgresConnection(fake)
+    cur = conn.execute(
+        "INSERT INTO billing_subscriptions (account, plan) VALUES (?, ?)",
+        ("acct", "pro"))
+    assert cur.lastrowid == 555
+
+
+def test_billing_schema_still_initialises_on_sqlite(monkeypatch, tmp_path):
+    """SQLite behaviour must be completely unchanged."""
+    _isolated_db(monkeypatch, tmp_path)
+    database.init_db()
+    from services.billing.store import init_billing_db
+
+    init_billing_db()
+
+    conn = database.get_conn()
+    try:
+        assert isinstance(conn, sqlite3.Connection)
+        names = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        assert {"billing_subscriptions", "billing_events", "billing_usage"} <= names
+        conn.execute(
+            "INSERT INTO billing_subscriptions (account_ref, plan_id,"
+            " billing_period, provider, status, created_at, updated_at)"
+            " VALUES ('a','pro','monthly','lemonsqueezy','active','n','n')")
+        conn.commit()
+        row = conn.execute(
+            "SELECT id FROM billing_subscriptions ORDER BY id DESC LIMIT 1").fetchone()
+        assert row["id"] >= 1, "the primary key must still autoincrement on SQLite"
+    finally:
+        conn.close()
+
+
+def test_the_real_startup_path_runs_clean_under_postgres(monkeypatch):
+    """Reproduce production's startup exactly: init_db + init_billing_db
+    with get_conn() returning a PostgreSQL connection.
+
+    This is the test that would have caught the failed cutover.
+    """
+    recorded = _FakePgConn()
+
+    def _fake_get_conn():
+        return PostgresConnection(recorded)
+
+    monkeypatch.setattr(database, "get_conn", _fake_get_conn)
+    monkeypatch.setattr(database, "_use_postgres", lambda: True)
+
+    database.init_db()
+    from services.billing.store import init_billing_db
+
+    init_billing_db()
+
+    sent = " ".join(s for s, _ in recorded.statements)
+    upper = sent.upper()
+    assert "AUTOINCREMENT" not in upper, (
+        "AUTOINCREMENT reached PostgreSQL -- this is exactly what failed live"
+    )
+    assert "PRAGMA" not in upper
+    # and the tables really were created
+    for table in ("billing_subscriptions", "billing_events", "billing_usage"):
+        assert table in sent, f"{table} was never created"
+    assert "BIGSERIAL" in upper

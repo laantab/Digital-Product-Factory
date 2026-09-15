@@ -44,6 +44,19 @@ def use_postgres() -> bool:
     return backend in ("postgres", "postgresql") and dialect.is_postgres()
 
 
+class _NullCursor:
+    """Stands in for a statement PostgreSQL never received."""
+
+    def fetchone(self):
+        return None
+
+    def fetchall(self):
+        return []
+
+    def __iter__(self):
+        return iter(())
+
+
 class _CursorProxy:
     """A psycopg cursor that also answers `lastrowid`.
 
@@ -79,7 +92,18 @@ class PostgresConnection:
         self.row_factory = None
 
     def execute(self, sql: str, params=()):
-        statement = dialect.to_postgres(sql)
+        # SQLite-only statements (PRAGMA, VACUUM, REINDEX) are tuning
+        # hints with no PostgreSQL equivalent. Skipping them beats failing
+        # an application's startup over one.
+        if dialect.is_sqlite_only_statement(sql):
+            return _CursorProxy(_NullCursor())
+
+        # DDL is translated here, in the connection every module shares,
+        # rather than module by module: the first cutover attempt failed
+        # in production because billing's CREATE TABLE still said
+        # AUTOINCREMENT, and a point fix would leave the next module to
+        # fail the same way.
+        statement = dialect.to_postgres(dialect.translate_ddl(sql))
         wants_id = (
             statement.lstrip().upper().startswith("INSERT")
             and "RETURNING" not in statement.upper()

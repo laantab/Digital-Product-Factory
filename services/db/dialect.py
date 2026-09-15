@@ -74,6 +74,56 @@ def to_postgres(sql: str) -> str:
 
 
 # --------------------------------------------------------------------------
+# DDL translation
+#
+# WHY THIS IS GENERAL RATHER THAN A FIX TO ONE MODULE
+#
+# The first PostgreSQL cutover attempt failed in production on
+# `services/billing/store.py`, which creates its three tables at app
+# startup using `INTEGER PRIMARY KEY AUTOINCREMENT`. The 0B-4 work had
+# given `database.init_db()` its own PostgreSQL branch -- a POINT fix that
+# protected only the module that had been looked at. Any other module
+# creating a table at startup was still going to take production down.
+#
+# So the translation lives in the connection everything shares. A module
+# may keep writing ordinary SQLite DDL; if PostgreSQL is active it is
+# rewritten on the way through, and no future table can repeat this.
+# --------------------------------------------------------------------------
+
+#: SQLite's autoincrement spelling, in the several ways it gets written.
+_AUTOINCREMENT_PK = re.compile(
+    r"\b(?:BIG)?INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b", re.IGNORECASE)
+_BARE_AUTOINCREMENT = re.compile(r"\s+AUTOINCREMENT\b", re.IGNORECASE)
+
+#: Statements that mean nothing to PostgreSQL and must not be sent.
+_SQLITE_ONLY_STATEMENT = re.compile(r"^\s*(PRAGMA|VACUUM|REINDEX)\b", re.IGNORECASE)
+
+
+def is_sqlite_only_statement(sql: str) -> bool:
+    """True for statements PostgreSQL has no equivalent of.
+
+    These are skipped rather than raised on: a PRAGMA is a SQLite tuning
+    hint, and failing an application's startup over one would be absurd.
+    """
+    return bool(_SQLITE_ONLY_STATEMENT.match(str(sql or "")))
+
+
+def translate_ddl(sql: str) -> str:
+    """Rewrite SQLite DDL as valid PostgreSQL DDL.
+
+    `INTEGER PRIMARY KEY AUTOINCREMENT` becomes `BIGSERIAL PRIMARY KEY`,
+    which is PostgreSQL's equivalent: an implicit sequence supplying the
+    id. Everything else in the Factory's DDL -- IF NOT EXISTS, TEXT,
+    INTEGER, NOT NULL, DEFAULT, UNIQUE, CREATE INDEX -- is already valid
+    in both.
+    """
+    out = _AUTOINCREMENT_PK.sub("BIGSERIAL PRIMARY KEY", str(sql or ""))
+    # A trailing bare AUTOINCREMENT (e.g. after an explicit PRIMARY KEY)
+    # has no PostgreSQL meaning and is simply dropped.
+    return _BARE_AUTOINCREMENT.sub("", out)
+
+
+# --------------------------------------------------------------------------
 # Schema
 #
 # Deliberately the SAME logical schema as SQLite, column for column, so a

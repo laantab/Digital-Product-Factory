@@ -5,6 +5,52 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.22 — 2026-09-15
+
+**Fixes the fault that stopped the first attempt to move to the new database. The live site was never at risk and was already safely back on the old one.**
+
+### What changed
+
+- **Translating between the two databases now happens in the one place
+  every part of the Factory shares**, instead of being handled separately
+  by each part that creates its own tables.
+- Settings that only mean something to the old database are skipped
+  rather than passed on and rejected.
+
+### What was fixed
+
+- **The billing tables were still being created using an instruction the
+  new database does not understand.** The first switch-over attempt
+  failed at start-up with a syntax error, and the live site rolled
+  straight back to the old database as designed. Nothing was lost and no
+  customer data was affected.
+- **The real mistake was fixing only half the problem last time.** The
+  earlier work taught the *main* records table to speak the new
+  database's language, but each part of the Factory that creates its own
+  tables was left to fend for itself — so billing failed, and the next
+  one would have too.
+- **The translation now happens in the one place every part of the
+  Factory shares.** Any section can go on writing tables the way it
+  always has; if the new database is in use, the wording is corrected on
+  the way through. No future table can repeat this failure.
+- **Settings that only mean something to the old database are now quietly
+  skipped** rather than sent onward and rejected. Failing a start-up over
+  a tuning hint would be absurd.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. The old database is
+still in use and still holds everything; the new one is not switched on.
+
+### Release gate
+
+Seventeen new checks, including one that reproduces the exact start-up
+that failed live and would have caught it beforehand. It was confirmed to
+genuinely fail when the fix is removed — a test that cannot fail proves
+nothing. Full Windows release gate: green, with no paid API calls.
+
+---
+
 ## 1.7.21 — 2026-09-15
 
 **The Factory can now actually run on the new professional database — but only when told to, in two separate steps. Nothing has switched yet.**
