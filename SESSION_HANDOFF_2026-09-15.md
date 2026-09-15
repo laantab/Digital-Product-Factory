@@ -92,7 +92,35 @@ not set.
 
 ---
 
-## Next step — 0B-4 PostgreSQL (OWNER DECISION REQUIRED)
+## 0B-4 PostgreSQL — local groundwork COMPLETE (v1.7.20, `31aa841`)
+
+Built and proven, all with `DATABASE_URL` unset so nothing changed:
+
+- `services/db/dialect.py` — placeholder and DDL translation, a Postgres
+  schema column-for-column identical to SQLite, and the sequence reset an
+  id-preserving import needs.
+- `services/db/migrate_postgres.py` — export, import, and the **parity
+  verifier**, which compares any two DB-API connections so it could be
+  proven SQLite-to-SQLite before a server exists.
+
+**Rehearsed on the real database:** 114 projects and 73 assets imported
+into a target built from the Postgres schema — parity **PASS**, zero
+missing/extra/field/version mismatches, SQLite source byte-identical
+afterwards. Release gate 3,053 tests, 0 failures.
+
+Ids and versions are preserved deliberately: `assets.project_id`
+references them and storage keys embed them
+(`projects/{id}/embedded/pdf_bytes.pdf`), so renumbering would break
+every migrated artifact.
+
+`psycopg` is deliberately NOT yet in `requirements.txt` — it is added as
+part of the cutover, so the driver cannot be selected by accident.
+
+**0B-5 was deliberately not started.** The approved queue design is
+Postgres-as-queue with `FOR UPDATE SKIP LOCKED`; building it against
+SQLite would be building the wrong thing.
+
+## Next step — 0B-4 production cutover (OWNER ACTION REQUIRED)
 
 Roadmap: **0B-3 storage ✅ → 0B-4 Postgres → 0B-5 job manager + worker →
 0C ebook worker migration → 0D three live ebook builds → 0E remaining
