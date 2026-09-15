@@ -67,6 +67,20 @@ def _project(pdf=PDF):
     return database.create_project("Prod Product", "product", data)
 
 
+def _delete_project(project_id):
+    """Remove a row outright.
+
+    The suite shares one database, so a test that deliberately creates a
+    MALFORMED record has to remove it again -- otherwise every later
+    inventory reports a problem and the production guard, correctly,
+    refuses to run.
+    """
+    conn = database.get_conn()
+    conn.execute("DELETE FROM projects WHERE id=?", (int(project_id),))
+    conn.commit()
+    conn.close()
+
+
 def _post(client, body=None, token=TOKEN):
     headers = {"Content-Type": "application/json"}
     if token is not None:
@@ -157,13 +171,16 @@ def test_inventory_reports_malformed_records_rather_than_repairing_them(
         "Broken", "product",
         {"product_type": "faith_planner", "is_pdf": True, "pdf_bytes": "%%%not-base64%%%"},
     )
-    result = _post(client, {"action": "inventory"}).get_json()["result"]
-    problems = {p["project_id"] for p in result["problems"]}
-    assert broken["id"] in problems
-    # and it is NOT offered for migration
-    assert all(p["project_id"] != broken["id"] for p in result["pending"])
-    # and the record was left exactly as it was
-    assert database.get_project(broken["id"])["data"]["pdf_bytes"] == "%%%not-base64%%%"
+    try:
+        result = _post(client, {"action": "inventory"}).get_json()["result"]
+        problems = {p["project_id"] for p in result["problems"]}
+        assert broken["id"] in problems
+        # and it is NOT offered for migration
+        assert all(p["project_id"] != broken["id"] for p in result["pending"])
+        # and the record was left exactly as it was
+        assert database.get_project(broken["id"])["data"]["pdf_bytes"] == "%%%not-base64%%%"
+    finally:
+        _delete_project(broken["id"])
 
 
 def test_a_project_without_pdf_bytes_is_not_eligible(client, monkeypatch):
@@ -345,6 +362,164 @@ def test_cli_verify_does_not_migrate(client, capsys):
     project = _project()
     assert pm.main(["verify"]) == 0
     assert database.list_assets(project["id"]) == [], "verify must never migrate"
+
+
+# ============================ the guarded production sequence ==============
+
+
+@pytest.fixture
+def prod(client, monkeypatch, tmp_path):
+    """A production-shaped run: on 'persistent disk', R2 configured, driver off.
+
+    Deliberately given its OWN database. The production sequence scans
+    every project and refuses to run if any record is malformed -- which
+    is exactly right for production, but means these tests cannot share a
+    database that other suites fill with arbitrary and deliberately broken
+    records.
+    """
+    import services.storage.production_migration as pm
+    from services.storage.local import LocalFilesystemDriver
+
+    own_db = tmp_path / "prod_projects.db"
+    monkeypatch.setenv("FACTORY_DB_PATH", str(own_db))
+    monkeypatch.setattr(database, "DB_PATH", str(own_db))
+    database.init_db()
+
+    # Treat this database's own directory as "the persistent disk", so the
+    # guard is exercised for real rather than disabled.
+    monkeypatch.setattr(pm, "PERSISTENT_DISK_PREFIXES", (str(tmp_path),))
+    for name in ("FACTORY_R2_ACCOUNT_ID", "FACTORY_R2_BUCKET",
+                 "FACTORY_R2_ACCESS_KEY_ID", "FACTORY_R2_SECRET_ACCESS_KEY"):
+        monkeypatch.setenv(name, "present-but-never-printed")
+    monkeypatch.delenv("FACTORY_STORAGE_DRIVER", raising=False)
+
+    class FakeR2(LocalFilesystemDriver):
+        name = "r2"
+
+    monkeypatch.setattr("services.storage.r2.R2Driver",
+                        lambda *a, **k: FakeR2(root=tmp_path / "fake_r2"))
+    return pm
+
+
+def test_production_run_takes_a_verified_backup_before_migrating(prod):
+    """Backup first, proven identical, or nothing happens at all."""
+    project = _project()
+    report = prod.run_production_migration()
+
+    assert report["ok"] is True, report
+    assert report["result"] == "PASS"
+    backup = report["backup"]
+    assert backup["identical"] is True
+    assert backup["source_sha256"] == backup["backup_sha256"]
+    assert "PRE-R2-MIGRATION" in backup["path"]
+    assert os.path.exists(backup["path"])
+    assert project["id"] in report["migrated"]
+
+
+def test_production_run_aborts_when_the_backup_cannot_be_verified(prod):
+    """A migration that cannot prove its backup must not begin."""
+    _project()
+    prod_backup = prod.backup
+
+    def _broken(label=""):
+        result = prod_backup(label=label)
+        result["identical"] = False           # simulate a mismatch
+        result["ok"] = False
+        return result
+
+    prod.backup = _broken
+    try:
+        report = prod.run_production_migration()
+    finally:
+        prod.backup = prod_backup
+
+    assert report["ok"] is False
+    assert report["aborted_at"] == "backup"
+    assert "migrated" not in report, "nothing may be migrated after a bad backup"
+
+
+def test_production_run_refuses_when_r2_is_not_fully_configured(prod, monkeypatch):
+    _project()
+    monkeypatch.delenv("FACTORY_R2_SECRET_ACCESS_KEY", raising=False)
+    report = prod.run_production_migration()
+    assert report["ok"] is False
+    assert report["aborted_at"] == "safety_check"
+    assert "r2_config_complete" in report["reason"]
+    assert "backup" not in report, "it must not even reach the backup step"
+
+
+def test_production_run_refuses_when_reads_are_already_enabled(prod, monkeypatch):
+    """Driver must stay unset until the migration has been verified."""
+    _project()
+    monkeypatch.setenv("FACTORY_STORAGE_DRIVER", "r2")
+    report = prod.run_production_migration()
+    assert report["ok"] is False
+    assert report["aborted_at"] == "safety_check"
+    assert "storage_driver_unset" in report["reason"]
+
+
+def test_production_run_refuses_a_database_off_the_persistent_disk(prod, monkeypatch):
+    _project()
+    monkeypatch.setattr(prod, "PERSISTENT_DISK_PREFIXES", ("/nowhere-real",))
+    report = prod.run_production_migration()
+    assert report["ok"] is False
+    assert report["aborted_at"] == "safety_check"
+    assert "on_persistent_disk" in report["reason"]
+
+
+def test_production_run_refuses_when_a_record_is_malformed(prod):
+    """Malformed records are reported, never guessed at or migrated past."""
+    _project()
+    broken = database.create_project(
+        "Broken", "product",
+        {"product_type": "faith_planner", "is_pdf": True,
+         "pdf_bytes": "%%%not-base64%%%"},
+    )
+    try:
+        report = prod.run_production_migration()
+        assert report["ok"] is False
+        assert report["aborted_at"] == "safety_check"
+        assert "no_inventory_problems" in report["reason"]
+    finally:
+        _delete_project(broken["id"])
+
+
+def test_production_run_keeps_every_legacy_pdf_and_touches_no_project(prod):
+    project = _project()
+    before = database.get_project(project["id"])
+
+    report = prod.run_production_migration()
+    assert report["ok"] is True, report
+
+    after = database.get_project(project["id"])
+    assert after["data"]["pdf_bytes"] == before["data"]["pdf_bytes"]
+    assert base64.b64decode(after["data"]["pdf_bytes"]) == PDF
+    assert after["data"]["_row_version"] == before["data"]["_row_version"]
+    assert report["legacy_pdf_bytes_retained"] is True
+    assert report["inventory_after"]["pending_migration"] == 0
+    assert report["r2_reads_enabled_after"] is False
+    assert report["storage_driver_after"] == "(unset -> local)"
+
+
+def test_production_run_reports_per_project_verification(prod):
+    project = _project()
+    report = prod.run_production_migration()
+    per = report["verification"]["per_project"]
+    assert any(p["project_id"] == project["id"] for p in per)
+    entry = next(p for p in per if p["project_id"] == project["id"])
+    assert entry["checks"]["bytes_match_legacy"] is True
+    assert entry["checks"]["sha256"] is True
+    assert entry["checks"]["legacy_present"] is True
+    assert entry["bytes"] == len(PDF)
+
+
+def test_production_run_prints_no_credential_value(prod, monkeypatch, capsys):
+    import services.storage.production_migration as pm
+
+    monkeypatch.setenv("FACTORY_R2_SECRET_ACCESS_KEY", "leaky-secret-value-9")
+    _project()
+    assert pm.main(["migrate"]) == 0
+    assert "leaky-secret-value-9" not in capsys.readouterr().out
 
 
 def test_migration_is_not_limited_by_the_inventory_display_cap(client, monkeypatch):

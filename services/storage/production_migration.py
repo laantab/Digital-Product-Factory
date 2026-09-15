@@ -214,11 +214,12 @@ def _sha_file(path: str) -> str:
     return h.hexdigest()
 
 
-def backup() -> dict:
+def backup(label: str = "PRE-0B3E-PRODUCTION-MIGRATION") -> dict:
     """Timestamped byte-for-byte copy beside the production database.
 
     Additive: it never overwrites an earlier backup (the filename carries
-    a timestamp) and never touches the source.
+    a timestamp) and never touches the source. Written next to the
+    database, which on production means the persistent disk.
     """
     import database
 
@@ -235,9 +236,16 @@ def backup() -> dict:
         pass
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    dest = f"{src}.PRE-0B3E-PRODUCTION-MIGRATION-{stamp}.bak"
-    if os.path.exists(dest):
-        return {"ok": False, "error": "backup already exists; refusing to overwrite"}
+    dest = f"{src}.{label}-{stamp}.bak"
+    # Never overwrite an earlier backup. Two runs inside the same second
+    # get a suffix rather than a refusal -- a legitimate retry must not be
+    # blocked by clock resolution, and an existing backup must not be lost.
+    suffix = 1
+    while os.path.exists(dest):
+        suffix += 1
+        dest = f"{src}.{label}-{stamp}-{suffix}.bak"
+        if suffix > 50:
+            return {"ok": False, "error": "too many backups this second"}
 
     shutil.copy2(src, dest)
     src_sha, dest_sha = _sha_file(src), _sha_file(dest)
@@ -397,6 +405,144 @@ def verify_all(sample: int = 0, project_ids: list[int] | None = None) -> dict:
     }
 
 
+#: Where a database has to live to count as "on the persistent disk".
+#: Tests monkeypatch this; production never changes it.
+PERSISTENT_DISK_PREFIXES = ("/var/data",)
+
+
+def run_production_migration() -> dict:
+    """The whole approved production sequence, as ONE guarded operation.
+
+    SAFETY CHECK -> BACKUP (verified) -> RE-INVENTORY -> MIGRATE PENDING
+    -> PER-PROJECT VERIFY -> POST-VERIFY -> FINAL INVENTORY
+
+    Every gate is fail-closed: the migration does not start unless the
+    database is on the persistent disk, R2 is fully configured, the
+    storage driver is still unset, and the inventory reports no malformed
+    records. It does not start unless a backup has been taken AND proven
+    byte-identical. It stops at the first failure rather than continuing.
+
+    It never deletes or rewrites `pdf_bytes`, never touches exports, never
+    rewrites a project blob, never bumps a project version, and never
+    changes any environment variable.
+    """
+    report: dict = {"ok": False, "aborted_at": None}
+
+    # ---- 1. SAFETY CHECK ------------------------------------------------
+    env = environment()
+    before = _scan()
+    path = str(before.get("database_path") or "")
+    safety = {
+        "on_persistent_disk": path.startswith(PERSISTENT_DISK_PREFIXES),
+        "r2_config_complete": bool(env["r2_config_complete"]),
+        "storage_driver_unset": not env["r2_reads_enabled"],
+        "no_inventory_problems": not before["problems"],
+        "something_to_migrate": before["pending_migration"] > 0,
+    }
+    report["database_path"] = path
+    report["safety_check"] = safety
+    report["storage_driver"] = env["storage_driver"]
+    report["r2_reads_enabled"] = env["r2_reads_enabled"]
+    if not all(safety.values()):
+        report["aborted_at"] = "safety_check"
+        report["reason"] = [k for k, v in safety.items() if not v]
+        return report
+
+    # ---- 2. BACKUP, VERIFIED --------------------------------------------
+    saved = backup(label="PRE-R2-MIGRATION")
+    report["backup"] = {
+        "path": saved.get("backup_path"),
+        "source_bytes": saved.get("source_bytes"),
+        "backup_bytes": saved.get("backup_bytes"),
+        "source_sha256": saved.get("source_sha256"),
+        "backup_sha256": saved.get("backup_sha256"),
+        "identical": bool(saved.get("identical")),
+    }
+    if not saved.get("ok") or not saved.get("identical"):
+        report["aborted_at"] = "backup"
+        report["reason"] = saved.get("error") or "backup did not verify byte-identical"
+        return report
+
+    # ---- 3. RE-INVENTORY ------------------------------------------------
+    # Compared against the scan taken moments ago rather than hardcoded
+    # figures: the live site may legitimately have gained a project, but
+    # the numbers must not move underneath the migration.
+    again = _scan()
+    drift = {
+        "projects_scanned": (before["projects_scanned"], again["projects_scanned"]),
+        "projects_with_pdf_bytes": (before["projects_with_pdf_bytes"],
+                                    again["projects_with_pdf_bytes"]),
+        "pending_migration": (before["pending_migration"], again["pending_migration"]),
+        "existing_asset_rows": (before["existing_asset_rows"],
+                                again["existing_asset_rows"]),
+    }
+    report["inventory_before"] = {k: v[0] for k, v in drift.items()}
+    changed = [k for k, (a, b) in drift.items() if a != b]
+    if changed:
+        report["aborted_at"] = "re_inventory"
+        report["reason"] = f"state changed between scans: {changed}"
+        report["drift"] = drift
+        return report
+
+    # ---- 4-5. MIGRATE THE PENDING SET, VERIFYING EACH -------------------
+    pending_ids = [p["project_id"] for p in again["pending"]]
+    outcome = migrate(limit=min(len(pending_ids), MAX_BATCH),
+                      project_ids=pending_ids)
+    report["migrated"] = outcome["migrated"]
+    report["migrated_count"] = outcome["migrated_count"]
+    report["bytes_migrated"] = outcome["bytes_migrated"]
+    report["skipped"] = outcome["skipped"]
+    report["failed"] = outcome["failed"]
+    if outcome["failed"]:
+        report["aborted_at"] = "migrate"
+        report["reason"] = outcome["failed"]
+        report["legacy_retained"] = True      # nothing is ever deleted
+        return report
+
+    # ---- 7. POST-MIGRATION VERIFY ---------------------------------------
+    checked = verify_all(project_ids=outcome["migrated"])
+    report["verification"] = {
+        "verified": checked["verified"],
+        "passed": checked["passed"],
+        "failed": checked["failed"],
+        "failures": checked["failures"],
+        "per_project": [
+            {"project_id": r["project_id"], "bytes": r.get("bytes"),
+             "checks": r.get("checks")}
+            for r in [verify_one(pid) for pid in outcome["migrated"]]
+        ],
+    }
+    if not checked["all_ok"]:
+        report["aborted_at"] = "post_verify"
+        report["reason"] = checked["failures"]
+        return report
+
+    # ---- 8. FINAL INVENTORY ---------------------------------------------
+    final = _scan()
+    final_env = environment()
+    report["inventory_after"] = {
+        "projects_scanned": final["projects_scanned"],
+        "projects_with_pdf_bytes": final["projects_with_pdf_bytes"],
+        "already_migrated": final["already_migrated"],
+        "pending_migration": final["pending_migration"],
+        "existing_asset_rows": final["existing_asset_rows"],
+    }
+    report["legacy_pdf_bytes_retained"] = (
+        final["projects_with_pdf_bytes"] == before["projects_with_pdf_bytes"]
+    )
+    report["storage_driver_after"] = final_env["storage_driver"]
+    report["r2_reads_enabled_after"] = final_env["r2_reads_enabled"]
+    report["ok"] = (
+        not outcome["failed"]
+        and checked["all_ok"]
+        and final["pending_migration"] == 0
+        and report["legacy_pdf_bytes_retained"]
+        and not final_env["r2_reads_enabled"]
+    )
+    report["result"] = "PASS" if report["ok"] else "FAIL"
+    return report
+
+
 # ---------------------------------------------------------------------------
 # Command line
 #
@@ -431,7 +577,11 @@ def main(argv: list[str] | None = None) -> int:
     elif action == "backup":
         result = backup()
     elif action == "migrate":
-        result = migrate(limit=number or 10)
+        # Bare `migrate` runs the full guarded production sequence:
+        # safety check -> verified backup -> re-inventory -> migrate ->
+        # verify each -> post-verify -> final inventory. `migrate N` stays
+        # the raw bounded batch for local work.
+        result = migrate(limit=number) if number else run_production_migration()
     elif action == "verify":
         result = verify_all(sample=number)
     else:

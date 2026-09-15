@@ -5,6 +5,50 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.18 — 2026-09-15
+
+**One short command now does the whole live-site PDF copy safely: check, back up, copy, check again — and stops at the first sign of trouble.**
+
+### What changed
+
+- **`migrate` became a single guarded operation** instead of a bare copy.
+  In order: it checks the situation is safe, takes a backup and proves it
+  is identical, re-checks that nothing moved underneath it, copies each
+  PDF while verifying every one, checks them all again afterwards, and
+  reports a plain PASS or FAIL.
+- **It refuses to start unless everything is right**: the database must be
+  on the live site's permanent disk, all four cloud-storage settings must
+  be present, cloud reading must still be switched off, and no record may
+  be malformed. If any of those is wrong it stops before touching
+  anything — it does not even take the backup.
+- **No backup, no migration.** If the backup cannot be proven
+  byte-for-byte identical to the original, nothing is copied at all.
+- **It stops at the first failure** rather than carrying on.
+
+### What was fixed
+
+- **Two backups taken in the same second no longer collide.** The rule
+  that a backup may never overwrite an earlier one was right, but it
+  meant a legitimate second attempt within the same second was refused.
+  Backups now get a numbered suffix instead, so nothing is ever lost and
+  nothing is ever blocked.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. Original PDFs are never
+deleted, exported files are never touched, saved products are never
+rewritten, and cloud reading stays switched off.
+
+### Release gate
+
+Nine new checks, most of them about refusing: no backup means no
+migration, incomplete settings mean no migration, cloud reading already
+on means no migration, a database in the wrong place means no migration,
+and one malformed record stops the whole run. Full Windows release gate:
+green, with no paid API calls.
+
+---
+
 ## 1.7.17 — 2026-09-15
 
 **The "what's the situation?" command now also reports how storage is configured — without ever showing a secret value.**
