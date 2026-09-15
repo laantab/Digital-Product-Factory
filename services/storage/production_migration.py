@@ -151,6 +151,48 @@ def inventory() -> dict:
             "pending_listed": min(len(result["pending"]), 200)}
 
 
+#: R2 settings the driver requires. Reported by PRESENCE only -- a value
+#: must never reach a shell, a log, or a report.
+_R2_REQUIRED = (
+    "FACTORY_R2_ACCOUNT_ID",
+    "FACTORY_R2_BUCKET",
+    "FACTORY_R2_ACCESS_KEY_ID",
+    "FACTORY_R2_SECRET_ACCESS_KEY",
+)
+
+
+def environment() -> dict:
+    """Configuration facts, with NO secret value in the output.
+
+    Reports whether each required R2 setting is present, never what it
+    contains. `storage_driver` is the thing that decides whether reads
+    come from object storage at all, and on production it is expected to
+    be unset until the migration is verified.
+    """
+    driver = str(os.environ.get("FACTORY_STORAGE_DRIVER") or "").strip()
+    exports = ""
+    exports_files = None
+    try:
+        import database
+
+        exports = str(database._exports_root())
+        if os.path.isdir(exports):
+            exports_files = sum(len(f) for _, _, f in os.walk(exports))
+    except Exception:
+        pass
+
+    return {
+        "storage_driver": driver or "(unset -> local)",
+        "r2_reads_enabled": driver.lower() == "r2",
+        "r2_config_present": {name: bool(str(os.environ.get(name) or "").strip())
+                              for name in _R2_REQUIRED},
+        "r2_config_complete": all(
+            str(os.environ.get(n) or "").strip() for n in _R2_REQUIRED),
+        "exports_path": exports,
+        "exports_files": exports_files,
+    }
+
+
 def _all_assets() -> list[dict]:
     import database
 
@@ -384,6 +426,7 @@ def main(argv: list[str] | None = None) -> int:
         report["problems_count"] = len(report.pop("problems", []))
         report["on_persistent_disk"] = str(
             report.get("database_path", "")).startswith("/var/data")
+        report["environment"] = environment()
         result = report
     elif action == "backup":
         result = backup()

@@ -290,6 +290,46 @@ def test_cli_default_action_is_read_only(client, monkeypatch, capsys):
     assert database.list_assets(project["id"]) == []
 
 
+def test_cli_inventory_reports_configuration_without_any_secret_value(
+    client, monkeypatch, capsys
+):
+    """The inventory is typed into a production shell. It must never echo a
+    credential -- presence only, never the value."""
+    import services.storage.production_migration as pm
+
+    secrets = {
+        "FACTORY_R2_ACCOUNT_ID": "acct-secret-value-1",
+        "FACTORY_R2_BUCKET": "bucket-secret-value-2",
+        "FACTORY_R2_ACCESS_KEY_ID": "AKIA-secret-value-3",
+        "FACTORY_R2_SECRET_ACCESS_KEY": "shhh-secret-value-4",
+    }
+    for name, value in secrets.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("FACTORY_STORAGE_DRIVER", raising=False)
+
+    assert pm.main([]) == 0
+    out = capsys.readouterr().out
+    for value in secrets.values():
+        assert value not in out, "a credential value reached the shell"
+
+    env = json.loads(out)["environment"]
+    assert env["r2_config_complete"] is True
+    assert all(env["r2_config_present"][n] is True for n in secrets)
+    assert env["r2_reads_enabled"] is False
+    assert env["storage_driver"] == "(unset -> local)"
+    assert "exports_path" in env
+
+
+def test_cli_inventory_reports_when_r2_reads_are_enabled(client, monkeypatch, capsys):
+    import services.storage.production_migration as pm
+
+    monkeypatch.setenv("FACTORY_STORAGE_DRIVER", "r2")
+    assert pm.main([]) == 0
+    env = json.loads(capsys.readouterr().out)["environment"]
+    assert env["r2_reads_enabled"] is True
+    assert env["storage_driver"] == "r2"
+
+
 def test_cli_rejects_an_unknown_action_without_doing_anything(client, capsys):
     import services.storage.production_migration as pm
 

@@ -5,6 +5,40 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.17 — 2026-09-15
+
+**The "what's the situation?" command now also reports how storage is configured — without ever showing a secret value.**
+
+### What changed
+
+- **The read-only status command now says whether cloud storage is
+  switched on**, whether all four cloud-storage settings are present, and
+  where the exported files live and how many there are. This matters
+  because it is the only way to see, from the live site itself, whether
+  it is set up the way we think it is.
+- **It reports presence, never values.** For each setting it says only
+  "yes, this is set" or "no, this is missing". A secret value can never
+  appear on screen, in a log, or in a report.
+
+### What was fixed
+
+- Nothing was broken. This closes a blind spot: there was no safe way to
+  confirm the live site's storage configuration from the live site.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. The command still only
+looks — it copies nothing, changes nothing, and deletes nothing.
+
+### Release gate
+
+Two new checks, both about secrecy: four deliberately planted fake
+credentials must not appear anywhere in the output, and the command must
+correctly report whether cloud storage is switched on. Full Windows
+release gate: green, with no paid API calls.
+
+---
+
 ## 1.7.16 — 2026-09-14
 
 **A few typed words can now start the live site's PDF copying. Still nothing has been copied, and nothing changes for anyone using the Factory.**
