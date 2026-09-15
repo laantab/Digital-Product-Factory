@@ -145,7 +145,12 @@ _INVITE_COOKIE = "factory_invite"
 _INVITE_HEADER = "X-Factory-Invite"
 _INVITE_COOKIE_MAX_AGE = 90 * 24 * 60 * 60
 _INVITE_EXEMPT_PREFIXES = ("/static/", "/billing/webhook/")
-_INVITE_EXEMPT_PATHS = frozenset({"/invite"})
+# /admin/storage-migration is exempt because it is called by an automated
+# client, not a browser, and carries its own stronger credential: it is
+# invisible (404) unless FACTORY_MIGRATION_TOKEN is set on the host, and
+# then requires that token in a header. The invite cookie would add
+# nothing. Nothing else about the gate changes.
+_INVITE_EXEMPT_PATHS = frozenset({"/invite", "/admin/storage-migration"})
 _INVITE_REFUSED_MESSAGE = "Invite code required."
 
 _INVITE_PAGE = """<!doctype html>
@@ -4550,6 +4555,67 @@ def admin_backup_db():
     bak_path = _os.path.join(bak_dir, bak_name)
     shutil.copy2(src, bak_path)
     return jsonify({"ok": True, "backup_path": bak_path, "backup_name": bak_name})
+
+
+@app.post("/admin/storage-migration")
+def admin_storage_migration_route():
+    """Run the embedded-PDF storage migration against THIS host's database.
+
+    Upgrade 0, Phase 0B-3E. The production Factory runs on a Render
+    persistent disk that no other machine can reach, and the service plan
+    in use has no Shell. This route is the only way to run the already
+    proven migration executor against production data.
+
+    FAIL CLOSED, TWICE
+    ------------------
+      * Unless FACTORY_MIGRATION_TOKEN is set on the host, the route does
+        not exist -- it answers 404, exactly as an unknown path would, so
+        its presence leaks nothing on a host that never uses it.
+      * When set, every request must carry that token in the
+        X-Factory-Migration-Token header, compared in constant time.
+
+    It NEVER deletes or rewrites `pdf_bytes`, never rewrites a project's
+    data blob, never bumps a project version, and never regenerates a
+    product. `migrate` additionally requires an explicit confirm flag and
+    is bounded per request.
+    """
+    import hmac as _hmac
+
+    expected = str(os.environ.get("FACTORY_MIGRATION_TOKEN") or "").strip()
+    if not expected:
+        return _error("Not found.", 404)
+    supplied = str(request.headers.get("X-Factory-Migration-Token") or "")
+    if not _hmac.compare_digest(supplied, expected):
+        return _error("Not found.", 404)
+
+    body = request.get_json(silent=True) or {}
+    action = str(body.get("action") or "inventory").strip().lower()
+
+    from services.storage import production_migration as pm
+
+    try:
+        if action == "inventory":
+            return jsonify({"ok": True, "action": action, "result": pm.inventory()})
+        if action == "backup":
+            return jsonify({"ok": True, "action": action, "result": pm.backup()})
+        if action == "verify":
+            return jsonify({"ok": True, "action": action,
+                            "result": pm.verify_all(
+                                sample=int(body.get("sample") or 0),
+                                project_ids=body.get("project_ids"))})
+        if action == "migrate":
+            if body.get("confirm") is not True:
+                return _error("Migration requires an explicit confirm flag.", 400)
+            result = pm.migrate(limit=int(body.get("limit") or 10),
+                                project_ids=body.get("project_ids"))
+            return jsonify({"ok": not result["failed"], "action": action,
+                            "result": result})
+        return _error("Unknown action.", 400)
+    except Exception as exc:  # never leak a credential in an error
+        from services.storage.r2 import _redact
+
+        return jsonify({"ok": False, "action": action,
+                        "error": f"{type(exc).__name__}: {_redact(exc)}"}), 500
 
 
 @app.delete("/admin/delete-test-projects")

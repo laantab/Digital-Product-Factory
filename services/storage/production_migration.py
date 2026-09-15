@@ -1,0 +1,355 @@
+"""Production embedded-PDF migration, driven over HTTP — Phase 0B-3E.
+
+WHY THIS EXISTS
+---------------
+The embedded-PDF migration was completed against the local database. The
+production Factory runs on a Render persistent disk with its OWN SQLite
+file, which no other machine can reach — a disk "is accessible by only a
+single service instance". The Render plan in use has no Shell tab, so
+there is no way to run the proven executor against production data.
+
+This module is that missing hand. It exposes the SAME executor and the
+SAME safety contract as the local migration, callable through one
+token-gated admin route, so production can be migrated without a shell,
+a new service, or a second implementation.
+
+WHAT IT WILL NOT DO
+-------------------
+It never deletes or rewrites `pdf_bytes`. It never rewrites a project's
+data blob or bumps a project version. It never regenerates a product. It
+has no code path that removes a legacy artifact — the same rule the
+executor already enforces:
+
+    COPY -> VERIFY SIZE -> VERIFY SHA-256 -> RECORD -> READ BACK
+         -> VERIFY READBACK -> MARK VERIFIED -> KEEP LEGACY
+
+Every function here returns plain data with no secret in it.
+"""
+from __future__ import annotations
+
+import base64
+import binascii
+import hashlib
+import os
+import shutil
+import sqlite3
+from datetime import datetime, timezone
+
+from services.storage.keys import KIND_PDF, embedded_key
+
+#: Only this many projects may be migrated in one request. Bounded work
+#: per HTTP request is the same discipline that fixed the worker-timeout
+#: defect in v1.7.10 -- a migration must never become a long request.
+MAX_BATCH = 25
+
+
+def _decode(value: object) -> bytes | None:
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value)
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return base64.b64decode(text, validate=False)
+    except (binascii.Error, ValueError):
+        return None
+
+
+def database_path() -> str:
+    import database
+
+    return database.DB_PATH
+
+
+def _rows():
+    """Read every project id + data blob. Read-only connection."""
+    import database
+
+    conn = database.get_conn()
+    try:
+        return conn.execute("SELECT id, name, data FROM projects ORDER BY id").fetchall()
+    finally:
+        conn.close()
+
+
+def _scan() -> dict:
+    """Full scan. Returns the COMPLETE pending list, never truncated.
+
+    `inventory()` trims the list for its HTTP response; `migrate()` must
+    not work from a trimmed list, or a database with more eligible
+    projects than the display cap would leave the tail unreachable.
+    """
+    import database
+
+    path = database_path()
+    existing = {a["storage_key"] for a in _all_assets()}
+
+    scanned = eligible = already = 0
+    problems: list[dict] = []
+    pending: list[dict] = []
+    total_bytes = 0
+
+    for row in _rows():
+        scanned += 1
+        pid = int(row["id"])
+        try:
+            data = database._json_loads_safe(row["data"]) if hasattr(
+                database, "_json_loads_safe") else __import__("json").loads(row["data"] or "{}")
+        except Exception:
+            problems.append({"project_id": pid, "problem": "unparseable data"})
+            continue
+        if not isinstance(data, dict) or not data.get("pdf_bytes"):
+            continue
+
+        decoded = _decode(data.get("pdf_bytes"))
+        if decoded is None:
+            problems.append({"project_id": pid, "problem": "undecodable base64"})
+            continue
+        if not decoded:
+            problems.append({"project_id": pid, "problem": "zero bytes"})
+            continue
+        if decoded[:4] != b"%PDF":
+            problems.append({"project_id": pid, "problem": "not a PDF signature"})
+            continue
+
+        eligible += 1
+        key = embedded_key(pid, "pdf_bytes", KIND_PDF)
+        if key in existing:
+            already += 1
+            continue
+        total_bytes += len(decoded)
+        pending.append({
+            "project_id": pid,
+            "bytes": len(decoded),
+            "sha256": hashlib.sha256(decoded).hexdigest(),
+            "storage_key": key,
+            "product_type": str(data.get("product_type") or ""),
+        })
+
+    return {
+        "database_path": path,
+        "database_bytes": os.path.getsize(path) if os.path.exists(path) else 0,
+        "projects_scanned": scanned,
+        "projects_with_pdf_bytes": eligible,
+        "already_migrated": already,
+        "pending_migration": len(pending),
+        "pending_bytes": total_bytes,
+        "existing_asset_rows": len(existing),
+        "problems": problems,
+        "pending": pending,
+    }
+
+
+def inventory() -> dict:
+    """DRY RUN. What a production migration would do. Writes nothing.
+
+    The pending list is trimmed for the response; the totals above it are
+    complete.
+    """
+    result = _scan()
+    return {**result, "pending": result["pending"][:200],
+            "pending_listed": min(len(result["pending"]), 200)}
+
+
+def _all_assets() -> list[dict]:
+    import database
+
+    conn = database.get_conn()
+    try:
+        rows = conn.execute("SELECT * FROM assets").fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
+    return [database._asset_row_to_dict(r) for r in rows]
+
+
+def _sha_file(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def backup() -> dict:
+    """Timestamped byte-for-byte copy beside the production database.
+
+    Additive: it never overwrites an earlier backup (the filename carries
+    a timestamp) and never touches the source.
+    """
+    import database
+
+    src = database_path()
+    if not os.path.exists(src):
+        return {"ok": False, "error": "database file not found"}
+
+    # Checkpoint so the .db file is self-contained before it is copied.
+    try:
+        conn = database.get_conn()
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+        conn.close()
+    except sqlite3.Error:
+        pass
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    dest = f"{src}.PRE-0B3E-PRODUCTION-MIGRATION-{stamp}.bak"
+    if os.path.exists(dest):
+        return {"ok": False, "error": "backup already exists; refusing to overwrite"}
+
+    shutil.copy2(src, dest)
+    src_sha, dest_sha = _sha_file(src), _sha_file(dest)
+    return {
+        "ok": src_sha == dest_sha,
+        "source_path": src,
+        "backup_path": dest,
+        "source_bytes": os.path.getsize(src),
+        "backup_bytes": os.path.getsize(dest),
+        "source_sha256": src_sha,
+        "backup_sha256": dest_sha,
+        "identical": src_sha == dest_sha,
+    }
+
+
+def migrate(limit: int = 10, project_ids: list[int] | None = None) -> dict:
+    """Migrate up to `limit` eligible projects. Bounded and idempotent.
+
+    Stops at the first failed verification rather than continuing, so a
+    problem is isolated to one project instead of a whole batch.
+    """
+    import database
+    from services.storage import get_storage
+    from services.storage.executor import migrate_artifact
+
+    limit = max(1, min(int(limit or 1), MAX_BATCH))
+    plan = _scan()                      # full list, never the display cap
+    pending = plan["pending"]
+    if project_ids:
+        wanted = {int(p) for p in project_ids}
+        pending = [p for p in pending if p["project_id"] in wanted]
+    pending = pending[:limit]
+
+    # The migration writes to R2 explicitly, regardless of which driver the
+    # app serves reads from. FACTORY_STORAGE_DRIVER stays whatever it is.
+    from services.storage.r2 import R2Driver
+
+    storage = R2Driver()
+
+    migrated, failed, skipped = [], [], []
+    moved_bytes = 0
+    for item in pending:
+        pid = item["project_id"]
+        project = database.get_project(pid)
+        data = (project or {}).get("data") or {}
+        decoded = _decode(data.get("pdf_bytes"))
+        if not decoded:
+            skipped.append({"project_id": pid, "reason": "pdf_bytes unreadable at migrate time"})
+            continue
+        sha = hashlib.sha256(decoded).hexdigest()
+        key = item["storage_key"]
+
+        outcome = migrate_artifact(
+            project_id=pid, storage_key=key, source_bytes=decoded, kind=KIND_PDF,
+            content_type="application/pdf", enable_customer_migration=True,
+            storage=storage,
+        )
+        if not outcome.ok:
+            failed.append({"project_id": pid, "step": outcome.step_reached,
+                           "error": outcome.error})
+            break
+
+        check = verify_one(pid, storage=storage)
+        if not check.get("ok"):
+            failed.append({"project_id": pid, "step": "verification", "error": check})
+            break
+
+        migrated.append(pid)
+        moved_bytes += len(decoded)
+
+    after = _scan()
+    return {
+        "migrated": migrated,
+        "migrated_count": len(migrated),
+        "bytes_migrated": moved_bytes,
+        "skipped": skipped,
+        "failed": failed,
+        "remaining_after": after["pending_migration"],
+        "asset_rows_after": after["existing_asset_rows"],
+    }
+
+
+def verify_one(project_id: int, storage=None) -> dict:
+    """Re-verify one migrated project against its retained legacy blob."""
+    import database
+
+    if storage is None:
+        from services.storage.r2 import R2Driver
+
+        storage = R2Driver()
+
+    pid = int(project_id)
+    project = database.get_project(pid)
+    if not project:
+        return {"ok": False, "project_id": pid, "error": "no such project"}
+    data = project.get("data") or {}
+    legacy = _decode(data.get("pdf_bytes"))
+    key = embedded_key(pid, "pdf_bytes", KIND_PDF)
+    record = database.get_asset_by_key(key)
+
+    if legacy is None:
+        return {"ok": False, "project_id": pid, "error": "legacy pdf_bytes missing"}
+    if not record:
+        return {"ok": False, "project_id": pid, "error": "no asset row"}
+
+    try:
+        obj = storage.get(key)
+    except Exception as exc:
+        return {"ok": False, "project_id": pid, "error": f"cannot read object: {type(exc).__name__}"}
+
+    checks = {
+        "object_exists": True,
+        "bytes_match_legacy": obj == legacy,
+        "byte_count": len(obj) == len(legacy) == int(record["byte_size"]),
+        "sha256": hashlib.sha256(obj).hexdigest() == record["checksum"]
+        == hashlib.sha256(legacy).hexdigest(),
+        "approved": bool(record["approved"]),
+        "legacy_present": bool(data.get("pdf_bytes")),
+    }
+    return {
+        "ok": all(checks.values()),
+        "project_id": pid,
+        "storage_key": key,
+        "bytes": len(obj),
+        "checks": checks,
+    }
+
+
+def verify_all(sample: int = 0, project_ids: list[int] | None = None) -> dict:
+    """Verify migrated assets: all of them, a random sample, or named ones.
+
+    `project_ids` narrows the check to specific projects, which is how a
+    spot-check after a batch is done without re-reading every object.
+    """
+    import random
+
+    from services.storage.r2 import R2Driver
+
+    storage = R2Driver()
+    assets = _all_assets()
+    targets = assets
+    if project_ids:
+        wanted = {int(p) for p in project_ids}
+        targets = [a for a in assets if a["project_id"] in wanted]
+    elif sample and sample < len(assets):
+        targets = random.sample(assets, sample)
+
+    results = [verify_one(a["project_id"], storage=storage) for a in targets]
+    bad = [r for r in results if not r.get("ok")]
+    return {
+        "asset_rows": len(assets),
+        "verified": len(results),
+        "passed": len(results) - len(bad),
+        "failed": len(bad),
+        "failures": bad[:20],
+        "all_ok": not bad,
+    }

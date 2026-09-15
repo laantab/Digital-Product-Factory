@@ -5,6 +5,50 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.15 — 2026-09-14
+
+**Upgrade 0, Phase 0B-3E: a safe way to move the live site's PDFs into cloud storage. Nothing has been moved yet, and nothing changes for anyone using the Factory.**
+
+### What changed
+
+- **The live site can now be asked to copy its own PDFs into cloud
+  storage.** Everything moved so far was moved on the office computer.
+  The live site keeps its own separate copy of the database on its own
+  disk, which no other machine can reach — and the hosting plan has no
+  way to run a command on that machine. So the Factory gained one
+  private, locked door that can be knocked on from outside to start the
+  same copying work that has already been proven.
+- **The door does not exist unless it is switched on.** Until a secret
+  is set on the host, the address behaves exactly like a page that was
+  never built — it says "not found". Once switched on, it still says
+  "not found" to anyone who does not present the exact secret, so no one
+  can even discover that it is there.
+- **It can only do four things**: report what it *would* copy, make a
+  backup, copy a small batch, and check its own work. Copying requires
+  asking for it deliberately and is limited to a small number at a time.
+
+### What was fixed
+
+- Nothing was broken. This closes a gap: the copying work was finished
+  on the office computer but had no way to reach the live site.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. The new address is
+invisible and inactive on any host where the secret is not set, and it
+can never delete a PDF, change a saved product, or rebuild anything.
+Every original copy stays exactly where it is.
+
+### Release gate
+
+17 new checks, most of them about what the new address *refuses* to do:
+stay invisible without a secret, refuse a wrong secret without admitting
+it exists, never leak a credential, never touch a saved product, and stop
+rather than hide a mismatch. The private-beta gate was re-tested and is
+unchanged. Full Windows release gate: green, with no paid API calls.
+
+---
+
 ## 1.7.14 — 2026-09-14
 
 **Upgrade 0, Phase 0B-3B2B: the part of the Factory that builds a customer's download can now read a product's PDF from cloud storage. Still only one PDF has been moved.**
