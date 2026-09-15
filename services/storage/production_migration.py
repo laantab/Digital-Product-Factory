@@ -353,3 +353,51 @@ def verify_all(sample: int = 0, project_ids: list[int] | None = None) -> dict:
         "failures": bad[:20],
         "all_ok": not bad,
     }
+
+
+# ---------------------------------------------------------------------------
+# Command line
+#
+# Render's Web Shell mangles pasted multi-line input (it injects bracketed
+# paste markers), so the production migration has to be driveable by a few
+# typed words. Run from the project root:
+#
+#     python pmig.py                 inventory  (READ ONLY -- the default)
+#     python pmig.py backup          timestamped verified copy
+#     python pmig.py migrate 10      migrate up to 10, bounded
+#     python pmig.py verify          re-verify every migrated asset
+#     python pmig.py verify 5        re-verify a random sample of 5
+#
+# The default does nothing but read. `migrate` is the only action that
+# writes an object, and it never deletes or rewrites pdf_bytes.
+# ---------------------------------------------------------------------------
+def main(argv: list[str] | None = None) -> int:
+    import json as _json
+
+    args = list(argv if argv is not None else __import__("sys").argv[1:])
+    action = (args[0] if args else "inventory").strip().lower()
+    number = int(args[1]) if len(args) > 1 and str(args[1]).isdigit() else 0
+
+    if action in ("inventory", "", "status"):
+        report = inventory()
+        report.pop("pending", None)
+        report["problems_count"] = len(report.pop("problems", []))
+        report["on_persistent_disk"] = str(
+            report.get("database_path", "")).startswith("/var/data")
+        result = report
+    elif action == "backup":
+        result = backup()
+    elif action == "migrate":
+        result = migrate(limit=number or 10)
+    elif action == "verify":
+        result = verify_all(sample=number)
+    else:
+        print(f"unknown action: {action!r}")
+        return 2
+
+    print(_json.dumps(result, indent=2, default=str))
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised via pmig.py
+    raise SystemExit(main())

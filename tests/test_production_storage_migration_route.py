@@ -265,6 +265,48 @@ def test_migrate_is_bounded_per_request(client, monkeypatch, tmp_path):
     assert result["migrated_count"] <= 2, "limit not honoured"
 
 
+def test_cli_default_action_is_read_only(client, monkeypatch, capsys):
+    """`python pmig.py` with no arguments must only ever read.
+
+    It is typed straight into a production shell, so the default has to be
+    the harmless one -- never a migration.
+    """
+    import services.storage.production_migration as pm
+
+    project = _project()
+    before = database.get_project(project["id"])
+
+    assert pm.main([]) == 0
+    printed = json.loads(capsys.readouterr().out)
+
+    assert "projects_scanned" in printed
+    assert "pending_migration" in printed
+    assert "on_persistent_disk" in printed
+    assert "pending" not in printed, "the full list must not be dumped to a shell"
+
+    after = database.get_project(project["id"])
+    assert after["data"]["pdf_bytes"] == before["data"]["pdf_bytes"]
+    assert after["data"]["_row_version"] == before["data"]["_row_version"]
+    assert database.list_assets(project["id"]) == []
+
+
+def test_cli_rejects_an_unknown_action_without_doing_anything(client, capsys):
+    import services.storage.production_migration as pm
+
+    project = _project()
+    assert pm.main(["destroy"]) == 2
+    assert "unknown action" in capsys.readouterr().out
+    assert database.list_assets(project["id"]) == []
+
+
+def test_cli_verify_does_not_migrate(client, capsys):
+    import services.storage.production_migration as pm
+
+    project = _project()
+    assert pm.main(["verify"]) == 0
+    assert database.list_assets(project["id"]) == [], "verify must never migrate"
+
+
 def test_migration_is_not_limited_by_the_inventory_display_cap(client, monkeypatch):
     """A migration must reach projects beyond the response's 200-row cap.
 

@@ -5,6 +5,42 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.16 — 2026-09-14
+
+**A few typed words can now start the live site's PDF copying. Still nothing has been copied, and nothing changes for anyone using the Factory.**
+
+### What changed
+
+- **The copying work can now be run by typing a short command** on the
+  live site's own command line, instead of through the private web
+  address added in 1.7.15. The hosting plan does have a command line
+  after all, and its window mangles anything long that is pasted in — so
+  the commands are now a few words each.
+- **The safe option is the default.** Typing the command with no extra
+  words only *looks*: it reports what it would copy and changes nothing.
+  Copying has to be asked for deliberately, by name, and is limited to a
+  small number at a time.
+
+### What was fixed
+
+- Nothing was broken. This makes an already-safe job practical to run in
+  a window that cannot handle long pasted commands.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. No PDF has been copied
+on the live site yet, every original copy stays exactly where it is, and
+cloud storage is still switched off.
+
+### Release gate
+
+Three new checks covering the command line itself: the no-argument
+default only reads, an unrecognised word does nothing at all, and the
+checking option can never copy anything. Full Windows release gate:
+green, with no paid API calls.
+
+---
+
 ## 1.7.15 — 2026-09-14
 
 **Upgrade 0, Phase 0B-3E: a safe way to move the live site's PDFs into cloud storage. Nothing has been moved yet, and nothing changes for anyone using the Factory.**
