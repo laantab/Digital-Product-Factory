@@ -8,6 +8,11 @@ copy: never edit or test there.
 
 ## First five minutes of every session
 
+0. Read `AUTONOMOUS_UPGRADE_STANDING_ORDERS.md`. It says what to do without
+   asking, what to always stop for, and the rule that overrides the rest: the
+   repository and the live database are the authority, not a prompt or a
+   handoff document. Verify state before acting, and never re-run a completed
+   phase because a document still describes it as pending.
 1. Read the newest `SESSION_HANDOFF_*.md` in this folder. It says where work stopped
    and what is open. Start from its "Start here" section.
 2. Run `git status` and `git log --oneline -5`. Expect a clean tree on `main`.
