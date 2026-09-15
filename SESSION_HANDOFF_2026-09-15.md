@@ -4,103 +4,108 @@
 
 Read `AUTONOMOUS_UPGRADE_STANDING_ORDERS.md` first, then this file.
 
-**The next genuinely unfinished step is the PRODUCTION embedded-PDF
-migration, run from the Render Shell.** It is waiting on one typed
-command. Everything before it is done.
+**Phase 0B-3 (Storage / R2) is COMPLETE, including production.** R2 reads
+are live in production with legacy fallback intact.
 
-```
-python pmig.py
-```
-
-Typed in Render → Factory web service → Shell, from `~/project/src$`.
-No arguments means inventory only: it reads, prints a summary, writes
-nothing, and contacts no provider.
+**The next approved step is 0B-4 (PostgreSQL) — not yet started, and it
+needs the owner's go-ahead because it means creating a paid Render
+service.**
 
 ---
 
-## Ground truth (verified 2026-09-15, not copied forward)
+## Ground truth (verified 2026-09-15)
 
 | | |
 |---|---|
-| HEAD | `692e17d` |
+| HEAD | `471004f` |
 | `main` == `origin/main` | yes |
 | Working tree | clean |
-| VERSION | **1.7.16** |
-| Full Windows release gate | 3,012 tests · 0 failures · 0 errors · 0 skipped · 0 paid API calls |
-
-**A handoff dated 2026-09-15 circulated describing HEAD `736e429`,
-VERSION 1.7.14, and "67 embedded PDFs remaining". That document was
-written from a state several commits behind reality and is superseded by
-this one.** The bulk migration it lists as the next step was completed.
-
-### Local database — embedded PDFs fully migrated
-
-| | |
-|---|---|
-| Projects | 114 |
-| Rows retaining `pdf_bytes` | **73** (none removed) |
-| Asset rows | **73** |
-| R2 customer objects | **73** (51,727,628 bytes) |
-| Migrated / remaining | **73 / 0** |
-| Project data blobs changed | 0 |
-| Project versions bumped | 0 |
-| Exports | 3,224 files / 1,944,650,540 bytes — unchanged |
-
-### Production — NOT migrated
-
-Production runs on a Render persistent disk with **its own separate
-SQLite database**. The local migration proves nothing about production.
-Production has **zero asset rows**, so enabling R2 reads there today
-would be a verified no-op: `list_assets_exist()` returns False and R2 is
-never contacted.
-
-| | |
-|---|---|
-| R2 variables on Render | **configured** (owner added them 2026-09-14) |
-| `FACTORY_STORAGE_DRIVER` on Render | **unset** — deliberately |
-| Production PDFs migrated | **0** |
-| Postgres / Background Worker | not created |
+| VERSION | **1.7.19** |
+| Full Windows release gate | 3,028 tests · 0 failures · 0 errors · 0 skipped · 0 paid API calls |
 
 ---
 
-## What was completed since the superseded handoff
+## PRODUCTION — R2 reads ENABLED (milestone, 2026-09-15)
 
-**Phase 0B-3B2D — bulk migration (local), no code change, VERSION stayed 1.7.14.**
-All 67 remaining PDFs migrated in batches A–E (327 alone first at 41.76 MB,
-then 20/20/20/6), each batch with its own verified backup, per-project
-checksum verification, idempotency re-run, and a re-verified sample of
-earlier assets. Total 51,727,628 bytes — exactly the original dry-run
-prediction. Seven `PRE-0B3B2D-*` backups are in `Factory Control Center\Backups\`.
+Confirmed by the owner running the verification commands on the live
+Render instance. These are production-side results; this machine cannot
+reach `/var/data/projects.db`.
 
-Two pre-existing conditions surfaced and proven unrelated to storage:
-project 327's export is blocked by the Coloring Book QA gate, and
-projects 291/323/308 trigger the crossword full-book rebuild. Both behave
-identically with the driver unset.
+| | |
+|---|---|
+| Factory version in production | **v1.7.19** |
+| `FACTORY_STORAGE_DRIVER` | **`r2`** — R2 reads enabled |
+| Production projects | 9 |
+| Projects with `pdf_bytes` | 4 |
+| Embedded PDFs migrated to R2 | **4** |
+| Pending migration | **0** |
+| Asset rows | **4** |
+| Legacy `pdf_bytes` retained | **YES — all 4** |
+| `readcheck` | **PASS** |
+| Fallback verification | **PASS** |
+| Live customer Saved Projects / download smoke test | **PASS** |
+| Legacy data deleted | **NONE** |
 
-**Phase 0B-3E — production migration mechanism.**
-- `v1.7.15` (`3b28b65`, relock `ee7afc6`): `services/storage/production_migration.py`
-  (inventory / backup / bounded migrate / verify, reusing the proven
-  executor) plus a token-gated `POST /admin/storage-migration`, added when
-  Render Shell was believed unavailable.
-- `v1.7.16` (`692e17d`): `pmig.py`, a typed CLI, after Shell turned out to
-  be available and its window was found to mangle pasted multi-line input.
+**Rollback is one step and remains available:** set
+`FACTORY_STORAGE_DRIVER` to `local` (or delete the variable). Reads return
+to the legacy copies immediately — no data repair, no restore, no code
+change. This works *only* because every legacy `pdf_bytes` is still
+present. **Do not delete them.**
 
-Bug caught during that work: `migrate()` was consuming `inventory()`'s
-200-row display cap, so a production database with more eligible projects
-would have left the tail silently unmigrated. Fixed, with a test pinning it.
+A successful R2 read performs **no write of any kind**: no project blob
+rewrite, no version bump, no lifecycle change, no asset update. The read
+path is a `SELECT` plus an R2 `head`/`get`. Audited in code before
+enablement.
+
+### Local database (separate from production)
+
+73 of 73 embedded PDFs migrated, 73 asset rows, 73 R2 objects,
+51,727,628 bytes, all 73 legacy `pdf_bytes` retained, 114 projects,
+3,224 export files unchanged.
 
 ---
 
-## Cleanup owed once production migration completes
+## Storage tooling now in the repo
 
-`pmig.py` and the `/admin/storage-migration` route both exist only to
-reach production. Remove them together afterwards — including the
-`invite_protection` exemption the route added. The route is inert
-meanwhile: it returns 404 unless `FACTORY_MIGRATION_TOKEN` is set on the
-host, and it is not set.
+| Command | What it does |
+|---|---|
+| `python pmig.py` | inventory — READ ONLY (the default) |
+| `python pmig.py backup` | timestamped, checksum-verified copy |
+| `python pmig.py migrate` | the full guarded production sequence |
+| `python pmig.py migrate N` | raw bounded batch, local use |
+| `python pmig.py verify` | re-verify migrated assets against legacy |
+| `python pmig.py readcheck` | which source the REAL reader chooses, plus a safe fallback probe |
 
-## Owner decision pending
+`migrate` is fail-closed at every gate: it refuses unless the database is
+on the persistent disk, R2 is fully configured, the driver is still
+unset, and no record is malformed — and it will not migrate at all unless
+a backup has been proven byte-identical.
 
-After the production migration verifies, the next owner-level decision is
-whether to enable R2 reads in production (`FACTORY_STORAGE_DRIVER=r2`) or
-move to 0B-4 (Postgres). **Do not remove any `pdf_bytes` either way.**
+## Cleanup owed (not urgent, not yet done)
+
+`pmig.py` and the token-gated `POST /admin/storage-migration` route
+(v1.7.15) both exist only to reach production storage. Once there is no
+further production migration work, remove them together, including the
+`invite_protection` invite-gate exemption the route added. The route is
+inert meanwhile: 404 unless `FACTORY_MIGRATION_TOKEN` is set, and it is
+not set.
+
+---
+
+## Next step — 0B-4 PostgreSQL (OWNER DECISION REQUIRED)
+
+Roadmap: **0B-3 storage ✅ → 0B-4 Postgres → 0B-5 job manager + worker →
+0C ebook worker migration → 0D three live ebook builds → 0E remaining
+workflows.** Marketing (MARKETING-1…6) only after production stability.
+
+0B-4 is an owner stop condition: it means **creating and paying for a
+Render PostgreSQL instance**, and the blueprint (§26) requires a paid tier
+with backups and recovery. Do not create it without explicit approval.
+
+Still-open items carried forward: the owner's live ebook re-test of the
+v1.7.10 bounded-generation fix, and the §26 dashboard-only unknowns
+(Render start command / Gunicorn timeout / worker count, worker and
+Postgres pricing, connection limits).
+
+**Do not delete any `pdf_bytes`.** Do not migrate export files. Those are
+separate, later, separately-approved decisions.
