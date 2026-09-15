@@ -5,6 +5,47 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.20 — 2026-09-15
+
+**Groundwork for moving the Factory's records to a stronger database — with a checker that proves nothing was lost. Nothing has moved yet.**
+
+### What changed
+
+- **The Factory can now speak to a professional database (PostgreSQL) as
+  well as the simple file-based one it uses today.** This is preparation
+  for the bigger change that lets products be built in the background
+  instead of while a customer waits.
+- **Nothing changes until it is switched on.** With the new setting
+  absent — which is how every copy of the Factory runs right now — the
+  Factory behaves exactly as before. Switching it on without the required
+  software fails loudly rather than quietly doing something unexpected.
+- **A copy tool and, more importantly, a proof tool.** The copy tool moves
+  every saved product and file record across. The proof tool then
+  compares the two databases record by record and field by field, and
+  reports every single difference it finds.
+
+### What was fixed
+
+- Nothing was broken. This is new groundwork.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory today.
+
+### Release gate
+
+Twenty-five new checks. Most of them deliberately try to make the proof
+tool FAIL — a checker that always says "fine" would be worthless. It is
+required to catch a missing record, a secretly altered field, a lost
+version number, and an unexpected extra record. It also must never write
+to the original database, which stays as the way back.
+
+Rehearsed against the real Factory database: 114 saved products and 73
+file records copied and compared with zero differences, and the original
+left untouched.
+
+---
+
 ## 1.7.19 — 2026-09-15
 
 **A new read-only check that answers the one question that matters when cloud storage is switched on: which copy is the Factory actually using?**
