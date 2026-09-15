@@ -5,6 +5,52 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.21 — 2026-09-15
+
+**The Factory can now actually run on the new professional database — but only when told to, in two separate steps. Nothing has switched yet.**
+
+### What changed
+
+- **Two separate settings are now required to move the Factory onto the
+  new database**, and this is the most important safety decision in the
+  whole change. One setting says *where* the new database is. A second,
+  separate setting says *use it*.
+- **Why it matters:** if the Factory switched the moment the database was
+  connected, then simply linking it would have pointed the live site at a
+  brand-new, completely empty database. Every customer's Saved Projects
+  would have appeared to vanish and every download would have failed —
+  with an empty list as the only clue that anything was wrong. Keeping
+  the two apart means the new database can be created, filled and checked
+  while customers carry on using the old one, and the actual switch is
+  one deliberate act that is undone by deleting one setting.
+- **A short set of commands** to back up, create, copy, check and report —
+  including one that says which database the Factory is really using,
+  rather than assuming.
+
+### What was fixed
+
+- **A wrong-database hazard, caught by its own test.** The switch
+  originally accepted *any* database address. That would have let the
+  Factory try to reach a completely different kind of database with the
+  wrong software. It now requires the address to genuinely be the new
+  database's.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. Both settings are
+absent, so the Factory runs exactly as before, and the existing database
+file is never deleted — it stays as the way back.
+
+### Release gate
+
+Twenty-five new checks. Most prove the switch CANNOT happen by accident:
+neither setting alone moves anything, only an exact value counts, a
+wrong-database address is refused, and if the check itself fails the
+Factory stays on the old database rather than falling over. Full Windows
+release gate: green, with no paid API calls.
+
+---
+
 ## 1.7.20 — 2026-09-15
 
 **Groundwork for moving the Factory's records to a stronger database — with a checker that proves nothing was lost. Nothing has moved yet.**

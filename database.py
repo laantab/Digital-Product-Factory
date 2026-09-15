@@ -148,7 +148,28 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def get_conn() -> sqlite3.Connection:
+def _use_postgres() -> bool:
+    """True only when explicitly switched to PostgreSQL (Upgrade 0, 0B-4).
+
+    Requires BOTH FACTORY_DB_BACKEND=postgres AND a DATABASE_URL. Either
+    alone leaves the Factory on SQLite exactly as before -- which is what
+    lets the database be created, migrated and verified while production
+    carries on serving customers from SQLite.
+    """
+    try:
+        from services.db.connection import use_postgres
+
+        return use_postgres()
+    except Exception:
+        return False
+
+
+def get_conn():
+    if _use_postgres():
+        from services.db.connection import connect as _pg_connect
+
+        return _pg_connect()
+
     # A freshly mounted persistent disk (e.g. Render's /var/data) is empty, and
     # sqlite3 will not create missing parent directories for us. Make the DB's
     # directory first so the very first boot on a new volume succeeds instead
@@ -165,6 +186,13 @@ def get_conn() -> sqlite3.Connection:
 
 def init_db() -> None:
     conn = get_conn()
+    if _use_postgres():
+        # The same logical schema, in PostgreSQL's spelling. Idempotent.
+        from services.db.connection import init_postgres_schema
+
+        init_postgres_schema(conn)
+        conn.close()
+        return
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS projects (

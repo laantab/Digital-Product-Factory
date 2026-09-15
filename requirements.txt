@@ -9,6 +9,10 @@ beautifulsoup4==4.13.4
 # app runs normally without it until FACTORY_STORAGE_DRIVER=r2 is set.
 boto3==1.40.15
 openai==1.97.1
+# PostgreSQL driver — Upgrade 0, Phase 0B-4. Imported lazily and used only
+# when FACTORY_DB_BACKEND=postgres AND DATABASE_URL are both set; with
+# either absent the Factory runs on SQLite exactly as before.
+psycopg[binary]==3.2.9
 python-dotenv==1.1.1
 pypdf==6.10.0
 reportlab==4.4.9

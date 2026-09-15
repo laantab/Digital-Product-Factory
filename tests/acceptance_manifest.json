@@ -132,6 +132,7 @@
     "tests/test_packaging_embedded_asset_reader.py",
     "tests/test_production_storage_migration_route.py",
     "tests/test_postgres_compatibility.py",
+    "tests/test_postgres_cutover.py",
     "tests/test_chapter_photo_queries.py",
     "tests/test_visual_relevance_strategy.py",
     "tests/test_database_isolation.py",
