@@ -522,6 +522,90 @@ def test_production_run_prints_no_credential_value(prod, monkeypatch, capsys):
     assert "leaky-secret-value-9" not in capsys.readouterr().out
 
 
+# ============================== read-source verification (readcheck) =======
+
+
+def test_readcheck_reports_legacy_while_reads_are_disabled(prod):
+    """With the driver unset the real reader must still choose legacy."""
+    _project()
+    prod.run_production_migration()
+
+    report = prod.read_check()
+    assert report["r2_reads_enabled"] is False
+    assert report["served_from_legacy"] == report["assets_checked"]
+    assert report["served_from_r2"] == 0
+    for entry in report["per_project"]:
+        assert entry["matches_legacy"] is True
+        assert entry["legacy_present"] is True
+        assert entry["valid_pdf"] is True
+
+
+def test_readcheck_reports_r2_once_reads_are_enabled(prod, monkeypatch):
+    """The point of the whole phase: the real reader prefers R2."""
+    _project()
+    prod.run_production_migration()
+
+    monkeypatch.setenv("FACTORY_STORAGE_DRIVER", "r2")
+    report = prod.read_check()
+
+    assert report["r2_reads_enabled"] is True
+    assert report["served_from_r2"] == report["assets_checked"] >= 1
+    assert report["served_from_legacy"] == 0
+    for entry in report["per_project"]:
+        assert entry["source"] == "R2"
+        assert entry["matches_legacy"] is True, "R2 bytes must equal the legacy copy"
+        assert entry["sha256_ok"] is True
+        assert entry["legacy_present"] is True
+    assert report["ok"] is True
+    assert report["result"] == "PASS"
+
+
+def test_readcheck_fallback_probe_proves_every_failure_mode(prod, monkeypatch):
+    _project()
+    prod.run_production_migration()
+    monkeypatch.setenv("FACTORY_STORAGE_DRIVER", "r2")
+
+    probe = prod.read_check()["fallback_probe"]
+    assert probe["all_fell_back_to_legacy"] is True
+    assert probe["production_objects_touched"] == 0
+    for mode in ("r2_unavailable", "object_missing", "checksum_mismatch", "wrong_size"):
+        assert probe["modes"][mode]["used_legacy"] is True, mode
+        assert probe["modes"][mode]["sha256_ok"] is True, mode
+
+
+def test_readcheck_writes_nothing_at_all(prod, monkeypatch):
+    """It is typed against live production. It must only read."""
+    project = _project()
+    prod.run_production_migration()
+    monkeypatch.setenv("FACTORY_STORAGE_DRIVER", "r2")
+
+    before = database.get_project(project["id"])
+    assets_before = database.list_assets(project["id"])
+
+    prod.read_check()
+
+    after = database.get_project(project["id"])
+    assert after["data"]["pdf_bytes"] == before["data"]["pdf_bytes"]
+    assert after["data"]["_row_version"] == before["data"]["_row_version"]
+    assert after["data"].get("artifact_state") == before["data"].get("artifact_state")
+    assert database.list_assets(project["id"]) == assets_before
+
+
+def test_readcheck_fails_when_a_legacy_copy_has_gone_missing(prod, monkeypatch):
+    """The fallback is only real while the legacy copy exists -- say so."""
+    project = _project()
+    prod.run_production_migration()
+    monkeypatch.setenv("FACTORY_STORAGE_DRIVER", "r2")
+
+    stored = database.get_project(project["id"])["data"]
+    stored.pop("pdf_bytes")
+    database.update_project(project["id"], None, stored)
+
+    report = prod.read_check()
+    assert report["ok"] is False
+    assert report["result"] == "FAIL"
+
+
 def test_migration_is_not_limited_by_the_inventory_display_cap(client, monkeypatch):
     """A migration must reach projects beyond the response's 200-row cap.
 

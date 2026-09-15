@@ -405,6 +405,136 @@ def verify_all(sample: int = 0, project_ids: list[int] | None = None) -> dict:
     }
 
 
+def read_check(fallback_probe: bool = True) -> dict:
+    """READ ONLY. Which source the REAL packaging reader actually chooses.
+
+    `verify` proves the stored objects are intact. This proves something
+    different and, after enabling R2 reads, more important: that the
+    function the six packaging read sites actually call
+    (`services.packaging._verified_embedded_pdf`) selects R2 rather than
+    the legacy blob -- and that the bytes it returns are identical to the
+    legacy copy.
+
+    It deliberately does NOT call `build_product_export`, which would
+    write export files. It only reads.
+
+    With `fallback_probe`, it then proves the fallback on real production
+    data by substituting a broken storage driver IN THIS PROCESS ONLY.
+    No production object is touched, moved, corrupted or deleted.
+    """
+    import database
+    from services.packaging import _verified_embedded_pdf
+
+    env = environment()
+    results = []
+    for asset in _all_assets():
+        pid = asset["project_id"]
+        project = database.get_project(pid)
+        if not project:
+            results.append({"project_id": pid, "error": "project missing"})
+            continue
+        data = project.get("data") or {}
+        legacy = _decode(data.get("pdf_bytes"))
+        served = _verified_embedded_pdf(project, data)
+        source = "R2" if served is not None else "LEGACY"
+        used = served if served is not None else legacy
+        results.append({
+            "project_id": pid,
+            "source": source,
+            "bytes": len(used) if used else 0,
+            "matches_legacy": bool(used and legacy and used == legacy),
+            "sha256_ok": bool(
+                used and hashlib.sha256(used).hexdigest() == asset["checksum"]),
+            "valid_pdf": bool(used and used[:4] == b"%PDF"),
+            "legacy_present": bool(data.get("pdf_bytes")),
+        })
+
+    report = {
+        "storage_driver": env["storage_driver"],
+        "r2_reads_enabled": env["r2_reads_enabled"],
+        "assets_checked": len(results),
+        "served_from_r2": sum(1 for r in results if r.get("source") == "R2"),
+        "served_from_legacy": sum(1 for r in results if r.get("source") == "LEGACY"),
+        "per_project": results,
+    }
+
+    if fallback_probe and results:
+        report["fallback_probe"] = _fallback_probe(results[0]["project_id"])
+
+    ok = bool(results) and all(
+        r.get("matches_legacy") and r.get("sha256_ok") and r.get("valid_pdf")
+        and r.get("legacy_present") for r in results)
+    if env["r2_reads_enabled"]:
+        ok = ok and report["served_from_r2"] == len(results)
+    probe = report.get("fallback_probe") or {}
+    if fallback_probe:
+        ok = ok and probe.get("all_fell_back_to_legacy", False)
+    report["ok"] = ok
+    report["result"] = "PASS" if ok else "FAIL"
+    return report
+
+
+def _fallback_probe(project_id: int) -> dict:
+    """Prove the fallback on real data without touching a real object.
+
+    Each failure mode is simulated by replacing the storage driver for the
+    duration of one in-process call. Production R2 objects are never
+    written to, deleted, or modified.
+    """
+    import database
+    from services.packaging import _verified_embedded_pdf
+    from services.storage.base import StorageStat
+    import services.storage.compat as compat
+
+    project = database.get_project(int(project_id))
+    data = (project or {}).get("data") or {}
+    legacy = _decode(data.get("pdf_bytes"))
+    if not legacy:
+        return {"error": "no legacy copy to fall back to"}
+
+    size, digest = len(legacy), hashlib.sha256(legacy).hexdigest()
+
+    class _Outage:
+        def stat(self, key): raise RuntimeError("simulated R2 outage")
+        def get(self, key): raise RuntimeError("simulated R2 outage")
+
+    class _Missing:
+        def stat(self, key): return None
+        def get(self, key): raise RuntimeError("no object")
+
+    class _Corrupt:
+        def stat(self, key): return StorageStat(key=key, size=size, checksum="0" * 64)
+        def get(self, key): return b"not-the-real-pdf"
+
+    class _WrongSize:
+        def stat(self, key): return StorageStat(key=key, size=size + 999, checksum=digest)
+        def get(self, key): return legacy
+
+    real = compat.get_storage
+    outcomes = {}
+    try:
+        for label, fake in (("r2_unavailable", _Outage()), ("object_missing", _Missing()),
+                            ("checksum_mismatch", _Corrupt()), ("wrong_size", _WrongSize())):
+            compat.get_storage = lambda f=fake: f
+            served = _verified_embedded_pdf(project, data)
+            used = served if served is not None else legacy
+            outcomes[label] = {
+                "used_legacy": served is None,
+                "bytes": len(used),
+                "sha256_ok": hashlib.sha256(used).hexdigest() == digest,
+            }
+    finally:
+        compat.get_storage = real
+
+    return {
+        "project_id": int(project_id),
+        "modes": outcomes,
+        "all_fell_back_to_legacy": all(
+            o["used_legacy"] and o["sha256_ok"] for o in outcomes.values()),
+        "production_objects_touched": 0,
+    }
+
+
 #: Where a database has to live to count as "on the persistent disk".
 #: Tests monkeypatch this; production never changes it.
 PERSISTENT_DISK_PREFIXES = ("/var/data",)
@@ -584,6 +714,8 @@ def main(argv: list[str] | None = None) -> int:
         result = migrate(limit=number) if number else run_production_migration()
     elif action == "verify":
         result = verify_all(sample=number)
+    elif action in ("readcheck", "reads"):
+        result = read_check()
     else:
         print(f"unknown action: {action!r}")
         return 2

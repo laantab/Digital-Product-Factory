@@ -5,6 +5,47 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.19 — 2026-09-15
+
+**A new read-only check that answers the one question that matters when cloud storage is switched on: which copy is the Factory actually using?**
+
+### What changed
+
+- **`readcheck` reports, for every moved PDF, whether the Factory read it
+  from cloud storage or from the original copy** — and confirms the bytes
+  are identical either way. The existing check proved the cloud copies
+  were intact; this proves which one the product-building code actually
+  picks up, which is a different and more useful thing once cloud reading
+  is switched on.
+- **It also proves the safety net still works, on real data, without
+  breaking anything.** It temporarily pretends — inside its own run only —
+  that cloud storage is down, that the file is missing, that it is
+  corrupted, and that it is the wrong size. In all four cases the Factory
+  must fall back to the original copy and produce the right bytes. No real
+  stored file is touched, moved, changed or deleted.
+- **It only reads.** It does not copy, delete, rebuild a product, alter a
+  saved project, or contact any paid service.
+
+### What was fixed
+
+- Nothing was broken. This closes the last blind spot before switching
+  cloud reading on: there was no way to confirm which copy was being used.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory.
+
+### Release gate
+
+Five new checks: the right copy is chosen with cloud reading off, the
+right copy is chosen with it on, all four safety-net situations fall back
+correctly, the check itself writes nothing whatsoever, and — importantly —
+it reports FAILURE if an original copy has gone missing, because the
+safety net is only real while the original is still there. Full Windows
+release gate: green, with no paid API calls.
+
+---
+
 ## 1.7.18 — 2026-09-15
 
 **One short command now does the whole live-site PDF copy safely: check, back up, copy, check again — and stops at the first sign of trouble.**
