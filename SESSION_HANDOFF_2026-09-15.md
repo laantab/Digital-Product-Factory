@@ -120,6 +120,50 @@ part of the cutover, so the driver cannot be selected by accident.
 Postgres-as-queue with `FOR UPDATE SKIP LOCKED`; building it against
 SQLite would be building the wrong thing.
 
+## 0B-4 PostgreSQL — ALL CODE COMPLETE (v1.7.21, `7020b8b`)
+
+Render PostgreSQL `digital-product-factory-db` (Ohio, Postgres 18, paid)
+is Available. All cutover code is written, gated and pushed. **Nothing
+has switched**: production still runs on SQLite.
+
+### The two-stage switch — the key safety decision
+
+`DATABASE_URL` says **where** PostgreSQL is. `FACTORY_DB_BACKEND=postgres`
+says **use it**. Both are required, deliberately.
+
+If the app switched the instant `DATABASE_URL` appeared, linking the
+database in Render would point production at an **empty** PostgreSQL:
+every customer's Saved Projects would vanish, every download would fail,
+and an empty list would be the only clue. Keeping them apart lets the
+database be created, migrated and verified while production carries on
+serving from SQLite.
+
+### Shipped
+
+- `services/db/dialect.py` — placeholder/DDL translation, Postgres schema
+- `services/db/connection.py` — psycopg wrapper giving `database.py` its
+  `?` placeholders and `cursor.lastrowid` (via `RETURNING id`)
+- `services/db/cutover.py` + `pgmig.py` — status / backup / schema /
+  migrate / parity / health, typed in a few words
+- `services/db/migrate_postgres.py` — import and **parity verifier**
+- `psycopg[binary]` in requirements
+
+The SQLite path is untouched, which is what lets all **3,078** existing
+tests stand as proof of no regression. Rehearsed on the real database:
+114 projects and 73 assets, parity PASS, zero mismatches, source
+byte-identical.
+
+Two defects were caught by their own tests and fixed: `use_postgres()`
+accepted *any* database URL (a MySQL URL plus the backend flag would have
+aimed the app at the wrong server with the wrong driver), and
+`import_into()` translated placeholders from the config rather than the
+actual target.
+
+**0B-5 not started** — its queue design is Postgres-as-queue with
+`FOR UPDATE SKIP LOCKED`, so it needs the cutover proven first. It will
+also need a **second owner billing action**: Render Background Workers
+have no free tier.
+
 ## Next step — 0B-4 production cutover (OWNER ACTION REQUIRED)
 
 Roadmap: **0B-3 storage ✅ → 0B-4 Postgres → 0B-5 job manager + worker →
