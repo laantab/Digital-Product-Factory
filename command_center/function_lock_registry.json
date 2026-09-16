@@ -4,9 +4,9 @@
   "functions": {
     "word_search": {
       "display_name": "Word Search",
-      "status": "UNLOCKED",
-      "last_known_good_commit": "66b0085",
-      "factory_version": "1.7.14",
+      "status": "LOCKED",
+      "last_known_good_commit": "2d613c0",
+      "factory_version": "1.7.25",
       "protected_test_files": [
         "tests/test_word_search_topic_scope_contract.py",
         "tests/test_universal_topic_puzzle_engine.py",
@@ -26,17 +26,17 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": "Claude Opus 5",
-      "unlocked_reason": "Live activity indicator on the ebook progress screen. static/js/app.js is a declared shared dependency and gains a spinner/label beside the progress bar that reflects REAL state -- working, retrying, picking back up, or paused with a Continue button -- instead of animating regardless. No puzzle, coloring or crossword code path is touched.",
-      "relocked_by": null,
-      "relocked_after_tests": null,
-      "notes": "The customer-facing route had never used the shared topic engine, in any release, until a021385. No earlier commit is a valid last-known-good for this route. Relocked at ab6b923 (2026-09-13): Word Search's cover now genuinely attempts Pexels first (via is_photo_realistic_cover), falling back to the existing AI path unchanged when no suitable photo is found. Word Search's puzzle-generation/topic-vocabulary behavior is untouched. Relocked again at 6391ff1 (2026-09-13): unlocked only because static/js/app.js (shared) was edited to fix the ebook build-stall dead end; Word Search's own code and tests are untouched. Relocked at 66b0085 (2026-09-14, v1.7.14): unlocked only because services/packaging.py (a declared shared dependency) now prefers a VERIFIED stored asset at its six STORED embedded-PDF read sites before falling through to the identical legacy base64 decode. Product generation, rebuild paths, QA gates and export layout are unchanged; with no verified asset the executed decode is byte-for-byte the original."
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Claude Opus 5",
+      "relocked_after_tests": "tests/test_ebook_activity_truthfulness.py (13 passed) plus the product's own protected suites, and the full Windows release gate (3120 tests, 0 failures, 0 errors, 0 skipped, 0 paid API calls) on commit 2d613c0.",
+      "notes": "The customer-facing route had never used the shared topic engine, in any release, until a021385. No earlier commit is a valid last-known-good for this route. Relocked at ab6b923 (2026-09-13): Word Search's cover now genuinely attempts Pexels first (via is_photo_realistic_cover), falling back to the existing AI path unchanged when no suitable photo is found. Word Search's puzzle-generation/topic-vocabulary behavior is untouched. Relocked again at 6391ff1 (2026-09-13): unlocked only because static/js/app.js (shared) was edited to fix the ebook build-stall dead end; Word Search's own code and tests are untouched. Relocked at 66b0085 (2026-09-14, v1.7.14): unlocked only because services/packaging.py (a declared shared dependency) now prefers a VERIFIED stored asset at its six STORED embedded-PDF read sites before falling through to the identical legacy base64 decode. Product generation, rebuild paths, QA gates and export layout are unchanged; with no verified asset the executed decode is byte-for-byte the original. Relocked at 2d613c0 (2026-09-15, v1.7.25): unlocked because static/js/app.js (a declared shared dependency) gained the ebook progress screen's live activity light and paused panel. No puzzle, coloring or crossword code path was touched."
     },
     "coloring_book": {
       "display_name": "Coloring Book",
-      "status": "UNLOCKED",
-      "last_known_good_commit": "66b0085",
-      "factory_version": "1.7.14",
+      "status": "LOCKED",
+      "last_known_good_commit": "2d613c0",
+      "factory_version": "1.7.25",
       "protected_test_files": [
         "tests/test_coloring_book_interior_no_text_contract.py",
         "tests/test_coloring_book_sea_creatures_customer_path.py",
@@ -57,17 +57,17 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": "Claude Opus 5",
-      "unlocked_reason": "Live activity indicator on the ebook progress screen. static/js/app.js is a declared shared dependency and gains a spinner/label beside the progress bar that reflects REAL state -- working, retrying, picking back up, or paused with a Continue button -- instead of animating regardless. No puzzle, coloring or crossword code path is touched.",
-      "relocked_by": null,
-      "relocked_after_tests": null,
-      "notes": "LOCKED for the captions-off/no-text contract proven at 984b268. Relocked at ab6b923 (2026-09-13): the automatic build previously had NO final-cover QA at all -- a real gap, now closed by services/coloring_book/final_cover_qa.py, a small adapter that reads the actual rendered PDF page back and blocks on a missing title, placeholder/gibberish text, malformed characters, or an unrecognized cover source. Coloring Book itself still never attempts Pexels (explicitly excluded by product type in cover_agent.py, since its cover must stay branded illustrated artwork, not a photograph). Seven pre-existing *_LOCKED_STATE.md files (2026-07-11/07-12) claimed the captions-off behavior; their manual test theme ('Farm House') never exercised the one illustration branch (_draw_generic_scene) that had the defect, and none were machine-checked. Those files are historical record now, not the source of truth -- this entry is. A separate, unrelated pair of crash bugs was found in _draw_fantasy (dragon/castle themes) during the 984b268 fix and is flagged separately (not part of this lock). Relocked again at 6391ff1 (2026-09-13): unlocked only because static/js/app.js (shared) was edited to fix the ebook build-stall dead end; Coloring Book's own code and tests are untouched. Relocked at 66b0085 (2026-09-14, v1.7.14): unlocked only because services/packaging.py (a declared shared dependency) now prefers a VERIFIED stored asset at its six STORED embedded-PDF read sites before falling through to the identical legacy base64 decode. Product generation, rebuild paths, QA gates and export layout are unchanged; with no verified asset the executed decode is byte-for-byte the original."
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Claude Opus 5",
+      "relocked_after_tests": "tests/test_ebook_activity_truthfulness.py (13 passed) plus the product's own protected suites, and the full Windows release gate (3120 tests, 0 failures, 0 errors, 0 skipped, 0 paid API calls) on commit 2d613c0.",
+      "notes": "LOCKED for the captions-off/no-text contract proven at 984b268. Relocked at ab6b923 (2026-09-13): the automatic build previously had NO final-cover QA at all -- a real gap, now closed by services/coloring_book/final_cover_qa.py, a small adapter that reads the actual rendered PDF page back and blocks on a missing title, placeholder/gibberish text, malformed characters, or an unrecognized cover source. Coloring Book itself still never attempts Pexels (explicitly excluded by product type in cover_agent.py, since its cover must stay branded illustrated artwork, not a photograph). Seven pre-existing *_LOCKED_STATE.md files (2026-07-11/07-12) claimed the captions-off behavior; their manual test theme ('Farm House') never exercised the one illustration branch (_draw_generic_scene) that had the defect, and none were machine-checked. Those files are historical record now, not the source of truth -- this entry is. A separate, unrelated pair of crash bugs was found in _draw_fantasy (dragon/castle themes) during the 984b268 fix and is flagged separately (not part of this lock). Relocked again at 6391ff1 (2026-09-13): unlocked only because static/js/app.js (shared) was edited to fix the ebook build-stall dead end; Coloring Book's own code and tests are untouched. Relocked at 66b0085 (2026-09-14, v1.7.14): unlocked only because services/packaging.py (a declared shared dependency) now prefers a VERIFIED stored asset at its six STORED embedded-PDF read sites before falling through to the identical legacy base64 decode. Product generation, rebuild paths, QA gates and export layout are unchanged; with no verified asset the executed decode is byte-for-byte the original. Relocked at 2d613c0 (2026-09-15, v1.7.25): unlocked because static/js/app.js (a declared shared dependency) gained the ebook progress screen's live activity light and paused panel. No puzzle, coloring or crossword code path was touched."
     },
     "crossword": {
       "display_name": "Crossword",
-      "status": "UNLOCKED",
-      "last_known_good_commit": "66b0085",
-      "factory_version": "1.7.14",
+      "status": "LOCKED",
+      "last_known_good_commit": "2d613c0",
+      "factory_version": "1.7.25",
       "protected_test_files": [
         "tests/test_crossword_scope_answerkey_zip_repair.py",
         "tests/test_universal_topic_puzzle_engine.py",
@@ -88,11 +88,11 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": "Claude Opus 5",
-      "unlocked_reason": "Live activity indicator on the ebook progress screen. static/js/app.js is a declared shared dependency and gains a spinner/label beside the progress bar that reflects REAL state -- working, retrying, picking back up, or paused with a Continue button -- instead of animating regardless. No puzzle, coloring or crossword code path is touched.",
-      "relocked_by": null,
-      "relocked_after_tests": null,
-      "notes": "The only generator formally enrolled in PROTECTED_GENERATOR_RULE.md before 2026-09-12. e81298e is the commit that both created the shared topic engine and fixed Crossword's topic-scope contamination and dropped-answer-key defects (2026-09-09). Relocked at ab6b923 (2026-09-13): Crossword's cover now genuinely attempts Pexels first (via is_photo_realistic_cover), falling back to the existing AI path unchanged when no suitable photo is found. Crossword's puzzle-generation/topic-vocabulary behavior is untouched. Relocked again at 6391ff1 (2026-09-13): unlocked only because static/js/app.js (shared) was edited to fix the ebook build-stall dead end; Crossword's own code and tests are untouched. Relocked at 66b0085 (2026-09-14, v1.7.14): unlocked only because services/packaging.py (a declared shared dependency) now prefers a VERIFIED stored asset at its six STORED embedded-PDF read sites before falling through to the identical legacy base64 decode. Product generation, rebuild paths, QA gates and export layout are unchanged; with no verified asset the executed decode is byte-for-byte the original."
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Claude Opus 5",
+      "relocked_after_tests": "tests/test_ebook_activity_truthfulness.py (13 passed) plus the product's own protected suites, and the full Windows release gate (3120 tests, 0 failures, 0 errors, 0 skipped, 0 paid API calls) on commit 2d613c0.",
+      "notes": "The only generator formally enrolled in PROTECTED_GENERATOR_RULE.md before 2026-09-12. e81298e is the commit that both created the shared topic engine and fixed Crossword's topic-scope contamination and dropped-answer-key defects (2026-09-09). Relocked at ab6b923 (2026-09-13): Crossword's cover now genuinely attempts Pexels first (via is_photo_realistic_cover), falling back to the existing AI path unchanged when no suitable photo is found. Crossword's puzzle-generation/topic-vocabulary behavior is untouched. Relocked again at 6391ff1 (2026-09-13): unlocked only because static/js/app.js (shared) was edited to fix the ebook build-stall dead end; Crossword's own code and tests are untouched. Relocked at 66b0085 (2026-09-14, v1.7.14): unlocked only because services/packaging.py (a declared shared dependency) now prefers a VERIFIED stored asset at its six STORED embedded-PDF read sites before falling through to the identical legacy base64 decode. Product generation, rebuild paths, QA gates and export layout are unchanged; with no verified asset the executed decode is byte-for-byte the original. Relocked at 2d613c0 (2026-09-15, v1.7.25): unlocked because static/js/app.js (a declared shared dependency) gained the ebook progress screen's live activity light and paused panel. No puzzle, coloring or crossword code path was touched."
     },
     "invite_protection": {
       "display_name": "Invite protection",
