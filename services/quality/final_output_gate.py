@@ -75,32 +75,17 @@ class ValidationResult:
 # -------------------------------------------------------------------------- //
 
 def _load_project_by_package_id(package_id: str) -> dict | None:
-    """Find the project that owns this export package_id."""
-    import sqlite3, json
-    from database import get_conn
+    """Find the project that owns this export package_id.
 
-    conn = get_conn()
-    try:
-        rows = conn.execute(
-            "SELECT id, name, type, data FROM projects "
-            "WHERE type IN ('product', 'ebook')"
-        ).fetchall()
-    finally:
-        conn.close()
+    Delegates to the one canonical resolver. This was the second copy of that
+    lookup, with the same positional row read that failed on PostgreSQL and
+    the same bare `except: pass` that hid it -- and it did not check
+    export_package_id at all, so it could not have resolved a modern export
+    even on SQLite. See database.find_project_by_package (v1.7.28).
+    """
+    from database import find_project_by_package
 
-    for pid, name, ptype, data_str in rows:
-        try:
-            d = json.loads(data_str or "{}")
-            if str(d.get("package_id", "")) == package_id:
-                return {"id": pid, "name": name, "type": ptype, "data": d}
-            exports = d.get("product_exports") or {}
-            if isinstance(exports, dict):
-                for key, val in exports.items():
-                    if isinstance(val, dict) and str(val.get("package_id", "")) == package_id:
-                        return {"id": pid, "name": name, "type": ptype, "data": d}
-        except Exception:
-            pass
-    return None
+    return find_project_by_package(package_id)
 
 
 def _inspect_pdf_bytes(pdf_bytes: bytes) -> dict:

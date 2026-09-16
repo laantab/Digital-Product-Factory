@@ -14,6 +14,7 @@
     "tests/test_cover_regression.py",
     "tests/test_retail_cover_quality_lock.py",
     "tests/test_download_slug_package_id.py",
+    "tests/test_download_package_resolver_both_backends.py",
     "tests/test_word_search_stability.py",
     "tests/test_crossword_controlled_repair.py",
     "tests/test_crossword_typography_repair.py",

@@ -162,37 +162,17 @@ def record_download_audit(
 # Context resolution
 # --------------------------------------------------------------------------- //
 def _load_project_by_package_id(package_id: str) -> dict | None:
-    """Find the project that owns this export package_id."""
-    from database import get_conn
-    pkg = str(package_id or "").strip()
-    if not pkg:
-        return None
-    conn = get_conn()
-    try:
-        rows = conn.execute(
-            "SELECT id, name, type, data FROM projects "
-            "WHERE type IN ('product', 'ebook') AND data LIKE ?",
-            (f"%{pkg}%",),
-        ).fetchall()
-    finally:
-        conn.close()
-    for pid, name, ptype, data_str in rows:
-        try:
-            d = json.loads(data_str or "{}")
-            if str(d.get("package_id", "")) == package_id:
-                return {"id": pid, "name": name, "type": ptype, "data": d}
-            # Also check export_package_id — build_product_export stores the new
-            # export package_id here (not nested in product_exports.files).
-            if str(d.get("export_package_id", "")) == package_id:
-                return {"id": pid, "name": name, "type": ptype, "data": d}
-            exports = d.get("product_exports") or {}
-            if isinstance(exports, dict):
-                for key, val in exports.items():
-                    if isinstance(val, dict) and str(val.get("package_id", "")) == package_id:
-                        return {"id": pid, "name": name, "type": ptype, "data": d}
-        except Exception:
-            pass
-    return None
+    """Find the project that owns this export package_id.
+
+    Delegates to the one canonical resolver. This function used to carry its
+    own copy, which read rows positionally and so returned None for every row
+    on PostgreSQL (psycopg's dict_row yields mappings, and unpacking a mapping
+    yields its keys). Every production download was refused as an orphan as a
+    result. See database.find_project_by_package (v1.7.28).
+    """
+    from database import find_project_by_package
+
+    return find_project_by_package(package_id)
 
 
 def resolve_download_request(

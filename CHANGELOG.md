@@ -5,6 +5,62 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.28 — 2026-09-16
+
+**Every download on the live site was being refused. They work again.**
+
+### What changed
+
+- **Your Download PDF and Download ZIP buttons work on the live site
+  again.** Nothing about how products are made, priced or presented has
+  changed — this release repairs a lookup that was refusing to hand over
+  files it should have handed over.
+
+### What was fixed
+
+- **"Download blocked" on files that were perfectly fine.** Every PDF and
+  ZIP download on the live site returned an error saying the package was
+  not linked to your saved project — even though it was, and even though
+  the file was sitting there ready to send. The same download worked
+  correctly on a local copy of the Factory, which is why it went
+  unnoticed.
+- **The cause was the live site's database answering in a different
+  shape.** The code that looks up "which project does this download
+  belong to?" read each database row by position rather than by name.
+  The local database hands rows back in a form where that happens to
+  work; the live database hands them back in a form where it quietly
+  produces nonsense. The lookup then decided every package belonged to no
+  project, and the safety check correctly refused to send a file it had
+  been told was orphaned. The check was right; what it was told was
+  wrong.
+- **There were two copies of that lookup**, both with the same mistake,
+  and one of them had never checked the newer kind of package id at all.
+  There is now one shared lookup, used by both, that behaves identically
+  on either database.
+- **A row that cannot be read is now reported instead of ignored.** The
+  original code hid the failure inside a catch-all that discarded the
+  error, which is why this survived a whole release without anyone
+  seeing a single message about it.
+
+### Does anything about the steps change?
+
+No. Same screens, same buttons, same prices. Your Download PDF and
+Download ZIP buttons simply work again.
+
+The safety check that refuses genuinely orphaned packages is unchanged
+and still refuses them. Only the lookup feeding it was repaired.
+
+### Release gate
+
+Twenty-four new checks. They run the real lookup and the real download
+route against BOTH database row shapes — including the live site's shape,
+reproduced exactly, so this can never again be a defect that only appears
+in production. They also prove a genuinely orphaned package is still
+refused, so the fix cannot be mistaken for weakening the guard. Full
+Windows release gate: green, with no paid API calls.
+
+---
+
 ## 1.7.27 — 2026-09-16
 
 **The Factory now finishes a whole ebook on its own: nine chapters, a designed interior, a cover, a 31-page PDF and a ZIP, with the browser closed.**

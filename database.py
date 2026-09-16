@@ -1,11 +1,14 @@
 """SQLite persistence for Product Projects."""
 import json
+import logging
 import os
 import re
 import shutil
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 DB_PATH = os.environ.get("FACTORY_DB_PATH") or os.path.join(os.path.dirname(__file__), "projects.db")
 
@@ -906,6 +909,151 @@ def get_project(project_id: int) -> dict | None:
     ).fetchone()
     conn.close()
     return _row_to_dict(row) if row else None
+
+
+# --------------------------------------------------------------------------
+# Export package -> project. ONE resolver, identical on both backends.
+#
+# THE DEFECT THIS EXISTS TO END
+# -----------------------------
+# Every download in production returned
+# "403 stale_or_orphan_export_package" while the same download served 200
+# locally. Two copies of this lookup (download_pipeline_agent and
+# final_output_gate) read their rows POSITIONALLY:
+#
+#     for pid, name, ptype, data_str in rows:
+#         try:
+#             d = json.loads(data_str or "{}")
+#         except Exception:
+#             pass
+#
+# SQLite hands back sqlite3.Row, which unpacks as a sequence, so that worked.
+# PostgreSQL is opened with psycopg's dict_row (services/db/dialect.connect),
+# so each row is a MAPPING: unpacking it yields its KEYS. `data_str` became
+# the literal string "data", json.loads raised, and the bare `except: pass`
+# swallowed it -- so the resolver silently reported "no project owns this
+# package" for every row, and the orphan guard correctly refused to serve a
+# package it had been told was orphaned. The guard was right; its input was
+# wrong.
+#
+# Rows are therefore read BY COLUMN NAME here (sqlite3.Row and dict both
+# support that), never by position, and a parse failure is never silent.
+# --------------------------------------------------------------------------
+
+#: A package id as it appears inside a stored customer download URL, e.g.
+#: "/download/6c905b99.../flower_parts.pdf". Saved Projects builds its buttons
+#: from these, so a URL the app stored must resolve to the project that stores it.
+_DOWNLOAD_URL_PACKAGE_RE = re.compile(r"/download/([A-Za-z0-9_-]{1,128})/")
+
+
+def row_field(row, key: str, index: int | None = None):
+    """One column value, whatever row type the active backend returns.
+
+    sqlite3.Row supports both name and index; psycopg's dict_row supports
+    name only. Name works for both, so name is what we use.
+    """
+    if row is None:
+        return None
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        pass
+    if index is not None:
+        try:
+            return row[index]
+        except (KeyError, IndexError, TypeError):
+            return None
+    return None
+
+
+def package_ids_for_data(data: dict | None) -> set[str]:
+    """Every export package id this project's own metadata claims.
+
+    Structured parsing, not a substring guess: each id is read from the field
+    that holds it. Stored download URLs are included because Saved Projects
+    builds the customer's buttons from them, so the URL the app handed out
+    must resolve back to the project that handed it out.
+    """
+    found: set[str] = set()
+    if not isinstance(data, dict):
+        return found
+
+    def _add(value) -> None:
+        text = str(value or "").strip()
+        if text:
+            found.add(text)
+
+    _add(data.get("package_id"))
+    _add(data.get("export_package_id"))
+
+    for container_key in ("product_exports", "exports"):
+        container = data.get(container_key)
+        if not isinstance(container, dict):
+            continue
+        _add(container.get("package_id"))
+        meta = container.get("meta")
+        if isinstance(meta, dict):
+            _add(meta.get("package_id"))
+        files = container.get("files")
+        if isinstance(files, dict):
+            for entry in files.values():
+                if isinstance(entry, dict):
+                    _add(entry.get("package_id"))
+                    for match in _DOWNLOAD_URL_PACKAGE_RE.finditer(
+                        str(entry.get("url") or "")
+                    ):
+                        _add(match.group(1))
+        for entry in container.values():
+            if isinstance(entry, dict):
+                _add(entry.get("package_id"))
+    return found
+
+
+def find_project_by_package(
+    package_id: str, types: tuple[str, ...] = ("product", "ebook")
+) -> dict | None:
+    """The project that owns this export package id, or None.
+
+    The SQL substring is a PREFILTER only and can produce no false negatives:
+    an id stored anywhere in the row's JSON is by definition a substring of
+    that JSON text (`data` is TEXT on both backends). What actually decides a
+    match is package_ids_for_data() parsing the structure.
+    """
+    pkg = str(package_id or "").strip()
+    if not pkg:
+        return None
+
+    placeholders = ", ".join("?" for _ in types)
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, name, type, data FROM projects "
+            f"WHERE type IN ({placeholders}) AND data LIKE ?",
+            (*types, f"%{pkg}%"),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    for row in rows or []:
+        raw = row_field(row, "data", 3)
+        try:
+            data = json.loads(raw or "{}")
+        except (TypeError, ValueError):
+            # Never silent: a row we cannot parse is a real problem, and
+            # swallowing it is what hid this defect for an entire release.
+            log.warning(
+                "project row %r has unreadable data while resolving package %s",
+                row_field(row, "id", 0), pkg,
+            )
+            continue
+        if pkg in package_ids_for_data(data):
+            return {
+                "id": row_field(row, "id", 0),
+                "name": row_field(row, "name", 1),
+                "type": row_field(row, "type", 2),
+                "data": data,
+            }
+    return None
 
 
 def create_project(
