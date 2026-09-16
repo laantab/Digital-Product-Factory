@@ -115,6 +115,7 @@
     "tests/test_ai_providers.py",
     "tests/test_local_manuscript_pilot.py",
     "tests/test_chapter_contract_alignment.py",
+    "tests/test_generic_book_carries_designable_material.py",
     "tests/test_cover_vision_qc_regression.py",
     "tests/test_cover_preserves_visuals.py",
     "tests/test_ebook_export_stage.py",

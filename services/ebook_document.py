@@ -392,6 +392,17 @@ _STANDALONE_PRODUCTION_LABELS = {
     "insert a table here",
     "insert chart here",
     "insert a chart here",
+    # The contract's internal spec names. A repair instruction names the
+    # deliverable it wants, and a model asked for "chapter-workflow" will
+    # cheerfully print "### chapter-workflow" above the numbered list it just
+    # wrote -- which is what a customer would have read. Preflight catches it
+    # as a production heading, but only after the manuscript has been approved,
+    # leaving the book with no way forward. The same lesson as the table
+    # illustration: telling a model not to copy a label does not stop it
+    # copying the label, so strip it here as well (v1.7.27).
+    "chapter-workflow",
+    "chapter-checklist",
+    "chapter-comparison",
 }
 
 _FINDING_ECHO_RE = re.compile(

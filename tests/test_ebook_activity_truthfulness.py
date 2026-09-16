@@ -214,3 +214,50 @@ def test_the_leave_this_page_promise_is_no_longer_about_saved_projects():
           / "static" / "js" / "app.js").read_text(encoding="utf-8")
     assert "You can leave this page" in js
     assert "Continue where you left off" in js
+
+
+# ======= a finished book must not report "Paused" beside "Your ebook is ready" ==
+
+
+def test_a_build_whose_last_stage_completed_reports_finished_not_paused():
+    """The live acceptance run ended here.
+
+    Every stage completed inside one executor drain, so advance_build never ran
+    again to persist finished=True. status_payload derives "finished" from the
+    rail and correctly said "Your ebook is ready" at 100%; activity_for read
+    only the stale flag and said "Paused". Both must read the same truth.
+    """
+    import services.ebook_build_orchestrator as orch
+
+    project = _project()
+    data = _data(seconds_ago=ACTIVE_WITHIN_SECONDS + 600)
+    data["ebook_build"]["finished"] = False
+
+    # Every stage validated. Patched at this one input because the real export
+    # check requires a rendered PDF and ZIP on disk, which this test does not
+    # build; both functions under test read it, so their agreement is still
+    # what is being proven.
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(orch, "next_incomplete_stage", lambda _data: None)
+    status_payload = orch.status_payload
+    try:
+        payload = status_payload(data, project["id"])
+        assert payload["finished"] is True, "precondition: every stage is done"
+
+        activity = orch.activity_for(project["id"], data)
+        assert activity["state"] == ACTIVITY_DONE, (
+            "a finished book reported as stalled contradicts its 'ready' message"
+        )
+        assert activity["spinning"] is False
+        assert payload["activity"]["state"] == ACTIVITY_DONE
+    finally:
+        monkeypatch.undo()
+
+
+def test_an_unfinished_build_is_still_reported_honestly():
+    """The derived check must not mark every build done."""
+    project = _project()
+    data = _data(seconds_ago=ACTIVE_WITHIN_SECONDS + 600)
+    activity = activity_for(project["id"], data)
+    assert activity["state"] == ACTIVITY_STALLED
+    assert activity["spinning"] is False

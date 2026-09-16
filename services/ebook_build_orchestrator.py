@@ -1070,7 +1070,20 @@ def activity_for(project_id: int, data: dict, *, retrying: bool = False) -> dict
     state = build_state(data)
     idle_for = _seconds_since(state.get("updated_at"))
 
-    if state.get("finished"):
+    # Derived, not just the persisted flag. status_payload decides "finished"
+    # from the rail (next_incomplete_stage is None) and the two must agree: the
+    # flag is only written by advance_build, so a build whose LAST stage
+    # completed inside an executor drain still had finished=False persisted.
+    # The screen then showed a 100% bar reading "Your ebook is ready" beside an
+    # indicator saying "Paused" -- the same contradiction between the message
+    # and the indicator that v1.7.25 existed to remove (v1.7.27).
+    done = bool(state.get("finished"))
+    if not done:
+        try:
+            done = next_incomplete_stage(data) is None
+        except Exception:                               # noqa: BLE001
+            done = False
+    if done:
         return {"state": ACTIVITY_DONE, "spinning": False,
                 "label": "Finished", "idle_seconds": idle_for}
     if state.get("failed"):

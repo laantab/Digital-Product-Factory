@@ -779,6 +779,107 @@ def _outline_digest_from_data(data: dict | None) -> str:
     return _sha(payload)
 
 
+#: The generic specs. `_has_checklist` / `_has_workflow` carry no extra token
+#: requirement for these, so what the writer is told below is exactly what the
+#: validator accepts and exactly what the interior planner can draw.
+GENERIC_CHECKLIST_SPEC = "chapter-checklist"
+GENERIC_WORKFLOW_SPEC = "chapter-workflow"
+
+#: Spelled out, because "include a checklist" is not actionable. The interior
+#: only recognises a checklist from real markdown checkboxes
+#: (services.ebook_visual_pipeline._parse_checkbox_items wants four), and only
+#: recognises a procedure from a numbered list of at least three steps.
+def generic_checklist_criterion(items: int) -> str:
+    return (
+        f"Include a usable checklist of exactly {items} items, written as "
+        "markdown checkboxes, one per line, in the form: - [ ] do this thing"
+    )
+
+
+def generic_workflow_criterion(steps: int) -> str:
+    return (
+        f"Include a numbered workflow of exactly {steps} steps, written as a "
+        "numbered list: 1. first step, then 2., then 3., each on its own line"
+    )
+
+
+#: Deliberately different lengths. The interior compares visuals by shape, not
+#: by words (services.ebook_visual_editorial._design_signature is
+#: "kind|items=N|..."), so three checklists of four items are three copies of
+#: one design and are reported as "repeats the design of ... exactly". Asking
+#: every chapter for "at least four" would therefore have traded one interior
+#: refusal for another. Varying the length is also simply better: three
+#: identically sized boxes read as a template to a human too.
+_CHECKLIST_LENGTHS = (4, 6, 5, 7, 8)
+_WORKFLOW_LENGTHS = (3, 5, 4, 6, 7)
+
+
+def _generic_structural_duties(orders: list[int]) -> dict[int, tuple[str, int]]:
+    """Spread checklists and numbered procedures across a generic book.
+
+    WHY THIS EXISTS
+    ---------------
+    A book was written, passed every manuscript check with zero findings, and
+    then could not be designed: "Only 1 kind(s) of visual across 9: photo. A
+    designed interior needs at least 3." The interior editorial floor wants
+    three distinct kinds of visual; the generic contract demanded no
+    structured material at all, asking for a table only when the outline's
+    purpose text happened to contain a word like "table" or "compar".
+
+    So whether a book could be designed depended on whether the model
+    volunteered structure nobody had asked for. One book cleared the floor on
+    105 unrequested table rows and 30 unrequested numbered steps; another,
+    asked for three tables, wrote exactly three tables and nothing else, and
+    died at the visuals stage.
+
+    Every third chapter is therefore asked for a checklist and every third for
+    a numbered procedure, on different chapters, leaving the remaining third
+    free to carry a photograph. That is the exact shape the interior floor
+    asks for -- three distinct kinds, three photographs, three visuals that
+    carry more than a paragraph -- and it degrades safely: a chapter that
+    fails to produce its checklist falls back to a photograph rather than to
+    nothing (v1.7.27).
+
+    Note that a markdown table is deliberately NOT counted here. The designed
+    interior typesets tables itself, so the planner refuses to redraw one as a
+    graphic, and a table therefore yields no interior visual at all.
+    """
+    duties: dict[int, tuple[str, int]] = {}
+    ordered = sorted(orders)
+    total = len(ordered)
+    if total < 3:
+        # Too short to carry a duty in every chapter and still read as a book.
+        return duties
+
+    # Leave exactly as many chapters bare as the interior needs photographs;
+    # a checklist in every chapter would starve the book of them. This mirrors
+    # services.ebook_visual_editorial.media_requirements deliberately: the two
+    # numbers must agree, because disagreeing gates are what stranded a book.
+    photographs = min(4, max(3, round(total * 0.3)))
+    slots = total - photographs
+    if slots < 1:
+        return duties
+
+    # Chapter one opens with a photograph wherever possible; a book that opens
+    # on a box of text lines reads as a worksheet.
+    candidates = ordered[1:] or ordered
+    if slots >= len(candidates):
+        chosen = list(candidates)
+    else:
+        step = len(candidates) / float(slots)
+        chosen = [candidates[int(i * step)] for i in range(slots)]
+
+    checklists = workflows = 0
+    for position, order in enumerate(chosen):
+        if position % 2 == 0:
+            duties[order] = ("checklist", _CHECKLIST_LENGTHS[checklists % len(_CHECKLIST_LENGTHS)])
+            checklists += 1
+        else:
+            duties[order] = ("workflow", _WORKFLOW_LENGTHS[workflows % len(_WORKFLOW_LENGTHS)])
+            workflows += 1
+    return duties
+
+
 def build_book_contract(data: dict | None) -> BookContract:
     """Authoritative book + chapter contracts from project data."""
     from services.ebook_outline_fidelity import approved_outline_chapters
@@ -796,6 +897,10 @@ def build_book_contract(data: dict | None) -> BookContract:
     _book_min = 12000 if use_catalog else 4000
     _book_max = 16000 if use_catalog else 12000
     _chapter_target = chapter_target_words(_book_min, _book_max, len(remapped))
+
+    duties = {} if use_catalog else _generic_structural_duties(
+        [int(item["order"]) for item in remapped]
+    )
 
     chapters: list[ChapterContract] = []
     for item in remapped:
@@ -822,23 +927,38 @@ def build_book_contract(data: dict | None) -> BookContract:
             )
         else:
             purpose = str(item.get("purpose") or "")
+            order = int(item["order"])
             need_table = any(k in purpose.lower() for k in ("table", "compar", "pric", "budget"))
             need_check = any(k in purpose.lower() for k in ("checklist", "check list"))
             need_flow = any(k in purpose.lower() for k in ("workflow", "booking", "procedure"))
+            # The interior cannot be designed from prose. See
+            # _generic_structural_duties: the keyword triggers above fire only
+            # when the outline happens to use the word, which is why a book
+            # could pass every manuscript check and then be undesignable.
+            duty, count = duties.get(order, ("", 0))
+            need_check = need_check or duty == "checklist"
+            need_flow = need_flow or duty == "workflow"
+            criteria = ["Cover the approved purpose with usable steps"]
+            if need_check:
+                criteria.append(generic_checklist_criterion(
+                    count if duty == "checklist" else _CHECKLIST_LENGTHS[0]))
+            if need_flow:
+                criteria.append(generic_workflow_criterion(
+                    count if duty == "workflow" else _WORKFLOW_LENGTHS[0]))
             chapters.append(
                 ChapterContract(
-                    order=int(item["order"]),
+                    order=order,
                     title=item["title"],
                     purpose=purpose,
                     reader_questions=[f"What practical steps belong in {item['title']}?"],
                     required_facts=[],
                     required_examples=["concrete example or scenario"],
                     required_table="chapter-comparison" if need_table else "",
-                    required_workflow="chapter-workflow" if need_flow else "",
-                    required_checklist="chapter-checklist" if need_check else "",
+                    required_workflow=GENERIC_WORKFLOW_SPEC if need_flow else "",
+                    required_checklist=GENERIC_CHECKLIST_SPEC if need_check else "",
                     min_useful_words=500,
                     target_words=_chapter_target,
-                    acceptance_criteria=["Cover the approved purpose with usable steps"],
+                    acceptance_criteria=criteria,
                 )
             )
     req = event_photo_book_requirements() if use_catalog else {
@@ -917,6 +1037,36 @@ def format_unresolved_findings_for_prompt(findings: list[str]) -> list[str]:
                 "'Row 1' or anything else generic: a table with placeholder "
                 "headers is treated as an unfinished chapter and rejected. "
                 "Do not quote this finding as a heading or bold label."
+            )
+        elif code == "MISSING_REQUIRED_WORKFLOW":
+            # Same reasoning as MISSING_REQUIRED_TABLE above, and found the same
+            # way: a chapter was repaired six times and every repair wrote more
+            # prose, because the finding it was handed said only "Missing
+            # required workflow: chapter-workflow" -- an internal spec name, not
+            # an instruction. A model that has just written an ordered
+            # description in sentences believes it has already complied
+            # (v1.7.27).
+            instruction = (
+                "ADD the required numbered workflow. The chapter currently has "
+                "no numbered list, and prose describing a sequence does not "
+                "satisfy the requirement, however clearly it is ordered. Write "
+                "the steps as a Markdown numbered list: a line beginning 1. "
+                "then a line beginning 2. then 3., each step on its own line, "
+                "each naming one action the reader performs. Keep the "
+                "surrounding prose. Do not quote this finding as a heading or "
+                "bold label."
+            )
+        elif code == "MISSING_REQUIRED_CHECKLIST":
+            instruction = (
+                "ADD the required checklist. The chapter currently has no "
+                "checklist the reader can tick, and a paragraph listing things "
+                "to remember does not satisfy the requirement. Write it as "
+                "Markdown checkboxes: each line beginning with a dash, then a "
+                "space, then empty square brackets, then the item -- so the "
+                "line reads - [ ] followed by the thing to do. Give at least "
+                "four items, each one a single action written for this "
+                "chapter. Keep the surrounding prose. Do not quote this "
+                "finding as a heading or bold label."
             )
         elif code == "TEMPLATE_RESIDUE":
             instruction = (

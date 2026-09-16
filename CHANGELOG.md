@@ -5,6 +5,62 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.27 — 2026-09-16
+
+**The Factory now finishes a whole ebook on its own: nine chapters, a designed interior, a cover, a 31-page PDF and a ZIP, with the browser closed.**
+
+### What changed
+
+- **Your book is now *required* to contain the things a designed interior
+  is made from.** Every third chapter is asked for a real checklist and
+  every third for a numbered procedure, on different chapters, leaving the
+  rest free for a photograph. Before this, the Factory asked for a table
+  only if your outline happened to use the word "table" — so whether your
+  book could be designed at all depended on whether the writing model
+  volunteered extra structure nobody had requested.
+- **Checklists and procedures now vary in length through the book**, so
+  three of them do not read as three copies of one box.
+
+### What was fixed
+
+- **A finished book could not be designed, and said so in jargon.**
+  "Container Gardening for Beginners" was written, passed every writing
+  check with no complaints, and then stopped dead at "Only 1 kind(s) of
+  visual across 9: photo." One part of the Factory demanded three kinds of
+  visual; another part had asked the writer for none. They now agree.
+- **A repair instruction the writer could not act on.** When a chapter was
+  missing its checklist or its procedure, the writer was handed the words
+  "Missing required workflow: chapter-workflow" — an internal name, not an
+  instruction. One chapter was rewritten six times and got longer and
+  wordier each time. The instruction now spells out the exact format, the
+  way the table instruction already did.
+- **An internal name could be printed in your book.** A writing model
+  handed "chapter-workflow" duly printed "chapter-workflow" as a heading
+  above the list it had just written. The final quality check caught it,
+  but only after the writing was approved, leaving the book stuck with no
+  way forward. Those names are now stripped before they can reach a page.
+- **A finished book said "Paused".** The progress bar reached 100% and
+  read "Your ebook is ready" while the indicator beside it said "Paused",
+  because the two were reading different things. They now read the same
+  one.
+
+### Does anything about the steps change?
+
+No new steps and no price change. Books will contain more checklists and
+step-by-step procedures than before, which is what makes a designed
+interior possible — and what a practical how-to book should have had all
+along.
+
+### Release gate
+
+Thirty-six new checks, most of them guarding one rule learned the hard
+way: a requirement is only real if the thing demanded is the same thing
+the checker accepts AND the same thing the interior can draw. They assert
+that agreement directly, in all three places. Full Windows release gate:
+green, with no paid API calls.
+
+---
+
 ## 1.7.26 — 2026-09-15
 
 **A finished book could be thrown away over a source that was never wrong, and a retry could never actually retry. Both are fixed.**
