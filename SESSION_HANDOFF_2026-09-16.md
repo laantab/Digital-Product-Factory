@@ -117,22 +117,23 @@ Nothing was redesigned; no release-blocking regression was found.
 | Function Locks | PASS (no LOCKED function touched; enforcement + integrity green) |
 | Fast Gate | PASS (248) |
 | Full Gate | PASS (2280, 0 failures, 0 paid API calls) |
-| **PostgreSQL** | **NOT VERIFIED — see below** |
+| **PostgreSQL** | **PASS** — verified by the owner via the Render shell (below) |
+
+**PostgreSQL (owner-supplied, corrects my earlier "unverified"):**
+`active_backend: postgres`, `connection_class: PostgresConnection`,
+`projects: 9`, `assets: 4`, `sqlite_file_retained: true`, `storage_driver: r2`,
+`r2_reads_enabled: true`. I could not reach it from this machine (no
+`DATABASE_URL` locally, production behind the invite gate), but that is a limit
+of my access, not an unverified backend. Later the same day I confirmed
+PostgreSQL *reads* independently through the live app.
 
 ---
 
 ## What needs you
 
-**1. PostgreSQL health cannot be checked from this machine.** There is no
-`DATABASE_URL` in the local `.env`, and `https://digitalproductfactorypro.com`
-answers **401** on every path because of the invite gate, so no production
-build or query can be driven from here. Production is *up*; its database backend
-is unverified by me. Check it from the Render dashboard, or give this machine a
-read-only `DATABASE_URL` and the invite code if you want it verified here.
-
-**2. The live production copy of "Container Gardening for Beginners" is
-untouched.** Today's work was on the local reproduction. It should recover once
-v1.7.27 deploys, but that is a prediction, not a verified result.
+**The live production copy of "Container Gardening for Beginners" is untouched**
+as of this section. See the addendum at the end of this file — it was resumed
+later the same day, and the production acceptance attempt is recorded there.
 
 ---
 
@@ -191,3 +192,100 @@ on it.
 
 Two further checks added to `tests/test_ebook_activity_truthfulness.py` for the
 finished-book-says-Paused contradiction.
+
+---
+
+# Addendum — live production acceptance of v1.7.27 (same day)
+
+**Verdict: NOT READY. Three production blockers, all human-only.**
+None of them was introduced by v1.7.27; all three predate it.
+
+I reached production through the owner's own signed-in Chrome session (the
+invite code lives only in Render's environment, by design, so this was the only
+route). Read-only checks first, then the one authorised action: pressing
+Continue on the existing book.
+
+## Verified working in production
+
+| Check | Evidence |
+| --- | --- |
+| Deployment | App footer reads **v1.7.27**. Deployed `static/js/app.js` is content-identical to the repo (differs only by CRLF/LF), `Last-Modified 2026-09-16T16:11:28Z` — 19s after commit `3939779`, so the push auto-deployed. |
+| App health | Serving normally behind the invite gate; no 500s seen on any route. |
+| PostgreSQL reads | `/projects` returns rows; `/ebook-workspaces/in-progress` returns all five stranded books. |
+| Saved Projects | Loads, lists finished products and unfinished builds. |
+| "Continue where you left off" (v1.7.25) | Live, and lists all five stranded ebooks with truthful per-book status. |
+| Continue → resume handoff (v1.7.26) | `POST /ebook/build/5/resume` → **200**; screen showed "Working" and "You can leave this page." |
+| **Browser-independent execution** | **Proven.** Tab closed for five minutes; project 5's manuscript grew **11,477 → 11,658 words** with no client attached. |
+
+The original customer symptom is also confirmed fixed at the reporting layer:
+the stalled book reports `state: failed`, `label: "Stopped"`, `spinning: false`
+— not a spinner over a dead build.
+
+## Blocker 1 — the book's budget is spent (billing decision)
+
+Project 5's ledger: `cap_usd 3.5, spent_usd 3.5, remaining_usd 0.0, paid_calls 22`.
+
+My resume ran eight correction rounds between 16:23 and 16:25 UTC, each charging
+$0.15, each returning `status=needs_correction` with `structure_ok=true`. That
+consumed the last of the cap. Nothing further can run on this book until the cap
+is raised — that is a spend authorisation, not a code change.
+
+Note the rounds were *progressing* (the manuscript grew), not spinning.
+
+## Blocker 2 — Pexels is not configured in production (missing credential)
+
+The workspace reports `pexels.configured=false`, `code=missing_config`,
+`ai_cover.configured=false`, and the cover sits at "Step 1 of 3 — Choose a
+photo". Vector covers are disabled by policy
+(`generate_and_stage_cover` raises "Search Pexels or upload your own
+photograph").
+
+So **no ebook in production can complete its cover**, and therefore cannot reach
+design → preview → preflight → export, until either a `PEXELS_API_KEY` is set on
+Render or a photograph is uploaded by hand. My local runs passed this stage only
+because this machine has a Pexels key.
+
+## Blocker 3 — the one finished product cannot be downloaded
+
+Word Search "Flower Parts" (project 4). The download URL **the app itself
+stores** returns 403:
+
+```
+GET /download/6c905b99847a48aeb2eddb29c00c92b8/flower_parts.pdf
+403 {"error":"download_blocked",
+     "violations":["stale_or_orphan_export_package"]}
+```
+
+The guard fires when `context.project_id is None and context.product_type is
+None` — the package resolved to no project. But the project row's `data`
+contains that exact `export_package_id`, and `_project_for_package` matches on
+it via `WHERE type IN ('product','ebook') AND data LIKE ?`. The PDF file itself
+is present: the guard runs *after* the PDF has been opened and paged.
+
+Requesting the other id (`package_id`, `cee4f49…`) gives a different error,
+"Export file not found" — so that one *does* resolve to the project. The
+resolution is failing specifically for the stored `export_package_id`.
+
+The same route serves HTTP 200 locally on SQLite for project 370. That points at
+the PostgreSQL backend, and diagnosing it needs production database access.
+
+## What I did not do
+
+- Did not raise any spend cap, change any environment variable, touch the
+  database, or alter R2/PostgreSQL configuration.
+- Did not delete or re-export anything.
+- Did not create a replacement project — the real one (id 5) exists and is
+  recoverable.
+- Did not start a second live build after the budget was exhausted.
+
+## To finish production acceptance, in order
+
+1. Raise the spend cap on project 5 (or confirm a new per-book budget).
+2. Set `PEXELS_API_KEY` on Render, or upload a cover photograph by hand.
+3. Give me production database access (or run a query yourself) so blocker 3 can
+   be diagnosed — this one affects every download, so it should be treated as
+   the most serious of the three.
+
+With 1 and 2 cleared, project 5 should run to completion: its manuscript is
+already 9 chapters and ~11.7k words, and the local end-to-end run proved the
+remaining stages work on v1.7.27.
