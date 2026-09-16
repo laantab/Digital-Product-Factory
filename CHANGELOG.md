@@ -5,6 +5,57 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.23 — 2026-09-15
+
+**Fixes the worst possible bug: an ebook that stopped halfway and could not be found again from any screen.**
+
+### What changed
+
+- **A book that is still being written now appears in "Continue where you
+  left off"** from the moment it starts, instead of only once it reaches
+  the later design stages.
+
+### What was fixed
+
+- **A half-finished ebook could become unreachable.** A live book stopped
+  at "Writing your chapters (5 of 9)" and there was no way back to it —
+  not from Saved Projects, not from the continue list, not by reopening
+  the browser. The five finished chapters were safe in storage the whole
+  time; there was simply no door left open to them.
+- **Why it happened.** The "Continue where you left off" list only
+  recognised books that had got as far as the design stages. A book still
+  writing its chapters had not created that record yet, so the list
+  skipped it. Saved Projects could not help either, because it lists
+  finished, downloadable products and this book had no PDF yet. And the
+  only other memory — the browser's own — is wiped the moment the tab is
+  closed. Three separate doors, all shut.
+- **A book being written is now recognised in its own right**, with no
+  dependence on the browser remembering anything.
+
+### Does anything about the steps change?
+
+Yes, and for the better: an ebook you start now stays reachable from
+"Continue where you left off" for its whole life, not just near the end.
+Nothing else changes, no finished chapter is ever rewritten, and no
+product is regenerated.
+
+### Honest limitation
+
+This makes a stopped book **findable and resumable**. It does not yet
+make it keep building after you close the tab — the writing is still
+driven by the open page. Making "you can leave this page" completely
+true needs the background worker, which is the next infrastructure step.
+
+### Release gate
+
+Sixteen new checks covering the exact live failure: a five-of-nine
+manuscript is recognised as resumable, finished and failed books are not
+offered, already-written chapters are never discarded, the check writes
+nothing at all, and the listing stays behind the private-beta gate. Full
+Windows release gate: green, with no paid API calls.
+
+---
+
 ## 1.7.22 — 2026-09-15
 
 **Fixes the fault that stopped the first attempt to move to the new database. The live site was never at risk and was already safely back on the old one.**

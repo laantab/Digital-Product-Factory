@@ -295,6 +295,21 @@ def _col(col: str) -> str:
     return col if col in _TABLE_COLS else "0"
 
 
+def _ebook_build_is_unfinished(data: dict) -> bool:
+    """True when a one-click build was started and never finished.
+
+    Kept here rather than imported so the customer list can never be
+    broken by an import problem in the orchestrator; the orchestrator's
+    `build_is_unfinished` holds the same rule and is tested against this.
+    """
+    state = data.get("ebook_build") if isinstance(data, dict) else None
+    if not isinstance(state, dict):
+        return False
+    if not (state.get("stages") or state.get("build_id") or state.get("started_at")):
+        return False
+    return not bool(state.get("finished")) and not bool(state.get("failed"))
+
+
 def list_unfinished_ebook_workspaces() -> list[dict]:
     """Ebook projects still being built, newest first.
 
@@ -319,7 +334,17 @@ def list_unfinished_ebook_workspaces() -> list[dict]:
     for row in rows:
         project = _row_to_dict(row)
         data = project.get("data") if isinstance(project.get("data"), dict) else {}
-        if not (data.get("ebook_project_workspace") or data.get("ebook_workspace")):
+        has_workspace = bool(
+            data.get("ebook_project_workspace") or data.get("ebook_workspace"))
+        # A ONE-CLICK build that is still writing its manuscript has no
+        # workspace yet -- the workspace keys only appear once the build
+        # reaches visuals/cover/design. Requiring one therefore hid every
+        # book stalled mid-manuscript from this list, and a half-built book
+        # has no PDF so Saved Projects excludes it too. Between them a
+        # customer stopped at "Writing your chapters (5 of 9)" had no route
+        # back from any screen. An unfinished build counts on its own.
+        has_unfinished_build = _ebook_build_is_unfinished(data)
+        if not has_workspace and not has_unfinished_build:
             continue
         # Finished books belong in Saved Projects -- but only once they are
         # actually there. A one-button build finishes as a DRAFT the customer

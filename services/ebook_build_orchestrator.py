@@ -1053,3 +1053,85 @@ def _manuscript_milestone(data: dict, project_id: int) -> dict:
         "words": len(text.split()) if text else 0,
         "url": f"/ebook-workspace/{project_id}/manuscript" if ready else None,
     }
+
+
+# --------------------------------------------------------------------------
+# Unfinished builds — the route back to a stranded book
+#
+# WHY THIS EXISTS
+#
+# The build is driven entirely by a browser loop: `_ebookBuildLoop` in
+# static/js/app.js calls /advance once per bounded unit (one chapter,
+# since v1.7.10). There is no server-side executor. So when the customer
+# closes the tab, the loop stops and nothing advances the book again.
+#
+# That alone would be survivable -- every finished chapter is persisted,
+# and reopening the build restarts the loop from the first incomplete
+# stage. The problem was that there was no way BACK:
+#
+#   * the browser remembered the build in sessionStorage, which the
+#     browser destroys when the tab closes, and
+#   * a half-built ebook has no PDF yet, so
+#     database._has_usable_customer_output() is False and it does not
+#     appear in Saved Projects at all.
+#
+# Between them, a book stopped at "Writing your chapters (5 of 9)" had no
+# route back on any screen -- which is exactly the live failure this
+# function exists to end. The server remembers instead of the browser.
+#
+# This is a deliberate pre-0B-5 recovery mechanism, not a substitute for
+# it. It does not make the build survive a closed tab; it makes the build
+# FINDABLE and resumable afterwards. Only a background worker (0B-5) can
+# make "you can leave this page" true without the customer returning.
+# --------------------------------------------------------------------------
+
+def build_is_unfinished(data: dict) -> bool:
+    """True when a build was started, is not finished, and has not failed."""
+    state = data.get("ebook_build") if isinstance(data, dict) else None
+    if not isinstance(state, dict):
+        return False
+    if not (state.get("stages") or state.get("build_id") or state.get("started_at")):
+        return False
+    return not bool(state.get("finished")) and not bool(state.get("failed"))
+
+
+def unfinished_builds(limit: int = 10) -> list[dict]:
+    """Every started-but-unfinished ebook build, newest first. Read-only.
+
+    Deliberately independent of Saved Projects: that list is for finished
+    products and requires a real PDF or ZIP on disk, which an unfinished
+    book does not have yet.
+    """
+    import database
+
+    out: list[dict] = []
+    try:
+        projects = database.list_projects(include_system=False)
+    except Exception:
+        return out
+
+    for project in projects or []:
+        data = project.get("data") if isinstance(project.get("data"), dict) else {}
+        if not build_is_unfinished(data):
+            continue
+        if project.get("system_test") or data.get("system_test"):
+            continue
+        if project.get("temporary") or data.get("temporary"):
+            continue
+        state = data.get("ebook_build") or {}
+        stage = str(state.get("current_stage") or "")
+        out.append({
+            "project_id": project.get("id"),
+            "name": project.get("name") or data.get("title") or "Your ebook",
+            "percent": progress_percent(data),
+            "current_stage": stage,
+            "message": str(state.get("customer_message") or MSG_WORKING),
+            "updated_at": str(state.get("updated_at") or project.get("updated_at") or ""),
+            # Nothing is running server-side between requests, so a build
+            # the customer is not watching is paused, not working. Saying
+            # otherwise is the animated-spinner-forever defect.
+            "paused": True,
+        })
+
+    out.sort(key=lambda entry: str(entry.get("updated_at") or ""), reverse=True)
+    return out[:max(1, int(limit or 10))]
