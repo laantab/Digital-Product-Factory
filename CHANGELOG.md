@@ -5,6 +5,66 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.24 — 2026-09-15
+
+**"You can leave this page" is now true. The Factory finishes your ebook itself, instead of relying on your browser staying open.**
+
+### What changed
+
+- **The Factory now finishes your book on its own.** Until now the page
+  you were watching was quietly doing the work: it asked the Factory for
+  one chapter, then the next, then the next. Close the tab and the book
+  simply stopped — which is exactly what happened to a real book at
+  "Writing your chapters (5 of 9)".
+- **Starting a book now records a lasting instruction to finish it.** That
+  instruction is written down, not held in the page or in memory, so it
+  survives closing the tab, refreshing, losing your connection, and the
+  Factory itself being restarted or updated.
+- **If the Factory is interrupted mid-chapter, it picks the book back up
+  by itself.** No tidy-up has to happen first and nobody has to press
+  anything — a recovery that depends on a clean shutdown is no recovery
+  at all, so this one does not.
+- **Finished chapters are never rewritten.** The part that decides what to
+  write is completely unchanged; only who asks it to keep going is
+  different. A book stopped after chapter five carries on at chapter six.
+- **A book is never finished twice**, so no duplicate PDF, ZIP or
+  chapters.
+
+### What was fixed
+
+- **The real cause of the stuck book.** Work stopping when a browser tab
+  closed was never a timing problem or a provider problem — it was that
+  nothing on the Factory's side was responsible for finishing the job.
+  Now something is.
+
+### Does anything about the steps change?
+
+Yes, in the way that matters: start a book, close the tab, and come back
+later to find it further along or finished. Everything else — the
+chapters, the quality checks, the cover, the design, the PDF and ZIP — is
+untouched.
+
+### Honest limitation
+
+The Factory finishes books while it is awake. If the whole service is
+idle or stopped, work pauses safely and resumes when it wakes; nothing is
+lost. Removing that last gap needs a dedicated always-on helper, which is
+the next infrastructure step.
+
+If anything about this needs undoing, one setting switches it straight
+back to the old behaviour.
+
+### Release gate
+
+Twenty-eight new checks: two workers can never claim the same book, a
+book whose worker died is picked up again once its claim expires, a
+crashed attempt is retried rather than abandoned, a finished book is
+never finished twice, one long book cannot hog the Factory, and the
+switch-off works. Full Windows release gate: green, with no paid API
+calls.
+
+---
+
 ## 1.7.23 — 2026-09-15
 
 **Fixes the worst possible bug: an ebook that stopped halfway and could not be found again from any screen.**

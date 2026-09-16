@@ -94,6 +94,19 @@ with app.app_context():
     from services.billing.store import init_billing_db
 
     init_billing_db()
+
+    # Durable ebook execution. Starting this at boot is also the recovery
+    # path: any job whose lease expired when the previous process died is
+    # reclaimed by the first tick, with no cleanup step required.
+    try:
+        from services.jobs.runner import start as _start_executor
+        from services.jobs.store import init_jobs_table
+
+        init_jobs_table()
+        _start_executor()
+    except Exception:  # noqa: BLE001
+        app.logger.exception("ebook executor did not start")
+
     from services.ebook_pexels import pexels_status_label
 
     app.logger.info("%s", pexels_status_label())
@@ -3892,6 +3905,22 @@ def ebook_build_start_route():
         project, created = start_build(fields)
         pid = project.get("id")
         data = dict(project.get("data") or {})
+
+        # The SERVER now owns finishing this book. Enqueueing a durable job
+        # is what makes "You can leave this page" true: the intention to
+        # finish survives the browser, the request and a restart, because
+        # it is a row. The browser still drives the visible progress for a
+        # customer who stays, but it is no longer the only thing that can.
+        try:
+            from services.jobs.runner import start as _start_executor
+            from services.jobs.store import enqueue as _enqueue_build
+
+            _enqueue_build(pid)
+            _start_executor()
+        except Exception:  # noqa: BLE001
+            # A queueing problem must never stop a customer starting a book.
+            app.logger.exception("could not enqueue the ebook build job")
+
         payload = status_payload(data, pid)
         payload["created"] = bool(created)
         return jsonify(payload)

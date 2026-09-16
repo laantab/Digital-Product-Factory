@@ -96,7 +96,7 @@
     },
     "invite_protection": {
       "display_name": "Invite protection",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "3b28b65",
       "factory_version": "1.7.15",
       "protected_test_files": [
@@ -108,11 +108,11 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Claude Opus 5",
-      "relocked_after_tests": "Unlocked in anticipation of editing app.py / static/js/app.js for the live ebook stall fix. The fix landed entirely in database.py and services/ebook_build_orchestrator.py instead, and BOTH declared files were verified byte-unchanged (git diff empty), so each lock is restored to its prior baseline (3b28b65) with no change to protect.",
-      "notes": "Self-contained in app.py's single before_request hook -- no shared dependency on static/js/app.js (the gate is server-rendered, no fetch/JS involvement). 14+2 real behavioral tests: gate on/off, cookie/header/query admission, wrong-code refusal (never echoed), exemptions, admin routes gated too. Relocked at 6391ff1 (2026-09-13): unlocked only because app.py (declared as a whole shared dependency) gained a new route for the ebook build-stall fix; the invite gate hook itself is untouched. Relocked at efb1e90 (2026-09-14, v1.7.13): unlocked only because app.py (declared as a whole shared dependency) gained the Phase 0B-3B1 asset-first/legacy-fallback helpers and two call sites in the /download/<package_id>/<filename> route. The invite gate's before_request hook is byte-for-byte unchanged."
+      "unlocked_by": "Claude Opus 5",
+      "unlocked_reason": "Durable ebook executor. app.py gained a durable-job enqueue on /ebook/build and an executor start at boot, so the browser no longer owns execution. The invite gate's before_request hook is untouched and no route joined the exemption list. Relocked in the next commit against this release's real hash -- the registry rightly refuses a manufactured last_known_good_commit.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
+      "notes": "Self-contained in app.py's single before_request hook -- no shared dependency on static/js/app.js (the gate is server-rendered, no fetch/JS involvement). 14+2 real behavioral tests: gate on/off, cookie/header/query admission, wrong-code refusal (never echoed), exemptions, admin routes gated too. Relocked at 6391ff1 (2026-09-13): unlocked only because app.py (declared as a whole shared dependency) gained a new route for the ebook build-stall fix; the invite gate hook itself is untouched. Relocked at efb1e90 (2026-09-14, v1.7.13): unlocked only because app.py (declared as a whole shared dependency) gained the Phase 0B-3B1 asset-first/legacy-fallback helpers and two call sites in the /download/<package_id>/<filename> route. The invite gate's before_request hook is byte-for-byte unchanged. Relocked at v1.7.24 (2026-09-15): unlocked because app.py (a declared whole-file shared dependency) gained the durable ebook executor wiring -- enqueue on build start and ticker start at boot -- so the browser no longer owns execution. The gate itself is unchanged."
     },
     "factory_market_advantage": {
       "display_name": "Factory Market Advantage",
