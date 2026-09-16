@@ -5,6 +5,53 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.25 — 2026-09-15
+
+**You can now see at a glance whether the Factory is actually working on your book — and if it has stopped, it says so and offers a button.**
+
+### What changed
+
+- **A live activity light sits beside the progress bar.** It spins only
+  when something is genuinely working on your book, and it says what is
+  happening: Working, Retrying a step, Picking this back up, Paused, or
+  Finished.
+- **If nothing is running, the screen says "This book is paused"** and
+  gives you a Continue button, instead of an animation over a build that
+  has stopped.
+- **The promise on the screen now matches reality.** It used to say to
+  pick the book up from Saved Projects — a list that deliberately shows
+  only finished products, so an unfinished book was never in it. It now
+  points at "Continue where you left off", where the book actually is.
+
+### What was fixed
+
+- **An indicator that always animates is worse than none**, because it
+  cannot tell "working" from "abandoned" — and that is the one thing you
+  need to know. This one is driven by two real facts: how long ago your
+  book last saved real progress, and whether something currently holds
+  the job. If neither is true it stops spinning and turns amber.
+- **A worker that died is no longer mistaken for one that is busy.** If
+  the Factory was interrupted, its claim on your book expires, and the
+  screen reports paused rather than pretending.
+
+### Does anything about the steps change?
+
+No extra steps. The same screen, with the truth added to it. In normal
+use you should never see the paused state at all — the Factory finishes
+books on its own now. It exists for the day something goes wrong, so that
+you are told instead of left watching.
+
+### Release gate
+
+Thirteen new checks, most of them written to make the spinner STOP: no
+recent progress and no active worker must read as paused, an expired
+claim must not look like work in progress, a missing or malformed
+timestamp must never be treated optimistically, and the paused case must
+be handled before the spinning one. Full Windows release gate: green,
+with no paid API calls.
+
+---
+
 ## 1.7.24 — 2026-09-15
 
 **"You can leave this page" is now true. The Factory finishes your ebook itself, instead of relying on your browser staying open.**

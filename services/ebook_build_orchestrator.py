@@ -983,6 +983,99 @@ def resume_build(project_id: int) -> dict:
     return status_payload(data, project_id)
 
 
+# --------------------------------------------------------------------------
+# Activity — is anything ACTUALLY happening right now?
+#
+# The customer saw "Writing your chapters (5 of 9)" with a moving-looking
+# screen while nothing at all was running. An indicator that always
+# animates is not reassurance, it is the bug: it cannot tell "working"
+# apart from "abandoned", which is the single thing the customer needs to
+# know.
+#
+# So this reports the truth, derived from two real signals:
+#   * how long ago the build last actually persisted progress, and
+#   * whether a durable job holds a live lease (someone owns the work).
+#
+# Either driver counts. A customer watching the screen advances the build
+# from the browser, and the server executor advances it when they are
+# away; recent progress proves the first, a live lease proves the second.
+# When neither is true, the honest answer is "stalled" -- and the screen
+# says so and offers Continue, instead of spinning forever.
+# --------------------------------------------------------------------------
+
+ACTIVITY_WORKING = "working"
+ACTIVITY_QUEUED = "queued"
+ACTIVITY_RETRYING = "retrying"
+ACTIVITY_STALLED = "stalled"
+ACTIVITY_DONE = "done"
+ACTIVITY_FAILED = "failed"
+
+#: Progress more recent than this means something is genuinely running.
+#: Comfortably longer than one chapter, so a slow chapter is not mistaken
+#: for a stall.
+ACTIVE_WITHIN_SECONDS = 90
+
+
+def _seconds_since(timestamp: str) -> float | None:
+    from datetime import datetime, timezone
+
+    text = str(timestamp or "").strip()
+    if not text:
+        return None
+    try:
+        when = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0.0, (datetime.now(timezone.utc) - when).total_seconds())
+
+
+def activity_for(project_id: int, data: dict, *, retrying: bool = False) -> dict:
+    """What the progress screen should honestly say is happening."""
+    state = build_state(data)
+    idle_for = _seconds_since(state.get("updated_at"))
+
+    if state.get("finished"):
+        return {"state": ACTIVITY_DONE, "spinning": False,
+                "label": "Finished", "idle_seconds": idle_for}
+    if state.get("failed"):
+        return {"state": ACTIVITY_FAILED, "spinning": False,
+                "label": "Stopped", "idle_seconds": idle_for}
+
+    job = None
+    try:
+        from services.jobs.store import QUEUED, RUNNING, get_for_project
+
+        job = get_for_project(int(project_id))
+    except Exception:                                   # noqa: BLE001
+        job = None                                      # no jobs table yet
+
+    lease_live = False
+    queued = False
+    if job:
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc).isoformat()
+        lease_live = (job.get("status") == "RUNNING"
+                      and str(job.get("lease_expires_at") or "") > now)
+        queued = job.get("status") == "QUEUED"
+
+    recently_moved = idle_for is not None and idle_for <= ACTIVE_WITHIN_SECONDS
+
+    if retrying and (lease_live or recently_moved):
+        return {"state": ACTIVITY_RETRYING, "spinning": True,
+                "label": "Retrying a step", "idle_seconds": idle_for}
+    if lease_live or recently_moved:
+        return {"state": ACTIVITY_WORKING, "spinning": True,
+                "label": "Working", "idle_seconds": idle_for}
+    if queued:
+        return {"state": ACTIVITY_QUEUED, "spinning": True,
+                "label": "Picking this back up", "idle_seconds": idle_for}
+    return {"state": ACTIVITY_STALLED, "spinning": False,
+            "label": "Paused", "idle_seconds": idle_for}
+
+
 def status_payload(data: dict, project_id: int) -> dict:
     """Everything the customer's screen needs, and nothing they shouldn't see."""
     state = build_state(data)
@@ -1009,6 +1102,7 @@ def status_payload(data: dict, project_id: int) -> dict:
         "finished": bool(finished),
         "failed": bool(state.get("failed")),
         "retrying": bool(retrying),
+        "activity": activity_for(project_id, data, retrying=bool(retrying)),
         "attempts_left": int(attempts_left),
         "percent": progress_percent(data),
         "message": (

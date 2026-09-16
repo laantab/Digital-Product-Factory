@@ -7198,12 +7198,41 @@ function _ebookBuildRemembered() {
   }
 }
 
-function _ebookBuildBar(percent) {
+//: The live activity dot beside the bar.
+//
+//: An indicator that always spins is worse than none: it cannot tell
+//: "working" from "abandoned", which is the one thing the customer needs
+//: to know. This spins ONLY when the server says something genuinely
+//: holds the work -- recent persisted progress, or a live job lease.
+//: Otherwise it stops, goes amber, and says so. The server decides; this
+//: only draws what it is told (see activity_for in the orchestrator).
+function _ebookActivityDot(activity) {
+  const a = activity || {};
+  const state = String(a.state || "working");
+  const label = String(a.label || "Working");
+  if (state === "done") {
+    return `<span class="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700" data-ebook-activity="done">
+              <span class="h-2.5 w-2.5 rounded-full bg-emerald-600"></span>${escapeHtml(label)}</span>`;
+  }
+  if (state === "stalled" || state === "failed") {
+    return `<span class="inline-flex items-center gap-2 text-xs font-semibold text-amber-700" data-ebook-activity="${escapeHtml(state)}">
+              <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>${escapeHtml(label)}</span>`;
+  }
+  // Genuinely moving: a real spinner, and it means it.
+  return `<span class="inline-flex items-center gap-2 text-xs font-semibold text-brand-700" data-ebook-activity="${escapeHtml(state)}">
+            <span class="h-3.5 w-3.5 rounded-full border-2 border-brand-200 border-t-brand-600 animate-spin" aria-hidden="true"></span>
+            <span class="sr-only">Working</span>${escapeHtml(label)}</span>`;
+}
+
+function _ebookBuildBar(percent, activity) {
   const pct = Math.max(0, Math.min(100, Number(percent) || 0));
   return `
-    <div class="w-full rounded-full bg-slate-200 h-3 overflow-hidden" role="progressbar"
-         aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" data-ebook-build-bar>
-      <div class="h-3 rounded-full bg-brand-600 transition-all duration-500" style="width:${pct}%"></div>
+    <div class="flex items-center gap-3">
+      <div class="flex-1 rounded-full bg-slate-200 h-3 overflow-hidden" role="progressbar"
+           aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" data-ebook-build-bar>
+        <div class="h-3 rounded-full bg-brand-600 transition-all duration-500" style="width:${pct}%"></div>
+      </div>
+      ${activity === undefined ? "" : _ebookActivityDot(activity)}
     </div>
     <p class="mt-2 text-xs font-semibold text-slate-500" data-ebook-build-percent>${pct}%</p>`;
 }
@@ -7224,7 +7253,7 @@ function renderEbookBuild(status) {
          <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Finished</p>
          <h2 class="text-xl font-bold text-slate-900 mt-1">${escapeHtml(bookTitle)}</h2>
          <p class="text-sm text-slate-600 mt-2 mb-4" data-ebook-build-message>Your ebook is ready</p>
-         ${_ebookBuildBar(100)}
+         ${_ebookBuildBar(100, { state: "done", label: "Finished" })}
          <div class="mt-5 flex flex-wrap gap-2">
            ${preview ? `<button type="button" data-ebook-open class="btn-primary">Open Product</button>` : ""}
            ${pdf ? `<button type="button" data-ebook-dl-pdf class="${NS_BTN}">Download PDF</button>` : ""}
@@ -7291,6 +7320,17 @@ function renderEbookBuild(status) {
   // The manuscript is the book. Once it has passed its quality check it is
   // worth reading, whether or not the cover and PDF exist yet -- so show it
   // as a milestone in its own right instead of only a percentage.
+  // When nothing holds the work, say so plainly and give the customer the
+  // action -- never an animated screen over a build that stopped.
+  const act = s.activity || {};
+  const stalledPanel = act.state === "stalled"
+    ? `<div class="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4" data-ebook-stalled>
+         <p class="text-sm font-bold text-amber-900">This book is paused</p>
+         <p class="text-sm text-slate-700 mt-1">Nothing is running right now. Your finished chapters are saved.</p>
+         <button type="button" data-ebook-resume class="btn-primary mt-3">Continue</button>
+       </div>`
+    : "";
+
   const ms = s.manuscript || {};
   const msPanel = ms.ready
     ? `<div class="mt-5 rounded-xl border border-emerald-300 bg-emerald-50 p-4" data-ebook-manuscript-ready>
@@ -7311,13 +7351,16 @@ function renderEbookBuild(status) {
        <p class="text-sm text-slate-600 mt-2 mb-4" data-ebook-build-message>${escapeHtml(
          s.message || "Preparing your ebook"
        )}</p>
-       ${_ebookBuildBar(s.percent)}
+       ${_ebookBuildBar(s.percent, s.activity || {})}
+       ${stalledPanel}
        ${msPanel}
-       <p class="mt-4 text-xs text-slate-500">You can leave this page. We save each finished step, and you can pick up where you left off from Saved Projects.</p>
+       <p class="mt-4 text-xs text-slate-500">You can leave this page. The Factory keeps building on its own, and you can pick this up again from "Continue where you left off".</p>
      </div>`
   );
   const msBtn = root.querySelector("[data-ebook-open-manuscript]");
   if (msBtn && ms.url) msBtn.onclick = () => window.open(ms.url, "_blank", "noopener");
+  const stalledBtn = root.querySelector("[data-ebook-stalled] [data-ebook-resume]");
+  if (stalledBtn && pid) stalledBtn.onclick = () => resumeEbookBuild(pid);
 }
 
 //: Drive the build to a conclusion. One request in flight, always.
