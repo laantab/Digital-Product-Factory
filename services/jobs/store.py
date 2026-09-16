@@ -103,12 +103,21 @@ def _row_to_dict(row) -> dict:
     return {k: (row.get(k) if isinstance(row, dict) else row[k]) for k in _COLUMNS}
 
 
-def enqueue(project_id: int, kind: str = KIND_EBOOK_BUILD) -> dict:
+def enqueue(project_id: int, kind: str = KIND_EBOOK_BUILD, *,
+            reset_attempts: bool = False) -> dict:
     """Record the intention to finish this work. Idempotent per project+kind.
 
     A repeat enqueue re-queues the existing job rather than creating a
     second one: two jobs for one book would race two executors onto the
     same chapter.
+
+    `reset_attempts` is for the customer's explicit Continue and nothing
+    else. `claim_next` skips any job at MAX_ATTEMPTS, so re-opening an
+    exhausted job to QUEUED without clearing its attempts left it queued
+    forever and never claimed, while the screen span "being picked back
+    up" — the exact kind of lie v1.7.25 set out to remove. A human saying
+    "keep going" is a fresh start; an automatic retry is not, so the
+    ceiling still holds for every ordinary enqueue (v1.7.26).
     """
     import database
 
@@ -124,13 +133,21 @@ def enqueue(project_id: int, kind: str = KIND_EBOOK_BUILD) -> dict:
             if job["status"] in (QUEUED, RUNNING):
                 return job
             # A finished or failed job is re-opened, never duplicated.
-            conn.execute(
-                "UPDATE jobs SET status=?, lease_owner='', lease_expires_at='',"
-                " last_error='', updated_at=? WHERE id=?",
-                (QUEUED, now, job["id"]),
-            )
+            if reset_attempts:
+                conn.execute(
+                    "UPDATE jobs SET status=?, lease_owner='', lease_expires_at='',"
+                    " last_error='', attempts=0, updated_at=? WHERE id=?",
+                    (QUEUED, now, job["id"]),
+                )
+            else:
+                conn.execute(
+                    "UPDATE jobs SET status=?, lease_owner='', lease_expires_at='',"
+                    " last_error='', updated_at=? WHERE id=?",
+                    (QUEUED, now, job["id"]),
+                )
             conn.commit()
-            return {**job, "status": QUEUED}
+            return {**job, "status": QUEUED,
+                    "attempts": 0 if reset_attempts else job["attempts"]}
 
         conn.execute(
             "INSERT INTO jobs (project_id, kind, status, created_at, updated_at)"

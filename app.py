@@ -3946,11 +3946,30 @@ def ebook_build_resume_route(project_id: int):
     Distinct from /advance: this clears the one stalled stage's attempt count
     so the normal checkpoint loop can continue, instead of running a stage
     itself. See services.ebook_build_orchestrator.resume_build.
+
+    Clearing the stalled stage is only half of it: the work must then be
+    handed to the server, exactly as /ebook/build does when a book starts.
+    Without this, Continue tidied up the state and gave the book to nobody,
+    so a customer who clicked it and closed the tab — which the stalled
+    panel invites them to do — got nothing at all. The promise "you can
+    leave this page" was false on the very path that exists to rescue a
+    stalled book (v1.7.26).
     """
     try:
         from services.ebook_build_orchestrator import resume_build
 
-        return jsonify(resume_build(project_id))
+        payload = resume_build(project_id)
+        try:
+            from services.jobs.runner import start as _start_executor
+            from services.jobs.store import enqueue as _enqueue_build
+
+            # An explicit human "keep going" earns a fresh set of attempts.
+            _enqueue_build(project_id, reset_attempts=True)
+            _start_executor()
+        except Exception:  # noqa: BLE001
+            # A queueing problem must never take away the way forward.
+            app.logger.exception("could not enqueue the resumed ebook build job")
+        return jsonify(payload)
     except Exception as exc:  # noqa: BLE001
         return _customer_error(exc, 500, log="ebook build resume failed")
 

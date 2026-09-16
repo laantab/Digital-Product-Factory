@@ -442,13 +442,31 @@ def has_unverified_earnings_claim(src: dict) -> bool:
     return bool(_UNVERIFIED_EARNINGS_RE.search(_source_blob(src if isinstance(src, dict) else {})))
 
 
+def _is_host_or_below(host: str, domain: str) -> bool:
+    """True when `host` is `domain`, a subdomain of it, or a country variant.
+
+    Matched on a domain boundary. The previous test also accepted any host
+    merely CONTAINING the domain, which classified earthbox.com — the
+    planter maker EarthBox — as the social site x.com, so a legitimate
+    research source was labelled "Social signal" in the customer's
+    evidence table. linux.com, dropbox.com and netflix.com read the same
+    way (v1.7.26).
+    """
+    host = str(host or "").lower().strip(".")
+    domain = str(domain or "").lower().strip(".")
+    if not host or not domain:
+        return False
+    # facebook.com, m.facebook.com, facebook.com.au
+    return host == domain or host.endswith("." + domain) or host.startswith(domain + ".")
+
+
 def source_class_for(src: dict) -> str:
     url = _clean((src or {}).get("url") or (src or {}).get("listing_url"))
     host = source_website(url)
     path = (urlparse(url).path or "").lower()
     if marketplace_from_url(url):
         return "Marketplace"
-    if any(host == h or host.endswith("." + h) or h in host for h in _SOCIAL_HOSTS) or is_youtube_url(url):
+    if any(_is_host_or_below(host, h) for h in _SOCIAL_HOSTS) or is_youtube_url(url):
         return "Social signal"
     if any(needle in host or needle in url.lower() for needle in _TREND_HOSTS) or "trends" in path:
         return "Search trend"

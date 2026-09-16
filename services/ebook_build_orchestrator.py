@@ -293,6 +293,38 @@ def _authorized(data: dict, action: str) -> tuple[dict, dict]:
     return out.get("data", data), (out.get("estimate") or {})
 
 
+def _attempt_idempotency_key(data: dict, stage: str, pid: int, *, suffix: str = "") -> str:
+    """One idempotency key per ATTEMPT, not one per project for all time.
+
+    An idempotency key exists so the SAME logical paid call, delivered
+    twice — two executors racing, a retried request — is charged once. A
+    key that is constant for the life of the project does something else
+    entirely: the workspace records it on the first call, and every later
+    call carrying it returns the original result as a duplicate replay,
+    doing no work and persisting nothing.
+
+    That is what stranded a finished book. "Container Gardening for
+    Beginners" wrote nine good chapters and needed one correction pass. It
+    got exactly one, ever: attempt 1 corrected what it could and left a
+    single finding, attempts 2 to 60 replayed instantly and re-raised on
+    that same stale finding. Sixty attempts in about a minute, then
+    FAILED_FINAL — and no Continue could help, because resume clears the
+    attempt count while the replay still short-circuits.
+
+    `_claim_stage` increments the stage's attempt counter before the runner
+    runs, so that counter is exactly the right identity: the same attempt
+    replays safely, a real retry is a new logical call (v1.7.26).
+    """
+    try:
+        rec = _stage_record(build_state(data), stage)
+        attempt = int(rec.get("attempts") or 0)
+    except Exception:                                      # noqa: BLE001
+        # A key must never be the reason a build cannot run.
+        attempt = 0
+    tail = f"-{suffix}" if suffix else ""
+    return f"orch-{stage}{tail}-{pid}-a{attempt}"
+
+
 def _confirm_kwargs(est: dict, data: dict, key: str) -> dict:
     return {
         "confirmation_token": str(est.get("confirmation_token") or ""),
@@ -315,7 +347,7 @@ def _run_research(data: dict, pid: int) -> dict:
     from services.ebook_project_workspace import approve_stage, execute_run_research
 
     data, est = _authorized(data, "run_research")
-    out = execute_run_research(data, **_confirm_kwargs(est, data, f"orch-research-{pid}"))
+    out = execute_run_research(data, **_confirm_kwargs(est, data, _attempt_idempotency_key(data, "research", pid)))
     return approve_stage(out["data"], "research")
 
 
@@ -323,7 +355,7 @@ def _run_title(data: dict, pid: int) -> dict:
     from services.ebook_project_workspace import approve_stage, execute_generate_title_options
 
     data, est = _authorized(data, "generate_title_options")
-    out = execute_generate_title_options(data, **_confirm_kwargs(est, data, f"orch-title-{pid}"))
+    out = execute_generate_title_options(data, **_confirm_kwargs(est, data, _attempt_idempotency_key(data, "title", pid)))
     return approve_stage(out["data"], "title")
 
 
@@ -331,7 +363,7 @@ def _run_outline(data: dict, pid: int) -> dict:
     from services.ebook_project_workspace import approve_stage, execute_generate_outline_options
 
     data, est = _authorized(data, "generate_outline_options")
-    out = execute_generate_outline_options(data, **_confirm_kwargs(est, data, f"orch-outline-{pid}"))
+    out = execute_generate_outline_options(data, **_confirm_kwargs(est, data, _attempt_idempotency_key(data, "outline", pid)))
     return approve_stage(out["data"], "outline")
 
 
@@ -406,7 +438,7 @@ def _run_manuscript(data: dict, pid: int) -> dict:
 
     if not already_needs_correction:
         data, est = _authorized(data, "generate_manuscript")
-        kwargs = _confirm_kwargs(est, data, f"orch-manuscript-{pid}")
+        kwargs = _confirm_kwargs(est, data, _attempt_idempotency_key(data, "manuscript", pid))
         kwargs["outline_digest_expected"] = str(est.get("outline_digest") or "")
         out = execute_generate_manuscript(
             data,
@@ -432,7 +464,9 @@ def _run_manuscript(data: dict, pid: int) -> dict:
 
     if stage_status(ws, "manuscript") == STATUS_NEEDS_CORRECTION:
         data, cest = _authorized(data, "correct_manuscript")
-        ckwargs = _confirm_kwargs(cest, data, f"orch-manuscript-correct-{pid}")
+        ckwargs = _confirm_kwargs(cest, data,
+                                  _attempt_idempotency_key(data, "manuscript", pid,
+                                                           suffix="correct"))
         ckwargs["outline_digest_expected"] = str(cest.get("outline_digest") or "")
         cout = execute_correct_manuscript(
             data,

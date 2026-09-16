@@ -5,6 +5,76 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.26 — 2026-09-15
+
+**A finished book could be thrown away over a source that was never wrong, and a retry could never actually retry. Both are fixed.**
+
+### What changed
+
+- **A nine-chapter book that was already written now gets published
+  instead of discarded.** Nothing about how the Factory writes, designs
+  or prices a book has changed — these are all cases where finished work
+  was being thrown away by a check that was wrong, or by a retry that
+  quietly did nothing.
+
+### What was fixed
+
+- **"earthbox.com" was read as the social site "x.com".** The check for
+  weak sources asked whether a banned web address appeared anywhere in
+  your sources list, as plain text. "earthbo(x.com)" contains it. So
+  "Container Gardening for Beginners" — which cited EarthBox, the planter
+  maker, exactly the sort of place a container-gardening book should cite
+  — was told its sources were not trustworthy, and could never be
+  approved. Web addresses are now matched properly, as addresses.
+  linux.com, dropbox.com, netflix.com and equinox.com were unusable as
+  sources for the same reason.
+- **A retry now actually retries.** Each step carried a fixed reference
+  that was recorded the first time it ran, and every later attempt was
+  treated as a repeat of that first one: it returned the old answer
+  instantly, did no work and saved nothing. So a book needing a second
+  correction pass could never get one, in its whole life. The nine good
+  chapters of "Container Gardening" were written, then sixty attempts
+  were used up in about a minute without a single one doing anything,
+  and the book was declared unfinishable.
+- **The Continue button now actually hands your book to the Factory.**
+  It cleared the stuck step and then gave the work to nobody, so if you
+  clicked Continue and closed the tab — which the screen invites you to
+  do — nothing happened. The promise "you can leave this page" was false
+  on the one path that exists to rescue a stalled book.
+- **A book that had used up its attempts could get stuck "being picked
+  back up" forever.** Reopening it put it back in the queue but left the
+  used-up count in place, and nothing will pick up a book in that state.
+  Pressing Continue yourself now clears it; automatic retries still stop
+  where they always did.
+- **A source used for market research is no longer mislabelled.** The
+  same address-matching mistake showed a legitimate research source as a
+  "Social signal" in the evidence behind your idea score.
+
+### Does anything about the steps change?
+
+No. Same screens, same buttons, same prices. The difference is that a
+book which has genuinely been written now reaches you, and pressing
+Continue on a stalled book now actually restarts it — including when you
+close the tab straight afterwards.
+
+The quality checks themselves are unchanged. Quora, Reddit, Pinterest,
+Facebook, X and the rest are still refused as sources when a book
+genuinely cites them.
+
+### Release gate
+
+Sixty-eight new checks across three areas: web addresses must be matched
+as addresses and never as plain text (every banned site is still caught
+when truly cited, and hosts that merely end in one are not), a repeat of
+the same attempt must still be charged once while a genuine retry must be
+allowed to do real work, and Continue must leave a runnable job behind
+even when the queue is broken. One long-standing order-dependent failure
+between two existing test files was also fixed at its cause: a test that
+left projects behind in the shared test database. Full Windows release
+gate: green, with no paid API calls.
+
+---
+
 ## 1.7.25 — 2026-09-15
 
 **You can now see at a glance whether the Factory is actually working on your book — and if it has stopped, it says so and offers a button.**

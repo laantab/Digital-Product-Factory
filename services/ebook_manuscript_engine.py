@@ -316,10 +316,43 @@ NON_AUTHORITATIVE_SOURCE_DOMAINS = (
 )
 
 
+#: A hostname, bare or inside a URL. Used to compare cited sources against
+#: the blocklist on a domain boundary.
+_CITED_HOST_RE = re.compile(r"(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}")
+
+
+def _cited_hosts(back_matter: str) -> set[str]:
+    """Every hostname the back matter cites, with any www. prefix removed."""
+    hosts: set[str] = set()
+    for raw in _CITED_HOST_RE.findall(str(back_matter or "").lower()):
+        host = raw.strip(".")
+        if host.startswith("www."):
+            host = host[4:]
+        if host:
+            hosts.add(host)
+    return hosts
+
+
 def _non_authoritative_sources(back_matter: str) -> set[str]:
-    """Domains cited in back matter that cannot support a factual claim."""
-    text = str(back_matter or "").lower()
-    return {domain for domain in NON_AUTHORITATIVE_SOURCE_DOMAINS if domain in text}
+    """Domains cited in back matter that cannot support a factual claim.
+
+    Matched on a domain boundary — the host itself or a subdomain of it —
+    never as a bare substring. Asking whether "x.com" appeared anywhere in
+    the text read earthbo(x.com), the planter maker EarthBox, as the social
+    site X. "Container Gardening for Beginners" cited it because research
+    genuinely found it, so the correction pass rewrote the manuscript and
+    wrote the same real citation back every time: the build retried to its
+    60-attempt ceiling in about a minute and died FAILED_FINAL on
+    "Resolve structural/content findings before approving the manuscript."
+    linux.com, netflix.com, dropbox.com and equinox.com were unusable as
+    sources for the same reason (v1.7.26).
+    """
+    cited = _cited_hosts(back_matter)
+    return {
+        domain
+        for domain in NON_AUTHORITATIVE_SOURCE_DOMAINS
+        if any(host == domain or host.endswith("." + domain) for host in cited)
+    }
 
 
 def has_worked_example(body: str) -> bool:

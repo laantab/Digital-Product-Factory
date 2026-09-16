@@ -63,10 +63,34 @@ def _project_data(done_stages, build_state=None):
     return data
 
 
+#: Projects this file creates, removed afterwards. Resuming a build stamps
+#: `ebook_build.updated_at` with the current time, so a project left behind
+#: here outranks the fixtures of any other test that asks for the newest
+#: unfinished book -- it silently broke
+#: test_ebook_unfinished_build_recovery.py::test_the_newest_build_is_offered_first
+#: whenever this file happened to run first. Tests share one database for the
+#: whole pytest process; they must not leave litter in it (v1.7.26).
+_CREATED: list[int] = []
+
+
+@pytest.fixture(autouse=True)
+def _remove_projects_this_file_creates():
+    _CREATED.clear()
+    yield
+    for project_id in _CREATED:
+        try:
+            database.delete_project(project_id)
+        except Exception:  # noqa: BLE001
+            pass
+    _CREATED.clear()
+
+
 def _make(name, data):
-    return database.create_project(
+    project = database.create_project(
         name, "ebook", data, user_saved=True, system_test=False, temporary=False,
     )
+    _CREATED.append(project["id"])
+    return project
 
 
 def _stalled_manuscript_state():
