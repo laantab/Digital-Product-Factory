@@ -289,3 +289,124 @@ the PostgreSQL backend, and diagnosing it needs production database access.
 With 1 and 2 cleared, project 5 should run to completion: its manuscript is
 already 9 chapters and ~11.7k words, and the local end-to-end run proved the
 remaining stages work on v1.7.27.
+
+---
+
+# Addendum 2 — v1.7.28: the download defect, fixed and verified live
+
+**Blocker 1 is closed.** Released **v1.7.28** (`d86139a`), deployed, and verified
+against the real production URL.
+
+```
+GET /download/6c905b99847a48aeb2eddb29c00c92b8/flower_parts.pdf
+  -> HTTP 200 · 5,012 bytes · %PDF · application/pdf      (was 403)
+GET /download/6c905b99847a48aeb2eddb29c00c92b8/package.zip
+  -> HTTP 200 · 3,861 bytes · PK · application/zip        (was 403)
+```
+
+Production footer reads **v1.7.28**.
+
+## Root cause: a row shape, not a data problem
+
+Two copies of the package → project lookup read their rows **positionally**:
+
+```python
+for pid, name, ptype, data_str in rows:
+    try:
+        d = json.loads(data_str or "{}")
+    except Exception:
+        pass
+```
+
+SQLite returns `sqlite3.Row`, which unpacks as a sequence, so this worked.
+PostgreSQL is opened with psycopg's `dict_row`, so every row is a **mapping** —
+and unpacking a mapping yields its **keys**. `data_str` became the literal
+string `"data"`, `json.loads` raised, and the bare `except: pass` swallowed it.
+The lookup then reported "no project owns this package" for every row, and the
+orphan guard correctly refused to serve a package it had been told was orphaned.
+
+**The guard was right; its input was wrong.** Proven by running the old code
+against both row shapes:
+
+```
+OLD code, SQLite-shaped rows  -> {'id': '4'}
+OLD code, Postgres dict rows  -> None          <-- every download 403'd
+unpacking a dict row yields:     ['id', 'name', 'type', 'data']
+```
+
+## The fix
+
+One canonical resolver, `database.find_project_by_package`:
+
+- rows are read **by column name** (`sqlite3.Row` and `dict` both support it);
+- ownership is decided by **structured parsing** of the project's own metadata —
+  `package_id`, `export_package_id`, `product_exports`/`exports` package ids, and
+  the package id inside a stored `/download/<pkg>/` URL, because Saved Projects
+  builds the customer's buttons from those;
+- the SQL `LIKE` is a **prefilter only** and cannot produce a false negative: an
+  id stored in the row's JSON is by definition a substring of that TEXT column;
+- an unparseable row is **logged and skipped**, never silently swallowed — the
+  bare `except` is what hid this for an entire release.
+
+Both call sites now delegate to it. The second copy (`final_output_gate`) had
+never checked `export_package_id` at all, so it could not have resolved a modern
+export even on SQLite.
+
+**The stale/orphan guard is unchanged** and still returns 403 for a genuine
+orphan — there is a test for exactly that, on both backends.
+
+## Audit (as instructed, not just the one symptom)
+
+Every other positional row read was checked. `services/db/connection.py` and
+`services/db/cutover.py` already handle both shapes
+(`row["n"] if isinstance(row, dict) else row[0]`), and `database._row_to_dict`
+reads by name throughout — which is precisely why the rest of the app worked in
+production and only these two resolvers failed.
+
+## Tests
+
+`tests/test_download_package_resolver_both_backends.py` — 25 checks, registered
+in the manifest. They run the real resolver **and the real Flask download
+route** against both row shapes, reproducing the live site's shape exactly, so a
+PostgreSQL-only download defect cannot recur unseen: package_id and
+export_package_id on each backend, the stored customer URL, PDF 200, ZIP 200,
+both call sites on both backends, a genuine orphan still 403, and a grep guard
+against positional row reads.
+
+Full Windows release gate: **2305 passed, 0 failed**, 984 subtests, 0 paid API
+calls.
+
+One self-inflicted lesson worth keeping: my first version of the unreadable-row
+test wrote invalid JSON into the shared test database. `delete_project` could
+not parse it to remove it, so the bad row leaked and broke 29 unrelated tests
+later in the gate. The test now exercises a malformed row through a fake
+connection and never writes bad data anywhere.
+
+## What remains — two owner actions, nothing else
+
+Both are the ones already identified; neither is a code defect.
+
+1. **PEXELS_API_KEY is genuinely absent on Render.** `pexels_configured()`
+   returns `bool(os.environ.get("PEXELS_API_KEY"))`, and `/pexels-status`
+   reports `code: missing_config`. Until it is set, no ebook can complete its
+   cover (vector covers are disabled by policy), so none can reach design →
+   preview → preflight → export.
+
+2. **Project 5's budget is spent** — cap $3.50, spent $3.50, remaining $0.00.
+
+### Evidence for the bounded budget ask
+
+The identical book finished **locally**, under this same contract, from the
+identical stuck point (manuscript correction), for **$2.85 in 20 paid calls**:
+
+```
+correct_manuscript  $0.45  (3 chapter calls)   x5
+correct_manuscript  $0.60  (5 chapter calls)
+TOTAL               $2.85  -> finished 31-page PDF + 12.23 MB ZIP
+```
+
+Every charge was manuscript correction. **Visuals, cover, design, preview,
+preflight and export added nothing to the ledger** — they use free stock
+photography and local rendering. Production's manuscript is better structured
+than the local one (it was written by the premium provider), so it should need
+no more correction than this, and plausibly less.
