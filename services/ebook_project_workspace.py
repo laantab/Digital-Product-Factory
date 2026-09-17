@@ -3009,9 +3009,46 @@ def execute_correct_manuscript(
         data, manuscript_md=existing, book_contract=book_contract
     )
     findings_map = findings_by_order_from_quality(prior_quality)
+    failing_now = {
+        int(r["order"])
+        for r in prior_quality.chapter_results
+        if r.get("status") != QUALITY_PASS
+    }
     if stored_accepted:
-        accepted_keep = stored_accepted
-        failed_orders = [c.order for c in book_contract.chapters if c.order not in accepted_orders]
+        # Membership in the acceptance cache is not evidence that a chapter
+        # still passes. The cache is written under the contract in force when
+        # the chapter was written, and a contract change -- a validator
+        # repair, a tightened interior floor, the required-material contract
+        # in v1.7.27 -- leaves entries in it that today's validator fails.
+        #
+        # approve_stage re-validates the manuscript from its bytes on every
+        # attempt and trusts nothing cached. Deciding repairs from the cache
+        # alone meant those chapters could never enter failed_orders, so the
+        # correction pass was handed nothing to do, returned the manuscript
+        # unchanged, and approval failed again on the same finding: approval
+        # repeating while every correction round had no effect. Project 370
+        # needed its cache cleared by hand to get past exactly this.
+        #
+        # Only chapters the validator is failing RIGHT NOW are re-opened.
+        # Re-opening the whole cache on any contract change would regenerate
+        # books customers have already paid for, at real cost.
+        failed_orders = sorted(
+            {c.order for c in book_contract.chapters if c.order not in accepted_orders}
+            | (failing_now & accepted_orders)
+        )
+        stale_accepted = sorted(failing_now & accepted_orders)
+        if stale_accepted:
+            _append_history(
+                ws,
+                "reopen_stale_accepted_chapters",
+                orders=stale_accepted,
+                reason="accepted under an earlier contract; fails the current validator",
+            )
+        dropped = set(failed_orders)
+        accepted_keep = [c for c in stored_accepted if c.order not in dropped]
+        ws["accepted_chapters"] = [
+            {"order": c.order, "title": c.title, "body": c.body} for c in accepted_keep
+        ]
     else:
         failed_orders = [
             int(r["order"])

@@ -5,6 +5,46 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.7.29 — 2026-09-17
+
+**A book could get stuck asking to be approved over and over. It can now
+repair itself and move on.**
+
+### What changed
+
+- **A book that gets stuck at the manuscript step now fixes itself.**
+  Before, some books reached a point where the Factory kept saying the
+  manuscript still needed work, kept saying it was correcting it, and yet
+  nothing ever changed. The only way out was for someone to go in behind
+  the scenes and reset the book by hand. That loop is closed.
+
+### What was fixed
+
+- **Chapters approved under the old rules were never re-checked under the
+  new ones.** When the Factory's quality rules improve, chapters written
+  before the change can fall below the new standard. The approval check
+  noticed this every time. The repair step did not — it only looked at a
+  list of chapters marked "already fine" and trusted it, so it never sent
+  the outdated chapters back to be rewritten. Approval refused the book,
+  the repair had nothing to do, and the two disagreed forever.
+- **Only the chapters that actually fail are rewritten.** Nothing else in
+  the book is touched, so a stuck book costs one or two chapter repairs
+  to rescue, not a whole rewrite.
+
+### Does anything about the steps change?
+
+No. The steps are the same, the prices are the same, and a book that was
+already moving through them is unaffected. The only difference is that a
+book which used to get stuck now keeps going.
+
+### Release gate
+
+Run the full Windows release gate before releasing this. The defect is
+covered by `tests/test_ebook_accepted_chapter_revalidation.py`, which
+reproduces the stuck book end to end and fails on the previous release.
+
+---
+
 ## 1.7.28 — 2026-09-16
 
 **Every download on the live site was being refused. They work again.**

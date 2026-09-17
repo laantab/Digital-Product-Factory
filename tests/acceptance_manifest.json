@@ -151,6 +151,7 @@
     "tests/test_database_identity_is_not_leaked.py",
     "tests/test_interior_visual_editorial_standard.py",
     "tests/test_export_revision_identity.py",
-    "tests/test_command_center.py"
+    "tests/test_command_center.py",
+    "tests/test_ebook_accepted_chapter_revalidation.py"
   ]
 }
