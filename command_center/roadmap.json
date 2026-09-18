@@ -1,6 +1,6 @@
 {
   "schema_note": "Digital Product Factory Pro Competitive Upgrade Roadmap, established 2026-09-12. This is the durable strategic source of truth so a future Claude session cannot lose the strategic direction: quality/reliability/design/publishing/simplicity, NOT more product breadth, until these six upgrades are complete. Status values: NOT_STARTED, IN_PROGRESS, BLOCKED, VERIFYING, COMPLETE_LOCKED. Do not reorder upgrades without a real dependency reason (see each entry's `dependencies`). Do not begin an upgrade after the current one unless the owner explicitly approves skipping ahead.",
-  "updated_at": "2026-09-16T10:20:00-07:00",
+  "updated_at": "2026-09-17T14:00:00-07:00",
   "vision": "A beginner should go from IDEA -> MARKET OPPORTUNITY -> PRODUCT -> PROFESSIONAL DESIGN -> COVER -> VISUALS -> QA -> PREVIEW -> APPROVAL -> MULTIPLE EXPORT FORMATS -> READY-TO-SELL PACKAGE with as little technical knowledge and manual work as possible. The customer experience stays: Create -> Preview -> Approve -> Download. Digital Product Factory Pro is not a Designrr clone -- it is a complete AI-assisted digital-product production system competing on: Factory Market Advantage before creation, multiple product types, one-click production, free/local resources first with controlled paid-AI fallback, automatic QA, professional covers and interiors, protected working generators, automatic packaging, ready-to-sell outputs, and minimal technical interaction.",
   "standing_priority": "QUALITY -> RELIABILITY -> DESIGN -> PUBLISHING -> SIMPLICITY, not additional product types, until all six upgrades are COMPLETE_LOCKED. Do not add a new product generator unless the owner explicitly approves one.",
   "current_upgrade": "upgrade_1_cover_system",
@@ -256,6 +256,18 @@
         "DOWNLOADS: the only finished product returns 403 stale_or_orphan_export_package on the URL the app itself stores; needs production database access to diagnose; works locally on SQLite"
       ],
       "not_a_regression_from": "v1.7.27 - all three predate it"
+    },
+    "v1.8.0": {
+      "attempted_at": null,
+      "deployed": "NOT DEPLOYED - code and tests ready on feature/v1.8.0-workflows; the Render Workflows service has not been created (a new recurring charge, owner's decision)",
+      "result": "PENDING OWNER ACTION",
+      "what_it_fixes": "A live Resume Build for 'Container Gardening for Beginners' exceeded the Render web service memory limit because the book was written inside the process that serves pages.",
+      "architecture_decision": "Render Workflows, not an always-on Background Worker. Product generation is bursty: a Workflows task starts on demand with up to 1 CPU and 4 GB and is billed only while running ($0.20/CPU-hour + $0.05/GB-hour, verified 2026-09-17), where an always-on worker with 4 GB is $85 a month whether or not anyone is building a book.",
+      "superseded": "feature/v1.8.0-background-worker (never pushed; do not merge)",
+      "switch": "FACTORY_EXECUTION_MODE=workflow on the web service. Unset means the v1.7.29 behaviour, which is also what every local Windows checkout uses.",
+      "rollback": "Delete FACTORY_EXECUTION_MODE on the web service. No data migration either way; both modes use the same job rows, PostgreSQL and R2.",
+      "acceptance_plan": "V1_8_0_WORKFLOWS_DEPLOYMENT.md",
+      "tests": "tests/test_ebook_workflow_execution.py - 50 checks, zero paid API calls"
     }
   }
 }

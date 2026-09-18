@@ -1,0 +1,99 @@
+# Render Blueprint — Digital Product Factory v1.8.0
+#
+# WHAT CHANGED AND WHY
+# --------------------
+# A live Resume Build for "Container Gardening for Beginners" pushed the
+# web service past its memory limit. The book was being written inside the
+# process that serves pages, so one customer's build could take the whole
+# site down.
+#
+# This blueprint describes the fix: TWO services. The website answers
+# pages and never writes a book. The builder is a Workflows service whose
+# tasks start on demand, get their own CPU and RAM, and disappear when the
+# book is done — so an idle Factory costs nothing and a busy one does not
+# have to be paid for around the clock.
+#
+# THIS FILE IS NOT APPLIED AUTOMATICALLY. The existing web service
+# (srv-da8qisegekts7380vdvg) was created by hand and keeps its own
+# settings. It is here so the intended shape of production is in the
+# repository and reviewable, and so the workflow service can be created
+# from it. Creating the workflow service is a PAID action and is the
+# owner's to take.
+#
+# EVERY SECRET BELOW IS sync: false ON PURPOSE. No key value is ever
+# written into this repository; each is set in the Render dashboard.
+
+services:
+  # -------------------------------------------------------------- website
+  - type: web
+    name: digital-product-factory
+    runtime: python
+    region: ohio
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      # The switch that moves building off this service. Setting this to
+      # "workflow" is the whole cutover; deleting it is the whole rollback.
+      - key: FACTORY_EXECUTION_MODE
+        value: workflow
+      - key: FACTORY_WORKFLOW_TASK
+        value: digital-product-factory-builder/build_ebook
+      - key: RENDER_API_KEY
+        sync: false
+      - key: FACTORY_DB_BACKEND
+        value: postgres
+      - key: DATABASE_URL
+        sync: false
+      - key: FACTORY_STORAGE_DRIVER
+        value: r2
+      - key: SECRET_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PEXELS_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+
+  # -------------------------------------------------------------- builder
+  # Tasks are dispatched to this service by name. Compute is chosen per
+  # task in workflow_task.py (plan="flex": up to 1 CPU and 4 GB), which is
+  # why a workflow service has no `plan` field of its own.
+  - type: workflow
+    name: digital-product-factory-builder
+    runtime: python
+    region: ohio
+    buildCommand: pip install -r requirements.txt
+    startCommand: python workflow_task.py
+    envVars:
+      # The builder reads and writes the SAME durable state as the website:
+      # the same PostgreSQL, the same R2 bucket. That is what makes the
+      # handover a row rather than a message, and what lets a task be
+      # retried without losing a chapter.
+      - key: FACTORY_DB_BACKEND
+        value: postgres
+      - key: DATABASE_URL
+        sync: false
+      - key: FACTORY_STORAGE_DRIVER
+        value: r2
+      - key: SECRET_KEY
+        sync: false
+      # Hosted text generation. Production must never depend on a laptop's
+      # Ollama, so no OLLAMA_* variable is set here — absent means the
+      # cloud provider is used, which is the existing behaviour.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PEXELS_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      # R2 credentials, same bucket as the website.
+      - key: FACTORY_R2_ACCOUNT_ID
+        sync: false
+      - key: FACTORY_R2_ACCESS_KEY_ID
+        sync: false
+      - key: FACTORY_R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: FACTORY_R2_BUCKET
+        sync: false

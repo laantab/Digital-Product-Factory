@@ -14,6 +14,12 @@ openai==1.97.1
 # either absent the Factory runs on SQLite exactly as before.
 psycopg[binary]==3.2.9
 python-dotenv==1.1.1
+# Render Workflows SDK — v1.8.0. Imported lazily and used only when
+# FACTORY_EXECUTION_MODE=workflow: the web service imports it inside the
+# trigger function, and only the workflow service imports it at startup.
+# With the variable unset the Factory runs exactly as v1.7.29 did, and a
+# local Windows checkout never needs a Render account.
+render==1.1.0
 pypdf==6.10.0
 reportlab==4.4.9
 requests==2.32.4

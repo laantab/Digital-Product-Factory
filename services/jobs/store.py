@@ -82,7 +82,9 @@ def init_jobs_table() -> None:
                 attempts INTEGER NOT NULL DEFAULT 0,
                 last_error TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                workflow_run_id TEXT NOT NULL DEFAULT '',
+                workflow_triggered_at TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -93,6 +95,11 @@ def init_jobs_table() -> None:
         conn.commit()
     finally:
         conn.close()
+
+    # A production database created before v1.8.0 already has this table
+    # without the two workflow columns, and CREATE TABLE IF NOT EXISTS will
+    # not add them. This does, and it is a no-op everywhere else.
+    ensure_trigger_columns()
 
 
 _COLUMNS = ("id", "project_id", "kind", "status", "lease_owner",
@@ -288,3 +295,191 @@ def counts() -> dict:
     finally:
         conn.close()
     return out
+
+
+# ===========================================================================
+# Workflow triggering — v1.8.0.
+#
+# In workflow mode the web process does not build the book; it writes the
+# job and asks Render to run a task. Two extra facts have to be durable
+# for that to be safe:
+#
+#   * WHEN a task was last asked for, so a customer who clicks Continue
+#     five times does not start five tasks on the same book — which would
+#     race five instances onto one chapter and bill for all of them.
+#   * WHICH task run was started, so a stuck book can be traced to a
+#     Render run without guessing.
+#
+# Both live on the existing job row. A second table would have to be kept
+# in step with the first, and the row is already the thing that survives
+# a restart.
+# ===========================================================================
+
+#: A job may not be re-triggered inside this window. Long enough that an
+#: impatient customer cannot fan out tasks, short enough that a task which
+#: died before claiming anything is retried promptly.
+TRIGGER_COOLDOWN_SECONDS = 120
+
+_TRIGGER_COLUMNS = (
+    ("workflow_run_id", "TEXT NOT NULL DEFAULT ''"),
+    ("workflow_triggered_at", "TEXT NOT NULL DEFAULT ''"),
+)
+
+
+def ensure_trigger_columns() -> None:
+    """Add the workflow columns if they are not there. Idempotent.
+
+    Each ALTER gets its own connection: PostgreSQL aborts a transaction
+    on a failed statement, so sharing one connection would make the first
+    "column already exists" poison every ALTER after it.
+    """
+    import database
+
+    for name, ddl in _TRIGGER_COLUMNS:
+        conn = database.get_conn()
+        try:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {ddl}")
+            conn.commit()
+        except Exception:                              # noqa: BLE001
+            # Already present. This is the normal path on every boot after
+            # the first, and it is not worth logging.
+            try:
+                conn.rollback()
+            except Exception:                          # noqa: BLE001
+                pass
+        finally:
+            conn.close()
+
+
+def _trigger_cutoff(seconds: int) -> str:
+    return (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat()
+
+
+def claim_trigger(job_id: int, *, cooldown: int = TRIGGER_COOLDOWN_SECONDS) -> bool:
+    """Win the right to start ONE workflow task for this job.
+
+    Returns True at most once per cooldown window, and never while another
+    task holds a live lease on the job — a running task is already doing
+    the work, so a second one would only race it.
+
+    This is one conditional UPDATE, not a read followed by a write, so two
+    web instances handling two clicks at the same moment cannot both win.
+    """
+    import database
+
+    now = _now()
+    conn = database.get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE jobs SET workflow_triggered_at=?, updated_at=? "
+            "WHERE id=? "
+            "  AND (workflow_triggered_at IS NULL OR workflow_triggered_at=''"
+            "       OR workflow_triggered_at < ?) "
+            "  AND NOT (status=? AND lease_expires_at > ?)",
+            (now, now, int(job_id), _trigger_cutoff(cooldown), RUNNING, now),
+        )
+        conn.commit()
+        return int(getattr(cur, "rowcount", 0) or 0) == 1
+    except Exception:                                  # noqa: BLE001
+        # A missing column means ensure_trigger_columns has not run. Refuse
+        # to trigger rather than trigger without protection.
+        try:
+            conn.rollback()
+        except Exception:                              # noqa: BLE001
+            pass
+        return False
+    finally:
+        conn.close()
+
+
+def record_workflow_run(job_id: int, run_id: str) -> bool:
+    """Remember which Render task run was started for this job."""
+    import database
+
+    conn = database.get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE jobs SET workflow_run_id=?, updated_at=? WHERE id=?",
+            (str(run_id or "")[:200], _now(), int(job_id)),
+        )
+        conn.commit()
+        return int(getattr(cur, "rowcount", 0) or 0) == 1
+    except Exception:                                  # noqa: BLE001
+        try:
+            conn.rollback()
+        except Exception:                              # noqa: BLE001
+            pass
+        return False
+    finally:
+        conn.close()
+
+
+def trigger_info(project_id: int, kind: str = KIND_EBOOK_BUILD) -> dict:
+    """What we know about this book's last workflow trigger. Read-only."""
+    import database
+
+    conn = database.get_conn()
+    try:
+        row = conn.execute(
+            "SELECT workflow_run_id, workflow_triggered_at FROM jobs"
+            " WHERE project_id=? AND kind=?",
+            (int(project_id), str(kind)),
+        ).fetchone()
+    except Exception:                                  # noqa: BLE001
+        return {}
+    finally:
+        conn.close()
+    if row is None:
+        return {}
+
+    def _get(key):
+        return (row.get(key) if isinstance(row, dict) else row[key]) or ""
+
+    return {"workflow_run_id": _get("workflow_run_id"),
+            "workflow_triggered_at": _get("workflow_triggered_at")}
+
+
+def claim_for_project(owner: str, project_id: int,
+                      kind: str = KIND_EBOOK_BUILD) -> dict | None:
+    """Claim THIS book's job, rather than whichever is next in the queue.
+
+    A workflow task is started for one project and must work on that one:
+    claiming "the next runnable job" would let a task started for book A
+    pick up book B, which makes a run id meaningless and makes two tasks
+    able to swap books underneath each other.
+
+    Same conditional-UPDATE discipline as claim_next, so the running web
+    process and a starting task cannot both own the row.
+    """
+    import database
+
+    now = _now()
+    conn = database.get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM jobs WHERE project_id=? AND kind=?",
+            (int(project_id), str(kind)),
+        ).fetchone()
+        if row is None:
+            return None
+        job = _row_to_dict(row)
+        if job["status"] not in (QUEUED, RUNNING):
+            return None
+        if int(job["attempts"]) >= MAX_ATTEMPTS:
+            return None
+        if job["status"] == RUNNING and str(job["lease_expires_at"] or "") > now:
+            return None
+        cur = conn.execute(
+            "UPDATE jobs SET status=?, lease_owner=?, lease_expires_at=?,"
+            " attempts=attempts+1, updated_at=? "
+            "WHERE id=? AND status=? AND lease_expires_at=?",
+            (RUNNING, owner, _future(LEASE_SECONDS), now,
+             job["id"], job["status"], job["lease_expires_at"]),
+        )
+        conn.commit()
+        if int(getattr(cur, "rowcount", 0) or 0) == 1:
+            return {**job, "status": RUNNING, "lease_owner": owner,
+                    "attempts": int(job["attempts"]) + 1}
+        return None
+    finally:
+        conn.close()

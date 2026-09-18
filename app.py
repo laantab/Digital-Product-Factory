@@ -98,12 +98,32 @@ with app.app_context():
     # Durable ebook execution. Starting this at boot is also the recovery
     # path: any job whose lease expired when the previous process died is
     # reclaimed by the first tick, with no cleanup step required.
+    #
+    # In workflow mode (v1.8.0) the ticker deliberately does not start:
+    # the builder is a separate Render service, and a web process that
+    # still advanced builds would reproduce the memory failure this
+    # release exists to close. `runner.executor_enabled()` is the single
+    # gate; nothing here decides it a second time.
     try:
+        from services.jobs import mode as _execution_mode
         from services.jobs.runner import start as _start_executor
         from services.jobs.store import init_jobs_table
 
         init_jobs_table()
-        _start_executor()
+        _started = _start_executor()
+        app.logger.info(
+            "factory execution mode: %s (in-process executor %s)",
+            _execution_mode.execution_mode(),
+            "started" if _started else "not started",
+        )
+        if _execution_mode.is_workflow_mode():
+            _ready, _why = _execution_mode.is_configured()
+            if not _ready:
+                # A half-configured workflow service accepts books and
+                # builds none of them. Say so at boot, not when a
+                # customer is waiting.
+                app.logger.error(
+                    "workflow mode is set but not usable: %s", _why)
     except Exception:  # noqa: BLE001
         app.logger.exception("ebook executor did not start")
 
@@ -3912,11 +3932,12 @@ def ebook_build_start_route():
         # it is a row. The browser still drives the visible progress for a
         # customer who stays, but it is no longer the only thing that can.
         try:
-            from services.jobs.runner import start as _start_executor
-            from services.jobs.store import enqueue as _enqueue_build
+            from services.jobs.dispatch import hand_off as _hand_off_build
 
-            _enqueue_build(pid)
-            _start_executor()
+            # ONE decision point for who builds the book (v1.8.0). Inline
+            # mode ticks it here as before; workflow mode writes the job
+            # and asks Render to run it on its own instance.
+            _hand_off_build(pid)
         except Exception:  # noqa: BLE001
             # A queueing problem must never stop a customer starting a book.
             app.logger.exception("could not enqueue the ebook build job")
@@ -3930,13 +3951,50 @@ def ebook_build_start_route():
 
 @app.post("/ebook/build/<int:project_id>/advance")
 def ebook_build_advance_route(project_id: int):
-    """Run the next incomplete stage. One checkpoint per call."""
+    """Run the next incomplete stage. One checkpoint per call.
+
+    In workflow mode this refuses to build (v1.8.0). It is the last way a
+    browser could still make the web process write a book, and leaving it
+    open would mean an old tab, a stale script or a retried request could
+    push the web service past its memory limit again — and race the
+    Render task that legitimately owns the job. It answers with the same
+    read-only status the screen already polls, so a customer sees
+    progress rather than an error.
+    """
     try:
+        from services.jobs import mode as _execution_mode
+
+        if _execution_mode.is_workflow_mode():
+            from services.ebook_build_orchestrator import status_payload
+
+            project, err = _ebook_workspace_project_or_404(project_id)
+            if err:
+                return err[0], err[1]
+            payload = status_payload(dict(project.get("data") or {}), project_id)
+            payload["advanced"] = False
+            payload["execution_mode"] = _execution_mode.WORKFLOW
+            return jsonify(payload)
+
         from services.ebook_build_orchestrator import advance_build
 
         return jsonify(advance_build(project_id))
     except Exception as exc:  # noqa: BLE001
         return _customer_error(exc, 500, log="ebook build advance failed")
+
+
+@app.get("/ebook/execution-mode")
+def ebook_execution_mode_route():
+    """Read-only: which machine builds books, and is it usable.
+
+    Reports whether a credential is configured, never its value. This is
+    how a deploy is verified without opening a shell.
+    """
+    try:
+        from services.jobs import mode as _execution_mode
+
+        return jsonify(_execution_mode.describe())
+    except Exception as exc:  # noqa: BLE001
+        return _customer_error(exc, 500, log="execution mode read failed")
 
 
 @app.post("/ebook/build/<int:project_id>/resume")
@@ -3960,12 +4018,13 @@ def ebook_build_resume_route(project_id: int):
 
         payload = resume_build(project_id)
         try:
-            from services.jobs.runner import start as _start_executor
-            from services.jobs.store import enqueue as _enqueue_build
+            from services.jobs.dispatch import hand_off as _hand_off_build
 
             # An explicit human "keep going" earns a fresh set of attempts.
-            _enqueue_build(project_id, reset_attempts=True)
-            _start_executor()
+            # In workflow mode this also asks Render for a task, and the
+            # duplicate guard in the job row means a customer clicking
+            # Continue five times still starts exactly one (v1.8.0).
+            _hand_off_build(project_id, reset_attempts=True)
         except Exception:  # noqa: BLE001
             # A queueing problem must never take away the way forward.
             app.logger.exception("could not enqueue the resumed ebook build job")

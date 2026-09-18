@@ -47,13 +47,32 @@ _lock = threading.Lock()
 
 
 def executor_enabled() -> bool:
-    """On by default; off under the test suite and when switched off.
+    """On by default; off under the test suite, when switched off, and in
+    workflow mode.
 
     The test suite must never start a background thread: a suite that
     silently runs builds underneath itself is unreadable when it fails.
+
+    WORKFLOW MODE TURNS THIS OFF, AND THAT IS THE POINT (v1.8.0)
+    ------------------------------------------------------------
+    In workflow mode the builder is a separate Render service. If the web
+    process still ticked, it would keep writing books in the process that
+    serves pages — the exact memory failure this release exists to close —
+    and two owners would race each other onto the same chapter.
+
+    One gate for both the boot thread and `tick_soon`, deliberately: a
+    second check somewhere else is a second thing to forget.
     """
     if str(os.environ.get("FACTORY_TEST_MODE") or "").strip().lower() in ("1", "true", "yes"):
         return False
+    try:
+        from services.jobs import mode
+
+        if mode.is_workflow_mode():
+            return False
+    except Exception:                                  # noqa: BLE001
+        # An unreadable mode must not silently stop books being built.
+        pass
     return str(os.environ.get(ENV_SWITCH) or "on").strip().lower() not in (
         "off", "0", "false", "no")
 
