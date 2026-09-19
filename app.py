@@ -4097,6 +4097,19 @@ def ebook_build_advance_route(project_id: int):
             project, err = _ebook_workspace_project_or_404(project_id)
             if err:
                 return err[0], err[1]
+            # v1.8.2. Refusing to build here was right; refusing SILENTLY was
+            # not. "Continue where you left off" reopens a one-click build and
+            # polls this route -- it never calls /resume -- so this was the
+            # only route a resumed book could reach, and it answered 200 with
+            # a cheerful status while asking nobody to do the work. The book
+            # sat queued, the builder ran zero tasks, and nothing anywhere
+            # said so. Hand the work off, exactly as every other heavy route
+            # does. The duplicate guard in the job row (one conditional
+            # UPDATE, a 120s cooldown and a live-lease check) is what stops
+            # the polling loop starting a second task.
+            handed = _workflow_hand_off(project_id, route="advance")
+            if handed is not None:
+                return jsonify(handed)
             payload = status_payload(dict(project.get("data") or {}), project_id)
             payload["advanced"] = False
             payload["execution_mode"] = _execution_mode.WORKFLOW
