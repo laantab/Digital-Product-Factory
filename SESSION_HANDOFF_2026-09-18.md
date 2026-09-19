@@ -46,7 +46,25 @@ fails the gate when a new one is added without that decision being made.
 - A stale `.git/index.lock` was blocking every git command at the start of
   the session. Removed.
 
-## Release gate
+## Release gate — GREEN on Windows
+
+**The full Windows release gate was run by the owner and passed:
+3548 tests, 0 failures, 0 errors, 0 skipped, 0 paid API calls, 11m48s.**
+
+That is the authoritative result. Everything below describes the Linux VM
+the session worked in, and is kept only to explain what was seen there.
+
+**The nine "pre-existing failures" recorded below are Linux-only artifacts.
+They all pass on Windows.** They were genuinely failing in that VM, and
+running them at `origin/main` there proved they were not caused by v1.8.1 —
+which was the right call — but the conclusion "these are already red"
+does NOT apply to this repository. Nothing needs fixing.
+
+**The three real-browser tests did run on Windows and passed** (0 skipped),
+so the `static/js/app.js` change is covered. The verification gap noted
+below is closed.
+
+## Release gate as seen in the Linux session (for reference only)
 
 All 160 manifest files were run. Every new v1.8.1 suite is green, and the
 Fast Stability Gate is green.
@@ -65,7 +83,8 @@ file at `origin/main` in a separate worktree, and each was left untouched:
 These are not v1.8.1's to fix, but they were already red before this
 session and somebody should decide what to do about them.
 
-**Three tests could not be run and must be run on Windows before merge:**
+**Three tests could not be run in the Linux VM (they have since been run on
+Windows and passed):**
 `tests/test_ebook_real_browser_customer_path.py` needs Playwright's
 Chromium, which the Linux VM this session used cannot download. It drives
 the ebook customer path in a real browser, so it is the test that covers
