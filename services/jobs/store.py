@@ -323,6 +323,22 @@ TRIGGER_COOLDOWN_SECONDS = 120
 _TRIGGER_COLUMNS = (
     ("workflow_run_id", "TEXT NOT NULL DEFAULT ''"),
     ("workflow_triggered_at", "TEXT NOT NULL DEFAULT ''"),
+    # v1.8.1. The step-by-step screen asks for a SPECIFIC piece of work --
+    # replace this photograph, use this uploaded cover, rebuild the preview --
+    # not just "carry on with the book". `build_ebook(project_id)` takes only
+    # a project id, so the request itself has to be durable somewhere the task
+    # can read it. It lives on the job row rather than in the task arguments
+    # so the task signature, the duplicate guard and the lease logic are all
+    # unchanged from v1.8.0.
+    ("requested_action", "TEXT NOT NULL DEFAULT ''"),
+    ("requested_action_at", "TEXT NOT NULL DEFAULT ''"),
+    # v1.8.1. The website and the builder are two Render services and can be
+    # running different commits. A builder on v1.8.0 does not understand a
+    # requested action: it would build the book straight through and the
+    # customer's chosen photograph would never appear, with nothing saying
+    # why. Recording the version that actually did the work makes that
+    # visible on /ebook/execution-mode.
+    ("builder_version", "TEXT NOT NULL DEFAULT ''"),
 )
 
 
@@ -483,3 +499,182 @@ def claim_for_project(owner: str, project_id: int,
         return None
     finally:
         conn.close()
+
+
+# ===========================================================================
+# The customer's requested action — v1.8.1.
+#
+# v1.8.0 moved "Build My Ebook" to the builder. That button means one thing:
+# finish this book. The step-by-step screen is different — every button on it
+# asks for a particular piece of work, and several of them carry the
+# customer's own choice with them (which photograph, which layout, which
+# theme, which uploaded file).
+#
+# The action is written on the job row, in the same UPDATE discipline as
+# everything else here, because the row is already the thing that survives a
+# restart and is already what the builder claims. Passing the action as a
+# task argument instead would change `build_ebook`'s signature, and with it
+# the duplicate guard and the lease logic that v1.8.0's tests hold in place.
+#
+# TAKE, NOT READ. `take_requested_action` clears the action in the same
+# conditional UPDATE that returns it, so an action is performed at most once
+# even if two tasks race or Render retries a run. "Replace this photograph"
+# executed twice is a second paid image and a second surprise for the
+# customer.
+# ===========================================================================
+
+
+def set_requested_action(job_id: int, action: dict) -> bool:
+    """Record what the customer actually asked for. Overwrites any pending one.
+
+    Overwriting is correct: a customer who clicks "AI alternative" and then
+    "replace photo" before the first has run wants the second. Only the most
+    recent request is meaningful, and keeping a queue of superseded image
+    requests would spend money on choices the customer has already changed.
+    """
+    import json
+
+    import database
+
+    conn = database.get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE jobs SET requested_action=?, requested_action_at=?,"
+            " updated_at=? WHERE id=?",
+            (json.dumps(action or {}, separators=(",", ":"))[:8000],
+             _now(), _now(), int(job_id)),
+        )
+        conn.commit()
+        return int(getattr(cur, "rowcount", 0) or 0) == 1
+    except Exception:                                  # noqa: BLE001
+        # A missing column means ensure_trigger_columns has not run. Refuse
+        # rather than silently drop the customer's choice.
+        try:
+            conn.rollback()
+        except Exception:                              # noqa: BLE001
+            pass
+        return False
+    finally:
+        conn.close()
+
+
+def peek_requested_action(project_id: int, kind: str = KIND_EBOOK_BUILD) -> dict:
+    """Read the pending action WITHOUT clearing it. For status routes only."""
+    import json
+
+    import database
+
+    conn = database.get_conn()
+    try:
+        row = conn.execute(
+            "SELECT requested_action FROM jobs WHERE project_id=? AND kind=?",
+            (int(project_id), str(kind)),
+        ).fetchone()
+    except Exception:                                  # noqa: BLE001
+        return {}
+    finally:
+        conn.close()
+    if row is None:
+        return {}
+    raw = (row.get("requested_action") if isinstance(row, dict)
+           else row["requested_action"]) or ""
+    try:
+        parsed = json.loads(raw) if raw else {}
+    except Exception:                                  # noqa: BLE001
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def take_requested_action(job_id: int) -> dict:
+    """Return the pending action and clear it, atomically. At most once.
+
+    The clear is part of the same conditional UPDATE as the read's guard, so
+    two executors cannot both come away believing they own the action. An
+    action performed twice would mean a second paid image or a second cover.
+    """
+    import json
+
+    import database
+
+    pending = ""
+    conn = database.get_conn()
+    try:
+        row = conn.execute(
+            "SELECT requested_action FROM jobs WHERE id=?", (int(job_id),)
+        ).fetchone()
+        if row is None:
+            return {}
+        pending = (row.get("requested_action") if isinstance(row, dict)
+                   else row["requested_action"]) or ""
+        if not str(pending).strip():
+            return {}
+        cur = conn.execute(
+            "UPDATE jobs SET requested_action='', updated_at=? "
+            "WHERE id=? AND requested_action=?",
+            (_now(), int(job_id), pending),
+        )
+        conn.commit()
+        if int(getattr(cur, "rowcount", 0) or 0) != 1:
+            # Someone else took it first. Theirs to perform, not ours.
+            return {}
+    except Exception:                                  # noqa: BLE001
+        try:
+            conn.rollback()
+        except Exception:                              # noqa: BLE001
+            pass
+        return {}
+    finally:
+        conn.close()
+
+    try:
+        parsed = json.loads(pending)
+    except Exception:                                  # noqa: BLE001
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def record_builder_version(job_id: int, version: str) -> bool:
+    """Remember which build of the builder claimed this job."""
+    import database
+
+    conn = database.get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE jobs SET builder_version=?, updated_at=? WHERE id=?",
+            (str(version or "")[:40], _now(), int(job_id)),
+        )
+        conn.commit()
+        return int(getattr(cur, "rowcount", 0) or 0) == 1
+    except Exception:                                  # noqa: BLE001
+        try:
+            conn.rollback()
+        except Exception:                              # noqa: BLE001
+            pass
+        return False
+    finally:
+        conn.close()
+
+
+def last_builder_version() -> str:
+    """The most recently reported builder version, or "".
+
+    Empty on a service that believes it is in workflow mode means no builder
+    run has ever reported -- which is exactly what was true on the evening of
+    2026-09-18, when the builder showed zero runs all night.
+    """
+    import database
+
+    conn = database.get_conn()
+    try:
+        row = conn.execute(
+            "SELECT builder_version FROM jobs WHERE builder_version <> ''"
+            " ORDER BY updated_at DESC LIMIT 1"
+        ).fetchone()
+    except Exception:                                  # noqa: BLE001
+        return ""
+    finally:
+        conn.close()
+    if row is None:
+        return ""
+    return str((row.get("builder_version") if isinstance(row, dict)
+                else row["builder_version"]) or "")

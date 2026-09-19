@@ -109,6 +109,28 @@ def _package_id(data: dict) -> str:
     return "ebook-" + uuid.uuid4().hex[:12]
 
 
+def _publish_visual(aid: dict, path) -> None:
+    """Make a freshly downloaded interior photograph readable by the website.
+
+    v1.8.1. The builder writes it to its own disk; the website has to serve
+    it. Never raises -- one missing picture must not fail a book.
+    """
+    try:
+        from services.storage.publish import publish_file, publishing_enabled
+
+        if not publishing_enabled():
+            return
+        project_id = int((aid or {}).get("_project_id") or 0)
+        if project_id <= 0:
+            return
+        publish_file(project_id, EXPORTS_DIR, path,
+                     kind="interior_image", content_type="image/png")
+    except Exception:                                  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("could not publish a visual")
+
+
 def visuals_dir(package_id: str) -> Path:
     return Path(EXPORTS_DIR) / str(package_id or "ebook-visuals-local") / "visuals"
 
@@ -2127,6 +2149,7 @@ def store_interior_photo(
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     path.write_bytes(buf.getvalue())
+    _publish_visual(aid, path)
     out = json.loads(json.dumps(aid))
     out["type"] = "photo"
     _stamp_aid_from_file(

@@ -2370,6 +2370,90 @@ def execute_generate_outline_options(
     return {"ok": True, "duplicate": False, "data": data, "result": result}
 
 
+#: Which stage each confirmed paid action belongs to, and whether the outline
+#: digest is part of its contract. Research, titles and outlines are agreed
+#: BEFORE there is an outline to digest, so checking one would reject every
+#: request; the manuscript is agreed against a specific outline, so it must.
+_CONFIRMED_ACTIONS = {
+    "run_research": ("research", False),
+    "generate_title_options": ("title", False),
+    "generate_outline_options": ("outline", False),
+    "generate_manuscript": ("manuscript", True),
+    "correct_manuscript": ("manuscript", True),
+}
+
+
+def precheck_manuscript_request(
+    data: dict,
+    action: str,
+    *,
+    confirmation_token: str,
+    expected_artifact_id: str,
+    expected_revision: int,
+    outline_digest_expected: str,
+    max_authorized_usd: float,
+    idempotency_key: str,
+) -> None:
+    """Validate a manuscript request WITHOUT running it or spending anything.
+
+    v1.8.1. In workflow mode the route no longer calls
+    ``execute_generate_manuscript`` itself -- the builder does, on its own
+    instance -- so the checks that used to reject a bad request with a 400
+    would otherwise happen minutes later, on another machine, after a task
+    had already been started and billed for. This runs the same checks first,
+    in the request, and raises exactly what the customer sees today.
+
+    It changes nothing. It works on a deep copy, and ``consume_confirmation``
+    does not mark a token used (see its docstring), so a token validated here
+    is still available to the authoritative call on the builder. The spend
+    gate itself is untouched and still runs, once, where it always did.
+
+    Returns None when the request is acceptable. Raises ``ValueError`` (or
+    ``ConfirmationAlreadyUsed``) with the customer-facing message otherwise.
+    """
+    probe = ensure_workspace(copy.deepcopy(dict(data)))
+    ws = probe["ebook_workspace"]
+
+    if not str(idempotency_key or "").strip():
+        raise ValueError("Idempotency key is required.")
+
+    ledger = ws.get("paid_call_ledger") or {}
+    if str(idempotency_key).strip() in (ledger.get("idempotency_keys") or {}):
+        # An idempotent replay is not an error. The authoritative call
+        # returns the prior result; nothing needs rejecting here.
+        return
+
+    stage, checks_outline = _CONFIRMED_ACTIONS.get(str(action), ("manuscript", True))
+    assert_can_run_stage(ws, stage)
+    if stage == "manuscript" and not (
+        is_approved(ws, "research") and is_approved(ws, "title")
+        and is_approved(ws, "outline")):
+        raise ValueError("Research, title, and outline must all be approved.")
+
+    pending = consume_confirmation(probe, str(action), confirmation_token)
+
+    artifact_id = str(probe.get("artifact_id") or probe.get("package_id") or "")
+    revision = int(probe.get("artifact_revision") or 1)
+    if str(expected_artifact_id or "") != artifact_id:
+        raise ValueError("Stale artifact ID — reopen the project and try again.")
+    if int(expected_revision) != revision:
+        raise ValueError("Stale artifact revision — reopen the project and try again.")
+    if str(pending.get("artifact_id") or "") != artifact_id:
+        raise ValueError("Confirmation token was issued for a different artifact.")
+    if int(pending.get("artifact_revision") or 0) != revision:
+        raise ValueError("Confirmation token was issued for a different revision.")
+
+    if checks_outline:
+        current_od = outline_digest(probe)
+        if str(outline_digest_expected or "") != current_od:
+            raise ValueError("Outline changed since the estimate — request a new cost estimate.")
+        if str(pending.get("outline_digest") or "") != current_od:
+            raise ValueError("Confirmation token outline digest mismatch.")
+
+    if round(float(max_authorized_usd), 4) <= 0:
+        raise ValueError("Maximum authorized charge must be positive.")
+
+
 def execute_generate_manuscript(
     data: dict,
     *,

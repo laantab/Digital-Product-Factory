@@ -124,10 +124,29 @@ def is_configured() -> tuple[bool, str]:
     return True, ""
 
 
+def website_version() -> str:
+    """The VERSION this web service is running, or "unknown"."""
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        with open(os.path.join(root, "VERSION"), encoding="utf-8") as handle:
+            return handle.read().strip() or "unknown"
+    except Exception:                                  # noqa: BLE001
+        return "unknown"
+
+
 def describe() -> dict:
-    """Read-only summary for the execution-mode route. Contains no secrets."""
+    """Read-only summary for the execution-mode route. Contains no secrets.
+
+    v1.8.1 adds the two versions. The website and the builder deploy from
+    different Render services and can be on different commits; a builder that
+    does not understand a requested action would otherwise fail silently, and
+    this is the one page that can be checked without opening a shell.
+    """
     ready, reason = is_configured()
     return {
+        "website_version": website_version(),
+        "builder_version_last_seen": _last_seen_builder_version(),
         "execution_mode": execution_mode(),
         "workflow_task": workflow_task(),
         "render_api_key_configured": api_key_configured(),
@@ -135,3 +154,18 @@ def describe() -> dict:
         "ready": ready,
         "reason": reason,
     }
+
+
+def _last_seen_builder_version() -> str:
+    """The VERSION reported by the most recent builder run, or "".
+
+    Read from the job row the builder already writes, so this costs one small
+    query and adds no new table. Empty means no run has reported yet -- which
+    is itself worth seeing on a service that believes it is in workflow mode.
+    """
+    try:
+        from services.jobs import store
+
+        return store.last_builder_version()
+    except Exception:                                  # noqa: BLE001
+        return ""

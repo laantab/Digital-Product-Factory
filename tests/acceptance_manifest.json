@@ -153,6 +153,12 @@
     "tests/test_export_revision_identity.py",
     "tests/test_command_center.py",
     "tests/test_ebook_accepted_chapter_revalidation.py",
-    "tests/test_ebook_workflow_execution.py"
+    "tests/test_ebook_workflow_execution.py",
+    "tests/test_post_route_registry.py",
+    "tests/test_workspace_routes_to_builder.py",
+    "tests/test_builder_performs_requested_action.py",
+    "tests/test_build_holds_after_every_stage.py",
+    "tests/test_step_by_step_screen_polls.py",
+    "tests/test_builder_images_travel_through_storage.py"
   ]
 }

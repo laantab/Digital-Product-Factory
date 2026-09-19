@@ -70,6 +70,24 @@ def build_ebook(ctx: TaskContext, project_id: int) -> dict:
     return summary
 
 
+def _version() -> str:
+    """The VERSION file next to this entrypoint, or "unknown"."""
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, "VERSION"), encoding="utf-8") as handle:
+            return handle.read().strip() or "unknown"
+    except Exception:                                  # noqa: BLE001
+        return "unknown"
+
+
 if __name__ == "__main__":
-    log.info("Digital Product Factory workflow service starting")
+    # v1.8.1. THE TWO SERVICES CAN RUN DIFFERENT COMMITS. The website deploys
+    # from `main`; the builder was created from `feature/v1.8.0-workflows`. A
+    # builder still running v1.8.0 would not understand a requested action at
+    # all -- it would claim the job, build the book straight through, and the
+    # customer's chosen photograph would never appear, with nothing in any log
+    # saying why. Printing the version at start makes that mismatch visible in
+    # the first line of the run rather than in a confused customer.
+    log.info("Digital Product Factory workflow service starting (VERSION %s)",
+             _version())
     app.start()
