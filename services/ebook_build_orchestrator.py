@@ -94,14 +94,77 @@ MSG_FINAL = "Your project is safely saved. We couldn't complete this step automa
 MSG_MANUSCRIPT_READY = "Your manuscript is written and ready to read."
 
 
-def _held_after_manuscript(data: dict, state: dict) -> bool:
-    """True when the build is deliberately holding at the finished manuscript."""
-    if str(state.get("paused_after") or "") != "manuscript":
-        return False
+#: Plain-language "this stage is done, come and look" messages. The customer
+#: reads these while the build waits for them, so they say what is ready
+#: rather than naming a stage.
+STAGE_READY_MESSAGES = {
+    "research": "Your research is ready to read.",
+    "title": "Your title choices are ready.",
+    "outline": "Your outline is ready to read.",
+    "manuscript": MSG_MANUSCRIPT_READY,
+    "visuals": "Your visuals are ready to look at.",
+    "cover": "Your cover is ready to look at.",
+    "design": "Your design is ready to look at.",
+    "preview": "Your preview is ready to read.",
+    "preflight": "Your quality check is finished.",
+    "export": "Your final files are ready.",
+}
+
+
+def pause_after(data: dict, stage: str) -> dict:
+    """Hold the build once `stage` is complete, so the customer can look at it.
+
+    v1.8.1. The step-by-step screen approves every stage, not only the
+    manuscript, so the hold has to work for every stage. Setting it is all
+    this does: the decision to STOP is made in advance_build, which already
+    reads `paused_after`, and nothing about the stage's own work changes.
+    """
+    state = build_state(data)
+    stage = str(stage or "").strip()
+    if stage and stage not in STAGES:
+        raise ValueError(f"unknown stage: {stage}")
+    state["paused_after"] = stage
+    state["updated_at"] = _now()
+    return data
+
+
+def clear_pause(data: dict) -> dict:
+    """Release the hold so the build may run the next stage.
+
+    This is what the customer's approval means. Until v1.8.1 nothing ever
+    cleared `paused_after`, which is why the hold was never used: a build
+    that stopped would have stopped for good.
+    """
+    state = build_state(data)
+    state["paused_after"] = ""
+    state["updated_at"] = _now()
+    return data
+
+
+def held_after(data: dict, state: dict | None = None) -> str:
+    """The stage this build is deliberately holding at, or "".
+
+    A hold only takes effect once the stage it names has actually completed.
+    Before that the build is simply working, and reporting it as "waiting for
+    you" would be a lie the customer cannot act on.
+    """
+    state = state if isinstance(state, dict) else build_state(data)
+    stage = str(state.get("paused_after") or "")
+    if not stage:
+        return ""
     from services.ebook_project_workspace import is_approved
 
     ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
-    return is_approved(ws, "manuscript")
+    return stage if is_approved(ws, stage) else ""
+
+
+def _held_after_manuscript(data: dict, state: dict) -> bool:
+    """True when the build is deliberately holding at the finished manuscript.
+
+    Kept as a named helper because the manuscript hold has its own customer
+    message and its own tests. It is now one case of the general rule above.
+    """
+    return held_after(data, state) == "manuscript"
 
 #: A stage held RUNNING longer than this lost its worker and may be reclaimed.
 STALE_RUNNING_SECONDS = 900
@@ -887,13 +950,13 @@ def advance_build(project_id: int) -> dict:
     # A build can be deliberately held after a stage so the customer can read
     # what has been produced before more work runs. Reporting progress is
     # always allowed; running the next stage is not.
-    paused_after = str(state.get("paused_after") or "")
-    if paused_after:
-        from services.ebook_project_workspace import is_approved
-
-        ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
-        if is_approved(ws, paused_after):
-            return status_payload(data, project_id)
+    # v1.8.1: this works for every stage, not only the manuscript. The
+    # step-by-step customer approves each one, so the builder has to be able
+    # to stop after any of them and wait. `held_after` returns the stage only
+    # once that stage has actually completed, so a hold never masks work in
+    # progress.
+    if held_after(data, state):
+        return status_payload(data, project_id)
 
     rec = _stage_record(state, stage)
     if int(rec.get("attempts") or 0) >= _max_attempts(stage) and rec.get("status") != COMPLETE:
@@ -1154,7 +1217,8 @@ def status_payload(data: dict, project_id: int) -> dict:
         "percent": progress_percent(data),
         "message": (
             MSG_READY if finished
-            else (MSG_MANUSCRIPT_READY if _held_after_manuscript(data, state)
+            else (STAGE_READY_MESSAGES.get(held_after(data, state), MSG_WORKING)
+                  if held_after(data, state)
                   else (state.get("customer_message") or MSG_WORKING))
         ),
         "artifact_state": str(data.get("artifact_state") or "DRAFT"),
@@ -1178,6 +1242,10 @@ def status_payload(data: dict, project_id: int) -> dict:
         # A build may be deliberately held after a stage so the customer can
         # read what has been produced before more work runs.
         "paused_after": str(state.get("paused_after") or ""),
+        # The hold, but only once it is actually in effect. The screen shows
+        # "waiting for you" from this, never from paused_after alone, which
+        # is set while the stage is still being worked on.
+        "held_after": held_after(data, state),
     }
 
 

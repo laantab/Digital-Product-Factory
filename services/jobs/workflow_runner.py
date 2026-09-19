@@ -130,6 +130,28 @@ def run_build(project_id: int, *, budget_seconds: int | None = None,
 
         unclaimable = 0
         summary["claims"] += 1
+
+        # v1.8.1. The step-by-step screen asks for a SPECIFIC piece of work,
+        # recorded on the job row by the website. Perform it here, on the
+        # first claim that finds one, with the same function the website
+        # would have called inline -- then let the ordinary build loop carry
+        # on over the result. Taking the action clears it, so a Render retry
+        # never performs it twice.
+        job_id = outcome.get("job_id")
+        if job_id:
+            try:
+                from services.jobs.builder_actions import perform_pending
+
+                done = perform_pending(project_id, int(job_id))
+                if done.get("performed"):
+                    summary["actions"] = int(summary.get("actions") or 0) + 1
+                    summary["last_action"] = done.get("route") or ""
+                if done.get("error"):
+                    # One request failed; the book has not.
+                    summary.setdefault("action_errors", []).append(done["error"])
+            except Exception:                          # noqa: BLE001
+                log.exception("requested action handling failed for %s", project_id)
+
         summary["units"] += int(outcome.get("units") or 0)
         if outcome.get("percent") is not None:
             summary["percent"] = outcome.get("percent")

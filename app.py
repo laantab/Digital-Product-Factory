@@ -667,6 +667,59 @@ def generate_ebook_route():
         return _error(str(exc), 500)
 
 
+def _workflow_hand_off(project_id: int, *, route: str, action: str = "",
+                       payload: dict | None = None):
+    """Give a heavy route's work to the builder, or None to run it inline.
+
+    v1.8.1. Every heavy ebook route calls this AFTER it has validated the
+    request and recorded the customer's decision, and BEFORE it does any
+    work. In workflow mode it returns the read-only status payload the screen
+    already polls, and the route returns that and does nothing else. In
+    inline mode -- local Windows development, and the rollback path -- it
+    returns None and the route behaves exactly as it did before.
+
+    app.py deliberately does not check the execution mode itself. The whole
+    decision lives in services/jobs/, which is what stops the two modes
+    drifting into two half-maintained execution paths. See
+    services/jobs/actions.py.
+    """
+    try:
+        from services.jobs.actions import hand_off_if_workflow
+
+        return hand_off_if_workflow(project_id, route=route, action=action,
+                                    payload=payload or {})
+    except Exception:  # noqa: BLE001
+        # A handoff problem must never take a route down. Falling through to
+        # inline is the safe direction: the customer's book still gets built,
+        # and the memory risk is a risk, not a certainty.
+        app.logger.exception("workflow hand-off failed for %s", route)
+        return None
+
+
+def _store_uploaded_cover(project_id: int, raw: bytes, filename: str) -> str:
+    """Put an uploaded cover photograph in storage and return its key, or "".
+
+    v1.8.1. The website and the builder do not share a disk, so anything the
+    customer uploads has to go somewhere both can reach before the builder is
+    asked to use it. Returning "" on failure is deliberate: the caller then
+    stays inline rather than handing the builder a key to nothing.
+    """
+    try:
+        import hashlib
+
+        from services.storage import get_storage
+        from services.storage.keys import KIND_COVER, embedded_key
+
+        digest = hashlib.sha256(raw or b"").hexdigest()[:32]
+        key = f"{embedded_key(int(project_id), 'cover_upload', KIND_COVER)}.{digest}"
+        content_type = "image/png" if filename.lower().endswith(".png") else "image/jpeg"
+        get_storage().put(key, raw, content_type=content_type)
+        return key
+    except Exception:  # noqa: BLE001
+        app.logger.exception("could not store the uploaded cover for %s", project_id)
+        return ""
+
+
 def _ebook_workspace_project_or_404(project_id: int):
     project = database.get_project(project_id)
     if not project:
@@ -1160,6 +1213,37 @@ def generate_ebook_workspace_manuscript_route(project_id: int):
             return err[0], err[1]
         data = dict(project.get("data") or {})
 
+        # v1.8.1. THIS IS THE ROUTE THAT TOOK THE SITE DOWN. On 2026-09-18 it
+        # returned 500 because the gunicorn worker was killed at the
+        # 120-second limit while still writing chapters, and the instance ran
+        # out of memory minutes later. Writing a book is not work for the
+        # process that serves pages.
+        #
+        # THE SPEND GATE DOES NOT MOVE AND DOES NOT WEAKEN. A request that
+        # would be refused today is refused here, before any task is started
+        # or billed -- otherwise a stale token would become a Render run that
+        # fails minutes later on another machine. precheck_manuscript_request
+        # runs the engine's own checks on a deep copy and marks nothing used,
+        # so the authoritative call on the builder still validates exactly
+        # once, exactly as it always did.
+        from services.ebook_project_workspace import precheck_manuscript_request
+
+        precheck_manuscript_request(
+            data, "generate_manuscript",
+            confirmation_token=str(body.get("confirmation_token") or ""),
+            expected_artifact_id=str(body.get("expected_artifact_id") or body.get("artifact_id") or ""),
+            expected_revision=int(body.get("expected_revision") or body.get("artifact_revision") or 0),
+            outline_digest_expected=str(body.get("outline_digest") or ""),
+            max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
+            idempotency_key=str(body.get("idempotency_key") or ""),
+        )
+        handed = _workflow_hand_off(
+            project_id,
+            route="/ebook-workspace/<int:project_id>/generate-manuscript",
+            action="generate", payload=dict(body))
+        if handed is not None:
+            return jsonify(handed)
+
         def _persist_progress(partial: dict) -> None:
             """Save after every chapter that passes validation.
 
@@ -1218,6 +1302,28 @@ def correct_ebook_workspace_manuscript_route(project_id: int):
             )
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
+
+        # v1.8.1: correcting a manuscript rewrites chapters. Same machine as
+        # writing them, for the same reason -- and the same rule about the
+        # spend gate: refuse a bad request here, before a task is started.
+        from services.ebook_project_workspace import precheck_manuscript_request
+
+        precheck_manuscript_request(
+            data, "correct_manuscript",
+            confirmation_token=str(body.get("confirmation_token") or ""),
+            expected_artifact_id=str(body.get("expected_artifact_id") or body.get("artifact_id") or ""),
+            expected_revision=int(body.get("expected_revision") or body.get("artifact_revision") or 0),
+            outline_digest_expected=str(body.get("outline_digest") or ""),
+            max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
+            idempotency_key=str(body.get("idempotency_key") or ""),
+        )
+        handed = _workflow_hand_off(
+            project_id,
+            route="/ebook-workspace/<int:project_id>/correct-manuscript",
+            action="correct", payload=dict(body))
+        if handed is not None:
+            return jsonify(handed)
+
         out = execute_correct_manuscript(
             data,
             confirmation_token=str(body.get("confirmation_token") or ""),
@@ -1292,9 +1398,14 @@ def seed_ebook_acceptance_workspace_route():
 
 @app.post("/ebook-workspace/<int:project_id>/visuals")
 def ebook_workspace_visuals_route(project_id: int):
-    """Prepare or approve content-aware visuals. No paid image generation."""
+    """Prepare or approve content-aware visuals. No paid image generation.
+
+    v1.8.1: the work itself moved to services/ebook_workspace_actions so the
+    builder can perform exactly the same action on its own instance. This
+    route validates, decides who does it, and answers.
+    """
     try:
-        from services.ebook_design_workspace import approve_visuals_local, prepare_visuals_local
+        from services import ebook_workspace_actions as wsa
         from services.ebook_project_workspace import workspace_public_view
         from services.quality.artifact_state import ArtifactStateError
 
@@ -1305,60 +1416,26 @@ def ebook_workspace_visuals_route(project_id: int):
         action = str(body.get("action") or "prepare").strip().lower()
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
+
+        # Unchanged: the artifact-state gate still refuses a mutation on a
+        # published artifact, with the same 409, before anything is handed
+        # anywhere.
         try:
             _require_content_mutation_allowed(data, action="update visuals")
         except ArtifactStateError as exc:
             return _error(str(exc), 409)
-        if action == "approve":
-            data = approve_visuals_local(data)
-            msg = "Visuals approved."
-        elif action in {"replace", "replace-photo"}:
-            from services.ebook_visual_pipeline import replace_photo_aid
 
-            data = replace_photo_aid(
-                data,
-                str(body.get("visual_id") or ""),
-                local_path=str(body.get("local_path") or ""),
-                mode=str(body.get("mode") or ""),
-            )
-            msg = "Replacement photograph staged for review. Visuals are not approved."
-        elif action in {"generate-ai", "ai-alternative"}:
-            from services.ebook_visual_pipeline import replace_photo_aid
+        # Approving or accepting a photograph writes one field. Starting a
+        # builder instance for that would make the screen slower than it is
+        # today, for nothing.
+        if not wsa.is_light("/ebook-workspace/<int:project_id>/visuals", action):
+            handed = _workflow_hand_off(
+                project_id, route="/ebook-workspace/<int:project_id>/visuals",
+                action=action, payload=dict(body))
+            if handed is not None:
+                return jsonify(handed)
 
-            data = replace_photo_aid(
-                data,
-                str(body.get("visual_id") or ""),
-                mode="ai",
-            )
-            msg = "A custom image was prepared for review. Visuals are not approved."
-        elif action in {"retry-automatic"}:
-            ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
-            preserve = False
-            try:
-                from services.ebook_project_workspace import is_approved as _is_approved
-
-                preserve = _is_approved(ws, "cover") or _is_approved(ws, "design") or _is_approved(ws, "preview")
-            except Exception:
-                preserve = False
-            data = prepare_visuals_local(data, preserve_downstream=preserve)
-            msg = "Automatic visual retry finished. Visuals are not approved."
-        elif action in {"accept-photo", "accept"}:
-            from services.ebook_visual_pipeline import accept_photo_aid
-
-            data = accept_photo_aid(data, str(body.get("visual_id") or ""))
-            msg = "Photograph accepted for this brief. Visuals are not approved."
-        elif action in {"view-full-size", "seen-full-size"}:
-            from services.ebook_visual_pipeline import mark_photo_full_size_viewed
-
-            data = mark_photo_full_size_viewed(data, str(body.get("visual_id") or ""))
-            msg = "Full-size preview recorded."
-        else:
-            from services.ebook_project_workspace import is_approved as _is_approved
-
-            ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
-            preserve = _is_approved(ws, "cover") or _is_approved(ws, "design") or _is_approved(ws, "preview")
-            data = prepare_visuals_local(data, preserve_downstream=preserve)
-            msg = "Visuals ready for review."
+        data, msg = wsa.visuals(data, dict(body))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project), "message": msg})
     except ValueError as exc:
@@ -1370,18 +1447,17 @@ def ebook_workspace_visuals_route(project_id: int):
 
 @app.post("/ebook-workspace/<int:project_id>/cover")
 def ebook_workspace_cover_route(project_id: int):
-    """Photo-backed cover actions. Reject remains available. Never generates a vector cover."""
+    """Photo-backed cover actions. Reject remains available. Never generates a vector cover.
+
+    v1.8.1: the actions moved to services/ebook_workspace_actions so the
+    builder performs the same ones. Fetching photographs and re-rendering
+    cover layouts is image work, and image work is the builder's.
+    """
     body = request.get_json(silent=True) or {}
     try:
-        from services.ebook_design_workspace import reject_cover, stage_photo_cover
-        from services.ebook_pexels import PexelsError, search_pexels
-        from services.ebook_photo_cover import (
-            PhotoCoverError,
-            apply_editor,
-            attach_pexels,
-            clear_layout_selection,
-            select_layout,
-        )
+        from services import ebook_workspace_actions as wsa
+        from services.ebook_pexels import PexelsError
+        from services.ebook_photo_cover import PhotoCoverError
         from services.ebook_project_workspace import workspace_public_view
         from services.quality.artifact_state import ArtifactStateError
 
@@ -1397,70 +1473,15 @@ def ebook_workspace_cover_route(project_id: int):
                 _require_content_mutation_allowed(data, action="update cover photograph")
             except ArtifactStateError as exc:
                 return _error(str(exc), 409)
-        if action == "fixture":
-            # Deterministic local cover for Safe Mode acceptance testing.
-            #
-            # Dual-gated: unreachable unless FACTORY_TEST_MODE=1 AND
-            # EBOOK_CUSTOMER_PATH_FIXTURE=1. It reuses the real production
-            # chain end to end -- source storage, activation, typography and
-            # safety QA, layout selection and digest stamping. No threshold is
-            # lowered and no validation is skipped: the fixture photograph has
-            # to earn a passing layout exactly as a stock photograph does.
-            from services.external_calls import ebook_fixture_mode
 
-            if not ebook_fixture_mode():
-                return _error("This action is not available.", 404)
+        if not wsa.is_light("/ebook-workspace/<int:project_id>/cover", action):
+            handed = _workflow_hand_off(
+                project_id, route="/ebook-workspace/<int:project_id>/cover",
+                action=action, payload=dict(body))
+            if handed is not None:
+                return jsonify(handed)
 
-            from services.ebook_customer_path import _first_passing_layout, _fixture_jpeg
-            from services.ebook_photo_cover import _activate_source, _store_source_bytes
-
-            raw = _fixture_jpeg((36, 92, 48), seed=str(body.get("seed") or "cover-a"))
-            source = _store_source_bytes(
-                data,
-                raw,
-                source_type="local_licensed",
-                filename="cover-fixture.jpg",
-                license_note="Deterministic local fixture photograph. Not for sale.",
-                project_id=project_id,
-            )
-            data = _activate_source(data, source, project_id=project_id)
-            layout = _first_passing_layout(data.get("cover_design"))
-            if not layout:
-                raise PhotoCoverError("No safe cover layout passed quality checks.")
-            data = select_layout(data, layout, project_id=project_id)
-            data = stage_photo_cover(data, project_id=project_id)
-        elif action == "reject":
-            data = reject_cover(data)
-        elif action == "pexels-search":
-            prior_cover = data.get("cover_design")
-            result = search_pexels(str(body.get("query") or ""), page=int(body.get("page") or 1))
-            ws = data.setdefault("ebook_workspace", {})
-            ws["pexels_cache"] = {
-                "query": result.get("query"),
-                "page": result.get("page"),
-                "photos": result.get("photos"),
-                "next_page": result.get("next_page"),
-            }
-            if prior_cover is not None:
-                data["cover_design"] = prior_cover
-        elif action == "pexels-select":
-            data = attach_pexels(data, str(body.get("photo_id") or ""), project_id=project_id)
-            data = stage_photo_cover(data, project_id=project_id)
-        elif action == "editor":
-            data = apply_editor(data, dict(body.get("editor") or {}), project_id=project_id)
-            data = stage_photo_cover(data, project_id=project_id)
-        elif action == "select":
-            data = select_layout(data, str(body.get("layout_id") or ""), project_id=project_id)
-            data = stage_photo_cover(data, project_id=project_id)
-        elif action == "deselect":
-            data = clear_layout_selection(data)
-        elif action in {"generate", "licensed"}:
-            return _error(
-                "Vector covers are disabled. Search Pexels or upload your own photograph.",
-                400,
-            )
-        else:
-            return _error("Unknown cover action.", 400)
+        data, _msg = wsa.cover(data, dict(body), project_id=project_id)
         if mutating:
             project = _persist_draft_content_mutation(project_id, data) or project
         else:
@@ -1468,6 +1489,8 @@ def ebook_workspace_cover_route(project_id: int):
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
     except ArtifactStateError as exc:
         return _error(str(exc), 409)
+    except wsa.UnknownAction as exc:
+        return _error(str(exc), 400)
     except (ValueError, PhotoCoverError, PexelsError) as exc:
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
@@ -1477,10 +1500,18 @@ def ebook_workspace_cover_route(project_id: int):
 
 @app.post("/ebook-workspace/<int:project_id>/cover-image")
 def ebook_workspace_cover_image_route(project_id: int):
-    """Upload a JPG/PNG cover photograph. Zero paid calls."""
+    """Upload a JPG/PNG cover photograph. Zero paid calls.
+
+    v1.8.1. THE UPLOADED BYTES TRAVEL THROUGH STORAGE. The file arrives here,
+    at the website; decoding it and re-rendering every cover layout is the
+    builder's work; and the two machines share no filesystem. So the bytes go
+    into the storage driver (R2 in production) and the builder is given the
+    key, not a path. Handing over a local path would be a file the builder
+    cannot open, and the customer would watch a cover that never appears.
+    """
     try:
-        from services.ebook_design_workspace import stage_photo_cover
-        from services.ebook_photo_cover import PhotoCoverError, attach_upload
+        from services import ebook_workspace_actions as wsa
+        from services.ebook_photo_cover import PhotoCoverError
         from services.ebook_project_workspace import workspace_public_view
         from services.quality.artifact_state import ArtifactStateError
 
@@ -1496,34 +1527,42 @@ def ebook_workspace_cover_image_route(project_id: int):
         if declared and declared not in {"image/jpeg", "image/jpg", "image/png", "application/octet-stream"}:
             return _error("Unsupported or corrupted image. Upload a JPG or PNG.", 400)
         raw = upload.read()
+        filename = str(upload.filename or "upload.png")
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
         try:
             _require_content_mutation_allowed(data, action="upload cover photograph")
         except ArtifactStateError as exc:
             return _error(str(exc), 409)
-        data = attach_upload(
-            data,
-            raw,
-            filename=str(upload.filename or "upload.png"),
-            license_note=license_note,
-            project_id=project_id,
-            owned=owned,
-        )
-        data = stage_photo_cover(data, project_id=project_id)
+
+        payload = {"filename": filename, "license_note": license_note, "owned": owned}
+        stored_key = _store_uploaded_cover(project_id, raw, filename)
+        if stored_key:
+            payload["storage_key"] = stored_key
+
+        if stored_key:
+            # Only hand off once the bytes are somewhere the builder can read
+            # them. If storage refused, staying inline is the safe direction:
+            # a slow upload beats a cover that silently never arrives.
+            handed = _workflow_hand_off(
+                project_id, route="/ebook-workspace/<int:project_id>/cover-image",
+                action="upload", payload=payload)
+            if handed is not None:
+                handed["message"] = f"Uploaded {filename}. Creating cover choices."
+                return jsonify(handed)
+
+        data, message = wsa.cover_image(
+            data, {**payload, "_raw_bytes": raw}, project_id=project_id)
         project = _persist_draft_content_mutation(project_id, data) or project
         source = ((data.get("cover_design") or {}).get("source") or {})
-        filename = str(source.get("filename") or upload.filename or "photograph")
-        source_type = str(source.get("source_type") or "upload")
-        message = f"Uploaded {filename}. Creating cover choices."
         return jsonify(
             {
                 "ok": True,
                 "workspace": workspace_public_view(project),
                 "message": message,
                 "source": {
-                    "filename": filename,
-                    "source_type": source_type,
+                    "filename": str(source.get("filename") or filename),
+                    "source_type": str(source.get("source_type") or "upload"),
                     "sha256": str(source.get("sha256") or ""),
                 },
             }
@@ -1610,6 +1649,16 @@ def ebook_workspace_design_route(project_id: int):
         if err:
             return err[0], err[1]
         theme_id = str(body.get("theme_id") or "").strip()
+
+        # v1.8.1: in workflow mode the builder stages the theme, which
+        # re-renders the designed book. Returns None inline, so the code
+        # below is exactly what it was.
+        handed = _workflow_hand_off(
+            project_id, route="/ebook-workspace/<int:project_id>/design",
+            payload={"theme_id": theme_id})
+        if handed is not None:
+            return jsonify(handed)
+
         data = select_and_stage_theme(dict(project.get("data") or {}), theme_id)
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -1630,6 +1679,14 @@ def ebook_workspace_preview_route(project_id: int):
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
             return err[0], err[1]
+
+        # v1.8.1: rendering the designed preview of a whole book is not work
+        # for the process that serves pages.
+        handed = _workflow_hand_off(
+            project_id, route="/ebook-workspace/<int:project_id>/preview")
+        if handed is not None:
+            return jsonify(handed)
+
         data = build_preview(dict(project.get("data") or {}))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -1724,6 +1781,13 @@ def ebook_workspace_preflight_route(project_id: int):
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
             return err[0], err[1]
+
+        # v1.8.1: preflight reads the whole designed book.
+        handed = _workflow_hand_off(
+            project_id, route="/ebook-workspace/<int:project_id>/preflight")
+        if handed is not None:
+            return jsonify(handed)
+
         data = run_preflight_stage(dict(project.get("data") or {}))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
