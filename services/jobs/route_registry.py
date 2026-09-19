@@ -71,6 +71,9 @@ _R_OTHER = ("not an ebook build; the builder's only task is build_ebook, so "
             "there is nothing to hand this to until a second task exists")
 
 
+_R_LEGACY = ("the builder's only task is build_ebook(project_id), which drives the workspace build. This route works on a package_id or a legacy non-workspace record instead, so there is no build for it to join. Registered heavy so it cannot be forgotten; unchanged by v1.8.1.")
+
+
 def _h(path: str, why: str, handoff: str = BUILDER, note: str = "") -> dict:
     return {"path": path, "weight": HEAVY, "handoff": handoff,
             "why": why, "reason": note or (_R_EBOOK if handoff == BUILDER else _R_OTHER)}
@@ -96,7 +99,8 @@ ROUTES: tuple[dict, ...] = (
 
     _l("/research", "starts a research request and returns its handle"),
 
-    _h("/generate-ebook", "legacy non-workspace path: writes a whole ebook"),
+    _h("/generate-ebook", "legacy non-workspace path: writes a whole ebook",
+       DEFERRED, _R_LEGACY),
     _l("/ebook-workspace", "creates the workspace row"),
     _l("/ebook-workspace/<int:project_id>/research", "records research input"),
     _h("/ebook-workspace/<int:project_id>/run-research",
@@ -149,11 +153,13 @@ ROUTES: tuple[dict, ...] = (
     _h("/generate-product", "builds a coloring book or puzzle book, including "
        "its images and its PDF", DEFERRED),
     _h("/enhance-ebook", "legacy path: completes an ebook and runs the quality "
-       "pipeline over it"),
+       "pipeline over it", DEFERRED, _R_LEGACY),
 
     _l("/ebook/save", "stores edited ebook fields"),
-    _h("/ebook/regenerate-cover", "re-renders the factory ebook cover"),
-    _h("/retry-ebook-visual", "downloads a replacement stock photograph"),
+    _h("/ebook/regenerate-cover", "re-renders the factory ebook cover",
+       DEFERRED, _R_LEGACY),
+    _h("/retry-ebook-visual", "downloads a replacement stock photograph",
+       DEFERRED, _R_LEGACY),
 
     _l("/discover-products", "reads stored product ideas"),
     _l("/factory-market-advantage", "reads a stored summary"),
@@ -166,8 +172,9 @@ ROUTES: tuple[dict, ...] = (
     _l("/generate-publishing", "assembles publishing copy"),
     _l("/save-publishing", "stores publishing fields"),
 
-    _h("/render-visual-image", "generates an image"),
-    _h("/export-product", "builds the product PDF and ZIP"),
+    _h("/render-visual-image", "generates an image", DEFERRED, _R_LEGACY),
+    _h("/export-product", "builds the product PDF and ZIP", DEFERRED,
+       "exports every product type, not only ebooks; " + _R_LEGACY),
 
     _l("/ebook-release-check", "reads stored state and reports readiness"),
     _l("/generate-seller-package", "assembles copy from stored fields"),
@@ -184,7 +191,7 @@ ROUTES: tuple[dict, ...] = (
     _l("/projects/<int:project_id>/revisions", "stores a revision row"),
     _l("/projects/<int:project_id>/kdp/preflight", "checks stored state"),
     _h("/projects/<int:project_id>/kdp/prepare-package",
-       "builds the KDP package files"),
+       "builds the KDP package files", DEFERRED, _R_LEGACY),
 
     _l("/admin/backup-db", "copies the database file"),
     _h("/admin/storage-migration", "moves stored artifacts in bulk", DEFERRED,

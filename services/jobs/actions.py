@@ -52,6 +52,88 @@ log = logging.getLogger(__name__)
 MSG_HANDED_OFF = "Working on it. You can leave this page."
 
 
+#: Which build stage each step-by-step route is asking for.
+#:
+#: THIS IS WHAT KEEPS THE STEP-BY-STEP SCREEN STEP-BY-STEP. The builder's
+#: ordinary job is to drive a book all the way to a finished PDF -- that is
+#: what the one-click button wants. A customer on the step-by-step screen
+#: wants the opposite: do THIS step, then stop and let me look at it. Handing
+#: their click to the builder without saying where to stop would run the
+#: whole book behind their back, spending their whole budget on choices they
+#: never got to make.
+#:
+#: So a step-by-step hand-off sets `paused_after` to the stage being asked
+#: for. The builder does that stage, the hold takes effect, and the build
+#: waits. Approving the stage clears the hold and the next click moves on.
+#: The one-click build sets no stage here and is therefore unchanged.
+ROUTE_STAGES = {
+    "/ebook-workspace/<int:project_id>/run-research": "research",
+    "/ebook-workspace/<int:project_id>/title-options": "title",
+    "/ebook-workspace/<int:project_id>/outline-options": "outline",
+    "/ebook-workspace/<int:project_id>/generate-manuscript": "manuscript",
+    "/ebook-workspace/<int:project_id>/correct-manuscript": "manuscript",
+    "/ebook-workspace/<int:project_id>/visuals": "visuals",
+    "/ebook-workspace/<int:project_id>/cover": "cover",
+    "/ebook-workspace/<int:project_id>/cover-image": "cover",
+    "/ebook-workspace/<int:project_id>/design": "design",
+    "/ebook-workspace/<int:project_id>/preview": "preview",
+    "/ebook-workspace/<int:project_id>/preflight": "preflight",
+}
+
+
+def stage_for_route(route: str) -> str:
+    """The stage a step-by-step route is asking for, or "" for a full build."""
+    return ROUTE_STAGES.get(str(route), "")
+
+
+def hold_after_stage(project_id: int, stage: str) -> bool:
+    """Tell the build to stop once `stage` is done, and persist that.
+
+    Written before the hand-off so a task that starts immediately already
+    sees the hold. Never raises: failing to set a hold must not stop the
+    customer's work, and the worst case is a build that runs one stage
+    further than they asked, which the approval gates still protect.
+    """
+    if not stage:
+        return False
+    try:
+        import database
+        from services.ebook_build_orchestrator import pause_after
+
+        project = database.get_project(int(project_id))
+        if not project:
+            return False
+        data = dict(project.get("data") or {})
+        data = pause_after(data, stage)
+        database.update_project(int(project_id), None, data)
+        return True
+    except Exception:                                  # noqa: BLE001
+        log.exception("could not set the hold after %s for project %s",
+                      stage, project_id)
+        return False
+
+
+def release_hold(project_id: int) -> bool:
+    """Clear the hold, so the next hand-off may run the following stage.
+
+    This is what a customer's approval means. Until v1.8.1 nothing cleared
+    it, which is why a held build would have stayed held for good.
+    """
+    try:
+        import database
+        from services.ebook_build_orchestrator import clear_pause
+
+        project = database.get_project(int(project_id))
+        if not project:
+            return False
+        data = clear_pause(dict(project.get("data") or {}))
+        database.update_project(int(project_id), None, data)
+        return True
+    except Exception:                                  # noqa: BLE001
+        log.exception("could not release the hold for project %s", project_id)
+        return False
+
+
 def workflow_mode() -> bool:
     """Whether the builder owns heavy work right now."""
     from services.jobs import mode
@@ -112,6 +194,14 @@ def hand_off_if_workflow(project_id: int, *, route: str, action: str = "",
         return None
 
     pid = int(project_id)
+
+    # Say where to stop BEFORE asking for a task, so a task that starts at
+    # once already sees the hold. A step-by-step click means "do this step",
+    # never "build the rest of my book".
+    stage = stage_for_route(route)
+    if stage:
+        hold_after_stage(pid, stage)
+
     recorded = record_action(pid, {"route": str(route), "action": str(action or ""),
                                    "payload": dict(payload or {})})
 
@@ -135,6 +225,7 @@ def hand_off_if_workflow(project_id: int, *, route: str, action: str = "",
     out["execution_mode"] = "workflow"
     out["requested_route"] = str(route)
     out["requested_action"] = str(action or "")
+    out["requested_stage"] = stage
     out["action_recorded"] = bool(recorded)
     out["enqueued"] = bool(triggered.get("enqueued"))
     out["triggered"] = bool(triggered.get("triggered"))

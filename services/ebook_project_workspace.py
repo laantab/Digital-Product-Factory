@@ -2370,6 +2370,19 @@ def execute_generate_outline_options(
     return {"ok": True, "duplicate": False, "data": data, "result": result}
 
 
+#: Which stage each confirmed paid action belongs to, and whether the outline
+#: digest is part of its contract. Research, titles and outlines are agreed
+#: BEFORE there is an outline to digest, so checking one would reject every
+#: request; the manuscript is agreed against a specific outline, so it must.
+_CONFIRMED_ACTIONS = {
+    "run_research": ("research", False),
+    "generate_title_options": ("title", False),
+    "generate_outline_options": ("outline", False),
+    "generate_manuscript": ("manuscript", True),
+    "correct_manuscript": ("manuscript", True),
+}
+
+
 def precheck_manuscript_request(
     data: dict,
     action: str,
@@ -2410,9 +2423,11 @@ def precheck_manuscript_request(
         # returns the prior result; nothing needs rejecting here.
         return
 
-    assert_can_run_stage(ws, "manuscript")
-    if not (is_approved(ws, "research") and is_approved(ws, "title")
-            and is_approved(ws, "outline")):
+    stage, checks_outline = _CONFIRMED_ACTIONS.get(str(action), ("manuscript", True))
+    assert_can_run_stage(ws, stage)
+    if stage == "manuscript" and not (
+        is_approved(ws, "research") and is_approved(ws, "title")
+        and is_approved(ws, "outline")):
         raise ValueError("Research, title, and outline must all be approved.")
 
     pending = consume_confirmation(probe, str(action), confirmation_token)
@@ -2428,11 +2443,12 @@ def precheck_manuscript_request(
     if int(pending.get("artifact_revision") or 0) != revision:
         raise ValueError("Confirmation token was issued for a different revision.")
 
-    current_od = outline_digest(probe)
-    if str(outline_digest_expected or "") != current_od:
-        raise ValueError("Outline changed since the estimate — request a new cost estimate.")
-    if str(pending.get("outline_digest") or "") != current_od:
-        raise ValueError("Confirmation token outline digest mismatch.")
+    if checks_outline:
+        current_od = outline_digest(probe)
+        if str(outline_digest_expected or "") != current_od:
+            raise ValueError("Outline changed since the estimate — request a new cost estimate.")
+        if str(pending.get("outline_digest") or "") != current_od:
+            raise ValueError("Confirmation token outline digest mismatch.")
 
     if round(float(max_authorized_usd), 4) <= 0:
         raise ValueError("Maximum authorized charge must be positive.")

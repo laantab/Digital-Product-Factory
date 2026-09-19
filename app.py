@@ -914,6 +914,25 @@ def run_ebook_workspace_research_route(project_id: int):
             return err[0], err[1]
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
+
+        # v1.8.1: research makes paid provider calls inside the request.
+        from services.ebook_project_workspace import precheck_manuscript_request
+
+        precheck_manuscript_request(
+            data, "run_research",
+            confirmation_token=str(body.get("confirmation_token") or ""),
+            expected_artifact_id=str(body.get("expected_artifact_id") or body.get("artifact_id") or ""),
+            expected_revision=int(body.get("expected_revision") or body.get("artifact_revision") or 0),
+            outline_digest_expected="",
+            max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
+            idempotency_key=str(body.get("idempotency_key") or ""),
+        )
+        handed = _workflow_hand_off(
+            project_id, route="/ebook-workspace/<int:project_id>/run-research",
+            action="run_research", payload=dict(body))
+        if handed is not None:
+            return jsonify(handed)
+
         out = execute_run_research(
             data,
             confirmation_token=str(body.get("confirmation_token") or ""),
@@ -939,7 +958,8 @@ def run_ebook_workspace_research_route(project_id: int):
         return _error(str(exc), 500)
 
 
-def _run_confirmed_workspace_action(project_id: int, body: dict, executor, log_label: str):
+def _run_confirmed_workspace_action(project_id: int, body: dict, executor, log_label: str,
+                                    route: str = "", action_name: str = ""):
     """Shared route body for confirmed estimate-then-execute stage actions."""
     from services.ebook_project_workspace import ConfirmationAlreadyUsed
 
@@ -951,6 +971,28 @@ def _run_confirmed_workspace_action(project_id: int, body: dict, executor, log_l
             return err[0], err[1]
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
+
+        # v1.8.1: a paid provider call inside a web request is work the
+        # builder should be doing. The spend gate runs first, here, so a
+        # stale or unauthorised request is still refused before a task
+        # starts -- see precheck_manuscript_request.
+        if route:
+            from services.ebook_project_workspace import precheck_manuscript_request
+
+            precheck_manuscript_request(
+                data, action_name,
+                confirmation_token=str(body.get("confirmation_token") or ""),
+                expected_artifact_id=str(body.get("expected_artifact_id") or body.get("artifact_id") or ""),
+                expected_revision=int(body.get("expected_revision") or body.get("artifact_revision") or 0),
+                outline_digest_expected="",
+                max_authorized_usd=float(body.get("max_authorized_usd") or body.get("estimated_max_usd") or 0),
+                idempotency_key=str(body.get("idempotency_key") or ""),
+            )
+            handed = _workflow_hand_off(project_id, route=route,
+                                        action=action_name, payload=dict(body))
+            if handed is not None:
+                return jsonify(handed)
+
         out = executor(
             data,
             confirmation_token=str(body.get("confirmation_token") or ""),
@@ -1023,7 +1065,9 @@ def generate_ebook_workspace_title_options_route(project_id: int):
 
     body = request.get_json(silent=True) or {}
     return _run_confirmed_workspace_action(
-        project_id, body, execute_generate_title_options, "ebook workspace title options"
+        project_id, body, execute_generate_title_options, "ebook workspace title options",
+        route="/ebook-workspace/<int:project_id>/title-options",
+        action_name="generate_title_options",
     )
 
 
@@ -1034,7 +1078,9 @@ def generate_ebook_workspace_outline_options_route(project_id: int):
 
     body = request.get_json(silent=True) or {}
     return _run_confirmed_workspace_action(
-        project_id, body, execute_generate_outline_options, "ebook workspace outline options"
+        project_id, body, execute_generate_outline_options, "ebook workspace outline options",
+        route="/ebook-workspace/<int:project_id>/outline-options",
+        action_name="generate_outline_options",
     )
 
 
@@ -1055,6 +1101,23 @@ def approve_ebook_workspace_stage_route(project_id: int):
             preview_digest=body.get("preview_digest"),
         )
         project = database.update_project(project_id, None, data) or project
+
+        # v1.8.1. Approving a stage is what releases the hold the builder is
+        # sitting on. Without this the build would stop at the first stage
+        # and stay stopped -- which is why `paused_after` existed but was
+        # never set by anything before now.
+        #
+        # Approval is instant and free, so this route stays light in both
+        # modes. It does not start any work: the next step-by-step click
+        # does that.
+        try:
+            from services.jobs.actions import release_hold, workflow_mode
+
+            if workflow_mode():
+                release_hold(project_id)
+        except Exception:  # noqa: BLE001
+            app.logger.exception("could not release the build hold for %s", project_id)
+
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
     except ValueError as exc:
         return _error(str(exc), 400)

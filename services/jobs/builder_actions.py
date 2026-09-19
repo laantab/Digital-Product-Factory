@@ -72,7 +72,7 @@ def perform_pending(project_id: int, job_id: int) -> dict:
 
         data = dict(project.get("data") or {})
         data, message = wsa.perform(data, project_id=int(project_id),
-                                    route=route, payload=payload)
+                                    route=route, action=action, payload=payload)
         database.update_project(int(project_id), None, data)
         out["performed"] = True
         out["message"] = message

@@ -286,15 +286,27 @@ def handles(route: str) -> bool:
     return str(route) in _HANDLERS
 
 
-def perform(data: dict, *, project_id: int, route: str,
+def perform(data: dict, *, project_id: int, route: str, action: str = "",
             payload: dict | None = None) -> tuple[dict, str]:
-    """Run one recorded workspace action. Returns (data, customer message)."""
+    """Run one recorded workspace action. Returns (data, customer message).
+
+    `action` is authoritative. The handlers below read the action out of the
+    payload because that is the shape the request body has, but the recorded
+    action is the thing the website actually decided on -- and the two must
+    not be allowed to disagree. A payload that arrived without its action
+    field would otherwise silently fall through to the default branch and do
+    something the customer never asked for: "replace this photograph" quietly
+    becoming "rebuild all of them" is a different bill and a different book.
+    """
     handler = _HANDLERS.get(str(route))
     if handler is None:
         raise UnknownAction(f"no handler for {route}")
     data = dict(data)
     data["_project_id"] = int(project_id)
-    return handler(data, dict(payload or {}), int(project_id))
+    merged = dict(payload or {})
+    if str(action or "").strip():
+        merged["action"] = str(action).strip()
+    return handler(data, merged, int(project_id))
 
 
 def is_light(route: str, action: str) -> bool:

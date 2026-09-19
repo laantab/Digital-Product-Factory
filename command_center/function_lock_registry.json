@@ -96,7 +96,7 @@
     },
     "invite_protection": {
       "display_name": "Invite protection",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "293f4d8",
       "factory_version": "1.7.26",
       "protected_test_files": [
@@ -108,10 +108,10 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Claude Opus 5",
-      "relocked_after_tests": "tests/test_invite_gate.py + tests/test_render_persistence_patch.py (unchanged), tests/test_ebook_resume_hands_work_to_the_server.py (new, covers the changed route), full Windows release gate (2242 passed, 0 failed, 978 subtests, 0 paid API calls) on commit 80a1861.",
+      "unlocked_by": "Claude Opus 5",
+      "unlocked_reason": "v1.8.1. app.py is declared as a whole-file shared dependency, so any change to it trips this lock. app.py changed only to add the workflow hand-off helper, the uploaded-cover storage helper, and the hand-off call in the heavy ebook routes. The invite gate's before_request hook is byte-for-byte unchanged (verified by diffing app.py against 293f4d8: no line mentioning the gate, the hook or the exemption list appears in the diff) and no route joined the exemption list.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "Self-contained in app.py's single before_request hook -- no shared dependency on static/js/app.js (the gate is server-rendered, no fetch/JS involvement). 14+2 real behavioral tests: gate on/off, cookie/header/query admission, wrong-code refusal (never echoed), exemptions, admin routes gated too. Relocked at 6391ff1 (2026-09-13): unlocked only because app.py (declared as a whole shared dependency) gained a new route for the ebook build-stall fix; the invite gate hook itself is untouched. Relocked at efb1e90 (2026-09-14, v1.7.13): unlocked only because app.py (declared as a whole shared dependency) gained the Phase 0B-3B1 asset-first/legacy-fallback helpers and two call sites in the /download/<package_id>/<filename> route. The invite gate's before_request hook is byte-for-byte unchanged. Relocked at v1.7.24 (2026-09-15): unlocked because app.py (a declared whole-file shared dependency) gained the durable ebook executor wiring -- enqueue on build start and ticker start at boot -- so the browser no longer owns execution. The gate itself is unchanged. Relocked at e41b3a1 (2026-09-15, v1.7.24): unlocked because app.py (a declared whole-file shared dependency) gained the durable ebook executor wiring -- a job enqueue on build start and the executor ticker at boot -- so the browser no longer owns execution. The invite gate's before_request hook is byte-for-byte unchanged and no route joined the exemption list. Relocked at 80a1861 (2026-09-15, v1.7.26): unlocked because app.py (a declared whole-file shared dependency) gained the durable-job handoff in the /ebook/build/<id>/resume route -- Continue previously cleared the stalled stage and handed the book to nobody, so 'you can leave this page' was false on the one path that exists to rescue a stalled book. The invite gate's before_request hook is byte-for-byte unchanged and no route joined the exemption list. RELOCKED at 293f4d8 (v1.8.0): app.py changed only to hand the build off to the execution-mode dispatcher, to refuse to advance a build in workflow mode, and to add the read-only GET /ebook/execution-mode route. The invite gate itself was not touched; tests/test_invite_gate.py and tests/test_render_persistence_patch.py are green."
     },
     "factory_market_advantage": {
