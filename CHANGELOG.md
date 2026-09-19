@@ -5,6 +5,57 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.0 — 2026-09-17
+
+**The builder is its own machine, not a thread in the website.**
+
+### What changed
+
+- **Writing a book no longer happens inside the website.** When a customer
+  clicks Build or Continue, the Factory writes down that the book must be
+  finished and hands the work to a separate machine that starts up just for
+  that book. The website goes straight back to answering pages.
+- **Nothing changes until it is switched on.** Out of the box this release
+  behaves exactly like 1.7.29, and on a local PC it always will. The new
+  way of working is turned on by one setting on the live site, and turned
+  off again by deleting it.
+
+### What was fixed
+
+- **One customer's book could take the whole site down.** A real build
+  ("Container Gardening for Beginners") used more memory than the website
+  was allowed, because the book was being written inside the same program
+  that serves pages. Now a book gets its own machine with about eight times
+  the memory, which starts when the book starts and shuts down when it is
+  finished.
+- **Clicking Continue five times no longer starts five builds.** Impatience
+  used to be able to set several copies of the same book going at once. The
+  Factory now refuses all but the first.
+- **A book that is already finished is never built a second time.** If the
+  hosting platform retries a job it thinks went wrong, the Factory checks
+  first and hands back the finished book instead of making another one.
+- **Progress screens can never move a build along by accident.** Looking at
+  a book, refreshing a page, or an old browser tab left open cannot make the
+  website start writing.
+
+### Does anything about the steps change?
+
+No. The steps are the same, the quality checks are the same and the prices
+are the same. A book that was part-way through carries on from exactly where
+it stopped. The only difference is which machine does the writing.
+
+### Cost
+
+The new machine is only paid for while a book is actually being written, and
+costs nothing when the Factory is idle.
+
+### Release gate
+
+Code and tests complete. The paid hosting has not been created yet, so this
+version is not live.
+
+---
+
 ## 1.7.29 — 2026-09-17
 
 **A book could get stuck asking to be approved over and over. It can now

@@ -56,15 +56,58 @@ def run_one_job(owner: str | None = None) -> dict:
     job = store.claim_next(owner)
     if not job:
         return {"claimed": False, "reason": "nothing runnable"}
+    return _drive(job, owner)
 
+
+def drain(max_jobs: int = 25, owner: str | None = None) -> dict:
+    """Advance runnable jobs until there are none left or the cap is hit."""
+    owner = owner or store.executor_id()
+    ran, finished = 0, 0
+    for _ in range(max(1, int(max_jobs))):
+        outcome = run_one_job(owner)
+        if not outcome.get("claimed"):
+            break
+        ran += 1
+        if outcome.get("finished"):
+            finished += 1
+    return {"jobs_run": ran, "jobs_finished": finished, "counts": store.counts()}
+
+
+def run_project(project_id: int, owner: str | None = None, *,
+                units: int | None = None) -> dict:
+    """Advance ONE named book, claiming only that book's job.
+
+    This is what a Render Workflow task calls. A task is started for one
+    project and must work on that one: `run_one_job` takes whichever job
+    is next in the queue, so a task started for book A could silently
+    spend its whole run on book B — which makes the run id meaningless
+    when a customer asks what happened to their book, and lets two tasks
+    swap books underneath each other.
+
+    Everything else is identical to `run_one_job`, deliberately: the same
+    lease, the same heartbeat, the same orchestrator, the same bounded
+    units, the same release-not-fail on a transient error. The executor
+    still has no concept of a chapter, so it still cannot regenerate one.
+    """
+    owner = owner or store.executor_id()
+    job = store.claim_for_project(owner, int(project_id))
+    if not job:
+        return {"claimed": False, "reason": "not runnable",
+                "project_id": int(project_id)}
+    return _drive(job, owner, units=units)
+
+
+def _drive(job: dict, owner: str, *, units: int | None = None) -> dict:
+    """Advance an already-claimed job. Shared by run_one_job and run_project."""
     project_id = int(job["project_id"])
+    budget = int(units) if units and int(units) > 0 else UNITS_PER_CLAIM
     result = {"claimed": True, "job_id": job["id"], "project_id": project_id,
               "units": 0, "finished": False, "failed": False}
 
     try:
         from services.ebook_build_orchestrator import advance_build
 
-        for _ in range(UNITS_PER_CLAIM):
+        for _ in range(budget):
             status = advance_build(project_id)
             result["units"] += 1
             result["percent"] = status.get("percent")
@@ -105,17 +148,3 @@ def run_one_job(owner: str | None = None) -> dict:
         # error does not permanently kill a customer's book.
         store.release(job["id"], owner, error=f"{type(exc).__name__}: {exc}"[:500])
         return result
-
-
-def drain(max_jobs: int = 25, owner: str | None = None) -> dict:
-    """Advance runnable jobs until there are none left or the cap is hit."""
-    owner = owner or store.executor_id()
-    ran, finished = 0, 0
-    for _ in range(max(1, int(max_jobs))):
-        outcome = run_one_job(owner)
-        if not outcome.get("claimed"):
-            break
-        ran += 1
-        if outcome.get("finished"):
-            finished += 1
-    return {"jobs_run": ran, "jobs_finished": finished, "counts": store.counts()}
