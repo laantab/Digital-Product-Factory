@@ -8287,6 +8287,19 @@ function showEbookWorkspaceStage(stageId) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+
+      // v1.8.1. In workflow mode the bytes are now in storage and the
+      // builder decodes them and re-renders the cover layouts. There is no
+      // registered photograph to report yet, so the sha256 check below would
+      // wrongly tell the customer their upload failed when it is simply not
+      // finished. Watch for the cover step to land instead.
+      if (data && data.handed_off) {
+        _wsCoverChoosingPhoto = false;
+        await _wsHandedOff(data, ws.project_id,
+                           `Uploaded ${file.name}. Your cover choices are ready.`);
+        return;
+      }
+
       const src = ((((data.workspace || {}).design || {}).cover || {}).photo || {}).source || data.source || {};
       if (!src.sha256) {
         throw new Error(data.error || "Upload did not register the new photograph.");
@@ -8430,10 +8443,110 @@ function showEbookWorkspaceStage(stageId) {
   }
 }
 
+//: How often the step-by-step screen asks how a handed-off step is going.
+//: Slower than the one-click build's tick: each of these steps is a single
+//: stage the customer is waiting on, not a chapter-by-chapter crawl.
+const WS_POLL_MS = 1500;
+
+//: Give up polling after this long and leave the screen on a plain message.
+//: The work is a durable row and carries on regardless -- this only decides
+//: how long the page keeps watching.
+const WS_POLL_TIMEOUT_MS = 15 * 60 * 1000;
+
+//: Cancels an in-flight poll when the customer navigates away or starts
+//: something else, so two steps can never both be re-rendering the screen.
+let _wsPollRun = 0;
+
+//: v1.8.1. In workflow mode a heavy step no longer finishes inside the
+//: request: the reply says "handed off" and the real work happens on the
+//: builder. This is the ONE place that knows the difference, because every
+//: step-by-step button goes through postEbookWorkspaceAction -- which is
+//: also why an old tab still works. A browser running last week's script
+//: gets a 200 with a status payload, renders nothing new, and is simply out
+//: of date rather than broken.
+async function _wsPollUntilStepLands(projectId, runToken, okMessage) {
+  const deadline = Date.now() + WS_POLL_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (runToken !== _wsPollRun) return;
+    await new Promise((r) => setTimeout(r, WS_POLL_MS));
+    if (runToken !== _wsPollRun) return;
+
+    let status;
+    try {
+      status = await api(`/ebook/build/${projectId}/status`);
+    } catch (e) {
+      continue;  // a lost poll is not a lost book; the row survives
+    }
+    if (runToken !== _wsPollRun) return;
+
+    if (status && status.message) toast(status.message);
+
+    // The builder stops after the stage the customer asked for and waits.
+    // That hold IS the step landing.
+    if (status && (status.held_after || status.finished || status.failed)) {
+      try {
+        const ws = await api(`/ebook-workspace/${projectId}`);
+        if (ws && ws.workspace) renderEbookWorkspace(ws.workspace);
+      } catch (e) { /* the next render picks it up */ }
+      if (status.failed) {
+        toast("We couldn't finish that step. Your work is saved.", "error");
+      } else if (okMessage) {
+        toast(okMessage);
+      }
+      return;
+    }
+  }
+}
+
+//: v1.8.1. The estimate-then-confirm flows (research, titles, outlines,
+//: manuscript, correction) do not go through postEbookWorkspaceAction,
+//: because each has its own confirmation panel to tidy away first. They all
+//: need the same handed-off handling, so it lives here rather than being
+//: written out five times -- CLAUDE.md's warning about the second copy is
+//: exactly how the v1.8.0 gap happened.
+//: A confirmed step that may be handed to the builder. Returns the
+//: reply for the caller to carry on with, or null when the work was handed
+//: off and this has already polled it to completion -- in which case the
+//: caller's remaining rendering has nothing left to do.
+async function _wsConfirmedCall(url, projectId, confirmEl, okMessage, opts) {
+  const res = await api(url, opts);
+  if (res && res.handed_off) {
+    if (confirmEl) {
+      confirmEl.classList.add("hidden");
+      confirmEl.innerHTML = "";
+    }
+    await _wsHandedOff(res, projectId, okMessage);
+    return { workspace: null, handed_off: true, result: {} };
+  }
+  return res;
+}
+
+async function _wsHandedOff(res, projectId, okMessage) {
+  toast((res && res.customer_message) || "Working on it. You can leave this page.");
+  _wsPollRun += 1;
+  await _wsPollUntilStepLands(projectId, _wsPollRun, okMessage);
+}
+
 async function postEbookWorkspaceAction(url, body, okMessage) {
   try {
     const res = await api(url, { method: "POST", body: JSON.stringify(body || {}) });
+
+    // Inline mode, and every light action in either mode: the work is
+    // already done and the reply carries the new workspace. Unchanged.
     if (res.workspace) renderEbookWorkspace(res.workspace);
+
+    if (res && res.handed_off) {
+      // The builder has it. Say so in the same words the one-click build
+      // uses, then watch for the step to land.
+      toast(res.customer_message || "Working on it. You can leave this page.");
+      const projectId = res.project_id || (body && body.project_id);
+      if (projectId) {
+        _wsPollRun += 1;
+        await _wsPollUntilStepLands(projectId, _wsPollRun, okMessage);
+      }
+      return;
+    }
+
     if (okMessage) toast(okMessage);
   } catch (e) {
     toast(e.message || String(e), "error");
@@ -8501,7 +8614,7 @@ async function estimateCorrectionInWorkspace(projectId) {
           idempotency_key: idempotencyKey,
           authorize_paid_call: true,
         };
-        const gen = await api(`/ebook-workspace/${projectId}/correct-manuscript`, {
+        const gen = await _wsConfirmedCall(`/ebook-workspace/${projectId}/correct-manuscript`, projectId, confirmEl, "Manuscript corrected — awaiting your approval.", {
           method: "POST",
           body: JSON.stringify(body),
         });
@@ -8573,7 +8686,7 @@ async function estimateResearchInWorkspace(projectId) {
           max_authorized_usd: est.max_authorized_usd != null ? est.max_authorized_usd : est.estimated_max_usd,
           idempotency_key: idempotencyKey,
         };
-        const run = await api(`/ebook-workspace/${projectId}/run-research`, {
+        const run = await _wsConfirmedCall(`/ebook-workspace/${projectId}/run-research`, projectId, confirmEl, "Research finished — ready to read.", {
           method: "POST",
           body: JSON.stringify(body),
         });
@@ -8665,7 +8778,7 @@ async function estimateOptionGenerationInWorkspace(projectId, kind) {
           max_authorized_usd: est.max_authorized_usd != null ? est.max_authorized_usd : est.estimated_max_usd,
           idempotency_key: idempotencyKey,
         };
-        const run = await api(`/ebook-workspace/${projectId}/${cfg.endpoint}`, {
+        const run = await _wsConfirmedCall(`/ebook-workspace/${projectId}/${cfg.endpoint}`, projectId, confirmEl, "Ready for you to choose.", {
           method: "POST",
           body: JSON.stringify(body),
         });
@@ -8740,6 +8853,12 @@ async function estimateManuscriptInWorkspace(projectId) {
           method: "POST",
           body: JSON.stringify(body),
         });
+        if (gen && gen.handed_off) {
+          confirmEl.classList.add("hidden");
+          confirmEl.innerHTML = "";
+          await _wsHandedOff(gen, projectId, "Manuscript written — awaiting your approval.");
+          return;
+        }
         if (gen.workspace) {
           renderEbookWorkspace(gen.workspace);
         }

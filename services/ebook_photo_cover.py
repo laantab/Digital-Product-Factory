@@ -1410,6 +1410,33 @@ def _pdf_from_png(png: bytes, *, title: str, author: str, subtitle: str = "", se
     return buf.getvalue()
 
 
+def _publish_cover_files(data: dict, *paths) -> None:
+    """Make freshly rendered cover files readable by the web service.
+
+    Never raises: a cover that fails to publish is a cover that does not
+    appear, which is bad and is logged, but it is not a reason to throw away
+    a book that was otherwise built correctly.
+    """
+    try:
+        from services.storage.publish import publish_file, publishing_enabled
+
+        if not publishing_enabled():
+            return
+        project_id = int(data.get("_project_id") or 0)
+        if project_id <= 0:
+            return
+        for path in paths:
+            name = str(path).lower()
+            content_type = ("application/pdf" if name.endswith(".pdf")
+                            else "image/png")
+            publish_file(project_id, EXPORTS_DIR, path,
+                         kind="cover", content_type=content_type)
+    except Exception:                                  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("could not publish cover files")
+
+
 def _thumb(img: Image.Image) -> Image.Image:
     h = int(THUMB_W * COVER_H / COVER_W)
     return img.resize((THUMB_W, h), Image.Resampling.LANCZOS)
@@ -1755,6 +1782,12 @@ def _write_variant_files(
         fh.write(pdf)
     with open(thumb_path, "wb") as fh:
         fh.write(thumb)
+
+    # v1.8.1. The builder renders these onto its own disk, which the website
+    # cannot read and which disappears when the task ends. Publishing them
+    # puts them where the website's existing asset-first reader already
+    # looks. No-op inline, where the one disk is the one being read.
+    _publish_cover_files(data, png_path, pdf_path, thumb_path)
     if qa is None:
         qa = inspect_variant(img, layout_id, ident)
     return {
@@ -2436,6 +2469,39 @@ def photo_cover_public_fields(data: dict, *, project_id: int | None) -> dict[str
     }
 
 
+def _cover_bytes_from_storage_or_disk(path: str, project_id: int | None) -> bytes | None:
+    """The file's bytes, from the local disk or from storage. None if neither.
+
+    Disk first, because inline mode and local development have the file
+    right there and must not depend on any storage backend at all. Storage
+    second, because in workflow mode the machine that wrote the file has
+    already gone.
+    """
+    try:
+        if path and os.path.isfile(path):
+            with open(path, "rb") as handle:
+                return handle.read()
+    except OSError:
+        pass
+
+    try:
+        pid = int(project_id or 0)
+        if pid <= 0 or not path:
+            return None
+        rel = os.path.relpath(str(path), EXPORTS_DIR).replace(os.sep, "/")
+        if rel.startswith(".."):
+            return None
+        from services.storage.compat import read_export_or_legacy
+
+        return read_export_or_legacy(pid, rel)
+    except Exception:                                  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "could not read a cover file from storage")
+        return None
+
+
 def verified_variant_asset(
     data: dict,
     *,
@@ -2459,10 +2525,15 @@ def verified_variant_asset(
     if row_src and row_src != str(verified["digest"] or "").lower():
         raise PhotoCoverError("Cover variant digest does not match.")
     path = str(row.get("thumb_path") if size == "thumb" else row.get("png_path") or "")
-    if not path or not os.path.isfile(path):
+
+    # v1.8.1. In workflow mode the builder rendered this onto its own disk,
+    # which no longer exists. The bytes were published to storage when they
+    # were written, so read them from there before concluding the cover is
+    # missing. Every identity and digest check above has already passed;
+    # this only changes WHERE the verified bytes are fetched from.
+    body = _cover_bytes_from_storage_or_disk(path, project_id)
+    if body is None:
         raise PhotoCoverError("Cover variant file is missing.")
-    with open(path, "rb") as fh:
-        body = fh.read()
     return {"bytes": body, "mimetype": "image/png", "digest": row["digest"]}
 
 

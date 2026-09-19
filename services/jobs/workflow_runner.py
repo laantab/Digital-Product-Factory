@@ -55,6 +55,25 @@ RETRY_SLEEP_SECONDS = 5
 MAX_UNCLAIMABLE = 3
 
 
+def builder_version() -> str:
+    """The VERSION this builder is running, or "unknown".
+
+    Reported so a website on v1.8.1 and a builder still on v1.8.0 -- which is
+    the shape of this repository's two Render services today -- is an obvious
+    mismatch rather than a book that quietly ignores what the customer asked
+    for.
+    """
+    import os
+
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        with open(os.path.join(root, "VERSION"), encoding="utf-8") as handle:
+            return handle.read().strip() or "unknown"
+    except Exception:                                  # noqa: BLE001
+        return "unknown"
+
+
 def run_build(project_id: int, *, budget_seconds: int | None = None,
               sleep=time.sleep) -> dict:
     """Drive one book to completion, a pause, a failure or the deadline.
@@ -71,7 +90,9 @@ def run_build(project_id: int, *, budget_seconds: int | None = None,
 
     summary = {"project_id": project_id, "owner": owner, "claims": 0,
                "units": 0, "finished": False, "failed": False,
-               "paused": False, "reason": ""}
+               "paused": False, "reason": "", "builder_version": builder_version()}
+    log.info("builder version %s driving project %s",
+             summary["builder_version"], project_id)
 
     try:
         store.init_jobs_table()
@@ -139,6 +160,10 @@ def run_build(project_id: int, *, budget_seconds: int | None = None,
         # never performs it twice.
         job_id = outcome.get("job_id")
         if job_id:
+            try:
+                store.record_builder_version(int(job_id), summary["builder_version"])
+            except Exception:                          # noqa: BLE001
+                pass                                   # traceability, not the book
             try:
                 from services.jobs.builder_actions import perform_pending
 

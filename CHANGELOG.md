@@ -5,6 +5,80 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.1 — 2026-09-18
+
+**Finishing the job 1.8.0 started: the pictures move too.**
+
+### What was fixed
+
+- **The step-by-step screen was still building books inside the website.**
+  1.8.0 moved the one-click Build My Ebook button onto the separate builder
+  machine and left every other button behind. On the evening of 18 September
+  a test book built through the step-by-step screen failed: writing the
+  chapters took longer than the website is allowed to spend on one request,
+  and a few minutes later the website ran out of memory and restarted. The
+  builder was never asked to do anything all evening. Now every step that
+  does real work — writing chapters, correcting them, preparing visuals,
+  replacing a photograph, asking for a different image, building the cover,
+  uploading your own cover photograph, choosing a design, building the
+  preview, and the quality check — is done by the builder.
+
+- **Your pictures come back.** The website and the builder are two separate
+  machines that do not share a hard disk. Covers and photographs the builder
+  makes are now saved somewhere both machines can reach, so they appear on
+  your screen instead of going missing.
+
+### What changed
+
+- **The screen no longer freezes on a long step.** Each button now starts
+  the work and then shows progress, with the same "You can leave this page"
+  promise the one-click build already makes.
+
+- **The builder stops and waits for you after every step.** It used to be
+  able to wait only after the manuscript. Now it pauses wherever you are, so
+  a single click can never run ahead and spend your budget on choices you
+  have not made yet. Approving a step is what lets it carry on.
+
+- **Nothing can be forgotten again.** Every button on the site is now listed
+  with a note saying whether it does real work or not, and a test refuses to
+  let a new one be added without that decision being made. This is what was
+  missing in 1.8.0: the gap existed because nothing forced anyone to look.
+
+### Does anything about the steps change?
+
+No. The steps are the same steps, in the same order, and each one still
+waits for you to approve it before the next one runs. What changed is which
+machine does the work, and that a long step now shows progress instead of
+freezing the page.
+
+On your own PC nothing changes at all, and if the live site is switched
+back, everything behaves exactly as it did before.
+
+### Cost
+
+No change to what a book costs. The safety checks on spending are untouched:
+a request that would have been refused before is still refused, and still
+refused before anything is started or charged for. The builder machine is
+still only paid for while it is actually working.
+
+### Release gate
+
+The Fast Stability Gate and the full Windows release gate were both run.
+Six new zero-cost test files were added and registered in the acceptance
+manifest, including one that refuses to let a new button be added to the
+site without someone deciding whether it does real work. No paid provider
+was called anywhere in the new tests.
+
+### Still to do
+
+- Seven older buttons that also do heavy work — finished-file export, the
+  older ebook tools, and the KDP packaging — still run in the website. They
+  work on older records rather than a step-by-step project, so there is
+  nothing on the builder for them to join yet. They are listed and labelled
+  so they are not lost.
+
+---
+
 ## 1.8.0 — 2026-09-17
 
 **The builder is its own machine, not a thread in the website.**

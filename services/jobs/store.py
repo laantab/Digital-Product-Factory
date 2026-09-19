@@ -332,6 +332,13 @@ _TRIGGER_COLUMNS = (
     # unchanged from v1.8.0.
     ("requested_action", "TEXT NOT NULL DEFAULT ''"),
     ("requested_action_at", "TEXT NOT NULL DEFAULT ''"),
+    # v1.8.1. The website and the builder are two Render services and can be
+    # running different commits. A builder on v1.8.0 does not understand a
+    # requested action: it would build the book straight through and the
+    # customer's chosen photograph would never appear, with nothing saying
+    # why. Recording the version that actually did the work makes that
+    # visible on /ebook/execution-mode.
+    ("builder_version", "TEXT NOT NULL DEFAULT ''"),
 )
 
 
@@ -624,3 +631,50 @@ def take_requested_action(job_id: int) -> dict:
     except Exception:                                  # noqa: BLE001
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def record_builder_version(job_id: int, version: str) -> bool:
+    """Remember which build of the builder claimed this job."""
+    import database
+
+    conn = database.get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE jobs SET builder_version=?, updated_at=? WHERE id=?",
+            (str(version or "")[:40], _now(), int(job_id)),
+        )
+        conn.commit()
+        return int(getattr(cur, "rowcount", 0) or 0) == 1
+    except Exception:                                  # noqa: BLE001
+        try:
+            conn.rollback()
+        except Exception:                              # noqa: BLE001
+            pass
+        return False
+    finally:
+        conn.close()
+
+
+def last_builder_version() -> str:
+    """The most recently reported builder version, or "".
+
+    Empty on a service that believes it is in workflow mode means no builder
+    run has ever reported -- which is exactly what was true on the evening of
+    2026-09-18, when the builder showed zero runs all night.
+    """
+    import database
+
+    conn = database.get_conn()
+    try:
+        row = conn.execute(
+            "SELECT builder_version FROM jobs WHERE builder_version <> ''"
+            " ORDER BY updated_at DESC LIMIT 1"
+        ).fetchone()
+    except Exception:                                  # noqa: BLE001
+        return ""
+    finally:
+        conn.close()
+    if row is None:
+        return ""
+    return str((row.get("builder_version") if isinstance(row, dict)
+                else row["builder_version"]) or "")
