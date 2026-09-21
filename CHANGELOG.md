@@ -5,6 +5,39 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.6 — 2026-09-21
+
+**A sign-in screen.**
+
+### What changed
+
+- New page at /auth/signin with two small forms: "Sign in" and "Create an
+  account". Once signed in it shows your email and role, a link back to the
+  Factory, and a "Sign out" button.
+- The very first account created becomes the admin, as before.
+
+### What was fixed
+
+- 1.8.5 added accounts but no screen to use them, so the only way to make
+  the admin account was a command on the server. Now it is done in the
+  browser.
+
+### Do your steps change?
+
+Yes, once: open digitalproductfactorypro.com/auth/signin and create your
+account under "Create an account". Do this first, before sharing the invite
+code with anyone else, because the first account becomes the admin. Book
+building is unchanged, and the invite code still protects every page,
+including this one.
+
+### Release gate
+
+10 new checks: the page is served, is never cached or shown inside another
+site, echoes nothing it is sent, keeps the secret out of web addresses, and
+the sign-in and sign-up routes still refuse plain form posts from other
+sites. The page lives in routes/auth.py, so app.py and the invite-protection
+lock are untouched. No paid calls.
+
 ## 1.8.5 — 2026-09-21
 
 **Real logins, and a safe link to Pin Factory Pro.**
