@@ -668,7 +668,8 @@ def generate_ebook_route():
 
 
 def _workflow_hand_off(project_id: int, *, route: str, action: str = "",
-                       payload: dict | None = None):
+                       payload: dict | None = None,
+                       reset_attempts: bool = False):
     """Give a heavy route's work to the builder, or None to run it inline.
 
     v1.8.1. Every heavy ebook route calls this AFTER it has validated the
@@ -687,7 +688,8 @@ def _workflow_hand_off(project_id: int, *, route: str, action: str = "",
         from services.jobs.actions import hand_off_if_workflow
 
         return hand_off_if_workflow(project_id, route=route, action=action,
-                                    payload=payload or {})
+                                    payload=payload or {},
+                                    reset_attempts=bool(reset_attempts))
     except Exception:  # noqa: BLE001
         # A handoff problem must never take a route down. Falling through to
         # inline is the safe direction: the customer's book still gets built,
@@ -4107,7 +4109,16 @@ def ebook_build_advance_route(project_id: int):
             # does. The duplicate guard in the job row (one conditional
             # UPDATE, a 120s cooldown and a live-lease check) is what stops
             # the polling loop starting a second task.
-            handed = _workflow_hand_off(project_id, route="advance")
+            # v1.8.3. The first request after the customer clicks Continue
+            # carries {"continue": true}. That click -- and only that click,
+            # never the polling that follows it -- is a human "keep going",
+            # so it earns the job a fresh set of attempts, exactly as
+            # /resume does. Without it a book that had used all 60 attempts
+            # was handed to the builder, and the builder refused it.
+            body = request.get_json(silent=True) or {}
+            customer_continue = bool(body.get("continue")) if isinstance(body, dict) else False
+            handed = _workflow_hand_off(project_id, route="advance",
+                                        reset_attempts=customer_continue)
             if handed is not None:
                 return jsonify(handed)
             payload = status_payload(dict(project.get("data") or {}), project_id)
