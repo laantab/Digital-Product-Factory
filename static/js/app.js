@@ -1066,7 +1066,9 @@ async function loadEbookResumeList() {
     const row = items.find((p) => Number(p.id) === rid) || {};
     // One-button builds continue on the customer screen; hand-driven
     // workspace projects continue on the stage rail they were started on.
-    btn.onclick = () => (row.one_click ? openEbookBuild(rid) : openEbookWorkspace(rid));
+    // v1.8.3: a Continue click is the customer's "keep going", so the first
+    // request tells the server, which gives the job a fresh set of attempts.
+    btn.onclick = () => (row.one_click ? openEbookBuild(rid, { continued: true }) : openEbookWorkspace(rid));
   });
 }
 
@@ -7364,15 +7366,20 @@ function renderEbookBuild(status) {
 }
 
 //: Drive the build to a conclusion. One request in flight, always.
-async function _ebookBuildLoop(projectId, runToken) {
+async function _ebookBuildLoop(projectId, runToken, opts) {
   if (_ebookBuildBusy) return;
   _ebookBuildBusy = true;
+  // v1.8.3: only the FIRST request after a Continue click says so. The
+  // polling that follows must never reset the server's retry counter.
+  let continued = !!(opts && opts.continued);
   try {
     for (;;) {
       if (runToken !== _ebookBuildRun) return; // customer navigated away
       let status;
       try {
-        status = await api(`/ebook/build/${projectId}/advance`, { method: "POST", body: "{}" });
+        const body = continued ? JSON.stringify({ continue: true }) : "{}";
+        continued = false;
+        status = await api(`/ebook/build/${projectId}/advance`, { method: "POST", body });
       } catch (e) {
         // Network or server trouble: report plainly, never a traceback.
         renderEbookBuild({
@@ -7446,7 +7453,7 @@ async function startEbookBuild(fields) {
 
 //: Reopen a build -- from Saved Projects, or after a refresh. Never creates a
 //: project: it reads the persisted stage and continues from there.
-async function openEbookBuild(projectId) {
+async function openEbookBuild(projectId, opts) {
   if (!projectId) return;
   _ebookBuildRemember(projectId);
   go("ebook-build");
@@ -7467,7 +7474,7 @@ async function openEbookBuild(projectId) {
   if (runToken !== _ebookBuildRun) return;
   renderEbookBuild(status);
   if (!status.finished && !status.failed) {
-    await _ebookBuildLoop(projectId, runToken);
+    await _ebookBuildLoop(projectId, runToken, { continued: !!(opts && opts.continued) });
   }
 }
 

@@ -188,7 +188,7 @@ def test_ui_loads_and_renders_the_resume_list():
     # workspace project returns to the stage rail it was started on. Sending a
     # one-click customer to the ten-stage rail would show them the operational
     # view they were never meant to see.
-    assert "row.one_click ? openEbookBuild(rid) : openEbookWorkspace(rid)" in js, (
+    assert "row.one_click ? openEbookBuild(rid, { continued: true }) : openEbookWorkspace(rid)" in js, (
         "Continue must route by how the project was started"
     )
 

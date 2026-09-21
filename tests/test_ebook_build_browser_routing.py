@@ -79,21 +79,21 @@ class EbookBuildRoutingTests(unittest.TestCase):
         body = _function_body(APP_JS, "async function startEbookBuild(fields)")
         self.assertIn('api("/ebook/build"', body)
         self.assertIn('go("ebook-build")', body)
-        loop = _function_body(APP_JS, "async function _ebookBuildLoop(projectId, runToken)")
+        loop = _function_body(APP_JS, "async function _ebookBuildLoop(projectId, runToken")
         self.assertIn("/advance", loop)
-        reopen = _function_body(APP_JS, "async function openEbookBuild(projectId)")
+        reopen = _function_body(APP_JS, "async function openEbookBuild(projectId")
         self.assertIn("/status", reopen)
         self.assertNotIn('api("/ebook/build"', reopen, "reopening must never start a new build")
 
     def test_advance_requests_cannot_overlap(self):
-        loop = _function_body(APP_JS, "async function _ebookBuildLoop(projectId, runToken)")
+        loop = _function_body(APP_JS, "async function _ebookBuildLoop(projectId, runToken")
         self.assertIn("if (_ebookBuildBusy) return;", loop)
         self.assertIn("_ebookBuildBusy = true;", loop)
         self.assertIn("_ebookBuildBusy = false;", loop)
         self.assertIn("finally", loop)
 
     def test_loop_stops_on_finish_failure_and_navigation(self):
-        loop = _function_body(APP_JS, "async function _ebookBuildLoop(projectId, runToken)")
+        loop = _function_body(APP_JS, "async function _ebookBuildLoop(projectId, runToken")
         self.assertIn("status.finished", loop)
         self.assertIn("status.failed", loop)
         self.assertIn("runToken !== _ebookBuildRun", loop)

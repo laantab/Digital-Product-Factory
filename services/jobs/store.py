@@ -138,6 +138,26 @@ def enqueue(project_id: int, kind: str = KIND_EBOOK_BUILD, *,
         if existing is not None:
             job = _row_to_dict(existing)
             if job["status"] in (QUEUED, RUNNING):
+                # v1.8.3. A job can be QUEUED (or RUNNING on a lease that
+                # has run out) and still be dead: the builder refuses any
+                # job at MAX_ATTEMPTS. Returning it untouched meant the
+                # customer's explicit Continue never cleared the counter,
+                # so every task Render started was turned away. A live
+                # lease is left alone -- a builder is working on it now.
+                lease_live = (job["status"] == RUNNING
+                              and str(job["lease_expires_at"] or "") > now)
+                if reset_attempts and not lease_live and int(job["attempts"] or 0) > 0:
+                    cur = conn.execute(
+                        "UPDATE jobs SET status=?, lease_owner='', lease_expires_at='',"
+                        " last_error='', attempts=0, updated_at=? "
+                        "WHERE id=? AND status=? AND attempts=?",
+                        (QUEUED, now, job["id"], job["status"], job["attempts"]),
+                    )
+                    conn.commit()
+                    if int(getattr(cur, "rowcount", 0) or 0) == 1:
+                        return {**job, "status": QUEUED, "lease_owner": "",
+                                "lease_expires_at": "", "last_error": "",
+                                "attempts": 0}
                 return job
             # A finished or failed job is re-opened, never duplicated.
             if reset_attempts:

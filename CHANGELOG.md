@@ -5,6 +5,45 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.3 — 2026-09-20
+
+**Continue really does pick your book back up.**
+
+### What changed
+
+- Clicking Continue on a stuck book now gives it a fresh set of tries.
+
+### What was fixed
+
+- **Continue gave a stuck book to the builder, and the builder said no.**
+  Every book gets 60 tries before the Factory stops retrying it on its own.
+  "Container Gardening for Beginners" had used all 60. Clicking Continue
+  asked the builder to carry on (that was the 1.8.2 fix), but it never gave
+  the book a fresh set of tries, so the builder turned it away every time.
+  Now your Continue click, and only your click, starts the count again. The
+  automatic checking the screen does while you wait never resets it, so a
+  book still can't retry forever on its own. No paid work was done while
+  the book was stuck.
+
+- The Resume Build button had the same gap for a book that was waiting in
+  line, and is fixed the same way.
+
+### Do your steps change?
+
+No. Click Continue exactly as before.
+
+### Release gate
+
+Nine new checks, which fail without the fix. The builder and resume test
+suites pass. No paid calls were made while testing.
+
+## 1.8.2 — 2026-09-19
+
+- Continue where you left off now asks the builder to do the work, instead
+  of quietly waiting for nobody.
+
+---
+
 ## 1.8.1 — 2026-09-18
 
 **Finishing the job 1.8.0 started: the pictures move too.**
