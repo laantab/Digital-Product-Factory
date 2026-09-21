@@ -97,6 +97,17 @@ ROUTES: tuple[dict, ...] = (
     _l("/billing/webhook/stripe", "records a payment event"),
     _l("/billing/webhook/lemonsqueezy", "records a payment event"),
 
+    # Factory 1.8.5: login (Phase A) and the Pin Factory Pro proxy (Phase B2).
+    # None of these builds a product; the proxy waits at most 20 s for Pin
+    # Factory Pro and does no work on the Factory itself.
+    _l("/auth/register", "creates a user row and logs it in"),
+    _l("/auth/login", "checks a password and starts a session"),
+    _l("/auth/logout", "ends the session"),
+    _l("/pin-factory/text", "forwards one request to Pin Factory Pro"),
+    _l("/pin-factory/image", "forwards one request to Pin Factory Pro"),
+    _l("/pin-factory/export", "forwards one request to Pin Factory Pro"),
+    _l("/pin-factory/microtools", "forwards one request to Pin Factory Pro"),
+
     _l("/research", "starts a research request and returns its handle"),
 
     _h("/generate-ebook", "legacy non-workspace path: writes a whole ebook",

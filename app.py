@@ -89,6 +89,31 @@ app = Flask(__name__)
 # Coloring-book saves may include large PDF base64; allow up to 64 MB JSON bodies.
 app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
 
+# --------------------------------------------------------------------------
+# User login (Phase A, forward-ported for Factory 1.8.5).
+#
+# The session cookie is signed with SECRET_KEY, which is what makes
+# current_user.id trustworthy. There is deliberately no fixed fallback key:
+# without SECRET_KEY each process makes a random one, so logins simply do
+# not survive a restart instead of being forgeable with a published default.
+# --------------------------------------------------------------------------
+import secrets as _secrets
+
+from flask_login import LoginManager
+
+from auth import load_user as _load_user
+
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or _secrets.token_hex(32)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
+if str(os.environ.get("RENDER") or os.environ.get("FACTORY_SECURE_COOKIES") or "").strip():
+    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["REMEMBER_COOKIE_SECURE"] = True
+login_manager = LoginManager(app)
+login_manager.user_loader(_load_user)
+
 with app.app_context():
     database.init_db()
     from services.billing.store import init_billing_db
@@ -133,6 +158,10 @@ with app.app_context():
 
 app.register_blueprint(word_search_builder_bp)
 app.register_blueprint(crossword_builder_bp)
+
+from routes.auth import auth_bp  # noqa: E402
+
+app.register_blueprint(auth_bp)
 
 
 @app.after_request
@@ -5306,6 +5335,67 @@ def cover_upload_image_route():
     except Exception as exc:
         app.logger.exception("cover image upload failed")
         return jsonify({"error": str(exc)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Pin Factory Pro proxy routes (Phase B2, for Factory 1.8.5)
+#
+# Every route needs a logged-in, active Factory user. Who that user is comes
+# ONLY from current_user.id (the signed server-side session) -- never from a
+# query string, form, JSON body, cookie or header the browser sends. The
+# shared Pin Factory key is added on the server and never reaches a browser.
+# See services/pin_factory_proxy.py for the header and redirect rules.
+# ---------------------------------------------------------------------------
+
+from flask_login import current_user as _current_user  # noqa: E402
+
+from auth import active_user_required  # noqa: E402
+from services.pin_factory_proxy import proxy_pin_factory  # noqa: E402
+
+
+def _pin_factory(target_path: str):
+    body, status, response_headers = proxy_pin_factory(
+        flask_request=request,
+        target_path=target_path,
+        factory_user_id=str(_current_user.id),
+        log=app.logger.info,
+    )
+    return Response(body, status=status, headers=response_headers)
+
+
+@app.route("/pin-factory/text", methods=["GET", "POST"])
+@active_user_required
+def pin_factory_text_route():
+    """Proxy to Pin Factory Pro /api/text."""
+    return _pin_factory("text")
+
+
+@app.route("/pin-factory/image", methods=["GET", "POST"])
+@active_user_required
+def pin_factory_image_route():
+    """Proxy to Pin Factory Pro /api/image."""
+    return _pin_factory("image")
+
+
+@app.route("/pin-factory/export", methods=["GET", "POST"])
+@active_user_required
+def pin_factory_export_route():
+    """Proxy to Pin Factory Pro /api/export."""
+    return _pin_factory("export")
+
+
+@app.route("/pin-factory/microtools", methods=["GET", "POST"])
+@active_user_required
+def pin_factory_microtools_route():
+    """Proxy to Pin Factory Pro /api/microtools."""
+    return _pin_factory("microtools")
+
+
+@app.route("/pin-factory/health", methods=["GET"])
+@active_user_required
+def pin_factory_health_route():
+    """Proxy to Pin Factory Pro /api/health (reachability check)."""
+    return _pin_factory("health")
 
 
 if __name__ == "__main__":

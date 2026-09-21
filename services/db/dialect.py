@@ -143,7 +143,8 @@ CREATE TABLE IF NOT EXISTS projects (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 0,
-    product_uuid TEXT
+    product_uuid TEXT,
+    user_id BIGINT
 )
 """
 
@@ -178,8 +179,38 @@ POSTGRES_RESET_SEQUENCES = (
 )
 
 
+# Phase A users and ownership (forward-ported for 1.8.5). Additive: the
+# ALTER adds a NULLABLE column, so no existing production row changes.
+POSTGRES_USERS_DDL = """
+CREATE TABLE IF NOT EXISTS users (
+    id BIGSERIAL PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user',
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+)
+"""
+
+# A projects table created before 1.8.5 has no user_id column; CREATE TABLE
+# IF NOT EXISTS leaves it that way. These run after the schema, on every
+# start-up, and are no-ops once applied. Kept out of
+# postgres_schema_statements() because that portable schema is also used by
+# the migration tooling, where the column already exists in the DDL above.
+POSTGRES_PROJECTS_USER_ID = "ALTER TABLE projects ADD COLUMN IF NOT EXISTS user_id BIGINT"
+
+POSTGRES_PROJECTS_USER_INDEX = (
+    "CREATE INDEX IF NOT EXISTS projects_user_id_idx ON projects (user_id)"
+)
+
+
 def postgres_schema_statements() -> tuple[str, ...]:
-    return (POSTGRES_PROJECTS_DDL, POSTGRES_ASSETS_DDL, POSTGRES_ASSETS_INDEX)
+    return (POSTGRES_PROJECTS_DDL, POSTGRES_ASSETS_DDL, POSTGRES_ASSETS_INDEX,
+            POSTGRES_USERS_DDL)
+
+
+def postgres_upgrade_statements() -> tuple[str, ...]:
+    return (POSTGRES_PROJECTS_USER_ID, POSTGRES_PROJECTS_USER_INDEX)
 
 
 def connect(url: str | None = None):

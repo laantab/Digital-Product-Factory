@@ -258,8 +258,192 @@ def init_db() -> None:
         "CREATE INDEX IF NOT EXISTS assets_project_kind_idx "
         "ON assets (project_id, kind, approved)"
     )
+    _init_auth_schema_sqlite(conn)
     conn.commit()
     conn.close()
+
+
+# --------------------------------------------------------------------------
+# Users and project ownership (Phase A, forward-ported for Factory 1.8.5).
+#
+# Additive only. A users table is created and projects gain a NULLABLE
+# user_id column. No existing row is changed by creating them: NULL means
+# "not yet assigned", and ownership is only ever written by an explicit call
+# (create_project(user_id=...), set_project_owner, or the operator-run
+# scripts/migrate_phase_a.py). The project list and Saved Projects code does
+# not read user_id, so their behaviour is unchanged.
+# --------------------------------------------------------------------------
+
+_USERS_DDL = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user',
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+)
+"""
+
+
+def _init_auth_schema_sqlite(conn) -> None:
+    try:
+        conn.execute("ALTER TABLE projects ADD COLUMN user_id INTEGER")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+    conn.execute(_USERS_DDL)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS projects_user_id_idx ON projects (user_id)"
+    )
+
+
+_USER_COLS = "id, email, password_hash, role, active, created_at"
+
+
+def _user_row_to_dict(row) -> dict | None:
+    if not row:
+        return None
+    return {
+        "id": int(row_field(row, "id", 0)),
+        "email": str(row_field(row, "email", 1) or ""),
+        "password_hash": str(row_field(row, "password_hash", 2) or ""),
+        "role": str(row_field(row, "role", 3) or "user"),
+        "active": bool(row_field(row, "active", 4)),
+        "created_at": str(row_field(row, "created_at", 5) or ""),
+    }
+
+
+def get_user(user_id: int) -> dict | None:
+    """The user row, or None. The dict includes password_hash: never return
+    it to a browser -- auth.User and the /auth routes expose id/email/role."""
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            f"SELECT {_USER_COLS} FROM users WHERE id = ?", (uid,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return _user_row_to_dict(row)
+
+
+def get_user_by_email(email: str) -> dict | None:
+    key = str(email or "").strip().lower()
+    if not key:
+        return None
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            f"SELECT {_USER_COLS} FROM users WHERE email = ?", (key,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return _user_row_to_dict(row)
+
+
+def count_users() -> int:
+    conn = get_conn()
+    try:
+        row = conn.execute("SELECT COUNT(*) AS n FROM users").fetchone()
+    finally:
+        conn.close()
+    return int(row_field(row, "n", 0) or 0)
+
+
+def create_user(email: str, password_hash: str, role: str = "user") -> dict:
+    """Create a user. The email is stored lower-cased. Raises on a duplicate."""
+    key = str(email or "").strip().lower()
+    if not key or not password_hash:
+        raise ValueError("email and password_hash are required")
+    if role not in ("user", "admin"):
+        raise ValueError("role must be 'user' or 'admin'")
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "INSERT INTO users (email, password_hash, role, active, created_at) "
+            "VALUES (?, ?, ?, 1, ?)",
+            (key, password_hash, role, _now()),
+        )
+        conn.commit()
+        user_id = cur.lastrowid
+    finally:
+        conn.close()
+    return get_user(user_id)
+
+
+def set_user_active(user_id: int, active: bool) -> bool:
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE users SET active = ? WHERE id = ?", (int(bool(active)), int(user_id))
+        )
+        conn.commit()
+        return int(getattr(cur, "rowcount", 0) or 0) == 1
+    finally:
+        conn.close()
+
+
+def get_project_owner(project_id: int) -> int | None:
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT user_id FROM projects WHERE id = ?", (int(project_id),)
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    value = row_field(row, "user_id", 0)
+    return int(value) if value is not None else None
+
+
+def set_project_owner(project_id: int, owner_id: int) -> bool:
+    """Assign one project to one existing user. False if either is missing."""
+    if get_user(owner_id) is None:
+        return False
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE projects SET user_id = ? WHERE id = ?", (int(owner_id), int(project_id))
+        )
+        conn.commit()
+        return int(getattr(cur, "rowcount", 0) or 0) == 1
+    finally:
+        conn.close()
+
+
+def backfill_project_owners(owner_id: int) -> int:
+    """Give every UNOWNED project to one existing user. Idempotent: a second
+    run finds nothing unowned and changes nothing. Never reassigns a project
+    that already has an owner. Returns the number of rows changed."""
+    if get_user(owner_id) is None:
+        raise ValueError("owner does not exist")
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE projects SET user_id = ? WHERE user_id IS NULL", (int(owner_id),)
+        )
+        conn.commit()
+        return int(getattr(cur, "rowcount", 0) or 0)
+    finally:
+        conn.close()
+
+
+def ownership_counts() -> dict:
+    conn = get_conn()
+    try:
+        total = conn.execute("SELECT COUNT(*) AS n FROM projects").fetchone()
+        unowned = conn.execute(
+            "SELECT COUNT(*) AS n FROM projects WHERE user_id IS NULL"
+        ).fetchone()
+    finally:
+        conn.close()
+    t = int(row_field(total, "n", 0) or 0)
+    u = int(row_field(unowned, "n", 0) or 0)
+    return {"projects": t, "unowned": u, "owned": t - u}
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
@@ -1064,6 +1248,7 @@ def create_project(
     system_test: bool | None = None,
     temporary: bool | None = None,
     user_confirmed_save: bool = False,
+    user_id: int | None = None,
 ) -> dict:
     """Create a new project record.
 
@@ -1115,6 +1300,10 @@ def create_project(
     conn.commit()
     project_id = cur.lastrowid
     conn.close()
+    if user_id is not None:
+        # Phase A ownership. Written separately so the insert above -- and
+        # every caller that does not pass an owner -- is exactly as before.
+        set_project_owner(project_id, int(user_id))
     return get_project(project_id)
 
 

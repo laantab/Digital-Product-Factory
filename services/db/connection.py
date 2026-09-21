@@ -149,4 +149,6 @@ def init_postgres_schema(conn) -> None:
     """Create the approved schema. Idempotent (IF NOT EXISTS throughout)."""
     for statement in dialect.postgres_schema_statements():
         conn.execute(statement)
+    for statement in dialect.postgres_upgrade_statements():
+        conn.execute(statement)
     conn.commit()

@@ -159,6 +159,8 @@
     "tests/test_builder_performs_requested_action.py",
     "tests/test_build_holds_after_every_stage.py",
     "tests/test_step_by_step_screen_polls.py",
-    "tests/test_builder_images_travel_through_storage.py"
+    "tests/test_builder_images_travel_through_storage.py",
+    "tests/test_auth_phase_a.py",
+    "tests/test_pin_factory_proxy.py"
   ]
 }
