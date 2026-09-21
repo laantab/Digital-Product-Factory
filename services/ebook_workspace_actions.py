@@ -306,7 +306,12 @@ def perform(data: dict, *, project_id: int, route: str, action: str = "",
     merged = dict(payload or {})
     if str(action or "").strip():
         merged["action"] = str(action).strip()
-    return handler(data, merged, int(project_id))
+    # v1.8.4: pictures made by this action are published under this book.
+    from services.ebook_visual_pipeline import localize_visual_plan, publishing_for_project
+
+    localize_visual_plan(data, project_id=int(project_id))
+    with publishing_for_project(int(project_id)):
+        return handler(data, merged, int(project_id))
 
 
 def is_light(route: str, action: str) -> bool:
