@@ -109,18 +109,151 @@ def _package_id(data: dict) -> str:
     return "ebook-" + uuid.uuid4().hex[:12]
 
 
-def _publish_visual(aid: dict, path) -> None:
-    """Make a freshly downloaded interior photograph readable by the website.
+# ---------------------------------------------------------------------------
+# v1.8.4. Which book a picture belongs to, and where this machine can read it.
+#
+# v1.8.1 published a picture only when the picture itself carried
+# "_project_id". Nothing ever put that key on a picture, so on the live
+# builder not one picture reached storage, and the website -- a different
+# machine with a different disk -- could show none of them. The book is now
+# named once, around the work (publishing_for_project), and every picture
+# made inside that scope is published under it.
+#
+# The reverse direction was missing too. A picture's asset_path is a path on
+# the machine that made it. The website, and every later builder run (whose
+# temporary disk starts empty), looked for that exact file, did not find it,
+# and reported the picture missing. local_visual_path() reads the same
+# picture from storage onto this machine's own exports folder when needed.
+# ---------------------------------------------------------------------------
+import contextlib
+import contextvars
 
-    v1.8.1. The builder writes it to its own disk; the website has to serve
-    it. Never raises -- one missing picture must not fail a book.
+_PUBLISH_PROJECT: "contextvars.ContextVar[int]" = contextvars.ContextVar(
+    "factory_publish_project", default=0)
+
+
+@contextlib.contextmanager
+def publishing_for_project(project_id):
+    """Name the book whose pictures are made inside this block."""
+    try:
+        pid = int(project_id or 0)
+    except (TypeError, ValueError):
+        pid = 0
+    token = _PUBLISH_PROJECT.set(pid)
+    try:
+        yield
+    finally:
+        _PUBLISH_PROJECT.reset(token)
+
+
+def _publish_project_id(aid: dict | None = None) -> int:
+    try:
+        pid = int((aid or {}).get("_project_id") or 0)
+    except (TypeError, ValueError):
+        pid = 0
+    return pid or int(_PUBLISH_PROJECT.get() or 0)
+
+
+def _data_project_id(data: dict | None) -> int:
+    try:
+        return int((data or {}).get("_project_id") or (data or {}).get("project_id") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _visual_relpath(path) -> str:
+    """'<package>/visuals/<file>' -- the same on every machine, whatever its root."""
+    parts = [p for p in str(path or "").replace("\\", "/").split("/") if p]
+    if len(parts) >= 3 and parts[-2] == "visuals":
+        return "/".join(parts[-3:])
+    return ""
+
+
+def local_visual_path(aid: dict | None, *, project_id: int = 0) -> str:
+    """A path on THIS machine holding the picture, fetched from storage if needed.
+
+    Returns the stored path unchanged when nothing better is available, so a
+    caller's own "file is missing" check still reports the truth. Never raises.
+    """
+    stored = str((aid or {}).get("asset_path") or "")
+    if not stored:
+        return ""
+    try:
+        if os.path.isfile(stored):
+            return stored
+        rel = _visual_relpath(stored)
+        if not rel:
+            return stored
+        local = os.path.join(EXPORTS_DIR, *rel.split("/"))
+        if os.path.isfile(local):
+            return local
+        pid = int(project_id or 0) or _publish_project_id(aid)
+        if pid <= 0:
+            return stored
+        from services.storage.compat import read_export_or_legacy
+
+        payload = read_export_or_legacy(pid, rel)
+        if not payload:
+            return stored
+        os.makedirs(os.path.dirname(local), exist_ok=True)
+        with open(local, "wb") as fh:
+            fh.write(payload)
+        return local
+    except Exception:                                  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("could not fetch a stored visual")
+        return stored
+
+
+def localize_visual_plan(data: dict, *, project_id: int = 0) -> int:
+    """Point every planned picture at a copy on THIS machine. Returns how many moved.
+
+    v1.8.4. Run before a stage on the builder (whose disk starts empty each
+    run) and before the website renders pictures (whose disk never held
+    them), so every reader downstream -- review, preview, PDF -- finds the
+    same bytes it always did, just on the machine it is running on. A
+    picture storage cannot supply is left exactly as it was.
+    """
+    moved = 0
+    try:
+        plan = data.get("visual_plan") if isinstance(data, dict) else None
+        if not isinstance(plan, dict):
+            return 0
+        pid = int(project_id or 0) or _data_project_id(data)
+        for ch in plan.get("chapters") or []:
+            if not isinstance(ch, dict):
+                continue
+            for aid in ch.get("aids") or []:
+                if not isinstance(aid, dict):
+                    continue
+                stored = str(aid.get("asset_path") or "")
+                if not stored or os.path.isfile(stored):
+                    continue
+                local = local_visual_path(aid, project_id=pid)
+                if local and local != stored and os.path.isfile(local):
+                    aid["asset_path"] = local
+                    moved += 1
+    except Exception:                                  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("could not localise the visual plan")
+    return moved
+
+
+def _publish_visual(aid: dict, path) -> None:
+    """Make a picture this machine just made readable by the website.
+
+    v1.8.1, corrected in v1.8.4 to find the book from the surrounding
+    publishing_for_project scope. Never raises -- one missing picture must
+    not fail a book.
     """
     try:
         from services.storage.publish import publish_file, publishing_enabled
 
         if not publishing_enabled():
             return
-        project_id = int((aid or {}).get("_project_id") or 0)
+        project_id = _publish_project_id(aid)
         if project_id <= 0:
             return
         publish_file(project_id, EXPORTS_DIR, path,
@@ -2184,7 +2317,7 @@ def materialize_visual_plan(visual_plan: dict, *, package_id: str) -> dict[str, 
             path = _aid_file(package_id, vid)
             kind = str(aid.get("type") or "").lower()
             if kind == "photo":
-                existing = Path(str(aid.get("asset_path") or path))
+                existing = Path(local_visual_path(aid) or str(path))
                 if existing.is_file() and existing != path:
                     path.write_bytes(existing.read_bytes())
                 if not path.is_file():
@@ -2198,6 +2331,7 @@ def materialize_visual_plan(visual_plan: dict, *, package_id: str) -> dict[str, 
             img.save(buf, format="PNG", optimize=True)
             payload = buf.getvalue()
             path.write_bytes(payload)
+            _publish_visual(aid, path)
             aid["asset_path"] = str(path)
             aid["sha256"] = _sha_bytes(payload)
             aid["width"] = int(img.size[0])
@@ -2280,9 +2414,10 @@ def validate_visual_readiness(data: dict, *, html: str | None = None) -> VisualV
         return VisualValidation(False, ["Visuals cannot be approved without a valid visual plan."])
     required = required_aids(plan)
     resolved = 0
+    pid = _data_project_id(data)
     for aid in required:
         vid = str(aid.get("visual_id") or "")
-        path = str(aid.get("asset_path") or "")
+        path = local_visual_path(aid, project_id=pid)
         caption = str(aid.get("caption") or "").strip()
         source = str(aid.get("source") or "").strip()
         chapter = str(aid.get("chapter") or "").strip()
@@ -2762,8 +2897,9 @@ def visual_review_payload(data: dict) -> dict[str, Any]:
     technical_assets = []
     photo_blockers = 0
     unresolved_chapter = ""
+    review_pid = _data_project_id(data)
     for aid in required_aids(plan):
-        path = str(aid.get("asset_path") or "")
+        path = local_visual_path(aid, project_id=review_pid)
         is_photo = is_photo_aid(aid)
         match_status = str(aid.get("match_status") or "")
         if is_photo and match_status != MATCH_PASS:

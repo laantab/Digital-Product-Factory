@@ -739,6 +739,47 @@ def _run_preflight(data: dict, pid: int) -> dict:
     return approve_stage(data, "preflight")
 
 
+_EXPORT_CONTENT_TYPES = {
+    ".pdf": "application/pdf",
+    ".zip": "application/zip",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+}
+
+
+def _publish_export_files(pid: int, exports_root: str, files: dict) -> int:
+    """v1.8.4. Put the finished book's files where the website can serve them.
+
+    On the builder the PDF and ZIP land on a temporary disk the website
+    cannot read, and that disk is gone when the task ends. /download already
+    serves a verified stored copy when there is no file on its own disk, so
+    publishing here is all the website needs. Inline mode does not publish
+    (publishing_enabled is off), so local Windows development is unchanged.
+    Never raises; returns how many files were published.
+    """
+    published = 0
+    try:
+        from services.ebook_package import is_allowed_download
+        from services.storage.publish import publish_file, publishing_enabled
+
+        if not publishing_enabled():
+            return 0
+        for name, full in sorted((files or {}).items()):
+            if not is_allowed_download(str(name)):
+                continue
+            ext = os.path.splitext(str(name))[1].lower()
+            ctype = _EXPORT_CONTENT_TYPES.get(ext, "application/octet-stream")
+            kind = "export_pdf" if ext == ".pdf" else ("export_zip" if ext == ".zip" else "export_file")
+            if publish_file(int(pid), exports_root, full, kind=kind, content_type=ctype):
+                published += 1
+            else:
+                log.error("export %s for project %s was not published", name, pid)
+    except Exception:                                  # noqa: BLE001
+        log.exception("could not publish the finished files for project %s", pid)
+    return published
+
+
 def _run_export(data: dict, pid: int) -> dict:
     """Build the customer's PDF and ZIP. Does not approve or lock anything.
 
@@ -782,6 +823,7 @@ def _run_export(data: dict, pid: int) -> dict:
                     files_on_disk[name] = full
             if files_on_disk:
                 data["export_files"] = files_on_disk
+                _publish_export_files(pid, EXPORTS_DIR, files_on_disk)
             pdf_on_disk = os.path.join(pkg_dir, "ebook.pdf")
             if os.path.isfile(pdf_on_disk):
                 data["pdf_path"] = pdf_on_disk
@@ -978,7 +1020,14 @@ def advance_build(project_id: int) -> dict:
 
     runner = STAGE_RUNNERS.get(stage)
     try:
-        updated = runner(dict(data), project_id)
+        # v1.8.4. Every picture made by this stage is published under this
+        # book. See services.ebook_visual_pipeline.publishing_for_project.
+        from services.ebook_visual_pipeline import localize_visual_plan, publishing_for_project
+
+        work = dict(data)
+        localize_visual_plan(work, project_id=project_id)
+        with publishing_for_project(project_id):
+            updated = runner(work, project_id)
         updated["_project_id"] = project_id
         new_state = build_state(updated)
         # A runner (currently only _run_manuscript) can mark a normal, no-error
