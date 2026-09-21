@@ -251,8 +251,11 @@ class PathSafetyTests(unittest.TestCase):
     def test_traversal_and_foreign_hosts_are_rejected(self):
         from services.pin_factory_proxy import _build_upstream_url, _is_safe_target_path
 
-        for bad in ("", "../admin", "/etc/passwd", "a/../../b"):
+        for bad in ("", "../admin", "/etc/passwd", "a/../../b", "\\etc\\passwd",
+                    "..\\admin", "C:/Windows", "a//b", "./x", "%2e%2e/admin"):
             self.assertFalse(_is_safe_target_path(bad), bad)
+        for good in ("text", "image", "health", "microtools", "export"):
+            self.assertTrue(_is_safe_target_path(good), good)
         self.assertEqual(_build_upstream_url("ftp://pfp.test", "text"), "")
         self.assertEqual(_build_upstream_url(BASE, "text"), f"{BASE}/text")
         self.assertEqual(_build_upstream_url(BASE, "@evil.test/x"),

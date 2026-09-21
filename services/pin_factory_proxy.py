@@ -100,12 +100,20 @@ def _strip_identity_from_body(body: bytes, content_type: str) -> bytes:
 
 
 def _is_safe_target_path(path: str) -> bool:
-    """Reject paths that could escape the intended PFP API surface."""
-    if not path:
+    """Reject paths that could escape the intended PFP API surface.
+
+    Deliberately NOT os.path: on Windows, os.path.normpath turns "/etc/passwd"
+    into "\\etc\\passwd", which no longer starts with "/" and slipped
+    through (caught by the Windows run of the proxy tests). URL paths are
+    checked as URL paths, identically on every operating system.
+    """
+    p = str(path or "")
+    if not p:
         return False
-    # Block parent-directory traversal even if PFP is misconfigured.
-    normalized = os.path.normpath(path)
-    return not normalized.startswith("..") and not normalized.startswith("/")
+    if p.startswith("/") or "\\" in p or ":" in p or "%" in p:
+        return False
+    segments = p.split("/")
+    return all(seg not in ("", ".", "..") for seg in segments)
 
 
 def _build_upstream_url(base_url: str, target_path: str) -> str:
