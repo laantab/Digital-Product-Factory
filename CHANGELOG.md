@@ -5,6 +5,42 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.4 — 2026-09-21
+
+**The builder's pictures and finished files reach the website.**
+
+### What changed
+
+- Pictures the builder makes, and the finished PDF and ZIP, are now saved
+  to the storage both machines share, and read back from it wherever needed.
+
+### What was fixed
+
+- **The website showed none of the pictures.** Container Gardening for
+  Beginners reached the pictures step on the builder, but the website showed
+  0 of 9 pictures. The builder was meant to copy each picture to shared
+  storage, but a missing label meant it never copied a single one. Every
+  picture made while a book is being built is now copied, under that book.
+- **Pictures went missing between runs.** The builder's disk is wiped at the
+  end of every run, and the website never had the files at all. Both now
+  fetch a picture from shared storage when it is not on their own disk, so
+  the picture review screen can show them and a later run can keep using them.
+- **The finished PDF and ZIP stayed on the builder.** They are now copied to
+  shared storage as soon as they are made, so the download buttons work.
+
+### Do your steps change?
+
+No. After this update you can open the picture review screen and approve or
+swap the Chapter 3 photo, which needs a person to check it.
+
+### Release gate
+
+Eleven new checks, with a storage stand-in that has no disk behind it, so a
+file can only arrive through storage. The old code reproduces the live
+problem exactly (0 pictures published, 0 visible on the website). The full
+suite was run; the remaining failures are the same ones the current live code
+already has on this test machine. No paid calls were made.
+
 ## 1.8.3 — 2026-09-20
 
 **Continue really does pick your book back up.**
