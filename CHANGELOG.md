@@ -5,6 +5,47 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.5 — 2026-09-21
+
+**Real logins, and a safe link to Pin Factory Pro.**
+
+### What changed
+
+- The Factory now has user accounts: register, log in and log out, with an
+  admin role. Sign-in secrets are scrambled with bcrypt before they are
+  stored and are never shown or logged.
+- Projects can now record which account owns them. Nothing existing was
+  moved: every project keeps working exactly as before, and ownership is only
+  assigned when the owner runs `scripts/migrate_phase_a.py --owner-email ...`.
+- New Pin Factory Pro link at /pin-factory/text, image, export, microtools and
+  health, for logged-in users only.
+
+### What was fixed
+
+- **Pin Factory Pro could be told the wrong user.** The first version of the
+  link trusted a user id sent by the browser and fell back to "anonymous".
+  It now uses only the logged-in account, strips any user id the browser
+  tries to send, never sends a request without the private Pin Factory key,
+  never passes Pin Factory's cookies or internal address back to the browser,
+  and refuses redirects.
+- On Windows the link's path check let "/etc/passwd" through; it now checks
+  paths the same way on every computer.
+
+### Do your steps change?
+
+Not for building books. The invite code still works exactly as before. To use
+the Pin Factory link you will need to log in; create your admin account with
+`python scripts\create_admin.py you@example.com` (you type your sign-in
+secret privately). The link stays switched off until PIN_FACTORY_BASE_URL and
+PIN_FACTORY_INTERNAL_KEY are set.
+
+### Release gate
+
+37 new login and Pin Factory checks. The Fast Stability Gate passes, the
+invite-protection lock was unlocked and relocked the approved way
+(3a5c6b0 then ed6dfe4), and the full gate shows no new failures against main.
+No paid calls were made.
+
 ## 1.8.4 — 2026-09-21
 
 **The builder's pictures and finished files reach the website.**
