@@ -1410,7 +1410,7 @@ def _pdf_from_png(png: bytes, *, title: str, author: str, subtitle: str = "", se
     return buf.getvalue()
 
 
-def _publish_cover_files(data: dict, *paths) -> None:
+def _publish_cover_files(data: dict, *paths, project_id: int | None = None) -> None:
     """Make freshly rendered cover files readable by the web service.
 
     Never raises: a cover that fails to publish is a cover that does not
@@ -1422,14 +1422,18 @@ def _publish_cover_files(data: dict, *paths) -> None:
 
         if not publishing_enabled():
             return
-        project_id = int(data.get("_project_id") or 0)
-        if project_id <= 0:
+        pid = int(project_id or data.get("_project_id") or 0)
+        if pid <= 0:
             return
         for path in paths:
             name = str(path).lower()
-            content_type = ("application/pdf" if name.endswith(".pdf")
-                            else "image/png")
-            publish_file(project_id, EXPORTS_DIR, path,
+            if name.endswith(".pdf"):
+                content_type = "application/pdf"
+            elif name.endswith((".jpg", ".jpeg")):
+                content_type = "image/jpeg"
+            else:
+                content_type = "image/png"
+            publish_file(pid, EXPORTS_DIR, path,
                          kind="cover", content_type=content_type)
     except Exception:                                  # noqa: BLE001
         import logging
@@ -1601,11 +1605,69 @@ def inspect_variant(
     }
 
 
+def recover_source_photo_file(source: dict, *, project_id: int | None, data: dict) -> bool:
+    """Put the registered photograph back on THIS machine. True when it is here.
+
+    v1.8.12. The builder starts every run with an empty disk, so the machine
+    that registered the photograph is usually gone by the final check.
+    Storage first, because that is a file this project already published.
+    Then, for a Pexels photograph, the free original it was registered from --
+    accepted ONLY when its SHA-256 equals the registered digest, so a
+    photograph that has changed is refused rather than quietly substituted.
+    No paid call: Pexels originals are free. Never raises.
+    """
+    try:
+        path = str((source or {}).get("path") or "")
+        if not path:
+            return False
+        if os.path.isfile(path):
+            return True
+        expected = str(
+            (source or {}).get("local_asset_sha256") or (source or {}).get("sha256") or ""
+        ).strip().lower()
+        if not expected:
+            return False
+
+        def _keep(payload: bytes | None) -> bool:
+            if not payload or _sha_bytes(payload) != expected:
+                return False
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp = path + ".tmp"
+            with open(tmp, "wb") as fh:
+                fh.write(payload)
+            os.replace(tmp, path)
+            return True
+
+        if _keep(_cover_bytes_from_storage_or_disk(path, project_id)):
+            return True
+
+        if str((source or {}).get("source_type") or "") != "pexels":
+            return False
+        rec = source.get("pexels") if isinstance(source.get("pexels"), dict) else {}
+        photo_id = str(rec.get("photo_id") or source.get("photo_id") or "").strip()
+        if not photo_id:
+            return False
+        from services.ebook_pexels import download_pexels_original, fetch_pexels_photo
+
+        if not _keep(download_pexels_original(fetch_pexels_photo(photo_id))):
+            return False
+        # Put it where the next machine will find it without the trip out.
+        _publish_cover_files(data, path, project_id=project_id)
+        return True
+    except Exception:                                  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("could not recover the cover photograph")
+        return False
+
+
 def verify_source(source: dict | None, *, project_id: int | None, data: dict) -> dict[str, Any]:
     if not isinstance(source, dict) or not source:
         raise PhotoCoverError("No cover photograph is registered.")
     path = str(source.get("path") or "")
     pkg = str(data.get("package_id") or data.get("artifact_id") or "")
+    if path and not os.path.isfile(path):
+        recover_source_photo_file(source, project_id=project_id, data=data)
     if not path or not os.path.isfile(path):
         raise PhotoCoverError("Cover photograph is missing.")
     try:
@@ -1717,6 +1779,11 @@ def _store_source_bytes(
     stored = _sha_file(dest)
     if stored != digest:
         raise PhotoCoverError("Cover photograph did not persist with a matching SHA-256.")
+    # v1.8.12. The cover variants were always published; the photograph they
+    # are made from was not, so a later machine could rebuild nothing and the
+    # book stopped at the final check. Publishing it costs nothing and never
+    # raises.
+    _publish_cover_files(data, dest, project_id=project_id)
     return {
         "source_type": source_type,
         "filename": name,
