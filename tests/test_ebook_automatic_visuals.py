@@ -186,7 +186,7 @@ class AutomaticEbookVisualTests(unittest.TestCase):
         return aid
 
     def _budget(self, cap: float = 0.16) -> dict:
-        return {
+        data = {
             "fields": {
                 "include_images": "Yes",
                 "visuals_authorized": "true",
@@ -196,6 +196,12 @@ class AutomaticEbookVisualTests(unittest.TestCase):
             "visual_budget_cap_usd": cap,
             "visual_ai_spend_usd": 0.0,
         }
+        # v1.8.7: paid picture AI also needs an explicit owner grant.
+        if cap > 0:
+            from services.ebook_factory_pipeline import grant_paid_visual_ai
+
+            grant_paid_visual_ai(data, max_usd=cap, granted_by="owner@example.com")
+        return data
 
     def test_01_automatic_mode_independent_briefs_per_chapter(self):
         plan = plan_content_aware_visuals(PHOTO_MD, title="Backyard Birds", include_photographs=True)

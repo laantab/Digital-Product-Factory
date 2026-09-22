@@ -5,6 +5,47 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.7 — 2026-09-21
+
+**Free Images and Covers by Default.**
+
+### What changed
+
+- A picture budget saved when a book was created no longer authorizes paid
+  AI pictures or AI covers on its own.
+- AI pictures and AI covers now need a separate authorization that names
+  who gave it and sets its own maximum amount. Without it, the amount
+  available for AI pictures is $0.
+- Free options are always tried first: Pexels photos, then a photo the book
+  has already approved for one of its chapters. AI is reached only if none
+  of those works and a separate authorization exists.
+- Prior spending history is unchanged. Nothing already recorded is reset or
+  removed; an authorization only notes where picture spending stood when it
+  was given.
+
+### What was fixed
+
+- A book created with "pictures authorized" could spend on its own at the
+  cover step if four Pexels candidates did not fit the cover layout.
+  Container Gardening for Beginners was set up that way and could have spent
+  up to $0.48 without anyone being asked.
+
+### Do your steps change?
+
+No. Pictures come from the Factory's own charts and Pexels photos, and the
+cover from Pexels or your approved chapter photos, at no cost. There is
+nothing new to click. There is no screen yet for giving a paid-picture
+authorization, so paid AI pictures stay off.
+
+### Release gate
+
+12 new checks, including one built from Container Gardening for Beginners'
+exact settings: no paid picture is allowed, no charge is recorded, the cover
+uses an approved chapter photo before any AI, and an authorization is named,
+capped, dated, can be withdrawn, and never resets spending history. Four
+older checks were updated to give an explicit authorization where they test
+paid pictures. No paid calls.
+
 ## 1.8.6 — 2026-09-21
 
 **A sign-in screen.**
