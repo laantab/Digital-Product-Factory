@@ -147,6 +147,112 @@ def set_visual_progress(data: dict | None, phase: str) -> dict:
     return payload
 
 
+# ---------------------------------------------------------------------------
+# v1.8.7: pictures and covers are free by default.
+#
+# Before 1.8.7, paid picture and cover generation was switched on by two
+# fields saved when a book was CREATED (visuals_authorized and
+# visual_budget_cap_usd). A book created with those set could then spend on
+# its own, weeks later, the moment a free option failed -- for example the
+# cover step falling back to an AI image when four Pexels candidates did not
+# fit the layout. No one was asked at that moment.
+#
+# The owner's rule is now: free first, always; paid AI only after the free
+# path is exhausted AND only with a separate, explicit, dated grant with its
+# own ceiling. Creation-time fields no longer enable spending on their own.
+# Every paid picture/cover call already passes through visual_ai_authorized()
+# and charge_visual_ai_call(); both now require the grant below, and the
+# budget available to AI is capped by what the grant has left.
+# ---------------------------------------------------------------------------
+PAID_VISUAL_GRANT_KEY = "paid_visual_ai_grant"
+
+
+def paid_visual_ai_grant(data: dict | None) -> dict | None:
+    """The active explicit grant for paid picture/cover AI, or None."""
+    payload = data if isinstance(data, dict) else {}
+    grant = payload.get(PAID_VISUAL_GRANT_KEY)
+    if not isinstance(grant, dict) or grant.get("revoked"):
+        return None
+    try:
+        max_usd = round(float(grant.get("max_usd") or 0), 4)
+    except (TypeError, ValueError):
+        return None
+    if max_usd <= 0 or not str(grant.get("granted_by") or "").strip():
+        return None
+    return grant
+
+
+def paid_visual_grant_remaining_usd(data: dict | None) -> float:
+    """What the explicit grant still allows. $0 when there is no grant."""
+    payload = data if isinstance(data, dict) else {}
+    grant = paid_visual_ai_grant(payload)
+    if grant is None:
+        return 0.0
+    try:
+        spent_since = round(
+            float(payload.get("visual_ai_spend_usd") or 0)
+            - float(grant.get("spend_at_grant_usd") or 0),
+            4,
+        )
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, round(float(grant["max_usd"]) - max(0.0, spent_since), 4))
+
+
+def grant_paid_visual_ai(
+    data: dict,
+    *,
+    max_usd: float,
+    granted_by: str,
+    reason: str = "",
+) -> dict:
+    """Record an explicit, capped owner grant for paid picture/cover AI.
+
+    Never called automatically. Cost accounting is not reset: the grant only
+    records where visual spending stood when it was given.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("Project data is required.")
+    who = str(granted_by or "").strip()
+    if not who:
+        raise ValueError("A paid-picture grant must name who authorized it.")
+    try:
+        amount = round(float(max_usd), 4)
+    except (TypeError, ValueError):
+        raise ValueError("Maximum amount must be a number.") from None
+    if amount <= 0:
+        raise ValueError("Maximum amount must be positive.")
+    ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+    ledger = ws.get("paid_call_ledger") if isinstance(ws.get("paid_call_ledger"), dict) else {}
+    if ledger:
+        remaining = round(float(ledger.get("remaining_usd") or 0), 4)
+        if amount > remaining + 1e-9:
+            raise ValueError("Maximum amount exceeds the project's remaining budget.")
+    from datetime import datetime, timezone
+
+    data[PAID_VISUAL_GRANT_KEY] = {
+        "max_usd": amount,
+        "granted_by": who,
+        "granted_at": datetime.now(timezone.utc).isoformat(),
+        "reason": str(reason or ""),
+        "spend_at_grant_usd": round(float(data.get("visual_ai_spend_usd") or 0), 4),
+    }
+    return data
+
+
+def revoke_paid_visual_ai(data: dict, *, revoked_by: str) -> dict:
+    """Withdraw the grant. Spending history is kept."""
+    if isinstance(data, dict) and isinstance(data.get(PAID_VISUAL_GRANT_KEY), dict):
+        from datetime import datetime, timezone
+
+        grant = dict(data[PAID_VISUAL_GRANT_KEY])
+        grant["revoked"] = True
+        grant["revoked_by"] = str(revoked_by or "")
+        grant["revoked_at"] = datetime.now(timezone.utc).isoformat()
+        data[PAID_VISUAL_GRANT_KEY] = grant
+    return data
+
+
 def remaining_visual_budget_usd(data: dict | None = None, fields: dict | None = None) -> float:
     payload = data if isinstance(data, dict) else {}
     fields = fields if isinstance(fields, dict) else (
@@ -164,12 +270,15 @@ def remaining_visual_budget_usd(data: dict | None = None, fields: dict | None = 
     if authorized in {"1", "true", "yes", "on"} or cap > 0:
         cap_remaining = max(0.0, round(cap - spent, 4))
     if ledger_remaining is not None and cap_remaining is not None:
-        return min(ledger_remaining, cap_remaining)
-    if cap_remaining is not None:
-        return cap_remaining
-    if ledger_remaining is not None:
-        return ledger_remaining
-    return 0.0
+        remaining = min(ledger_remaining, cap_remaining)
+    elif cap_remaining is not None:
+        remaining = cap_remaining
+    elif ledger_remaining is not None:
+        remaining = ledger_remaining
+    else:
+        remaining = 0.0
+    # v1.8.7: nothing is available to paid AI without an explicit grant.
+    return round(min(remaining, paid_visual_grant_remaining_usd(payload)), 4)
 
 
 def visual_ai_authorized(data: dict | None = None, fields: dict | None = None) -> bool:
@@ -182,6 +291,9 @@ def visual_ai_authorized(data: dict | None = None, fields: dict | None = None) -
     authorized = str(fields.get("visuals_authorized") or payload.get("visuals_authorized") or "").strip().lower()
     cap = float(fields.get("visual_budget_cap_usd") or payload.get("visual_budget_cap_usd") or 0)
     if authorized not in {"1", "true", "yes", "on"} and cap <= 0:
+        return False
+    # v1.8.7: creation-time fields are not enough; an explicit grant is.
+    if paid_visual_ai_grant(payload) is None:
         return False
     return remaining_visual_budget_usd(payload, fields) + 1e-9 >= AI_VISUAL_UNIT_USD
 

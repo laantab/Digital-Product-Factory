@@ -340,6 +340,24 @@ def _ai_cover_prompt(*, title: str, subtitle: str, fields: dict, style_spec: dic
     return " ".join(prompt.split())
 
 
+def has_approved_interior_photo(data: dict | None) -> bool:
+    """True when the book has a chapter photo the visual validator accepted.
+
+    Same test the build uses to promote a chapter photo to the cover.
+    """
+    plan = (data or {}).get("visual_plan") if isinstance(data, dict) else None
+    if not isinstance(plan, dict):
+        return False
+    for chapter in plan.get("chapters") or []:
+        for aid in (chapter or {}).get("aids") or []:
+            if str(aid.get("type") or "").lower() not in {"photo", "stock photo"}:
+                continue
+            path = str(aid.get("asset_path") or "")
+            if path and os.path.isfile(path) and str(aid.get("match_status") or "") == "pass":
+                return True
+    return False
+
+
 def _generate_ai_cover_candidate(
     payload: dict,
     *,
@@ -534,6 +552,15 @@ def complete_photo_cover(
                 # same project visual budget/authorization as interior
                 # visuals, and screened by the same editorial scorer before
                 # it's ever treated as a real candidate.
+                # v1.8.7: free first. If the book already has an approved
+                # chapter photograph, stop here without spending; the build
+                # promotes that photo to the cover (ebook_build_orchestrator.
+                # _cover_from_approved_interior_photo). AI is only reached
+                # when no free option is left.
+                if has_approved_interior_photo(payload):
+                    raise PhotoCoverError(
+                        last_layout_error or "No stock cover fitted; using an approved chapter photo."
+                    )
                 ai_layout = _generate_ai_cover_candidate(
                     payload, title=title, subtitle=subtitle, fields=fields, package_id=package_id,
                 )

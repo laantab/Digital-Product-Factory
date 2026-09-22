@@ -65,6 +65,14 @@ def _fake_png_bytes() -> bytes:
     return buf.getvalue()
 
 
+def _granted(data: dict | None = None, max_usd: float = 10.0) -> dict:
+    """v1.8.7: paid picture AI needs an explicit owner grant, not just fields."""
+    from services.ebook_factory_pipeline import grant_paid_visual_ai
+
+    return grant_paid_visual_ai(data if data is not None else {}, max_usd=max_usd,
+                                granted_by="owner@example.com", reason="unit test")
+
+
 class TestHybridVisualProduction(unittest.TestCase):
     def test_01_budget_not_authorized_blocks_ai_entirely(self):
         data: dict = {}
@@ -80,7 +88,7 @@ class TestHybridVisualProduction(unittest.TestCase):
         self.assertTrue(result.get("budget_message"))
 
     def test_02_authorized_budget_allows_ai_and_logs_cost(self):
-        data: dict = {}
+        data: dict = _granted()
         fields = dict(_AUTHORIZED_FIELDS)
         self.assertTrue(visual_ai_authorized(data, fields))
         aid = {"type": "stock photo", "title": "Deadlift", "chapter": "The Deadlift", "chapter_index": 0, "visual_id": "v0_0"}
@@ -101,7 +109,7 @@ class TestHybridVisualProduction(unittest.TestCase):
         self.assertEqual(result.get("source"), "ai_generated")
 
     def test_03_attempts_are_bounded_not_unbounded(self):
-        data: dict = {}
+        data: dict = _granted()
         fields = dict(_AUTHORIZED_FIELDS)
         aid = {"type": "stock photo", "title": "Deadlift", "chapter": "The Deadlift", "chapter_index": 0, "visual_id": "v0_0"}
         calls = {"n": 0}
@@ -120,7 +128,7 @@ class TestHybridVisualProduction(unittest.TestCase):
         self.assertLessEqual(calls["n"], AI_VISUAL_MAX_ATTEMPTS)
 
     def test_04_rejected_attempts_still_count_toward_spend(self):
-        data: dict = {}
+        data: dict = _granted()
         fields = dict(_AUTHORIZED_FIELDS)
         before = data.get("visual_ai_spend_usd", 0)
         ok = charge_visual_ai_call(data, fields)
@@ -128,7 +136,7 @@ class TestHybridVisualProduction(unittest.TestCase):
         self.assertGreater(data["visual_ai_spend_usd"], before)
 
     def test_05_charge_never_exceeds_configured_cap(self):
-        data: dict = {"visual_ai_spend_usd": 0}
+        data: dict = _granted({"visual_ai_spend_usd": 0})
         fields = {"topic": _KB_TOPIC, "visuals_authorized": "yes", "visual_budget_cap_usd": AI_VISUAL_UNIT_USD}
         first = charge_visual_ai_call(data, fields)
         second = charge_visual_ai_call(data, fields)
