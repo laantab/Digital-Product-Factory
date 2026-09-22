@@ -163,6 +163,7 @@
     "tests/test_auth_phase_a.py",
     "tests/test_pin_factory_proxy.py",
     "tests/test_signin_page.py",
-    "tests/test_free_by_default.py"
+    "tests/test_free_by_default.py",
+    "tests/test_website_accepts_stored_photos.py"
   ]
 }

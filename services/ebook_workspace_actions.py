@@ -61,6 +61,24 @@ def visuals(data: dict, payload: dict) -> tuple[dict, str]:
 
     action = str(payload.get("action") or "prepare").strip().lower()
 
+    # v1.8.8: accepting or approving a photograph runs on the WEBSITE (a
+    # light action, see VISUAL_LIGHT_ACTIONS), whose disk never held the
+    # builder's pictures. perform() already localises the plan for work sent
+    # to the builder; the light path went straight here and looked for the
+    # builder's file path, so every accept failed with "Photograph file is
+    # missing" even though the review screen, which does read from storage,
+    # showed the photo. Fetch the book's stored pictures first. Idempotent,
+    # free (storage read only), and a picture storage cannot supply is left
+    # exactly as it was.
+    if action in VISUAL_LIGHT_ACTIONS:
+        from services.ebook_visual_pipeline import localize_visual_plan
+
+        try:
+            pid = int(data.get("_project_id") or 0)
+        except (TypeError, ValueError):
+            pid = 0
+        localize_visual_plan(data, project_id=pid)
+
     if action == "approve":
         return approve_visuals_local(data), "Visuals approved."
 

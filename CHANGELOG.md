@@ -5,6 +5,37 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.8 — 2026-09-22
+
+**Approving a photo works again.**
+
+### What changed
+
+- Nothing you click is different.
+
+### What was fixed
+
+- Pressing "accept" on a photo, or approving the pictures, said
+  "Photograph file is missing" even though the photo was showing on the
+  review screen. The review screen fetched the photo from the Factory's
+  shared storage, but accept and approve looked only on the website's own
+  disk, which never holds the builder's pictures. They now fetch the book's
+  stored pictures first, the same way the builder and the review screen do.
+  This is what stopped Container Gardening for Beginners at the photo review.
+
+### Do your steps change?
+
+No. Accepting and approving photos now simply work. They are free: they only
+read pictures the Factory already stored.
+
+### Release gate
+
+6 new checks that recreate the live problem: pictures made on the builder,
+the builder's disk gone, and the website accepting and approving them. The
+same checks fail on the previous version with the exact live error message.
+A photo that storage genuinely does not have still fails honestly, and
+nothing is charged. No paid calls.
+
 ## 1.8.7 — 2026-09-21
 
 **Free Images and Covers by Default.**
