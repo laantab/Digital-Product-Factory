@@ -212,11 +212,73 @@ def _add_chapter_bookmarks(pdf_bytes: bytes, chapter_titles: list[str]) -> bytes
         return pdf_bytes
 
 
+def _bundle_project_id(data: dict) -> int:
+    """The project this bundle belongs to, or 0 when it is not known."""
+    try:
+        return int((data or {}).get("_project_id") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _approved_cover_pdf_bytes(data: dict, cover: dict) -> bytes:
+    """The approved cover PDF, from this machine's disk or from storage.
+
+    v1.8.11. The builder starts every run with an empty disk, so the machine
+    that rendered the approved cover is usually gone by the time preflight
+    re-renders the bundle. The cover files were published to storage when
+    they were made, exactly like the interior pictures, so fetch them back
+    instead of refusing to export a book whose cover the customer already
+    approved. A cover storage cannot supply is still reported as missing by
+    the caller -- this recovers files, it never invents one.
+    """
+    path = str((cover or {}).get("local_cover_pdf") or "")
+    if not path:
+        return b""
+    try:
+        if os.path.isfile(path):
+            with open(path, "rb") as fh:
+                return fh.read()
+    except OSError:
+        pass
+    pid = _bundle_project_id(data)
+    if pid <= 0:
+        return b""
+    try:
+        from services.ebook_photo_cover import cover_bytes_from_storage_or_disk
+
+        payload = cover_bytes_from_storage_or_disk(path, pid) or b""
+    except Exception:                                  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("could not fetch the stored cover PDF")
+        return b""
+    if not payload:
+        return b""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as fh:
+            fh.write(payload)
+    except OSError:
+        pass
+    return payload
+
+
 def render_designed_bundle(data: dict, *, output_dir: str | Path | None = None) -> dict[str, Any]:
     """Render preview HTML + PDF + ZIP for a quality-PASS manuscript and bound design."""
     from services.ebook_project_workspace import manuscript_digest
 
     require_quality_pass(data)
+    # v1.8.11. Same reason as the cover above: on the builder the pictures
+    # live in storage, not on this run's disk. Point the plan at local copies
+    # before anything renders. Never raises; a no-op when the files are here.
+    try:
+        from services.ebook_visual_pipeline import localize_visual_plan
+
+        localize_visual_plan(data, project_id=_bundle_project_id(data))
+    except Exception:                                  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("could not localise pictures for export")
     md = str(data.get("content") or data.get("ebook") or "")
     before = manuscript_text_fingerprint(md)
     design = EbookDesign.from_dict(data.get("ebook_design") if isinstance(data.get("ebook_design"), dict) else {})
@@ -240,11 +302,7 @@ def render_designed_bundle(data: dict, *, output_dir: str | Path | None = None) 
         include_title_page=False,
     )
     cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
-    cover_pdf_path = str(cover.get("local_cover_pdf") or "")
-    cover_pdf = b""
-    if cover_pdf_path and os.path.isfile(cover_pdf_path):
-        with open(cover_pdf_path, "rb") as fh:
-            cover_pdf = fh.read()
+    cover_pdf = _approved_cover_pdf_bytes(data, cover)
     if not cover_pdf:
         if cover.get("workflow") == "photo_backed":
             raise ValueError("Photo-backed cover PDF is missing. Export cannot reconstruct the cover.")

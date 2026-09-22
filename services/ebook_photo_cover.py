@@ -2502,6 +2502,12 @@ def _cover_bytes_from_storage_or_disk(path: str, project_id: int | None) -> byte
         return None
 
 
+#: v1.8.11. Public name for the same recovery the cover preview already uses:
+#: the export path needs it too, and reaching for a private name across
+#: modules is how a helper quietly grows two behaviours.
+cover_bytes_from_storage_or_disk = _cover_bytes_from_storage_or_disk
+
+
 def verified_variant_asset(
     data: dict,
     *,
