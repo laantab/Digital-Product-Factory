@@ -5,6 +5,40 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.11 — 2026-09-22
+
+**The builder can finish a book whose files it did not make itself.**
+
+### What changed
+
+- When the final quality check re-makes the book, it now fetches the
+  approved cover and the interior pictures from saved storage if they are
+  not on the machine doing the work.
+
+### What was fixed
+
+- A book stopped at 80% with "We couldn't complete this step automatically"
+  because the approved cover file had been made on a different machine,
+  which had since been recycled. The cover was safely saved all along; the
+  final check simply never went and got it.
+
+### Do your steps change?
+
+- No. Nothing about the way you use the Factory changes. A book that had
+  stopped at the final check can simply be continued.
+
+### Cost
+
+- No paid calls. Fetching a file that was already saved costs nothing, and
+  no writing, pictures or cover are made again.
+
+### Release gate
+
+- Focused tests for the repair plus the full stability gate, with no new
+  failures against main.
+
+---
+
 ## 1.8.10 — 2026-09-22
 
 **The final quality check uses the same heading rule as the release check.**
