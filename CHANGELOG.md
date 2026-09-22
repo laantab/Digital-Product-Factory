@@ -5,6 +5,42 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.12 — 2026-09-22
+
+**Your cover photograph is saved where any machine can find it.**
+
+### What changed
+
+- The photograph a cover is made from is now saved to storage the moment it
+  is registered, the same way the finished cover already was.
+- When the machine doing the work does not have that photograph, it fetches
+  it back: from storage first, and for a free Pexels photograph from the
+  original it was registered from. It is accepted only if it is the very
+  same file, so a photograph that has changed is refused rather than quietly
+  swapped in.
+
+### What was fixed
+
+- A book reached the final check and stopped with "Cover photograph is
+  missing", because the photograph only ever existed on a machine that had
+  since been recycled.
+
+### Do your steps change?
+
+- No. Nothing about the way you use the Factory changes.
+
+### Cost
+
+- No paid calls. Pexels photographs are free, and fetching a saved file
+  costs nothing.
+
+### Release gate
+
+- Focused tests for the repair plus the full stability gate, with no new
+  failures against main.
+
+---
+
 ## 1.8.11 — 2026-09-22
 
 **The builder can finish a book whose files it did not make itself.**
