@@ -5,6 +5,37 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.9 — 2026-09-22
+
+**Picture plans pass the Factory's own quality check.**
+
+### What changed
+
+- When one kind of chapter chart would fill more than 55% of a book's
+  pictures, the Factory now swaps the weakest extra ones for free Pexels
+  photographs while planning, the same way it already adds photographs to
+  reach the minimum. Photos you already approved, and charts with real
+  substance, are never touched.
+
+### What was fixed
+
+- Container Gardening for Beginners could never leave the pictures step:
+  "5 of 9 visuals are the same kind (workflow). That repetition reads as a
+  template." The planner met the photograph minimum but let one chart style
+  fill 5 of 9 chapters, and every rebuild made the same plan. The quality
+  rule is unchanged; the planner now makes a plan that passes it.
+
+### Do your steps change?
+
+No. A book may get one more free Pexels photo to review.
+
+### Release gate
+
+7 new checks, including this book's exact mix (3 photos, 5 workflows, 1
+checklist): it now comes out at 4 photos, 4 workflows and 1 checklist,
+approved photos unchanged. A balanced book is left exactly as it was, and
+nothing changes when photos cannot be fetched. No paid calls.
+
 ## 1.8.8 — 2026-09-22
 
 **Approving a photo works again.**
