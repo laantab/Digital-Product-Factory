@@ -168,6 +168,7 @@
     "tests/test_visual_plan_passes_its_own_editor.py",
     "tests/test_rendered_headings_follow_release_rule.py",
     "tests/test_builder_recovers_cover_from_storage.py",
-    "tests/test_cover_photo_survives_a_new_machine.py"
+    "tests/test_cover_photo_survives_a_new_machine.py",
+    "tests/test_cover_variants_follow_the_work.py"
   ]
 }

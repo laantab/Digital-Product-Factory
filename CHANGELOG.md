@@ -5,6 +5,40 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.13 — 2026-09-22
+
+**Your approved cover follows the work to whatever machine is doing it.**
+
+### What changed
+
+- The saved images of an approved cover are now fetched back when the
+  machine doing the work does not have them, the same way the photograph
+  itself is.
+- Two different problems no longer share one message. "Please choose another
+  photo" is now said only when the cover layouts really did fail their
+  quality checks. When the images simply could not be fetched, the Factory
+  says so and tells you nothing is wrong with your photograph.
+
+### What was fixed
+
+- An approved cover was refused at the final check with advice to replace a
+  photograph that was perfectly good.
+
+### Do your steps change?
+
+- No. Nothing about the way you use the Factory changes.
+
+### Cost
+
+- No paid calls. Fetching saved images costs nothing.
+
+### Release gate
+
+- Focused tests for the repair plus the full stability gate, with no new
+  failures against main.
+
+---
+
 ## 1.8.12 — 2026-09-22
 
 **Your cover photograph is saved where any machine can find it.**
