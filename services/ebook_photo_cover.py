@@ -104,6 +104,13 @@ FINDING_MESSAGES = {
 NO_SAFE_COVER_MESSAGE = (
     "This photo does not leave enough room for readable cover text. Please choose another photo."
 )
+#: v1.8.13. The approved cover exists and passed its checks; this machine
+#: could not fetch its saved image files. Never tells the customer to choose
+#: another photograph -- nothing is wrong with the one they chose.
+COVER_FILES_UNAVAILABLE_MESSAGE = (
+    "Your approved cover images could not be fetched from storage. "
+    "Nothing is wrong with your photograph; please try again."
+)
 GUIDED_STEP_CHOOSE_PHOTO = "choose_photo"
 GUIDED_STEP_CHOOSE_COVER = "choose_cover"
 GUIDED_STEP_REVIEW = "review"
@@ -2142,6 +2149,7 @@ def select_layout(data: dict, layout_id: str, *, project_id: int | None = None) 
     if cover.get("workflow") != "photo_backed":
         raise PhotoCoverError("Register a photograph before selecting a layout.")
     verify_source(cover.get("source"), project_id=project_id, data=data)
+    recover_variant_files(cover, project_id=project_id)
     variants = cover.get("variants") if isinstance(cover.get("variants"), dict) else {}
     chosen = variants.get(layout_id)
     if not isinstance(chosen, dict):
@@ -2151,13 +2159,22 @@ def select_layout(data: dict, layout_id: str, *, project_id: int | None = None) 
         raise PhotoCoverError("That cover is not available. Please choose another.")
     if not chosen.get("png_path") or not os.path.isfile(str(chosen.get("png_path"))):
         raise PhotoCoverError("That cover is not available. Please choose another.")
-    passing = [
-        lid
-        for lid in LAYOUT_IDS
+    quality_passed = [
+        lid for lid in LAYOUT_IDS
         if ((variants.get(lid) or {}).get("quality") or {}).get("pass")
-        and os.path.isfile(str((variants.get(lid) or {}).get("png_path") or ""))
+    ]
+    passing = [
+        lid for lid in quality_passed
+        if os.path.isfile(str((variants.get(lid) or {}).get("png_path") or ""))
     ]
     if not passing:
+        # v1.8.13. Two different problems used to share one message. A cover
+        # whose layouts all failed quality really does need another photo;
+        # a cover whose files this machine simply does not have does not,
+        # and telling the customer to choose another photograph would be
+        # wrong.
+        if quality_passed:
+            raise PhotoCoverError(COVER_FILES_UNAVAILABLE_MESSAGE)
         raise PhotoCoverError(NO_SAFE_COVER_MESSAGE)
     cover["selected_layout"] = layout_id
     cover["cover_digest"] = str(chosen.get("digest") or "")
@@ -2183,6 +2200,47 @@ def clear_layout_selection(data: dict) -> dict:
     return data
 
 
+def recover_variant_files(cover: dict, *, project_id: int | None) -> int:
+    """Bring this cover's rendered variant files back to THIS machine.
+
+    v1.8.13. The variants were published to storage when they were made, but
+    approval and preflight ask whether the PNG is on the local disk -- which
+    on the builder it never is. Fetching them back is free and changes
+    nothing about the cover itself. A file whose stored digest does not match
+    is not written. Never raises; returns how many files were recovered.
+    """
+    recovered = 0
+    try:
+        variants = cover.get("variants") if isinstance(cover.get("variants"), dict) else {}
+        for layout_id in LAYOUT_IDS:
+            row = variants.get(layout_id) if isinstance(variants.get(layout_id), dict) else None
+            if not row:
+                continue
+            for field, digest_field in (
+                ("png_path", "png_digest"), ("pdf_path", "digest"), ("thumb_path", ""),
+            ):
+                path = str(row.get(field) or "")
+                if not path or os.path.isfile(path):
+                    continue
+                payload = _cover_bytes_from_storage_or_disk(path, project_id)
+                if not payload:
+                    continue
+                expected = str(row.get(digest_field) or "").strip().lower() if digest_field else ""
+                if expected and _sha_bytes(payload) != expected:
+                    continue
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                tmp = path + ".tmp"
+                with open(tmp, "wb") as fh:
+                    fh.write(payload)
+                os.replace(tmp, path)
+                recovered += 1
+    except Exception:                                  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("could not recover the cover variant files")
+    return recovered
+
+
 def assert_photo_cover_approvable(data: dict, *, project_id: int | None = None) -> None:
     cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else None
     if not isinstance(cover, dict) or cover.get("workflow") != "photo_backed":
@@ -2190,6 +2248,7 @@ def assert_photo_cover_approvable(data: dict, *, project_id: int | None = None) 
     if not cover.get("selected_layout"):
         raise PhotoCoverError("Select a cover before approving.")
     verify_source(cover.get("source"), project_id=project_id, data=data)
+    recover_variant_files(cover, project_id=project_id)
     ident = _approved_identity(data)
     if (cover.get("title"), cover.get("subtitle"), cover.get("author")) != (
         ident["title"],
@@ -2200,13 +2259,20 @@ def assert_photo_cover_approvable(data: dict, *, project_id: int | None = None) 
     if str(cover.get("series") or "") != str(ident.get("series") or ""):
         raise PhotoCoverError("Cover text does not match the approved series text.")
     variants = cover.get("variants") if isinstance(cover.get("variants"), dict) else {}
-    passing = [
-        lid
-        for lid in LAYOUT_IDS
+    quality_passed = [
+        lid for lid in LAYOUT_IDS
         if ((variants.get(lid) or {}).get("quality") or {}).get("pass")
-        and os.path.isfile(str((variants.get(lid) or {}).get("png_path") or ""))
+    ]
+    passing = [
+        lid for lid in quality_passed
+        if os.path.isfile(str((variants.get(lid) or {}).get("png_path") or ""))
     ]
     if not passing:
+        # v1.8.13. See select_layout: a cover whose layouts failed quality
+        # needs another photograph; a cover whose saved images this machine
+        # could not fetch does not, and must not be reported as one.
+        if quality_passed:
+            raise PhotoCoverError(COVER_FILES_UNAVAILABLE_MESSAGE)
         raise PhotoCoverError(NO_SAFE_COVER_MESSAGE)
     chosen = variants.get(str(cover.get("selected_layout")))
     if not chosen or str(chosen.get("digest") or "") != str(cover.get("cover_digest") or ""):
@@ -2286,6 +2352,10 @@ def photo_cover_preflight_failures(data: dict, *, project_id: int | None = None)
             code = "cover_digest_mismatch"
         elif "label" in msg.lower():
             code = "unapproved_cover_label"
+        elif "storage" in msg.lower():
+            # v1.8.13. A machine that cannot fetch the saved cover images is
+            # not a photograph the customer must replace.
+            code = "cover_files_unavailable"
         elif "title" in msg.lower() or "identity" in msg.lower() or "readable" in msg.lower():
             code = "unreadable_cover_text"
         failures.append((code, msg))
