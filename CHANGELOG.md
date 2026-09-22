@@ -5,6 +5,42 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.10 — 2026-09-22
+
+**The final quality check uses the same heading rule as the release check.**
+
+### What changed
+
+- A section heading that appears once in several chapters, with different
+  text under each one, is now accepted by the final quality check (for
+  example a "Try this" or "Planning example" section in every chapter). The
+  release check already accepted this; the two checks now agree.
+
+### What was fixed
+
+- Container Gardening for Beginners passed every step through the preview
+  and was then refused at the final quality check: "duplicate heading:
+  5. Water deeply". That step appears in two different procedures, and the
+  book also has its own planning example in eight chapters. Each of those
+  sections has its own text (at most a quarter of the words in common).
+
+### Still refused
+
+- The same chapter title twice; any heading repeated inside one chapter;
+  repeated filler labels such as "Chapter Takeaway"; and repeated sections
+  whose text is nearly copied (80% or more of the words shared).
+
+### Do your steps change?
+
+No.
+
+### Release gate
+
+8 new checks, including the book's real layout, where each heading sits in
+its own box. They confirm distinct sections pass and copied ones still fail.
+The existing recurring-heading and customer-facing checks all still pass.
+No paid calls.
+
 ## 1.8.9 — 2026-09-22
 
 **Picture plans pass the Factory's own quality check.**
