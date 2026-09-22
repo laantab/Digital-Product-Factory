@@ -1209,9 +1209,7 @@ def _commission_media_mix(
         return plan_chapters
 
     want = media_requirements(len(chapters), photography_supported=True)
-    shortfall = want["photographs"] - len(photographs)
-    if shortfall <= 0:
-        return plan_chapters
+    shortfall = max(0, want["photographs"] - len(photographs))
 
     # Rank the candidates a photograph could replace: only text boxes, weakest
     # first. A chapter carrying a real table or sequence keeps what it has.
@@ -1221,17 +1219,53 @@ def _commission_media_mix(
         if len(aids) != 1:
             continue
         aid = aids[0]
-        if str(aid.get("type") or "").lower() not in TEXT_BOX_TYPES:
+        kind = str(aid.get("type") or "").lower()
+        if kind not in TEXT_BOX_TYPES:
             continue
-        candidates.append((_aid_content_weight(aid), position))
+        candidates.append((_aid_content_weight(aid), position, kind))
     candidates.sort()
 
     # Spread the chosen chapters through the book instead of taking the first
     # few: a run of photographs at the front reads as badly as a run of boxes.
-    chosen = sorted(position for _weight, position in candidates[: shortfall * 2])
-    if len(chosen) > shortfall:
-        step = len(chosen) / float(shortfall)
-        chosen = [chosen[int(i * step)] for i in range(shortfall)]
+    chosen: list[int] = []
+    if shortfall:
+        chosen = sorted(position for _w, position, _k in candidates[: shortfall * 2])
+        if len(chosen) > shortfall:
+            step = len(chosen) / float(shortfall)
+            chosen = [chosen[int(i * step)] for i in range(shortfall)]
+
+    # v1.8.9: the plan must also pass the editor's variety rule. The photo
+    # shortfall above can be met while one kind of text box still fills more
+    # than MAX_SINGLE_TYPE_SHARE of the book -- Container Gardening for
+    # Beginners was planned with three photographs and five workflows out of
+    # nine, and review_visual_set then rejected it ("5 of 9 visuals are the
+    # same kind (workflow)"). Planning is deterministic, so every rebuild
+    # produced the same rejected plan and the book could never leave the
+    # pictures step. Relieve the over-represented kind the same way, with the
+    # same free Pexels commission, weakest instances first. The rule itself is
+    # unchanged; the planner now produces a plan its own editor can accept.
+    from services.ebook_visual_editorial import MAX_SINGLE_TYPE_SHARE
+
+    total = sum(len(_aids(c)) for c in chapters)
+    if total >= 4:
+        counts: dict[str, int] = {}
+        for position, chapter in enumerate(chapters):
+            if position in chosen:
+                continue
+            for aid in _aids(chapter):
+                kind = str(aid.get("type") or "").lower()
+                counts[kind] = counts.get(kind, 0) + 1
+        allowed = int(MAX_SINGLE_TYPE_SHARE * total + 1e-9)
+        for kind, count in sorted(counts.items()):
+            excess = count - allowed
+            if excess <= 0 or kind not in TEXT_BOX_TYPES:
+                continue
+            pool = [position for _w, position, k in candidates
+                    if k == kind and position not in chosen]
+            chosen.extend(pool[:excess])
+    chosen = sorted(set(chosen))
+    if not chosen:
+        return plan_chapters
 
     for position in chosen:
         chapter = chapters[position]
