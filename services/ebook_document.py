@@ -489,6 +489,18 @@ def _repeated_heading_bodies_alike(text: str, heading: str) -> bool:
     return False
 
 
+#: Labels that are filler whenever they repeat, whatever sits under them.
+#: Shared with the rendered-book check in ebook_customer_facing (v1.8.10).
+BAD_DUPLICATE_HEADINGS = frozenset({
+    "what this book helps you do",
+    "chapter takeaway",
+    "key takeaway",
+    "apply what you learned",
+    "common mistakes",
+    "a step-by-step method",
+})
+
+
 def find_customer_content_defects(md_text: str) -> list[str]:
     """Return defect codes for leaked / placeholder / generic content."""
     defects: list[str] = []
@@ -500,14 +512,7 @@ def find_customer_content_defects(md_text: str) -> list[str]:
         if p.search(text):
             defects.append(f"blocked_customer_phrase:{p.pattern}")
     # Duplicate headings — fail on known bad labels (any repeat) or 3+ repeats
-    _BAD_DUP_HEADINGS = {
-        "what this book helps you do",
-        "chapter takeaway",
-        "key takeaway",
-        "apply what you learned",
-        "common mistakes",
-        "a step-by-step method",
-    }
+    _BAD_DUP_HEADINGS = BAD_DUPLICATE_HEADINGS
     headings = [m.group(1).strip().lower() for m in _H2_RE.finditer(text)]
     headings += [m.group(1).strip().lower() for m in _H3_RE.finditer(text)]
     seen: dict[str, int] = {}

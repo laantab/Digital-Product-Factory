@@ -278,6 +278,82 @@ CONCATENATED_HEADER_SAMPLES = (
 )
 
 
+_HEADING_TAGS = ("h1", "h2", "h3", "h4")
+
+
+def _section_words(heading) -> set[str]:
+    """Words of the section under a heading, in reading order, up to the next
+    heading of the same or a higher level (an h3 section includes its h4
+    steps). Reading order, not siblings: the book layout wraps headings in
+    keep-together boxes, so a heading often has no siblings at all."""
+    from bs4 import NavigableString, Tag
+
+    level = _HEADING_TAGS.index(heading.name) if heading.name in _HEADING_TAGS else 3
+    stop = set(_HEADING_TAGS[: level + 1])
+    words: set[str] = set()
+    own = set(id(d) for d in heading.descendants)
+    for el in heading.next_elements:
+        if isinstance(el, Tag):
+            if el.name in stop:
+                break
+            continue
+        if isinstance(el, NavigableString) and id(el) not in own:
+            words.update(re.findall(r"[a-z']+", str(el).lower()))
+    return words
+
+
+def _first_duplicate_heading(soup) -> str:
+    """The first heading that repeats as a real defect, or "".
+
+    v1.8.10 -- the same rule the release validator already uses
+    (ebook_document.find_customer_content_defects,
+    tests/test_recurring_section_headings.py): a section heading that recurs
+    once per chapter over DIFFERENT content is deliberate book structure, not
+    a duplicate. This rendered-book check had kept the older rule -- any
+    h2/h3/h4 repeated anywhere fails -- so a book could pass the release
+    validator and still be refused at preflight. Container Gardening for
+    Beginners was: "5. Water deeply" in two different procedures, and a
+    "Hypothetical planning example" section in eight chapters, each with its
+    own example.
+
+    Still a defect: a repeated chapter title; any heading repeated inside
+    one chapter; a known filler label (BAD_DUPLICATE_HEADINGS) repeated
+    anywhere; and a heading whose sections are near-copies of each other
+    (80% shared words). The chapter is tracked by chapter title in reading
+    order, because the PDF renderer can split one chapter across several
+    "chapter-page" sections.
+    """
+    from services.ebook_document import BAD_DUPLICATE_HEADINGS
+
+    chapter_no = 0
+    seen_in_chapter: set[tuple[int, str]] = set()
+    chapter_titles: set[str] = set()
+    bodies: dict[str, list[set[str]]] = {}
+    for h in soup.select(".chapter-page h2.chapter-title, .chapter-page h3, .chapter-page h4"):
+        title = re.sub(r"\s+", " ", h.get_text(" ", strip=True).lower())
+        if h.name == "h2":
+            chapter_no += 1
+            if title and title in chapter_titles:
+                return title
+            chapter_titles.add(title)
+            continue
+        if not title:
+            continue
+        if (chapter_no, title) in seen_in_chapter:
+            return title
+        seen_in_chapter.add((chapter_no, title))
+        earlier = bodies.setdefault(title, [])
+        if earlier and title in BAD_DUPLICATE_HEADINGS:
+            return title
+        words = _section_words(h)
+        for other in earlier:
+            union = words | other
+            if union and len(words & other) / len(union) >= 0.8:
+                return title
+        earlier.append(words)
+    return ""
+
+
 def inspect_rendered_ebook(*, html: str = "", pdf_text: str = "", pdf_bytes: bytes = b"") -> list[dict[str, str]]:
     """Fail rendered HTML/PDF defects, not just manuscript objects."""
     findings: list[dict[str, str]] = []
@@ -405,16 +481,9 @@ def inspect_rendered_ebook(*, html: str = "", pdf_text: str = "", pdf_bytes: byt
     audience_hits = len(re.findall(r"For beginner and intermediate photographers", html or "", re.I))
     if audience_hits > 1:
         findings.append({"code": "duplicate_audience", "message": f"{audience_hits} audience statements"})
-    heading_titles = [
-        re.sub(r"\s+", " ", h.get_text(" ", strip=True).lower())
-        for h in soup.select(".chapter-page h2.chapter-title, .chapter-page h3, .chapter-page h4")
-    ]
-    seen_h: set[str] = set()
-    for title in heading_titles:
-        if title and title in seen_h:
-            findings.append({"code": "duplicate_heading", "message": title[:80]})
-            break
-        seen_h.add(title)
+    dup = _first_duplicate_heading(soup)
+    if dup:
+        findings.append({"code": "duplicate_heading", "message": dup[:80]})
     for a in soup.find_all("a"):
         href = str(a.get("href") or "")
         if _LOCAL_HOST_RE.search(href) or re.search(r"ebook-workspace/\d+|full-preview\?digest=", href, re.I):
