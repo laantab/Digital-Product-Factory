@@ -467,19 +467,25 @@ def _text_height(draw: ImageDraw.ImageDraw, text: str, font) -> int:
     return max(1, bbox[3] - bbox[1])
 
 
+def _continues_a_word(text: str) -> bool:
+    """True only for a hyphen that carries a word on to the next line.
+
+    v1.9.1. A book title is allowed to contain a dash of its own, the way
+    "Container Gardening - A Beginner's Guide" does. That dash arrives as a
+    token by itself, and the old rule glued the next word straight onto any
+    token ending in a hyphen, so the cover printed "-A" and then failed its own
+    wording check. The customer was told the photograph was unusable, which was
+    never true. A hyphen only joins when a letter or a digit sits in front of it.
+    """
+    body = (text or "").rstrip("-")
+    return bool(body) and str(text).endswith("-") and body[-1].isalnum()
+
+
 def _join_wrapped(lines: list[str]) -> str:
     tokens: list[str] = []
     for line in lines:
         tokens.extend(re.findall(r"\S+", line or ""))
-    out = ""
-    for token in tokens:
-        if not out:
-            out = token
-        elif out.endswith("-"):
-            out += token
-        else:
-            out += " " + token
-    return out
+    return _glue_tokens(tokens)
 
 
 def _glue_tokens(parts: list[str]) -> str:
@@ -487,7 +493,7 @@ def _glue_tokens(parts: list[str]) -> str:
     for token in parts:
         if not out:
             out = token
-        elif out.endswith("-"):
+        elif _continues_a_word(out):
             out += token
         else:
             out += " " + token

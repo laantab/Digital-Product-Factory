@@ -38,6 +38,11 @@ The version shown in the bottom-left of the app matches the newest entry here.
   they were. The card's own colours now win over the table treatment, and
   every card label is measured against the panel it sits on.
 
+- A title with a dash in it can have a cover again. "Container Gardening -
+  A Beginner's Guide" was refused by all three cover layouts, and the message
+  blamed the photograph and told you to pick a different one. The photograph
+  was never the problem: the dash was being glued to the next word.
+
 ### Does anything look different in a book I already made?
 
 - Yes, slightly, and deliberately. Re-exporting an existing book picks up
