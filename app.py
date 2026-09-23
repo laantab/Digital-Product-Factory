@@ -276,10 +276,12 @@ def _access_control_is_unconfigured() -> bool:
     return not str(os.environ.get("FACTORY_INVITE_CODE") or "").strip()
 
 
+# Shown to whoever is at the door, so it names nothing internal. The sentence
+# that tells the operator what to set lives in the CRITICAL log line below and
+# in docs/BACKUP_AND_RECOVERY.md, where it is useful and not public.
 _ACCESS_CLOSED_MESSAGE = (
-    "This site is not accepting visitors yet. If you run it: set "
-    "FACTORY_INVITE_CODE to your beta code, or FACTORY_OPEN_ACCESS=1 to run "
-    "it open on purpose."
+    "This site is not open yet. If you have an invite, check the link you "
+    "were sent, or try again later."
 )
 
 if _access_control_is_unconfigured():
@@ -4495,6 +4497,13 @@ def coloring_preview_route(project_id: int, filename: str):
     except OSError:
         return _error(coloring_preview_missing_message(filename), 404)
     if not os.path.isfile(file_path):
+        # v1.9.1. The same asset-first fallback the download route has had since
+        # Phase 0B-3B1. The builder starts every run with an empty local disk,
+        # which is the whole failure class 1.8.11-1.8.14 closed; without this,
+        # a customer's download works and the picture of it 404s.
+        served = _verified_export_asset(pkg, filename)
+        if served is not None:
+            return _send_artifact_bytes(served, filename)
         return _error(coloring_preview_missing_message(filename), 404)
     return send_from_directory(directory, filename, as_attachment=False)
 
