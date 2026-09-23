@@ -467,6 +467,12 @@ def theme_css(theme_id: str | None) -> str:
     return t.css_vars() + _shared_book_css(t) + _template_structure_css(t)
 
 
+#: Where the running-footer frame begins, in inches from the top of a
+#: letter page, and the clear space kept between the body frame and it.
+FOOTER_TOP_IN = 10.05
+FOOTER_GAP_IN = 0.10
+
+
 def _shared_book_css(t: EbookTheme) -> str:
     accent2 = t.color_accent_2 or t.color_accent
     # v1.9.0. Ink that is measured against the fill it sits on, never assumed.
@@ -480,6 +486,13 @@ def _shared_book_css(t: EbookTheme) -> str:
     small_accent = accessible_ink(t.color_accent, page)
     small_muted = accessible_ink(t.color_muted, page)
     small_primary = accessible_ink(t.color_primary, page)
+    # v1.9.1. The body frame used the same margin on all four sides, so on
+    # every template with a bottom margin under 0.95in it ran down to
+    # 741pt while the footer frame starts at 723.6pt. The last line of a
+    # full page printed through the page number. The bottom margin is now
+    # derived from where the footer actually begins, so the two frames
+    # cannot overlap whatever a template asks for.
+    bottom_margin_in = round(max(float(t.margin_in), 11.0 - FOOTER_TOP_IN + FOOTER_GAP_IN), 3)
     # A card label sits on the callout fill, not on the page.
     card_label_ink = accessible_ink(t.color_primary, t.callout_bg or page)
     opener_h2 = {
@@ -769,11 +782,11 @@ def _shared_book_css(t: EbookTheme) -> str:
    whole rule, frame included, if it meets one inside. */
 @page {{
   size: letter;
-  margin: {t.margin_in}in;
+  margin: {t.margin_in}in {t.margin_in}in {bottom_margin_in}in {t.margin_in}in;
   @frame footer_frame {{
     -pdf-frame-content: page-footer;
     left: {t.margin_in}in;
-    top: 10.05in;
+    top: {FOOTER_TOP_IN}in;
     width: {8.5 - 2 * float(t.margin_in)}in;
     height: 0.35in;
   }}

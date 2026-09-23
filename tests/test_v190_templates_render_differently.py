@@ -62,6 +62,23 @@ SAMPLE = """## 1. First chapter
 
 An opening paragraph so the chapter has body text above its first section.
 
+A page of running prose, because a book that never fills a page cannot show whether its last line clears the running footer. This paragraph exists to carry the text frame all the way to the bottom of the page and over onto the next one, which is the only condition under which the body frame and the footer frame can be caught sharing space.
+
+A page of running prose, because a book that never fills a page cannot show whether its last line clears the running footer. This paragraph exists to carry the text frame all the way to the bottom of the page and over onto the next one, which is the only condition under which the body frame and the footer frame can be caught sharing space.
+
+A page of running prose, because a book that never fills a page cannot show whether its last line clears the running footer. This paragraph exists to carry the text frame all the way to the bottom of the page and over onto the next one, which is the only condition under which the body frame and the footer frame can be caught sharing space.
+
+A page of running prose, because a book that never fills a page cannot show whether its last line clears the running footer. This paragraph exists to carry the text frame all the way to the bottom of the page and over onto the next one, which is the only condition under which the body frame and the footer frame can be caught sharing space.
+
+A page of running prose, because a book that never fills a page cannot show whether its last line clears the running footer. This paragraph exists to carry the text frame all the way to the bottom of the page and over onto the next one, which is the only condition under which the body frame and the footer frame can be caught sharing space.
+
+A page of running prose, because a book that never fills a page cannot show whether its last line clears the running footer. This paragraph exists to carry the text frame all the way to the bottom of the page and over onto the next one, which is the only condition under which the body frame and the footer frame can be caught sharing space.
+
+A page of running prose, because a book that never fills a page cannot show whether its last line clears the running footer. This paragraph exists to carry the text frame all the way to the bottom of the page and over onto the next one, which is the only condition under which the body frame and the footer frame can be caught sharing space.
+
+A page of running prose, because a book that never fills a page cannot show whether its last line clears the running footer. This paragraph exists to carry the text frame all the way to the bottom of the page and over onto the next one, which is the only condition under which the body frame and the footer frame can be caught sharing space.
+
+
 ### A section heading
 
 - [ ] Checklist item one
@@ -351,6 +368,36 @@ def test_no_template_declares_a_border_around_the_figure_box(theme_id):
                 f"{theme_id}: {edge.strip(':')} on the figure box draws a rectangle "
                 f"around the whole column: {' '.join(declarations.split())[:90]}"
             )
+
+
+@pytest.mark.parametrize("theme_id", PROFESSIONAL_THEME_IDS)
+def test_no_body_line_runs_down_into_the_footer(theme_id, books):
+    """The body frame and the running-footer frame must not share any space.
+
+    The footer frame starts 10.05in down a letter page. The body frame used the
+    template's own margin on all four sides, so a template with a bottom margin
+    under 0.95in ran the body down past that line and the last line of a full
+    page printed through the page number.
+    """
+    footer_top = 10.05 * 72.0
+    doc = fitz.open(stream=books[theme_id], filetype="pdf")
+    intruders = []
+    for number, page in enumerate(doc):
+        lines = []
+        for block in page.get_text("dict").get("blocks", []):
+            for line in block.get("lines", []):
+                text = "".join(s.get("text", "") for s in line.get("spans", []))
+                if text.strip():
+                    lines.append((line["bbox"], text.strip()))
+        if not lines:
+            continue
+        bottom_most = max(y1 for (_, _, _, y1), _ in lines)   # the footer itself
+        for (x0, y0, x1, y1), text in lines:
+            if y1 >= bottom_most - 1.0:
+                continue                                       # this is the footer line
+            if y1 > footer_top:
+                intruders.append((number + 1, round(y1, 1), text[:40]))
+    assert not intruders, f"{theme_id}: body text inside the footer band: {intruders[:4]}"
 
 
 @pytest.mark.parametrize("theme_id", PROFESSIONAL_THEME_IDS)

@@ -27,7 +27,10 @@ The version shown in the bottom-left of the app matches the newest entry here.
   only as far as it has to be. Two templates were printing text that was
   effectively invisible on paper.
 - Tables now have visible structure in every template.
-- Nothing is printed across the page number at the bottom of a page.
+- Nothing is printed across the page number at the bottom of a page. The
+  text area now stops where the page-number strip begins, instead of
+  running into it, so the last line of a full page is never printed
+  through the number. Pages hold a line or two less as a result.
 - A wide table is rebuilt as a stack of cards so it stays readable on a
   portrait page. In Bold Creator the row labels on those cards were being
   printed in the template's own dark ink on a block of that same dark ink,
