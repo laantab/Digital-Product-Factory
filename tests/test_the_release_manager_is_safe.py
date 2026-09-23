@@ -60,6 +60,20 @@ class TheReleaseManagerIsSafeTests(unittest.TestCase):
         push = self.text.index("git push origin")
         self.assertLess(guard, push)
 
+    def test_a_flaky_fast_gate_is_retried_once_and_never_hidden(self):
+        """Two failures in a row must still stop it, and the report must say so."""
+        self.assertIn("FAST GATE FAILED TWICE", self.text,
+                      "a second failure has no stopping path")
+        twice = self.text.index("FAST GATE FAILED TWICE")
+        self.assertIn("goto :leave", self.text[twice:twice + 300],
+                      "failing twice does not stop before the push")
+        self.assertIn("FAST GATE PASSED on the second run", self.text,
+                      "a retry that passes is not reported as a retry")
+        self.assertIn("The failing test names from the first run are above", self.text,
+                      "a flake is reported without naming what failed")
+        self.assertEqual(self.text.count("scripts\\fast_gate.py"), 2,
+                         "the gate should run at most twice")
+
     def test_it_never_merges(self):
         for forbidden in ("git merge", "gh pr merge", "--squash", "--rebase"):
             with self.subTest(forbidden=forbidden):
