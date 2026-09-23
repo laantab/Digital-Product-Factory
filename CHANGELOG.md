@@ -28,6 +28,12 @@ The version shown in the bottom-left of the app matches the newest entry here.
   effectively invisible on paper.
 - Tables now have visible structure in every template.
 - Nothing is printed across the page number at the bottom of a page.
+- A wide table is rebuilt as a stack of cards so it stays readable on a
+  portrait page. In Bold Creator the row labels on those cards were being
+  printed in the template's own dark ink on a block of that same dark ink,
+  so pages of planning figures arrived as numbers with nothing to say what
+  they were. The card's own colours now win over the table treatment, and
+  every card label is measured against the panel it sits on.
 
 ### Does anything look different in a book I already made?
 

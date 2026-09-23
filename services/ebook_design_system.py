@@ -142,7 +142,7 @@ THEMES: dict[str, EbookTheme] = {
     # display_name, never theme_id).
     "studio_clean": EbookTheme(
         theme_id="studio_clean",
-        version="studio-v4",
+        version="studio-v5",
         display_name="Minimal Professional",
         font_body="LiberationSerif, Georgia, serif",
         font_heading="LiberationSerif, Georgia, serif",
@@ -193,7 +193,7 @@ THEMES: dict[str, EbookTheme] = {
     ),
     "editorial_professional": EbookTheme(
         theme_id="editorial_professional",
-        version="editorial-v3",
+        version="editorial-v4",
         display_name="Elegant Editorial",
         font_body="LiberationSerif, Georgia, serif",
         font_heading="LiberationSerif, Georgia, serif",
@@ -241,7 +241,7 @@ THEMES: dict[str, EbookTheme] = {
     ),
     "modern_practical": EbookTheme(
         theme_id="modern_practical",
-        version="practical-v3",
+        version="practical-v4",
         display_name="Modern Business",
         font_body="LiberationSans, Helvetica, sans-serif",
         font_heading="LiberationSans, Helvetica, sans-serif",
@@ -282,7 +282,7 @@ THEMES: dict[str, EbookTheme] = {
     ),
     "bold_creator": EbookTheme(
         theme_id="bold_creator",
-        version="bold-creator-v2",
+        version="bold-creator-v3",
         display_name="Bold Creator",
         font_body="LiberationSans, Helvetica, sans-serif",
         font_heading="LiberationSans, Helvetica, sans-serif",
@@ -326,7 +326,7 @@ THEMES: dict[str, EbookTheme] = {
     ),
     "bright_workbook": EbookTheme(
         theme_id="bright_workbook",
-        version="bright-workbook-v2",
+        version="bright-workbook-v3",
         display_name="Bright Workbook",
         font_body="LiberationSans, Helvetica, sans-serif",
         font_heading="LiberationSans, Helvetica, sans-serif",
@@ -370,7 +370,7 @@ THEMES: dict[str, EbookTheme] = {
     ),
     "warm_wellness": EbookTheme(
         theme_id="warm_wellness",
-        version="warm-wellness-v2",
+        version="warm-wellness-v3",
         display_name="Warm Wellness",
         # LiberationSerif/LiberationSans are the only faces this Factory holds
         # a redistribution licence for (SIL OFL 1.1, see ebook_fonts.py). Warm
@@ -480,6 +480,8 @@ def _shared_book_css(t: EbookTheme) -> str:
     small_accent = accessible_ink(t.color_accent, page)
     small_muted = accessible_ink(t.color_muted, page)
     small_primary = accessible_ink(t.color_primary, page)
+    # A card label sits on the callout fill, not on the page.
+    card_label_ink = accessible_ink(t.color_primary, t.callout_bg or page)
     opener_h2 = {
         "stacked_label": f"border-bottom: 2pt solid {t.color_rule}; padding-bottom: 0.28em;",
         "rule_under": f"border-bottom: 1.5pt solid {t.color_primary}; padding-bottom: 0.32em;",
@@ -889,6 +891,13 @@ table.ebook-card {{
   background: {t.callout_bg};
 }}
 table.ebook-card th, table.ebook-card td {{
+  /* A template's table-header fill must never reach a card cell. A wide table
+     is rebuilt as a two-column card whose left cell is a <th>, so the
+     thick_header rule -- table th {{ background: color_primary }} -- painted the
+     card's own brand-coloured label onto a brand-coloured block and the label
+     vanished at 1.00:1. Naming the fill here outranks that rule on the cards
+     alone and leaves ordinary tables untouched. */
+  background: {t.callout_bg};
   font-size: 9.5pt;
   line-height: 1.4;
   vertical-align: top;
@@ -902,7 +911,7 @@ table.ebook-card tr:last-child th, table.ebook-card tr:last-child td {{
 }}
 table.ebook-card th.ebook-card-label, .ebook-card-label {{
   width: 36%;
-  color: {t.color_primary};
+  color: {card_label_ink};
   font-weight: 700;
 }}
 table.ebook-card td.ebook-card-value {{

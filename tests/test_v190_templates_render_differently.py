@@ -78,6 +78,13 @@ An opening paragraph so the chapter has body text above its first section.
 | --- | --- |
 | Row one | Styled table row |
 | Row two | Second row here |
+
+A wide table is rebuilt as stacked cards, so the gate book must contain one.
+
+| Line item | Lean range | Event range | Notes | Owner |
+| --- | --- | --- | --- | --- |
+| Camera body | $800 | $2,500 | Test before the first event | Lead |
+| Printer | $600 | $1,900 | Spare ribbon on site | Lead |
 """
 
 
@@ -344,6 +351,37 @@ def test_no_template_declares_a_border_around_the_figure_box(theme_id):
                 f"{theme_id}: {edge.strip(':')} on the figure box draws a rectangle "
                 f"around the whole column: {' '.join(declarations.split())[:90]}"
             )
+
+
+@pytest.mark.parametrize("theme_id", PROFESSIONAL_THEME_IDS)
+def test_a_stacked_card_still_shows_its_row_labels(theme_id, books):
+    """A wide table becomes stacked cards, and the label is what carries meaning.
+
+    Bold Creator printed "Line item:", "Lean range:" and the rest in its brand
+    ink on its brand ink -- 1.00:1 -- so four pages of planning figures arrived
+    as a column of numbers beside a solid black block. The rule that did it,
+    thick_header's `table th`, was written for grid tables and reached the cards
+    because a card's label cell is also a <th>.
+    """
+    ink = _ink(books[theme_id])
+    labels = [s for s in ink["spans"] if s["text"].strip().rstrip(":") in
+              {"Line item", "Lean range", "Event range", "Notes", "Owner"}]
+    assert labels, f"{theme_id}: the sample book produced no card labels, so this test proves nothing"
+    unreadable = []
+    for span in labels:
+        ink_hex = _rgb_hex(span.get("color", 0))
+        sx0, sy0, sx1, sy1 = span["bbox"]
+        behind = "#ffffff"
+        for fill, rect, page_number in ink["fills"]:
+            if page_number != span["page"]:
+                continue
+            fx0, fy0, fx1, fy1 = rect
+            if fx0 <= sx0 and fy0 <= sy0 and fx1 >= sx1 and fy1 >= sy1:
+                behind = _rgb_hex(fill)
+        ratio = contrast_ratio(ink_hex, behind)
+        if ratio < 4.5:
+            unreadable.append((span["text"][:24], ink_hex, behind, round(ratio, 2)))
+    assert not unreadable, f"{theme_id}: card labels a reader cannot see: {unreadable[:4]}"
 
 
 @pytest.mark.parametrize("theme_id", PROFESSIONAL_THEME_IDS)
