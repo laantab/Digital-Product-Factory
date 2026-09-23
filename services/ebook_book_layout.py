@@ -147,12 +147,6 @@ _LAYOUT_TABLE_CLASSES = {
 }
 
 
-#: v1.9.0. The mark a checklist row carries. ASCII by design: the bundled
-#: Liberation fonts have no box or tick glyph, and a missing glyph prints as
-#: an empty rectangle -- proven by rendering, not assumed.
-CHECK_BOX_MARK = "[ ]"
-
-
 def _strip_checkbox_prefix_node(li) -> None:
     for node in li.find_all(string=True):
         text = str(node)
@@ -160,57 +154,6 @@ def _strip_checkbox_prefix_node(li) -> None:
         if cleaned != text:
             node.replace_with(cleaned)
             return
-
-
-def _rows_to_paragraphs(soup, listing, row_class: str) -> None:
-    """Turn list items into paragraph rows carrying their own mark.
-
-    v1.9.0. xhtml2pdf draws a bullet or numeral for every <li> regardless of
-    list-style, so a checklist printed "• [ ] item" and a procedure printed
-    "1. 1. step". Paragraph rows have no native marker, so the mark the
-    template styles is the only one on the page.
-    """
-    block = soup.new_tag("div")
-    block["class"] = list(listing.get("class") or [])
-    for li in listing.find_all("li", recursive=False):
-        row = soup.new_tag("p")
-        row["class"] = [row_class]
-        for child in list(li.contents):
-            row.append(child.extract())
-        block.append(row)
-    listing.replace_with(block)
-
-
-def _ensure_step_numbers(soup, ol) -> None:
-    """Number a workflow's steps in the markup, not in the renderer.
-
-    v1.9.0. xhtml2pdf's list numbering is not dependable once a list is
-    styled and paginated -- the same three steps printed "1. 2. 3." in one
-    book and bullets in another, from identical HTML. A reader following a
-    procedure needs the numbers, so the numbers are content.
-    """
-    items = ol.find_all("li", recursive=False)
-    for n, li in enumerate(items, start=1):
-        if li.find("span", class_="step-num"):
-            continue
-        mark = soup.new_tag("span")
-        mark["class"] = ["step-num"]
-        mark.string = f"{n}. "
-        li.insert(0, mark)
-
-
-def _ensure_check_box(soup, li) -> None:
-    """Give a checklist row its own mark, which templates then style.
-
-    v1.9.0. Without this the `.check-box` rule in four of the six templates
-    matched nothing at all and every checklist looked identical.
-    """
-    for existing in li.find_all("span", class_="check-box"):
-        return
-    mark = soup.new_tag("span")
-    mark["class"] = ["check-box"]
-    mark.string = f"{CHECK_BOX_MARK} "
-    li.insert(0, mark)
 
 
 def _split_checkbox_paragraphs(soup: BeautifulSoup) -> None:
@@ -300,8 +243,6 @@ def _normalize_checklist_items(soup: BeautifulSoup) -> None:
             ul["class"] = classes
             for li in items:
                 _strip_checkbox_prefix_node(li)
-                _ensure_check_box(soup, li)
-            _rows_to_paragraphs(soup, ul, "check-row")
 
 
 def _keep_headings_with_next(soup: BeautifulSoup) -> None:
@@ -653,10 +594,6 @@ def _decorate_structured_html(fragment: str, table_style: str = "classic",
         items = ol.find_all("li", recursive=False)
         if len(items) >= 3:
             ol["class"] = (ol.get("class") or []) + ["workflow"]
-
-    for ol in list(soup.find_all("ol", class_="workflow")):
-        _ensure_step_numbers(soup, ol)
-        _rows_to_paragraphs(soup, ol, "workflow-step")
 
     _split_checkbox_paragraphs(soup)
     _promote_section_headings(soup)

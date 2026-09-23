@@ -950,10 +950,6 @@ ol.workflow li, .workflow li {{
   margin: 0 0 8pt;
   list-style: none;
 }}
-.step-num {{
-  color: {small_accent};
-  font-weight: 700;
-}}
 .callout, .example-callout, .visual-aid {{
   background: {t.callout_bg};
   border-left: 3pt solid {t.color_accent};
@@ -1244,28 +1240,22 @@ def _template_structure_css(t: EbookTheme) -> str:
     checklist = {
         "square_boxes": f"ul.checklist, .checklist {{ background: #ffffff; padding: 2pt 0; }}\n"
                         f"ul.checklist li, .checklist li, .check-row {{ border-left: none; border: 1pt solid {t.color_rule}; "
-                        f"padding: 6pt 8pt; margin: 0 0 6pt; }}\n"
-                        f".check-box {{ color: {t.color_primary}; font-weight: 700; }}",
+                        f"padding: 6pt 8pt; margin: 0 0 6pt; }}",
         "numbered_steps": f"ul.checklist, .checklist {{ background: #ffffff; padding: 2pt 0; }}\n"
                           f"ul.checklist li, .checklist li, .check-row {{ border-left: 4pt solid {accent2}; "
-                          f"padding: 5pt 4pt 5pt 10pt; margin: 0 0 7pt; }}\n"
-                          f".check-box {{ color: {accent2}; font-weight: 800; }}",
+                          f"padding: 5pt 4pt 5pt 10pt; margin: 0 0 7pt; }}",
         "round_circles": f"ul.checklist, .checklist {{ background: #ffffff; padding: 2pt 0; }}\n"
                          f"ul.checklist li, .checklist li, .check-row {{ border-left: none; "
                          f"border-bottom: 0.75pt solid {t.color_rule}; padding: 7pt 2pt 6pt 12pt; "
-                         f"margin: 0 0 4pt; }}\n"
-                         f".check-box {{ color: {t.color_primary}; font-weight: 700; }}",
+                         f"margin: 0 0 4pt; }}",
         "bold_ticks": f"ul.checklist, .checklist {{ background: #ffffff; padding: 2pt 0; }}\n"
                       f"ul.checklist li, .checklist li, .check-row {{ border-left: none; "
-                      f"border-top: 2pt solid {t.color_accent}; padding: 6pt 2pt; margin: 0 0 6pt; }}\n"
-                      f".check-box {{ color: {t.color_accent}; font-weight: 800; }}",
+                      f"border-top: 2pt solid {t.color_accent}; padding: 6pt 2pt; margin: 0 0 6pt; }}",
         "dash_list": f"ul.checklist, .checklist {{ background: #ffffff; padding: 0; }}\n"
-                     f"ul.checklist li, .checklist li, .check-row {{ border-left: none; padding: 3pt 0 3pt 2pt; margin: 0 0 4pt; }}\n"
-                     f".check-box {{ color: {t.color_muted}; font-weight: 400; }}",
+                     f"ul.checklist li, .checklist li, .check-row {{ border-left: none; padding: 3pt 0 3pt 2pt; margin: 0 0 4pt; }}",
         "review_questions": f"ul.checklist, .checklist {{ background: #ffffff; padding: 2pt 0; }}\n"
                             f"ul.checklist li, .checklist li, .check-row {{ border-left: none; "
-                            f"border-top: 1pt solid {t.color_rule}; padding: 7pt 2pt; margin: 0 0 5pt; }}\n"
-                            f".check-box {{ color: {t.color_primary}; font-weight: 700; }}",
+                            f"border-top: 1pt solid {t.color_rule}; padding: 7pt 2pt; margin: 0 0 5pt; }}",
     }.get(t.checklist_style)
     if checklist:
         out.append(checklist)

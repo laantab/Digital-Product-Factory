@@ -136,8 +136,11 @@ def test_a_book_renders_and_carries_its_furniture(theme_id, books):
     ink = _ink(books[theme_id])
     assert ink["pages"] >= 2
     assert "First chapter" in ink["text"]
-    assert "[ ]" in ink["text"], "checklist rows lost their mark"
-    assert "1. Numbered workflow step one" in ink["text"], "a procedure lost its step numbers"
+    # One marker per row, and it is the list item's own: this renderer draws a
+    # bullet or numeral on a list item whatever the CSS says, so anything the
+    # Factory adds becomes a second marker on the page.
+    assert "Checklist item one" in ink["text"], "a checklist row went missing"
+    assert "Numbered workflow step one" in ink["text"], "a procedure step went missing"
 
 
 @pytest.mark.parametrize("theme_id", PROFESSIONAL_THEME_IDS)
@@ -228,7 +231,7 @@ def test_every_template_paints_something_of_its_own(books):
 def test_no_row_carries_two_markers(theme_id, books):
     """"• [ ] item" and "1. 1. step" both shipped past a green gate once."""
     text = _ink(books[theme_id])["text"]
-    for bad in ("\u2022 [ ]", "\u2022 1.", "1. 1.", "2. 2.", "3. 3.", "[ ] [ ]"):
+    for bad in ("\u2022 [ ]", "\u2022 1.", "1. 1.", "2. 2.", "3. 3.", "[ ] [ ]", "[ ] Checklist"):
         assert bad not in text, f"{theme_id}: doubled marker {bad!r} on the page"
 
 
