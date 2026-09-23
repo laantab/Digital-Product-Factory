@@ -1791,10 +1791,17 @@ def _record_metadata_haystack(type_: str | None = None, data: dict | None = None
 
 
 #: An unmistakable label a customer does not put on a book they are selling:
-#: "[TEST] ...", "(QA) ...", "TEST: ...", "DEBUG - ...".
+#: "[TEST] ...", "(QA) ...", "[ debug ] ...".
+#:
+#: Brackets only, on purpose. A leading "TEST: " or "DEBUG - " was also treated
+#: as a label, and "Title: Subtitle" is how most non-fiction is titled --
+#: "Handoff: Leading Through Change", "Debug: A Programmer's Memoir",
+#: "QA: Quality Assurance for Beginners" were all still hidden from their own
+#: owner. A colon or a dash is punctuation every author uses. An internal record
+#: named "TEST: something" now falls to needs_decision, where the other
+#: bare-word cases already land.
 _EXPLICIT_MARKER_RE = re.compile(
     r"(?i)(^|\s)[\[\(]\s*(test|qa|debug|fixture|placeholder|regression|handoff)\s*[\]\)]"
-    r"|^(test|qa|debug|fixture|placeholder|regression|handoff)\s*[:\-\u2013\u2014]"
 )
 
 

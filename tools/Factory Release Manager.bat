@@ -24,9 +24,11 @@ REM ===========================================================================
 
 REM ------------------------------- SETTINGS ---------------------------------
 set "BRANCH=v1.9.1-launch-blockers"
-set "EXPECTED_COMMIT="
-REM  Leave EXPECTED_COMMIT blank to accept whatever the branch is on, or paste
-REM  the full 40-character commit to refuse to run against anything else.
+set "EXPECTED_COMMIT=REPLACE_WITH_TIP"
+REM  The exact commit this run is meant to push. If the branch is on anything
+REM  else the file stops and changes nothing. Leaving it blank turns that check
+REM  OFF and accepts whatever the branch happens to point at -- only do that
+REM  knowingly. Claude sets this to the reviewed commit for each release.
 REM --------------------------------------------------------------------------
 
 set "REPO=%USERPROFILE%\Documents\Product-Pipeline\Factory-v1.3"

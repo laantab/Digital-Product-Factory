@@ -16,21 +16,44 @@ class TheReleaseManagerIsSafeTests(unittest.TestCase):
     def setUp(self):
         self.text = BAT.read_text(encoding="utf-8", errors="ignore")
         self.lowered = self.text.lower()
-        # What the file DOES, with its comments and the words it prints into
-        # the report removed -- a promise in a comment must not satisfy a test
-        # about behaviour.
+        # What the file DOES, with comments and printed text removed -- a
+        # promise in a comment must not satisfy a test about behaviour.
+        #
+        # Batch chains with & and &&, so a line is split into SEGMENTS first and
+        # each segment judged on its own. Stripping a whole line that begins
+        # with echo, which is what this used to do, hid everything after the
+        # first & -- `echo Finishing up & git merge origin/main` passed the
+        # whole suite, and `git merge` is on the forbidden list.
         commands = []
         for line in self.text.splitlines():
-            stripped = line.strip()
-            if stripped.lower().startswith("rem"):
-                continue
-            stripped = re.sub(r'>>?\s*"[^"]*"\s*echo.*$', "", stripped)
-            stripped = re.sub(r'^echo.*$', "", stripped)
-            commands.append(stripped)
+            for segment in re.split(r"&{1,2}", line):
+                segment = segment.strip()
+                low = segment.lower()
+                if low.startswith("rem ") or low == "rem" or low.startswith("::"):
+                    continue
+                segment = re.sub(r'^>>?\s*"[^"]*"\s*', "", segment).strip()
+                if segment.lower().startswith("echo"):
+                    continue
+                commands.append(segment)
         self.commands = "\n".join(commands).lower()
 
     def test_the_file_exists(self):
         self.assertTrue(BAT.is_file())
+
+    def test_it_is_pinned_to_an_exact_commit(self):
+        """Blank means it pushes whatever the branch happens to be on."""
+        match = re.search(r'set "EXPECTED_COMMIT=([^"]*)"', self.text)
+        self.assertIsNotNone(match, "EXPECTED_COMMIT is not set at all")
+        value = match.group(1).strip()
+        self.assertTrue(value, "EXPECTED_COMMIT is blank, so the commit check is skipped")
+        self.assertRegex(value, r"^[0-9a-f]{7,40}$",
+                         f"EXPECTED_COMMIT is not a commit: {value!r}")
+
+    def test_the_commit_check_can_actually_stop_it(self):
+        self.assertIn('if not "%EXPECTED_COMMIT%"==""', self.text)
+        guard = self.text.index("EXPECTED_COMMIT%")
+        push = self.text.index("git push origin")
+        self.assertLess(guard, push)
 
     def test_it_never_merges(self):
         for forbidden in ("git merge", "gh pr merge", "--squash", "--rebase"):
@@ -42,6 +65,33 @@ class TheReleaseManagerIsSafeTests(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, self.commands,
                                  f"a command in the file mentions {forbidden}")
+
+    def test_it_never_destroys_anything_on_the_disk(self):
+        """The folder this runs against holds the Factory and Lonnie's work."""
+        for forbidden in ("rmdir", "rd /s", "del /f", "del /q", "git reset --hard",
+                          "git clean", "format ", "push --mirror", "--prune"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, self.commands,
+                                 f"a command in the file can destroy files: {forbidden}")
+
+    def test_the_only_thing_it_removes_is_its_own_temporary_copy(self):
+        """Every worktree it removes has to be one of its own, under %TEMP%."""
+        temp_names = {"%WT%", "!WA!", "!WB!", "%TEMP%"}
+        # The loop variable is only as safe as what the loop iterates over.
+        for values in re.findall(r"for %%\w in \(([^)]*)\) do[^\r\n]*worktree remove[^\r\n]*",
+                                 self.text):
+            for token in re.findall(r'"([^"]+)"', values):
+                with self.subTest(token=token):
+                    self.assertIn(token, temp_names, f"a loop removes a worktree at {token}")
+        for line in re.findall(r"git worktree remove[^\r\n]*", self.text):
+            with self.subTest(line=line):
+                self.assertTrue(
+                    any(name in line for name in temp_names) or "%%~" in line,
+                    f"a worktree outside TEMP is removed: {line}",
+                )
+        for path in re.findall(r'set "(?:WT|WA|WB)=([^"]+)"', self.text):
+            with self.subTest(path=path):
+                self.assertTrue(path.startswith("%TEMP%"), f"a worktree lives outside TEMP: {path}")
 
     def test_it_never_force_pushes_or_deletes_a_branch(self):
         for forbidden in ("push --force", "push -f", "--delete", "branch -d", "push origin :"):

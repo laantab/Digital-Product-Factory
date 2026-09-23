@@ -35,6 +35,16 @@ REAL_TITLES = [
     "Workflow Mastery",
     "Seed Starting for Beginners",
     "Container Gardening for Beginners",
+    # "Title: Subtitle" is how most non-fiction is titled. A colon is
+    # punctuation every author uses; it is not a label.
+    "Handoff: Leading Through Change",
+    "Debug: A Programmer's Memoir",
+    "Test: A Novel",
+    "Regression - A Thriller",
+    "Fixture: The Art of Stage Lighting",
+    "Placeholder: Poems",
+    "QA: Quality Assurance for Beginners",
+    "Debug \u2014 Finding the Fault in Everything",
 ]
 
 STILL_HIDDEN = [
