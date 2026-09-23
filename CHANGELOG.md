@@ -5,6 +5,63 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.0 — 2026-09-22
+
+**Six templates that make six different-looking books.**
+
+### What changed
+
+- Choosing a template now changes the book itself, not just its colours.
+  Each of the six has its own chapter opening, headings, callouts,
+  checklists, quotations, captions, picture placement, table treatment,
+  contents page and page furniture.
+- The chooser preview now shows all of those parts, so you can see what you
+  are picking before you pick it.
+- Checklists print a real mark, and numbered steps print their numbers, in
+  every template.
+
+### What was fixed
+
+- Type can no longer be printed in a colour too faint to read. Every colour
+  the Factory prints is now measured against what is behind it, and darkened
+  only as far as it has to be. Two templates were printing text that was
+  effectively invisible on paper.
+- Tables now have visible structure in every template.
+- Nothing is printed across the page number at the bottom of a page.
+
+### Does anything look different in a book I already made?
+
+- Yes, slightly, and deliberately. Re-exporting an existing book picks up
+  these repairs, so a few colours are a shade deeper where they were too
+  faint to read: Bright Workbook's amber (measured 2.15:1 against the page,
+  which is unreadable), Minimal Professional's teal, and Warm Wellness's
+  terracotta and muted grey. Bright Workbook's chapter opening changed from
+  a tab to a stacked label, because its tab had become indistinguishable
+  from Modern Business's chapter opening. Checklists and numbered steps
+  print one marker instead of two.
+- Every template's version number was raised to record that its printed
+  output changed. Nothing you have saved was altered, and every saved book
+  still opens, still resolves its template, and still downloads.
+
+### Do your steps change?
+
+- No. The Factory works the same way; there is more to choose from.
+
+### Cost
+
+- No paid calls. Templates, previews and contrast checks are all local.
+
+### Release gate
+
+- Two new suites: a structural gate over the six templates, and a rendering
+  gate that builds a real book in every template and inspects the finished
+  PDF — contrast of every word against what is painted behind it, no text
+  below the readable minimum, visible tables, nothing over the footer, one
+  marker per row, and no two books rendering alike. Both are in the stability
+  gate. Full comparison gate with no new failures.
+
+---
+
 ## 1.8.14 — 2026-09-22
 
 **A finished book says it is finished.**
