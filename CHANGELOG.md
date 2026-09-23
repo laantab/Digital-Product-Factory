@@ -11,10 +11,12 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ### What changed
 
-- The Fast Stability Gate now runs every test the lock registry says it
-  protects. Seventeen files across six protected areas were missing from it, so
-  a change could pass the gate and still have broken something the registry
-  claimed was covered.
+- The Fast Stability Gate now runs every test the Factory's own registry says
+  it protects. Sixteen of those test files were missing from it, so a change
+  could pass the gate and still have broken something the registry claimed was
+  covered. One more is deliberately left out, with its reason written down: it
+  drives a real browser and takes minutes, so it runs in the full release gate
+  instead.
 - There is a backup and recovery guide at `docs/BACKUP_AND_RECOVERY.md`, written
   to be followed rather than studied. It says plainly that `/admin/backup-db` is
   not a backup, because it copies the database next to itself on the same disk.
@@ -44,7 +46,8 @@ The version shown in the bottom-left of the app matches the newest entry here.
 ### Does anything look different in a book I already made?
 
 - No. Nothing about how a book is written, designed, rendered or exported
-  changed in this release.
+  changed in this release. (The repair that made numbered steps print 1, 2, 3
+  in all six templates shipped in 1.9.0, not here.)
 - Books already hidden by the old title rule keep their settings, because
   guessing a second time could just as easily hide something that should stay
   hidden. Run `python scripts/review_hidden_books.py` to see which ones are
@@ -58,7 +61,8 @@ The version shown in the bottom-left of the app matches the newest entry here.
 ### Release gate
 
 - Full gate against the live site: no new failures. The Fast Stability Gate
-  covers 44 files after this release, up from 22.
+  covers 46 files after this release, up from 22 — the sixteen protected files
+  it was missing, plus the new checks that came with this release.
 - Spending is unchanged at 26 paid calls / $4.10. Nothing in this release makes
   a paid call.
 

@@ -219,6 +219,8 @@ start "" "!PRLINK!"
 >>"%REPORT%" echo   click the green Merge button on the pull request page
 >>"%REPORT%" echo   that just opened in your browser.
 >>"%REPORT%" echo.
+>>"%REPORT%" echo   Clicking Merge deploys this release to the live site.
+>>"%REPORT%" echo.
 >>"%REPORT%" echo   Nothing has been merged or deployed yet. The live site is
 >>"%REPORT%" echo   still running %BASE% at !MAINSHA!.
 >>"%REPORT%" echo ==========================================================

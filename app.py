@@ -276,10 +276,12 @@ def _access_control_is_unconfigured() -> bool:
     return not str(os.environ.get("FACTORY_INVITE_CODE") or "").strip()
 
 
+# Shown to whoever is at the door, so it names nothing internal. The sentence
+# that tells the operator what to set lives in the CRITICAL log line below and
+# in docs/BACKUP_AND_RECOVERY.md, where it is useful and not public.
 _ACCESS_CLOSED_MESSAGE = (
-    "This site is not accepting visitors yet. If you run it: set "
-    "FACTORY_INVITE_CODE to your beta code, or FACTORY_OPEN_ACCESS=1 to run "
-    "it open on purpose."
+    "This site is not open yet. If you have an invite, check the link you "
+    "were sent, or try again later."
 )
 
 if _access_control_is_unconfigured():

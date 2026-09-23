@@ -63,6 +63,20 @@ Once a month, download one database backup from Render and keep it somewhere
 that is not Render and not the same computer you work on. This is the copy that
 survives losing the account itself.
 
+**To restore from that copy**, when Render is not available to restore it for
+you: the file you downloaded is a PostgreSQL dump. Create an empty PostgreSQL
+database wherever you are rebuilding — a new Render instance, or one on your own
+machine — and load the dump into it:
+
+```
+pg_restore --clean --if-exists --no-owner --dbname "<connection string of the empty database>" "<the file you downloaded>"
+```
+
+Then point the Factory at it by setting `FACTORY_DB_BACKEND=postgres` and
+`DATABASE_URL` to that connection string, exactly as in the rehearsal above. If
+`pg_restore` says the file is not a dump it can read, it is a plain SQL file
+instead — use `psql --dbname "<connection string>" --file "<the file>"`.
+
 ---
 
 ## Restore rehearsal — do this once, before you need it
@@ -141,6 +155,10 @@ service has neither `FACTORY_INVITE_CODE` nor `FACTORY_OPEN_ACCESS` set. Set one
 of them in Render → Environment. A deploy is not needed; the service restarts on
 an environment change.
 
+**Prefer `FACTORY_INVITE_CODE`**, set to your beta code. Only use
+`FACTORY_OPEN_ACCESS=1` if you mean the site to be open to anyone who finds the
+address.
+
 ### "The site is down and I do not know why"
 
 1. Render dashboard → the web service → **Logs**. Read the last twenty lines
@@ -148,6 +166,8 @@ an environment change.
 2. Render dashboard → the web service → **Events**. If the newest deploy failed,
    use **Rollback** on the last deploy that succeeded.
 3. Rolling back is safe: it changes the code the site runs, not the database.
+   Any book built while the newer code was live is still in the database and can
+   be exported again once you are back up.
 
 ---
 

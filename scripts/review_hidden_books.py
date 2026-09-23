@@ -112,8 +112,7 @@ def main() -> int:
     print(f"\n{len(rows)} record(s) hidden only because of a word in the title:\n")
     for row in rows:
         print(f"  id {row['id']:>6}  {row['name']}")
-        print(f"          flags: user_saved={row['user_saved']} "
-              f"system_test={row['system_test']} temporary={row['temporary']}")
+        print(f"          hidden because: {row['reason_recorded_now']}")
     print("\nThese are CANDIDATES, not a verdict. Look at each one, then restore")
     print("the ones that are real customer books, one at a time:")
     print("    python scripts/review_hidden_books.py --unhide <id>")
