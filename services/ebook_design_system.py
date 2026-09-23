@@ -937,6 +937,12 @@ ul, ol {{
   padding: 0 0 0 4pt;
 }}
 ul li {{
+  /* This rule reaches checklist rows too. `ul.checklist {{ list-style: none }}`
+     sits on the container and only reaches its items by inheritance, which
+     always loses to a rule that matches the item directly -- so a checklist row
+     carries this disc, and has since before v1.9.0. Adding
+     `ul.checklist li {{ list-style-type: none }}` to "make that explicit" would
+     take the mark off every checklist in the product. */
   display: block;
   margin: 0 0 7pt;
   list-style-type: disc;

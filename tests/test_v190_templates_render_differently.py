@@ -158,11 +158,11 @@ def _rgb_hex(value: int | float | tuple) -> str:
 @pytest.mark.parametrize("theme_id", PROFESSIONAL_THEME_IDS)
 def test_a_book_renders_and_carries_its_furniture(theme_id, books):
     ink = _ink(books[theme_id])
-    assert ink["pages"] >= 2
+    assert ink["pages"] >= 4, "the sample book must fill pages, or its bottom-of-page tests prove nothing"
     assert "First chapter" in ink["text"]
-    # One marker per row, and it is the list item's own: this renderer draws a
-    # bullet or numeral on a list item whatever the CSS says, so anything the
-    # Factory adds becomes a second marker on the page.
+    # One marker per row, and it is the list item's own. The renderer draws the
+    # marker; the CSS says which one it draws. Anything the Factory types into
+    # the row itself becomes a second marker on the page.
     assert "Checklist item one" in ink["text"], "a checklist row went missing"
     assert "1. Numbered workflow step one" in ink["text"], (
         "a numbered procedure lost its number -- a bullet is not a step number"
@@ -384,6 +384,10 @@ def test_a_numbered_procedure_prints_numbers_and_a_bullet_list_prints_bullets(th
     text = _ink(books[theme_id])["text"]
     assert "1. Numbered workflow step one" in text, f"{theme_id}: a numbered step printed without its number"
     assert "2. Numbered workflow step two" in text, f"{theme_id}: only the first step was numbered"
+    # The other half of the name. Removing the marker from every bullet list and
+    # every checklist in all six templates used to pass this whole file.
+    assert "\u2022 Checklist item one" in text, f"{theme_id}: a checklist row printed with no mark"
+    assert "\u2022 Checklist item two" in text, f"{theme_id}: only the first checklist row was marked"
 
 
 @pytest.mark.parametrize("theme_id", PROFESSIONAL_THEME_IDS)
