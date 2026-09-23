@@ -5,6 +5,65 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.1 — 2026-09-23
+
+**The launch-readiness repairs, in one release.**
+
+### What changed
+
+- The Fast Stability Gate now runs every test the lock registry says it
+  protects. Seventeen files across six protected areas were missing from it, so
+  a change could pass the gate and still have broken something the registry
+  claimed was covered.
+- There is a backup and recovery guide at `docs/BACKUP_AND_RECOVERY.md`, written
+  to be followed rather than studied. It says plainly that `/admin/backup-db` is
+  not a backup, because it copies the database next to itself on the same disk.
+- Two new double-click files in `tools/`. **Factory Release Manager** checks,
+  tests, compares against the live site, pushes, and opens the pull request,
+  then tells you the one thing left to do; it cannot merge, deploy, spend money
+  or touch your settings file. **Check the cover over a real photo** builds the
+  three cover designs over a real photograph so the covers can be judged
+  properly. Both are free to run.
+
+### What was fixed
+
+- **Your book no longer disappears because of its own title.** A book called
+  "Test Kitchen Favourites", "The QA Handbook" or "Debug Your Life" was marked
+  as a test record the moment it was created and hidden from your Saved
+  Projects, with no message and no way back. Those are ordinary words in a real
+  book title. The Factory now decides from what it wrote about a record, not
+  from what you called your book.
+- **Signing in is no longer free to guess at.** The sign-in page accepted
+  unlimited attempts. Too many failures from one place is now refused for a
+  while, and the message says how long to wait. Someone failing on purpose
+  cannot lock you out of your own account.
+- **A colouring book preview picture no longer goes missing** on a service that
+  starts with an empty disk. The download already recovered the file from
+  storage; the preview did not.
+
+### Does anything look different in a book I already made?
+
+- No. Nothing about how a book is written, designed, rendered or exported
+  changed in this release.
+- Books already hidden by the old title rule keep their settings, because
+  guessing a second time could just as easily hide something that should stay
+  hidden. Run `python scripts/review_hidden_books.py` to see which ones are
+  affected — it only looks. `--unhide <id>` brings back the one you name.
+
+### Do your steps change?
+
+- No. One new thing is available if you want it: you can run the Factory Release
+  Manager instead of following the release steps by hand.
+
+### Release gate
+
+- Full gate against the live site: no new failures. The Fast Stability Gate
+  covers 44 files after this release, up from 22.
+- Spending is unchanged at 26 paid calls / $4.10. Nothing in this release makes
+  a paid call.
+
+---
+
 ## 1.9.0 — 2026-09-22
 
 **Six templates that make six different-looking books.**
