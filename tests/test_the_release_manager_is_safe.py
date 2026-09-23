@@ -19,14 +19,14 @@ class TheReleaseManagerIsSafeTests(unittest.TestCase):
         # What the file DOES, with comments and printed text removed -- a
         # promise in a comment must not satisfy a test about behaviour.
         #
-        # Batch chains with & and &&, so a line is split into SEGMENTS first and
+        # Batch chains with &, &&, | and ||, so a line is split into SEGMENTS
         # each segment judged on its own. Stripping a whole line that begins
         # with echo, which is what this used to do, hid everything after the
         # first & -- `echo Finishing up & git merge origin/main` passed the
         # whole suite, and `git merge` is on the forbidden list.
         commands = []
         for line in self.text.splitlines():
-            for segment in re.split(r"&{1,2}", line):
+            for segment in re.split(r"&{1,2}|\|{1,2}", line):
                 segment = segment.strip()
                 low = segment.lower()
                 if low.startswith("rem ") or low == "rem" or low.startswith("::"):
