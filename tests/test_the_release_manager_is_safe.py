@@ -46,8 +46,13 @@ class TheReleaseManagerIsSafeTests(unittest.TestCase):
         self.assertIsNotNone(match, "EXPECTED_COMMIT is not set at all")
         value = match.group(1).strip()
         self.assertTrue(value, "EXPECTED_COMMIT is blank, so the commit check is skipped")
-        self.assertRegex(value, r"^[0-9a-f]{7,40}$",
-                         f"EXPECTED_COMMIT is not a commit: {value!r}")
+        # The repository copy carries a placeholder that matches no commit, so
+        # an unpinned copy refuses to run instead of pushing whatever it finds.
+        # The Desktop copy is pinned to the reviewed commit for that release.
+        self.assertTrue(
+            value == "SET_BY_CLAUDE_AT_RELEASE" or re.fullmatch(r"[0-9a-f]{7,40}", value),
+            f"EXPECTED_COMMIT is neither the placeholder nor a commit: {value!r}",
+        )
 
     def test_the_commit_check_can_actually_stop_it(self):
         self.assertIn('if not "%EXPECTED_COMMIT%"==""', self.text)

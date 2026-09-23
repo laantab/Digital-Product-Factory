@@ -24,11 +24,16 @@ REM ===========================================================================
 
 REM ------------------------------- SETTINGS ---------------------------------
 set "BRANCH=v1.9.1-launch-blockers"
-set "EXPECTED_COMMIT=REPLACE_WITH_TIP"
+set "EXPECTED_COMMIT=SET_BY_CLAUDE_AT_RELEASE"
 REM  The exact commit this run is meant to push. If the branch is on anything
-REM  else the file stops and changes nothing. Leaving it blank turns that check
-REM  OFF and accepts whatever the branch happens to point at -- only do that
-REM  knowingly. Claude sets this to the reviewed commit for each release.
+REM  else, the file stops and changes nothing.
+REM
+REM  The copy in the repository carries SET_BY_CLAUDE_AT_RELEASE on purpose:
+REM  that matches no commit, so a copy nobody has pinned refuses to run rather
+REM  than pushing whatever the branch happens to point at. The copy on the
+REM  Desktop is pinned to the reviewed commit for that release.
+REM
+REM  Blank turns the check OFF entirely. Do not leave it blank.
 REM --------------------------------------------------------------------------
 
 set "REPO=%USERPROFILE%\Documents\Product-Pipeline\Factory-v1.3"
