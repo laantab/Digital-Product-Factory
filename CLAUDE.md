@@ -31,11 +31,22 @@ copy: never edit or test there.
 
 ## Gates
 
-Fast Stability Gate (about 25 seconds, zero cost), from this folder:
+Fast Stability Gate (about a minute, zero cost), from this folder:
 
 ```
-C:\Users\user\AppData\Local\Python\pythoncore-3.14-64\python.exe -m pytest -q tests\factory_golden_customer_path_smoke_suite.py tests\test_universal_topic_puzzle_engine.py tests\test_crossword_scope_answerkey_zip_repair.py tests\test_coloring_book_sea_creatures_customer_path.py tests\test_coloring_book_local_fallback_theme_classification.py tests\test_spelling_worksheet_topic_relevance.py tests\test_spelling_worksheet_release_readiness.py tests\test_spelling_worksheet_semantic_scope.py tests\test_african_animals_topic_repair.py tests\test_invite_gate.py tests\test_render_persistence_patch.py tests\test_customer_journey_every_product_type.py tests\test_ebook_saved_projects_visibility.py tests\test_saved_projects_reopen_build.py tests\test_reopen_packaging_identity_pass2.py tests\test_download_slug_package_id.py tests\test_word_search_topic_scope_contract.py tests\test_coloring_book_interior_no_text_contract.py tests\test_function_lock_registry_integrity.py tests\test_function_lock_enforcement.py tests\test_storage_foundation.py tests\test_storage_r2_cutover.py
+C:\Users\user\AppData\Local\Python\pythoncore-3.14-64\python.exe scripts\fast_gate.py
 ```
+
+The file list is no longer typed out here. `scripts/fast_gate.py` derives it
+from `command_center/function_lock_registry.json`: the core customer-path files
+in that script, plus every `protected_test_files` entry of every function whose
+registry record says `fast_gate`. A list typed by hand had drifted -- 17
+protected files across six functions were missing, so a change could pass this
+gate and still have broken a guarantee the registry says the gate protects.
+`tests/test_the_fast_gate_covers_what_it_claims.py` fails if a protected file is
+neither run nor named in that script's `EXCLUDED` with a reason.
+
+`python scripts\fast_gate.py --list` prints the files without running them.
 
 Same thing as a double-click:
 `Documents\Product-Pipeline\Factory Control Center\Launchers\RUN_FACTORY_STABILITY_GATE.bat`.
