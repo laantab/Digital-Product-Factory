@@ -176,6 +176,8 @@
     "tests/test_a_cover_title_may_contain_a_dash.py",
     "tests/test_admin_routes_require_an_admin.py",
     "tests/test_paid_image_authorization_is_per_thread.py",
-    "tests/test_the_invite_gate_fails_closed.py"
+    "tests/test_the_invite_gate_fails_closed.py",
+    "tests/test_an_unknown_project_gets_a_404_not_a_500.py",
+    "tests/test_advance_hands_off_in_workflow_mode.py"
   ]
 }

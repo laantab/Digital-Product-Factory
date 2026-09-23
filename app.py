@@ -792,11 +792,19 @@ def _store_uploaded_cover(project_id: int, raw: bytes, filename: str) -> str:
 
 
 def _ebook_workspace_project_or_404(project_id: int):
+    """(project, None) or (None, a response Flask can actually return).
+
+    The error half used to be wrapped twice -- (_error(...), 404) where
+    _error already returns (response, status) -- so every `return err[0],
+    err[1]` handed Flask a nested tuple and it raised TypeError. Flask then
+    turned an unknown project id into a 500 instead of the 404 the customer
+    should get. It was invisible because a 500 still looks like a refusal.
+    """
     project = database.get_project(project_id)
     if not project:
-        return None, (_error("Project not found.", 404), 404)
+        return None, _error("Project not found.", 404)
     if project.get("type") != "ebook" and str((project.get("data") or {}).get("product_type") or "").lower() != "ebook":
-        return None, (_error("Not an ebook project.", 400), 400)
+        return None, _error("Not an ebook project.", 400)
     return project, None
 
 
@@ -876,7 +884,7 @@ def get_ebook_workspace_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
         if get_workspace(data) is None and data.get("ebook_project_workspace"):
             data = ensure_workspace(data)
@@ -908,7 +916,7 @@ def ebook_workspace_cover_preview_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         digest = str(request.args.get("digest") or "").strip()
         download = str(request.args.get("download") or "").strip().lower() in {
             "1",
@@ -955,7 +963,7 @@ def save_ebook_workspace_research_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = save_research(dict(project.get("data") or {}), body.get("research") or body)
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -982,7 +990,7 @@ def run_ebook_workspace_research_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
 
@@ -1039,7 +1047,7 @@ def _run_confirmed_workspace_action(project_id: int, body: dict, executor, log_l
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
 
@@ -1107,7 +1115,7 @@ def _resubmitted_stage_action(project_id: int, log_label: str):
     app.logger.info("%s: confirmation already used; returning current stage", log_label)
     project, err = _ebook_workspace_project_or_404(project_id)
     if err:
-        return err[0], err[1]
+        return err
 
     data = dict(project.get("data") or {})
     ws = data.get("ebook_workspace") or {}
@@ -1163,7 +1171,7 @@ def approve_ebook_workspace_stage_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         stage = str(body.get("stage") or "").strip()
         data = approve_stage(
             dict(project.get("data") or {}),
@@ -1205,7 +1213,7 @@ def edit_ebook_workspace_title_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = edit_title(
             dict(project.get("data") or {}),
             title=str(body.get("title") or ""),
@@ -1229,7 +1237,7 @@ def edit_ebook_workspace_outline_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         chapters = body.get("chapters") or body.get("outline") or []
         data = edit_outline(
             dict(project.get("data") or {}),
@@ -1254,7 +1262,7 @@ def estimate_ebook_workspace_cost_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         action = str(body.get("action") or "").strip()
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
@@ -1288,7 +1296,7 @@ def cancel_ebook_workspace_estimate_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = cancel_paid_estimate(dict(project.get("data") or {}))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -1344,7 +1352,7 @@ def generate_ebook_workspace_manuscript_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
 
         # v1.8.1. THIS IS THE ROUTE THAT TOOK THE SITE DOWN. On 2026-09-18 it
@@ -1427,7 +1435,7 @@ def correct_ebook_workspace_manuscript_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         if body.get("authorize_paid_call") is not True:
             return _error(
                 "Correction requires explicit paid authorization. "
@@ -1545,7 +1553,7 @@ def ebook_workspace_visuals_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         body = request.get_json(silent=True) or {}
         action = str(body.get("action") or "prepare").strip().lower()
         data = dict(project.get("data") or {})
@@ -1597,7 +1605,7 @@ def ebook_workspace_cover_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         action = str(body.get("action") or "").strip().lower()
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
@@ -1651,7 +1659,7 @@ def ebook_workspace_cover_image_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         license_note = str(request.form.get("license_note") or "").strip()
         owned = str(request.form.get("i_own_this") or "").strip().lower() in {"1", "true", "on", "yes"}
         upload = request.files.get("file")
@@ -1722,7 +1730,7 @@ def ebook_workspace_cover_photo_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         asset = verified_source_photo_asset(
             dict(project.get("data") or {}),
             project_id=project_id,
@@ -1751,7 +1759,7 @@ def ebook_workspace_cover_variant_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         asset = verified_variant_asset(
             dict(project.get("data") or {}),
             project_id=project_id,
@@ -1781,7 +1789,7 @@ def ebook_workspace_design_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         theme_id = str(body.get("theme_id") or "").strip()
 
         # v1.8.1: in workflow mode the builder stages the theme, which
@@ -1812,7 +1820,7 @@ def ebook_workspace_preview_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
 
         # v1.8.1: rendering the designed preview of a whole book is not work
         # for the process that serves pages.
@@ -1846,7 +1854,7 @@ def ebook_workspace_full_preview_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
         html = str(data.get("ebook_preview_html") or data.get("preview_html") or "")
         if not html.strip():
@@ -1894,7 +1902,7 @@ def ebook_workspace_preview_opened_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = record_preview_opened(dict(project.get("data") or {}))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -1914,7 +1922,7 @@ def ebook_workspace_preflight_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
 
         # v1.8.1: preflight reads the whole designed book.
         handed = _workflow_hand_off(
@@ -1942,7 +1950,7 @@ def ebook_workspace_rewind_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = rewind_to_stage(dict(project.get("data") or {}), str(body.get("stage") or ""))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -4167,7 +4175,7 @@ def ebook_build_advance_route(project_id: int):
 
             project, err = _ebook_workspace_project_or_404(project_id)
             if err:
-                return err[0], err[1]
+                return err
             # v1.8.2. Refusing to build here was right; refusing SILENTLY was
             # not. "Continue where you left off" reopens a one-click build and
             # polls this route -- it never calls /resume -- so this was the
@@ -4261,7 +4269,7 @@ def ebook_build_status_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         return jsonify(status_payload(dict(project.get("data") or {}), project_id))
     except Exception as exc:  # noqa: BLE001
         return _customer_error(exc, 500, log="ebook build status failed")
@@ -4282,7 +4290,7 @@ def ebook_workspace_manuscript_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
         markdown = str(data.get("content") or data.get("ebook") or "")
         if not markdown.strip():
