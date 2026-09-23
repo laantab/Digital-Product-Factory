@@ -37,17 +37,19 @@ def _app_with(env: dict):
 
 
 class TheInviteGateFailsClosedTests(unittest.TestCase):
+    """The refusal is for hosted services only -- a laptop Factory stays open."""
+
     def tearDown(self):
         import app as app_module
 
         os.environ["FACTORY_TEST_MODE"] = "1"
-        for key in ("FACTORY_INVITE_CODE", "FACTORY_OPEN_ACCESS"):
+        for key in ("FACTORY_INVITE_CODE", "FACTORY_OPEN_ACCESS", "RENDER"):
             os.environ.pop(key, None)
         importlib.reload(app_module)
 
     def test_no_invite_code_and_no_opt_out_refuses_every_request(self):
         module, client = _app_with(
-            {"FACTORY_TEST_MODE": "0", "FACTORY_INVITE_CODE": "", "FACTORY_OPEN_ACCESS": ""}
+            {"FACTORY_TEST_MODE": "0", "RENDER": "true", "FACTORY_INVITE_CODE": "", "FACTORY_OPEN_ACCESS": ""}
         )
         for path in ("/", "/projects", "/admin/backup-db"):
             r = client.get(path)
@@ -58,7 +60,7 @@ class TheInviteGateFailsClosedTests(unittest.TestCase):
 
     def test_a_configured_invite_code_still_gates_normally(self):
         module, client = _app_with(
-            {"FACTORY_TEST_MODE": "0", "FACTORY_INVITE_CODE": "letmein", "FACTORY_OPEN_ACCESS": ""}
+            {"FACTORY_TEST_MODE": "0", "RENDER": "true", "FACTORY_INVITE_CODE": "letmein", "FACTORY_OPEN_ACCESS": ""}
         )
         self.assertEqual(module._invite_code_required(), "letmein")
         r = client.get("/", headers={"Accept": "text/html"})
@@ -66,7 +68,7 @@ class TheInviteGateFailsClosedTests(unittest.TestCase):
 
     def test_open_access_can_be_chosen_deliberately(self):
         module, client = _app_with(
-            {"FACTORY_TEST_MODE": "0", "FACTORY_INVITE_CODE": "", "FACTORY_OPEN_ACCESS": "1"}
+            {"FACTORY_TEST_MODE": "0", "RENDER": "true", "FACTORY_INVITE_CODE": "", "FACTORY_OPEN_ACCESS": "1"}
         )
         r = client.get("/", headers={"Accept": "text/html"})
         self.assertNotIn(r.status_code, (401, 503))
@@ -74,9 +76,19 @@ class TheInviteGateFailsClosedTests(unittest.TestCase):
     def test_static_files_are_still_served_while_closed(self):
         """A closed gate must not make the refusal page itself unstyled."""
         module, client = _app_with(
-            {"FACTORY_TEST_MODE": "0", "FACTORY_INVITE_CODE": "", "FACTORY_OPEN_ACCESS": ""}
+            {"FACTORY_TEST_MODE": "0", "RENDER": "true", "FACTORY_INVITE_CODE": "", "FACTORY_OPEN_ACCESS": ""}
         )
         r = client.get("/static/js/app.js")
+        self.assertNotEqual(r.status_code, 503)
+
+    def test_a_factory_on_a_laptop_is_not_refused(self):
+        """RENDER unset means this is somebody's own machine, not the live site."""
+        module, client = _app_with(
+            {"FACTORY_TEST_MODE": "0", "RENDER": "", "FACTORY_INVITE_CODE": "",
+             "FACTORY_OPEN_ACCESS": ""}
+        )
+        self.assertFalse(module._access_control_is_unconfigured())
+        r = client.get("/", headers={"Accept": "text/html"})
         self.assertNotEqual(r.status_code, 503)
 
 

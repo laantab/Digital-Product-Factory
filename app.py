@@ -265,6 +265,12 @@ def _access_control_is_unconfigured() -> bool:
     """
     if _FACTORY_TEST_MODE:
         return False
+    # Only on a hosted service. Render sets RENDER=true on every service it
+    # runs. A Factory started on a laptop stays open, which is what
+    # .env.example has always told people to expect and what the test suite
+    # relies on; refusing there would only teach people to switch this off.
+    if str(os.environ.get("RENDER") or "").strip().lower() not in ("true", "1"):
+        return False
     if str(os.environ.get("FACTORY_OPEN_ACCESS") or "").strip() == "1":
         return False
     return not str(os.environ.get("FACTORY_INVITE_CODE") or "").strip()
@@ -278,8 +284,9 @@ _ACCESS_CLOSED_MESSAGE = (
 
 if _access_control_is_unconfigured():
     app.logger.critical(
-        "REFUSING TRAFFIC: neither FACTORY_INVITE_CODE nor FACTORY_OPEN_ACCESS is set. "
-        "Every request will be answered 503 until one of them is."
+        "REFUSING TRAFFIC: this is a hosted service (RENDER is set) and neither "
+        "FACTORY_INVITE_CODE nor FACTORY_OPEN_ACCESS is set. Every request will be "
+        "answered 503 until one of them is."
     )
 
 
