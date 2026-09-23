@@ -184,6 +184,7 @@
     "tests/test_the_fast_gate_covers_what_it_claims.py",
     "tests/test_login_is_rate_limited.py",
     "tests/test_coloring_preview_recovers_from_storage.py",
-    "tests/test_the_backup_runbook_matches_the_code.py"
+    "tests/test_the_backup_runbook_matches_the_code.py",
+    "tests/test_the_release_manager_is_safe.py"
   ]
 }
