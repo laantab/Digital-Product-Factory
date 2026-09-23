@@ -1766,6 +1766,38 @@ def cleanup_project_storage(
 # Safety helpers
 # ---------------------------------------------------------------------------
 
+def _record_metadata_haystack(type_: str | None = None, data: dict | None = None) -> str:
+    """Everything the SYSTEM wrote about a record -- never the customer's title.
+
+    v1.9.1. "test", "qa", "debug", "fixture", "placeholder", "regression" and
+    "handoff" are ordinary words in a real book title: Test Kitchen Favourites,
+    The QA Handbook, Debug Your Life, Seed Starting for Beginners. Matching them
+    anywhere stamped system_test=1 on a paid-for book at the moment it was
+    created, so it vanished from its owner's Saved Projects with no message and
+    no route back, and the bulk clean-up route counted it as deletable.
+
+    In one of these fields the same word is the system's own label, not the
+    customer's wording, and it still means what it always meant.
+    """
+    record = data if isinstance(data, dict) else {}
+    parts = [
+        type_,
+        record.get("source"),
+        record.get("product_type"),
+        record.get("product_label"),
+        record.get("_test_reason"),
+    ]
+    return " ".join(str(part).strip() for part in parts if str(part or "").strip())
+
+
+#: An unmistakable label a customer does not put on a book they are selling:
+#: "[TEST] ...", "(QA) ...", "TEST: ...", "DEBUG - ...".
+_EXPLICIT_MARKER_RE = re.compile(
+    r"(?i)(^|\s)[\[\(]\s*(test|qa|debug|fixture|placeholder|regression|handoff)\s*[\]\)]"
+    r"|^(test|qa|debug|fixture|placeholder|regression|handoff)\s*[:\-\u2013\u2014]"
+)
+
+
 def _visibility_haystack(name: str, type_: str | None = None, data: dict | None = None) -> str:
     """Scan title/name/source/type/metadata only — never manuscript content."""
     record = data if isinstance(data, dict) else {}
@@ -1832,7 +1864,14 @@ def classify_customer_visibility(
         system_test = True
     if any(phrase in lowered for phrase in _STRONG_INTERNAL_PHRASES):
         internal_record = True
-    if _TEST_WORD_RE.search(haystack) or _QA_WORD_RE.search(haystack):
+    # v1.9.1. A bare word is evidence only where the customer did not write it:
+    # in the record's own metadata, or behind an unmistakable label.
+    metadata = _record_metadata_haystack(type_, data)
+    bare_word_re_list = (_TEST_WORD_RE, _QA_WORD_RE)
+    bare_in_metadata = any(rx.search(metadata) for rx in bare_word_re_list)
+    bare_in_title = any(rx.search(title) for rx in bare_word_re_list)
+    marked_title = bool(_EXPLICIT_MARKER_RE.search(title))
+    if bare_in_metadata or marked_title:
         system_test = True
     if _SMOKE_TEST_RE.search(haystack) and (
         "test" in lowered or "workflow" in lowered or "pipeline" in lowered
@@ -1849,7 +1888,9 @@ def classify_customer_visibility(
         internal_record = True
     if _PIPELINE_TEST_RE.search(haystack) or _VALIDATION_TEST_RE.search(haystack):
         system_test = True
-    if _TEMPORARY_RECORD_RE.search(haystack) or _PLACEHOLDER_RE.search(haystack):
+    if _TEMPORARY_RECORD_RE.search(haystack):
+        system_test = True
+    if _PLACEHOLDER_RE.search(metadata):
         system_test = True
 
     if system_test or internal_record:
@@ -1857,6 +1898,14 @@ def classify_customer_visibility(
             "hide": True,
             "system_test": system_test,
             "internal_record": internal_record,
+        }
+
+    if bare_in_title or _PLACEHOLDER_RE.search(title):
+        return {
+            "hide": False,
+            "system_test": False,
+            "internal_record": False,
+            "needs_decision": "a test-sounding word appears only in the customer's own title",
         }
 
     broad = _BROAD_DECISION_RE.search(title)
