@@ -101,7 +101,7 @@ import secrets as _secrets
 
 from flask_login import LoginManager
 
-from auth import load_user as _load_user
+from auth import admin_required, load_user as _load_user
 
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or _secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -254,6 +254,42 @@ def _invite_code_required() -> str:
     return str(os.environ.get("FACTORY_INVITE_CODE") or "").strip()
 
 
+def _access_control_is_unconfigured() -> bool:
+    """True when nothing at all stands in front of the Factory.
+
+    The gate used to be off whenever FACTORY_INVITE_CODE was empty, so one
+    unset or mistyped variable on a hand-configured host silently exposed the
+    whole site -- with no error and nothing in a log to say so. Access control
+    now fails closed. Running open is still allowed; it just has to be chosen,
+    with FACTORY_OPEN_ACCESS=1.
+    """
+    if _FACTORY_TEST_MODE:
+        return False
+    # Only on a hosted service. Render sets RENDER=true on every service it
+    # runs. A Factory started on a laptop stays open, which is what
+    # .env.example has always told people to expect and what the test suite
+    # relies on; refusing there would only teach people to switch this off.
+    if str(os.environ.get("RENDER") or "").strip().lower() not in ("true", "1"):
+        return False
+    if str(os.environ.get("FACTORY_OPEN_ACCESS") or "").strip() == "1":
+        return False
+    return not str(os.environ.get("FACTORY_INVITE_CODE") or "").strip()
+
+
+_ACCESS_CLOSED_MESSAGE = (
+    "This site is not accepting visitors yet. If you run it: set "
+    "FACTORY_INVITE_CODE to your beta code, or FACTORY_OPEN_ACCESS=1 to run "
+    "it open on purpose."
+)
+
+if _access_control_is_unconfigured():
+    app.logger.critical(
+        "REFUSING TRAFFIC: this is a hosted service (RENDER is set) and neither "
+        "FACTORY_INVITE_CODE nor FACTORY_OPEN_ACCESS is set. Every request will be "
+        "answered 503 until one of them is."
+    )
+
+
 def _invite_matches(candidate) -> bool:
     required = _invite_code_required()
     candidate = str(candidate or "").strip()
@@ -283,10 +319,14 @@ def _invite_page(message: str = "", status: int = 200):
 
 @app.before_request
 def _invite_gate():
+    path = request.path or "/"
+    if path.startswith(_INVITE_EXEMPT_PREFIXES):
+        return None
+    if _access_control_is_unconfigured():
+        return _error(_ACCESS_CLOSED_MESSAGE, 503)
     if not _invite_code_required():
         return None
-    path = request.path or "/"
-    if path in _INVITE_EXEMPT_PATHS or path.startswith(_INVITE_EXEMPT_PREFIXES):
+    if path in _INVITE_EXEMPT_PATHS:
         return None
     if _invite_matches(request.headers.get(_INVITE_HEADER)):
         return None
@@ -752,11 +792,19 @@ def _store_uploaded_cover(project_id: int, raw: bytes, filename: str) -> str:
 
 
 def _ebook_workspace_project_or_404(project_id: int):
+    """(project, None) or (None, a response Flask can actually return).
+
+    The error half used to be wrapped twice -- (_error(...), 404) where
+    _error already returns (response, status) -- so every `return err[0],
+    err[1]` handed Flask a nested tuple and it raised TypeError. Flask then
+    turned an unknown project id into a 500 instead of the 404 the customer
+    should get. It was invisible because a 500 still looks like a refusal.
+    """
     project = database.get_project(project_id)
     if not project:
-        return None, (_error("Project not found.", 404), 404)
+        return None, _error("Project not found.", 404)
     if project.get("type") != "ebook" and str((project.get("data") or {}).get("product_type") or "").lower() != "ebook":
-        return None, (_error("Not an ebook project.", 400), 400)
+        return None, _error("Not an ebook project.", 400)
     return project, None
 
 
@@ -836,7 +884,7 @@ def get_ebook_workspace_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
         if get_workspace(data) is None and data.get("ebook_project_workspace"):
             data = ensure_workspace(data)
@@ -868,7 +916,7 @@ def ebook_workspace_cover_preview_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         digest = str(request.args.get("digest") or "").strip()
         download = str(request.args.get("download") or "").strip().lower() in {
             "1",
@@ -915,7 +963,7 @@ def save_ebook_workspace_research_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = save_research(dict(project.get("data") or {}), body.get("research") or body)
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -942,7 +990,7 @@ def run_ebook_workspace_research_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
 
@@ -999,7 +1047,7 @@ def _run_confirmed_workspace_action(project_id: int, body: dict, executor, log_l
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
 
@@ -1067,7 +1115,7 @@ def _resubmitted_stage_action(project_id: int, log_label: str):
     app.logger.info("%s: confirmation already used; returning current stage", log_label)
     project, err = _ebook_workspace_project_or_404(project_id)
     if err:
-        return err[0], err[1]
+        return err
 
     data = dict(project.get("data") or {})
     ws = data.get("ebook_workspace") or {}
@@ -1123,7 +1171,7 @@ def approve_ebook_workspace_stage_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         stage = str(body.get("stage") or "").strip()
         data = approve_stage(
             dict(project.get("data") or {}),
@@ -1165,7 +1213,7 @@ def edit_ebook_workspace_title_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = edit_title(
             dict(project.get("data") or {}),
             title=str(body.get("title") or ""),
@@ -1189,7 +1237,7 @@ def edit_ebook_workspace_outline_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         chapters = body.get("chapters") or body.get("outline") or []
         data = edit_outline(
             dict(project.get("data") or {}),
@@ -1214,7 +1262,7 @@ def estimate_ebook_workspace_cost_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         action = str(body.get("action") or "").strip()
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
@@ -1248,7 +1296,7 @@ def cancel_ebook_workspace_estimate_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = cancel_paid_estimate(dict(project.get("data") or {}))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -1304,7 +1352,7 @@ def generate_ebook_workspace_manuscript_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
 
         # v1.8.1. THIS IS THE ROUTE THAT TOOK THE SITE DOWN. On 2026-09-18 it
@@ -1387,7 +1435,7 @@ def correct_ebook_workspace_manuscript_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         if body.get("authorize_paid_call") is not True:
             return _error(
                 "Correction requires explicit paid authorization. "
@@ -1505,7 +1553,7 @@ def ebook_workspace_visuals_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         body = request.get_json(silent=True) or {}
         action = str(body.get("action") or "prepare").strip().lower()
         data = dict(project.get("data") or {})
@@ -1557,7 +1605,7 @@ def ebook_workspace_cover_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         action = str(body.get("action") or "").strip().lower()
         data = dict(project.get("data") or {})
         data["_project_id"] = project_id
@@ -1611,7 +1659,7 @@ def ebook_workspace_cover_image_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         license_note = str(request.form.get("license_note") or "").strip()
         owned = str(request.form.get("i_own_this") or "").strip().lower() in {"1", "true", "on", "yes"}
         upload = request.files.get("file")
@@ -1682,7 +1730,7 @@ def ebook_workspace_cover_photo_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         asset = verified_source_photo_asset(
             dict(project.get("data") or {}),
             project_id=project_id,
@@ -1711,7 +1759,7 @@ def ebook_workspace_cover_variant_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         asset = verified_variant_asset(
             dict(project.get("data") or {}),
             project_id=project_id,
@@ -1741,7 +1789,7 @@ def ebook_workspace_design_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         theme_id = str(body.get("theme_id") or "").strip()
 
         # v1.8.1: in workflow mode the builder stages the theme, which
@@ -1772,7 +1820,7 @@ def ebook_workspace_preview_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
 
         # v1.8.1: rendering the designed preview of a whole book is not work
         # for the process that serves pages.
@@ -1806,7 +1854,7 @@ def ebook_workspace_full_preview_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
         html = str(data.get("ebook_preview_html") or data.get("preview_html") or "")
         if not html.strip():
@@ -1854,7 +1902,7 @@ def ebook_workspace_preview_opened_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = record_preview_opened(dict(project.get("data") or {}))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -1874,7 +1922,7 @@ def ebook_workspace_preflight_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
 
         # v1.8.1: preflight reads the whole designed book.
         handed = _workflow_hand_off(
@@ -1902,7 +1950,7 @@ def ebook_workspace_rewind_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = rewind_to_stage(dict(project.get("data") or {}), str(body.get("stage") or ""))
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project)})
@@ -4127,7 +4175,7 @@ def ebook_build_advance_route(project_id: int):
 
             project, err = _ebook_workspace_project_or_404(project_id)
             if err:
-                return err[0], err[1]
+                return err
             # v1.8.2. Refusing to build here was right; refusing SILENTLY was
             # not. "Continue where you left off" reopens a one-click build and
             # polls this route -- it never calls /resume -- so this was the
@@ -4221,7 +4269,7 @@ def ebook_build_status_route(project_id: int):
 
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         return jsonify(status_payload(dict(project.get("data") or {}), project_id))
     except Exception as exc:  # noqa: BLE001
         return _customer_error(exc, 500, log="ebook build status failed")
@@ -4242,7 +4290,7 @@ def ebook_workspace_manuscript_route(project_id: int):
         assert_no_paid_side_effects_on_read()
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
-            return err[0], err[1]
+            return err
         data = dict(project.get("data") or {})
         markdown = str(data.get("content") or data.get("ebook") or "")
         if not markdown.strip():
@@ -4832,8 +4880,15 @@ def delete_all_projects():
 
 
 @app.post("/admin/backup-db")
+@admin_required
 def admin_backup_db():
-    """Create a timestamped backup of the projects database. Used before bulk operations."""
+    """Create a timestamped backup of the projects database. Used before bulk operations.
+
+    Admin only. This route had no authentication at all: in production the
+    invite gate stood in front of it, but that is one shared code every pilot
+    customer holds, so any customer could copy the whole customer database by
+    visiting one URL. /admin/storage-migration already had the right shape.
+    """
     import datetime, shutil, os as _os
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     src = database.DB_PATH
@@ -4906,9 +4961,31 @@ def admin_storage_migration_route():
 
 
 @app.delete("/admin/delete-test-projects")
+@admin_required
 def admin_delete_test_projects():
-    """Delete test/debug/temporary projects. LOCKED rows are never deleted."""
-    import datetime, shutil, os as _os
+    """Delete test/debug/temporary projects. LOCKED rows are never deleted.
+
+    FAIL CLOSED, TWICE -- the same rule /admin/storage-migration follows.
+      * Admin only. This route had no authentication at all, and it deletes
+        every row matching `system_test = 1 OR temporary = 1 OR user_saved = 0`
+        with no confirmation and no request body.
+      * Those flags are stamped by the name classifier, so the rows it removes
+        include real customer books whose titles happen to contain a word like
+        "test" or "QA". Deleting one is not recoverable through the product.
+      * Unless FACTORY_DELETE_TEST_PROJECTS_TOKEN is set on the host the route
+        does not exist -- it answers 404, exactly as an unknown path would.
+        When set, the request must carry it in the
+        X-Factory-Delete-Test-Projects header, compared in constant time.
+    """
+    import datetime, hmac as _hmac, shutil, os as _os
+
+    expected = str(os.environ.get("FACTORY_DELETE_TEST_PROJECTS_TOKEN") or "").strip()
+    if not expected:
+        return _error("Not found.", 404)
+    supplied = str(request.headers.get("X-Factory-Delete-Test-Projects") or "")
+    if not _hmac.compare_digest(supplied, expected):
+        return _error("Not found.", 404)
+
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     src = database.DB_PATH
     bak_dir = _os.path.dirname(src)

@@ -170,6 +170,14 @@
     "tests/test_builder_recovers_cover_from_storage.py",
     "tests/test_cover_photo_survives_a_new_machine.py",
     "tests/test_cover_variants_follow_the_work.py",
-    "tests/test_finished_files_count_from_storage.py"
+    "tests/test_finished_files_count_from_storage.py",
+    "tests/test_v190_six_template_studio.py",
+    "tests/test_v190_templates_render_differently.py",
+    "tests/test_a_cover_title_may_contain_a_dash.py",
+    "tests/test_admin_routes_require_an_admin.py",
+    "tests/test_paid_image_authorization_is_per_thread.py",
+    "tests/test_the_invite_gate_fails_closed.py",
+    "tests/test_an_unknown_project_gets_a_404_not_a_500.py",
+    "tests/test_advance_hands_off_in_workflow_mode.py"
   ]
 }

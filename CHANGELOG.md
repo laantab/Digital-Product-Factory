@@ -5,6 +5,95 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.0 — 2026-09-22
+
+**Six templates that make six different-looking books.**
+
+### What changed
+
+- Choosing a template now changes the book itself, not just its colours.
+  Each of the six has its own chapter opening, headings, callouts,
+  checklists, quotations, captions, picture placement, table treatment,
+  contents page and page furniture.
+- The chooser preview now shows all of those parts, so you can see what you
+  are picking before you pick it.
+- Checklists print a real mark, and numbered steps print their numbers, in
+  every template. Four of the six were printing a numbered procedure as a
+  plain bullet list, so a set of steps arrived with no order to follow.
+
+### What was fixed
+
+- Type can no longer be printed in a colour too faint to read. Every colour
+  the Factory prints is now measured against what is behind it, and darkened
+  only as far as it has to be. Two templates were printing text that was
+  effectively invisible on paper.
+- Tables now have visible structure in every template.
+- Nothing is printed across the page number at the bottom of a page. The
+  text area now stops where the page-number strip begins, instead of
+  running into it, so the last line of a full page is never printed
+  through the number. Pages hold a line or two less as a result.
+- A wide table is rebuilt as a stack of cards so it stays readable on a
+  portrait page. In Bold Creator the row labels on those cards were being
+  printed in the template's own dark ink on a block of that same dark ink,
+  so pages of planning figures arrived as numbers with nothing to say what
+  they were. The card's own colours now win over the table treatment, and
+  every card label is measured against the panel it sits on.
+
+- A title with a dash in it can have a cover again. "Container Gardening -
+  A Beginner's Guide" was refused by all three cover layouts, and the message
+  blamed the photograph and told you to pick a different one. The photograph
+  was never the problem: the dash was being glued to the next word.
+
+### Safety repairs found in the launch audit
+
+- Two admin web addresses had no sign-in at all. One copied the whole customer
+  database; the other deleted projects permanently. Anyone holding the beta
+  invite code — which every pilot customer has — could reach them. Both now
+  require an admin account, and the delete also refuses to exist unless a
+  separate token is set on the host.
+- The live site now refuses traffic instead of serving itself to everyone when
+  no access control is configured. Before, an unset or mistyped invite code
+  silently opened the whole Factory with nothing in a log to say so. Running it
+  open to everyone is still allowed — it just has to be chosen, with
+  FACTORY_OPEN_ACCESS=1. The Factory on your own computer is unaffected.
+- Permission to make a paid picture belonged to the whole program rather than
+  to the one build that was approved, so anything running at the same time —
+  a save, an export, a quality recheck — could have spent money on that
+  build's approval. Permission is now held by the one request that was given it.
+
+### Does anything look different in a book I already made?
+
+- Yes, slightly, and deliberately. Re-exporting an existing book picks up
+  these repairs, so a few colours are a shade deeper where they were too
+  faint to read: Bright Workbook's amber (measured 2.15:1 against the page,
+  which is unreadable), Minimal Professional's teal, and Warm Wellness's
+  terracotta and muted grey. Bright Workbook's chapter opening changed from
+  a tab to a stacked label, because its tab had become indistinguishable
+  from Modern Business's chapter opening. Checklists and numbered steps
+  print one marker instead of two.
+- Every template's version number was raised to record that its printed
+  output changed. Nothing you have saved was altered, and every saved book
+  still opens, still resolves its template, and still downloads.
+
+### Do your steps change?
+
+- No. The Factory works the same way; there is more to choose from.
+
+### Cost
+
+- No paid calls. Templates, previews and contrast checks are all local.
+
+### Release gate
+
+- Two new suites: a structural gate over the six templates, and a rendering
+  gate that builds a real book in every template and inspects the finished
+  PDF — contrast of every word against what is painted behind it, no text
+  below the readable minimum, visible tables, nothing over the footer, one
+  marker per row, and no two books rendering alike. Both are in the stability
+  gate. Full comparison gate with no new failures.
+
+---
+
 ## 1.8.14 — 2026-09-22
 
 **A finished book says it is finished.**

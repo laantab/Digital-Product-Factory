@@ -434,7 +434,27 @@ def _render_comparison_cards(
     return wrap
 
 
-def _style_readable_table(soup: BeautifulSoup, table, headers: list[str]) -> None:
+#: How each template's table draws, as attributes this renderer honours:
+#: (border width in px, cell padding). CSS cell borders are ignored by
+#: xhtml2pdf, which is why no book had a visible grid before v1.9.0.
+TABLE_GRID = {
+    # (border width, cell padding) -- a style that says "open" draws no grid,
+    # and never claims one. Round 1 mapped every style to border="1", which
+    # made "minimal" and "hairline rows" false labels for an identical black
+    # grid in all six books.
+    "hairline_rows": ("0", "9"),
+    "banded": ("1", "7"),
+    "thick_header": ("1", "8"),
+    "minimal": ("0", "10"),
+    "full_grid": ("1", "5"),
+    "classic": ("1", "8"),
+}
+
+
+def _style_readable_table(
+    soup: BeautifulSoup, table, headers: list[str], table_style: str = "classic",
+    grid_colour: str = "#9ca3af",
+) -> None:
     col_count = len(headers)
     classes = table.get("class") or []
     if isinstance(classes, str):
@@ -442,9 +462,15 @@ def _style_readable_table(soup: BeautifulSoup, table, headers: list[str]) -> Non
     existing = table.find("colgroup")
     if existing:
         existing.decompose()
+    border, padding = TABLE_GRID.get(str(table_style or "classic"), TABLE_GRID["classic"])
     table["width"] = "100%"
-    table["cellpadding"] = "8"
+    table["cellpadding"] = padding
     table["cellspacing"] = "0"
+    table["border"] = border
+    if border != "0":
+        # xhtml2pdf takes the rule colour from the attribute, never from CSS
+        # on the cells, so the template's own colour is carried here.
+        table["bordercolor"] = str(grid_colour or "#9ca3af")
     pct = f"{max(1.0, 100.0 / col_count):.4f}%"
     colgroup = soup.new_tag("colgroup")
     for _ in range(col_count):
@@ -469,7 +495,8 @@ def _style_readable_table(soup: BeautifulSoup, table, headers: list[str]) -> Non
     table["class"] = classes
 
 
-def _prepare_ebook_tables(soup: BeautifulSoup) -> None:
+def _prepare_ebook_tables(soup: BeautifulSoup, table_style: str = "classic",
+                          grid_colour: str = "#9ca3af") -> None:
     for table in list(soup.find_all("table")):
         classes = table.get("class") or []
         if isinstance(classes, str):
@@ -502,7 +529,7 @@ def _prepare_ebook_tables(soup: BeautifulSoup) -> None:
                 _render_comparison_cards(soup, headers, model["rows"], extra_class=extra)
             )
             continue
-        _style_readable_table(soup, table, headers)
+        _style_readable_table(soup, table, headers, table_style, grid_colour)
 
 
 def _ensure_table_headers(soup: BeautifulSoup) -> None:
@@ -531,7 +558,8 @@ def _ensure_table_headers(soup: BeautifulSoup) -> None:
             table.append(tbody)
 
 
-def _decorate_structured_html(fragment: str) -> str:
+def _decorate_structured_html(fragment: str, table_style: str = "classic",
+                              grid_colour: str = "#9ca3af") -> str:
     soup = BeautifulSoup(fragment or "", "html.parser")
     for table in soup.find_all("table"):
         classes = table.get("class") or []
@@ -572,7 +600,7 @@ def _decorate_structured_html(fragment: str) -> str:
     _normalize_checklist_items(soup)
     _promote_numbered_paragraphs(soup)
     _ensure_table_headers(soup)
-    _prepare_ebook_tables(soup)
+    _prepare_ebook_tables(soup, table_style, grid_colour)
     _keep_headings_with_next(soup)
     return str(soup)
 
@@ -836,6 +864,7 @@ def render_designed_ebook_html(
     body_md, disclaimer_md, sources_md = peel_back_matter(original)
     preamble, _chapters_raw = _split_chapters(body_md)
     chapters = numbered_chapters(original)
+    theme = get_theme(design.theme_id)
     css = theme_css(design.theme_id)
     css = re.sub(r"letter-spacing\s*:\s*[^;\"']+;?", "", css, flags=re.I)
 
@@ -926,7 +955,9 @@ def render_designed_ebook_html(
 
     for i, (ctitle, cmd) in enumerate(chapters, start=1):
         body = _strip_leading_heading(_md_fragment(cmd), ctitle)
-        body = _decorate_structured_html(body)
+        body = _decorate_structured_html(
+            body, getattr(theme, "table_style", "classic"), getattr(theme, "color_rule", "#9ca3af")
+        )
         body = _keep_chapter_last_block(body)
         parts.append("<pdf:nextpage />")
         parts.append(f'<section class="chapter-page" id="chapter-{i}">')

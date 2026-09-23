@@ -119,6 +119,37 @@ class LockedProjectDeletionTests(unittest.TestCase):
         self._asset_root = Path(tempfile.mkdtemp(prefix="lockdel-assets-"))
         self.client = app.test_client()
         app.config["TESTING"] = True
+        # /admin/delete-test-projects now needs an admin and a host token: it
+        # used to be reachable by anyone holding the shared invite code, and it
+        # deletes rows permanently. The guarantee these tests encode -- a LOCKED
+        # project survives the bulk delete -- is unchanged, so they sign in and
+        # send the token rather than asserting the route is open.
+        from routes import auth as auth_routes
+
+        self._admin_password = "lockdel-admin-pw"
+        with patch.object(auth_routes, "_BCRYPT_ROUNDS", 4):
+            database.create_user(
+                "lockdel-admin@example.com",
+                auth_routes._hash_password(self._admin_password),
+                role="admin",
+            )
+            login = self.client.post(
+                "/auth/login",
+                json={"email": "lockdel-admin@example.com", "password": self._admin_password},
+            )
+        assert login.status_code == 200, login.get_data(as_text=True)
+        self._delete_token = "lockdel-test-token"
+        self._token_patch = patch.dict(
+            os.environ, {"FACTORY_DELETE_TEST_PROJECTS_TOKEN": self._delete_token}
+        )
+        self._token_patch.start()
+        self.addCleanup(self._token_patch.stop)
+
+    def _bulk_delete(self):
+        return self.client.delete(
+            "/admin/delete-test-projects",
+            headers={"X-Factory-Delete-Test-Projects": self._delete_token},
+        )
 
     def tearDown(self):
         for p in self._patches:
@@ -224,7 +255,7 @@ class LockedProjectDeletionTests(unittest.TestCase):
             system_test=True,
             temporary=True,
         )
-        resp = self.client.delete("/admin/delete-test-projects")
+        resp = self._bulk_delete()
         self.assertEqual(resp.status_code, 200, resp.data)
         body = resp.get_json()
         self.assertEqual(body.get("deleted"), 1)
@@ -293,7 +324,7 @@ class LockedProjectDeletionTests(unittest.TestCase):
             self.assertEqual(resp.status_code, 409, resp.data)
             self.assertEqual(resp.get_json().get("error"), LOCKED_DELETION_MESSAGE)
             self.assertIsNotNone(database.get_project(pid))
-        bulk = self.client.delete("/admin/delete-test-projects")
+        bulk = self._bulk_delete()
         self.assertEqual(bulk.status_code, 200, bulk.data)
         body = bulk.get_json()
         self.assertEqual(body.get("deleted"), 0)

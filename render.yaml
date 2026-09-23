@@ -55,6 +55,19 @@ services:
         sync: false
       - key: TAVILY_API_KEY
         sync: false
+      # Access control. The site now REFUSES traffic (503) unless one of these
+      # is set, so neither can be forgotten silently. Set FACTORY_INVITE_CODE
+      # to the shared beta code, or FACTORY_OPEN_ACCESS=1 to run the site open
+      # on purpose. Listed here so both are visible as required, even though
+      # this file is not applied to the hand-created service.
+      - key: FACTORY_INVITE_CODE
+        sync: false
+      - key: FACTORY_OPEN_ACCESS
+        sync: false
+      # Set this only when the one-off delete of test/temporary projects is
+      # actually being run; /admin/delete-test-projects answers 404 without it.
+      - key: FACTORY_DELETE_TEST_PROJECTS_TOKEN
+        sync: false
 
   # -------------------------------------------------------------- builder
   # Tasks are dispatched to this service by name. Compute is chosen per
