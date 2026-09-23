@@ -4495,6 +4495,13 @@ def coloring_preview_route(project_id: int, filename: str):
     except OSError:
         return _error(coloring_preview_missing_message(filename), 404)
     if not os.path.isfile(file_path):
+        # v1.9.1. The same asset-first fallback the download route has had since
+        # Phase 0B-3B1. The builder starts every run with an empty local disk,
+        # which is the whole failure class 1.8.11-1.8.14 closed; without this,
+        # a customer's download works and the picture of it 404s.
+        served = _verified_export_asset(pkg, filename)
+        if served is not None:
+            return _send_artifact_bytes(served, filename)
         return _error(coloring_preview_missing_message(filename), 404)
     return send_from_directory(directory, filename, as_attachment=False)
 
