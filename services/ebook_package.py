@@ -22,6 +22,7 @@ each finished PNG is written to exports/<package_id>/img_<visual_id>.png and the
 stable <img> URL in the preview resolves as soon as the file exists.
 """
 import base64
+import contextvars
 import html
 import json
 import os
@@ -1814,8 +1815,19 @@ _last_image_error: str = ""
 # Paid image generation requires an explicit user-approved generation action.
 # Save / Export / QA rechecks / diagnostic probes / missing-file probes must
 # never reach the OpenAI Images API without this authorization context.
-_paid_image_auth_depth: int = 0
-_paid_image_auth_reason: str = ""
+#
+# These are ContextVars, not module globals. As plain integers, one approved
+# build's authorization was visible to every other thread in the process, and
+# the app is multi-threaded by its own design (services/jobs/runner.py starts a
+# daemon executor and spawns a thread on passing traffic) -- so anything running
+# beside a build could spend money on that build's approval. A ContextVar is
+# per-thread and per-task, so it is also correct if a worker is ever made async.
+_paid_image_auth_depth: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "paid_image_auth_depth", default=0
+)
+_paid_image_auth_reason: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "paid_image_auth_reason", default=""
+)
 
 # Package-level hard cap on images.generate attempts (failures count).
 # Used for Thunder Volt full-book interiors: exactly 24 attempts, quality=medium.
@@ -1832,7 +1844,7 @@ class PaidImageBudgetExceeded(RuntimeError):
 
 
 def paid_image_generation_authorized() -> bool:
-    return _paid_image_auth_depth > 0
+    return _paid_image_auth_depth.get() > 0
 
 
 class _PaidImageAuthToken:
@@ -1840,16 +1852,13 @@ class _PaidImageAuthToken:
         self.reason = str(reason or "user_approved_generation")
 
     def __enter__(self):
-        global _paid_image_auth_depth, _paid_image_auth_reason
-        _paid_image_auth_depth += 1
-        _paid_image_auth_reason = self.reason
+        self._depth_token = _paid_image_auth_depth.set(_paid_image_auth_depth.get() + 1)
+        self._reason_token = _paid_image_auth_reason.set(self.reason)
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        global _paid_image_auth_depth, _paid_image_auth_reason
-        _paid_image_auth_depth = max(0, _paid_image_auth_depth - 1)
-        if _paid_image_auth_depth == 0:
-            _paid_image_auth_reason = ""
+        _paid_image_auth_reason.reset(self._reason_token)
+        _paid_image_auth_depth.reset(self._depth_token)
         return False
 
 

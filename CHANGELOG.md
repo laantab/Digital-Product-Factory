@@ -44,6 +44,23 @@ The version shown in the bottom-left of the app matches the newest entry here.
   blamed the photograph and told you to pick a different one. The photograph
   was never the problem: the dash was being glued to the next word.
 
+### Safety repairs found in the launch audit
+
+- Two admin web addresses had no sign-in at all. One copied the whole customer
+  database; the other deleted projects permanently. Anyone holding the beta
+  invite code — which every pilot customer has — could reach them. Both now
+  require an admin account, and the delete also refuses to exist unless a
+  separate token is set on the host.
+- The site now refuses traffic instead of serving itself to everyone when no
+  access control is configured. Before, an unset or mistyped invite code
+  silently opened the whole Factory with nothing in a log to say so. Running it
+  open to everyone is still allowed — it just has to be chosen, with
+  FACTORY_OPEN_ACCESS=1.
+- Permission to make a paid picture belonged to the whole program rather than
+  to the one build that was approved, so anything running at the same time —
+  a save, an export, a quality recheck — could have spent money on that
+  build's approval. Permission is now held by the one request that was given it.
+
 ### Does anything look different in a book I already made?
 
 - Yes, slightly, and deliberately. Re-exporting an existing book picks up
