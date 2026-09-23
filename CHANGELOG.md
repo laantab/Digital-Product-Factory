@@ -18,7 +18,8 @@ The version shown in the bottom-left of the app matches the newest entry here.
 - The chooser preview now shows all of those parts, so you can see what you
   are picking before you pick it.
 - Checklists print a real mark, and numbered steps print their numbers, in
-  every template.
+  every template. Four of the six were printing a numbered procedure as a
+  plain bullet list, so a set of steps arrived with no order to follow.
 
 ### What was fixed
 

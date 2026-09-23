@@ -142,7 +142,7 @@ THEMES: dict[str, EbookTheme] = {
     # display_name, never theme_id).
     "studio_clean": EbookTheme(
         theme_id="studio_clean",
-        version="studio-v5",
+        version="studio-v6",
         display_name="Minimal Professional",
         font_body="LiberationSerif, Georgia, serif",
         font_heading="LiberationSerif, Georgia, serif",
@@ -193,7 +193,7 @@ THEMES: dict[str, EbookTheme] = {
     ),
     "editorial_professional": EbookTheme(
         theme_id="editorial_professional",
-        version="editorial-v4",
+        version="editorial-v5",
         display_name="Elegant Editorial",
         font_body="LiberationSerif, Georgia, serif",
         font_heading="LiberationSerif, Georgia, serif",
@@ -241,7 +241,7 @@ THEMES: dict[str, EbookTheme] = {
     ),
     "modern_practical": EbookTheme(
         theme_id="modern_practical",
-        version="practical-v4",
+        version="practical-v5",
         display_name="Modern Business",
         font_body="LiberationSans, Helvetica, sans-serif",
         font_heading="LiberationSans, Helvetica, sans-serif",
@@ -282,7 +282,7 @@ THEMES: dict[str, EbookTheme] = {
     ),
     "bold_creator": EbookTheme(
         theme_id="bold_creator",
-        version="bold-creator-v3",
+        version="bold-creator-v4",
         display_name="Bold Creator",
         font_body="LiberationSans, Helvetica, sans-serif",
         font_heading="LiberationSans, Helvetica, sans-serif",
@@ -326,7 +326,7 @@ THEMES: dict[str, EbookTheme] = {
     ),
     "bright_workbook": EbookTheme(
         theme_id="bright_workbook",
-        version="bright-workbook-v3",
+        version="bright-workbook-v4",
         display_name="Bright Workbook",
         font_body="LiberationSans, Helvetica, sans-serif",
         font_heading="LiberationSans, Helvetica, sans-serif",
@@ -370,7 +370,7 @@ THEMES: dict[str, EbookTheme] = {
     ),
     "warm_wellness": EbookTheme(
         theme_id="warm_wellness",
-        version="warm-wellness-v3",
+        version="warm-wellness-v4",
         display_name="Warm Wellness",
         # LiberationSerif/LiberationSans are the only faces this Factory holds
         # a redistribution licence for (SIL OFL 1.1, see ebook_fonts.py). Warm
@@ -936,9 +936,15 @@ ul, ol {{
   margin: 0 0 14pt 0;
   padding: 0 0 0 4pt;
 }}
-ul li, ol li {{
+ul li {{
   display: block;
   margin: 0 0 7pt;
+  list-style-type: disc;
+}}
+ol li {{
+  display: block;
+  margin: 0 0 7pt;
+  list-style-type: decimal;
 }}
 ul.checklist, .checklist {{
   display: block;
@@ -968,9 +974,15 @@ ol.workflow, .workflow {{
   page-break-inside: avoid;
 }}
 ol.workflow li, .workflow li {{
+  /* v1.9.0. list-style: none arrived with a change that printed each step as a
+     paragraph carrying its own typed numeral. That change was reverted -- rows
+     are list items again -- but the rule stayed, and four of the six templates
+     fell back to a bullet, so a numbered procedure printed as bullets while the
+     release notes claimed otherwise. The renderer draws the numeral; ask it for
+     one. */
   display: block;
   margin: 0 0 8pt;
-  list-style: none;
+  list-style-type: decimal;
 }}
 .callout, .example-callout, .visual-aid {{
   background: {t.callout_bg};

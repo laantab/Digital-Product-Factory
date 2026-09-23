@@ -164,7 +164,9 @@ def test_a_book_renders_and_carries_its_furniture(theme_id, books):
     # bullet or numeral on a list item whatever the CSS says, so anything the
     # Factory adds becomes a second marker on the page.
     assert "Checklist item one" in ink["text"], "a checklist row went missing"
-    assert "Numbered workflow step one" in ink["text"], "a procedure step went missing"
+    assert "1. Numbered workflow step one" in ink["text"], (
+        "a numbered procedure lost its number -- a bullet is not a step number"
+    )
 
 
 @pytest.mark.parametrize("theme_id", PROFESSIONAL_THEME_IDS)
@@ -368,6 +370,20 @@ def test_no_template_declares_a_border_around_the_figure_box(theme_id):
                 f"{theme_id}: {edge.strip(':')} on the figure box draws a rectangle "
                 f"around the whole column: {' '.join(declarations.split())[:90]}"
             )
+
+
+@pytest.mark.parametrize("theme_id", PROFESSIONAL_THEME_IDS)
+def test_a_numbered_procedure_prints_numbers_and_a_bullet_list_prints_bullets(theme_id, books):
+    """Four templates printed a numbered procedure as bullets.
+
+    Nothing in the book's HTML differed -- the marker a list carries was being
+    decided by the renderer's own default, which followed the body font rather
+    than the tag. A reader of "1. Numbered workflow step one" as a bullet has no
+    order to follow, which is the whole point of a procedure.
+    """
+    text = _ink(books[theme_id])["text"]
+    assert "1. Numbered workflow step one" in text, f"{theme_id}: a numbered step printed without its number"
+    assert "2. Numbered workflow step two" in text, f"{theme_id}: only the first step was numbered"
 
 
 @pytest.mark.parametrize("theme_id", PROFESSIONAL_THEME_IDS)
