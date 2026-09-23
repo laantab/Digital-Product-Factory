@@ -5,6 +5,38 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.8.14 — 2026-09-22
+
+**A finished book says it is finished.**
+
+### What changed
+
+- The finished PDF and ZIP are now fetched from saved storage when the
+  machine checking them does not have them on its own disk. Only real PDF
+  and ZIP files are accepted; a book with no files is still reported
+  unfinished.
+
+### What was fixed
+
+- A book whose PDF and ZIP were built and downloadable stayed at 90% and
+  never showed as complete, because the website was looking for the files on
+  its own disk instead of where they were saved.
+
+### Do your steps change?
+
+- No.
+
+### Cost
+
+- No paid calls. Reading a saved file costs nothing.
+
+### Release gate
+
+- Focused tests for the repair plus the full stability gate, with no new
+  failures against main.
+
+---
+
 ## 1.8.13 — 2026-09-22
 
 **Your approved cover follows the work to whatever machine is doing it.**

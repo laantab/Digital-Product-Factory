@@ -245,8 +245,45 @@ def _rail(data: dict) -> dict:
     return rail if isinstance(rail, dict) else {}
 
 
+def _recover_export_files(data: dict, pkg_dir: str) -> None:
+    """Bring this project's finished PDF and ZIP back to THIS machine.
+
+    v1.8.14. The files are built on the builder and published to storage;
+    the website, which never had them, then reported a finished book as
+    unfinished. /download already serves the stored copy, so the bytes are
+    there -- fetch them so every reader agrees the book is done. Only bytes
+    that really are a PDF and a ZIP are written. Never raises.
+    """
+    try:
+        pid = int(data.get("_project_id") or 0)
+    except (TypeError, ValueError):
+        pid = 0
+    if pid <= 0:
+        return
+    package_id = os.path.basename(pkg_dir)
+    try:
+        from services.storage.compat import read_export_or_legacy
+
+        for name, magic in (("ebook.pdf", b"%PDF"), ("package.zip", b"PK\x03\x04")):
+            path = os.path.join(pkg_dir, name)
+            if os.path.isfile(path):
+                continue
+            payload = read_export_or_legacy(pid, f"{package_id}/{name}")
+            if not payload or not payload.startswith(magic):
+                continue
+            os.makedirs(pkg_dir, exist_ok=True)
+            tmp = path + ".tmp"
+            with open(tmp, "wb") as fh:
+                fh.write(payload)
+            os.replace(tmp, path)
+    except Exception:                                  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("could not fetch the finished files")
+
+
 def _export_files_on_disk(data: dict) -> bool:
-    """A real PDF and a real ZIP exist in this project's export package."""
+    """A real PDF and a real ZIP exist for this project, here or in storage."""
     from services.packaging import EXPORTS_DIR
 
     package_id = str(data.get("export_package_id") or data.get("package_id") or "").strip()
@@ -258,6 +295,8 @@ def _export_files_on_disk(data: dict) -> bool:
     pkg_dir = os.path.join(EXPORTS_DIR, package_id)
     pdf_path = os.path.join(pkg_dir, "ebook.pdf")
     zip_path = os.path.join(pkg_dir, "package.zip")
+    if not (os.path.isfile(pdf_path) and os.path.isfile(zip_path)):
+        _recover_export_files(data, pkg_dir)
     try:
         if not (os.path.isfile(pdf_path) and os.path.isfile(zip_path)):
             return False
