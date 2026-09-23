@@ -37,6 +37,8 @@ CORE = (
     "tests/test_african_animals_topic_repair.py",
     "tests/test_invite_gate.py",
     "tests/test_the_invite_gate_fails_closed.py",
+    "tests/test_login_is_rate_limited.py",
+    "tests/test_the_fast_gate_covers_what_it_claims.py",
     "tests/test_admin_routes_require_an_admin.py",
     "tests/test_paid_image_authorization_is_per_thread.py",
     "tests/test_a_customers_title_does_not_hide_their_book.py",

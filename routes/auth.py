@@ -11,6 +11,9 @@ not.
 """
 from __future__ import annotations
 
+import threading
+import time
+
 import bcrypt
 from flask import Blueprint, jsonify, make_response, request
 from flask_login import current_user, login_user, logout_user
@@ -22,6 +25,100 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 _BCRYPT_ROUNDS = 12
 _BAD_LOGIN = "Invalid email or password."
+
+# ---------------------------------------------------------------------------
+# Rate limiting on failed sign-ins (Factory 1.9.1)
+#
+# /auth/login accepted unlimited attempts. bcrypt at 12 rounds makes each guess
+# slow, which costs the attacker -- and also spends the web service's CPU, so a
+# few hundred parallel guesses is a denial of service as well as a guessing run.
+#
+# TWO counters, because either alone is wrong:
+#   * per address          -- stops one machine spraying one guess at every account.
+#   * per address+account  -- stops one machine hammering one account.
+# Keying on the account alone would let anybody lock a real customer out of
+# their own login by failing on purpose, so the address is always part of the
+# key.
+#
+# The counters live in this process. With more than one web worker the real
+# ceiling is this limit times the number of workers; that is a looser bound than
+# the numbers below, not a missing one, and it needs no new dependency and no
+# shared store. If the service is ever scaled out, move this to the database or
+# a cache and keep the same shape.
+# ---------------------------------------------------------------------------
+_WINDOW_SECONDS = 15 * 60
+_MAX_FAILURES_PER_ADDRESS = 20
+_MAX_FAILURES_PER_ADDRESS_AND_ACCOUNT = 8
+_MAX_TRACKED_KEYS = 20_000
+
+_attempts: dict[str, list[float]] = {}
+_attempts_lock = threading.Lock()
+
+
+def reset_login_attempts() -> None:
+    """Forget every recorded failure. For tests and for an operator's console."""
+    with _attempts_lock:
+        _attempts.clear()
+
+
+def _client_address() -> str:
+    """The caller's address, honouring the proxy header Render sets.
+
+    X-Forwarded-For can be forged by anyone talking to the service directly, so
+    this is a throttle, not an identity. It is never used for authorization.
+    """
+    forwarded = str(request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    return forwarded or (request.remote_addr or "unknown")
+
+
+def _prune(now: float, hits: list[float]) -> list[float]:
+    return [t for t in hits if now - t < _WINDOW_SECONDS]
+
+
+def _retry_after(now: float, hits: list[float]) -> int:
+    if not hits:
+        return _WINDOW_SECONDS
+    return max(1, int(_WINDOW_SECONDS - (now - min(hits))))
+
+
+def _login_is_blocked(email: str) -> int | None:
+    """Seconds to wait, or None when the attempt may go ahead."""
+    now = time.time()
+    address = _client_address()
+    with _attempts_lock:
+        for key, ceiling in (
+            (f"ip:{address}", _MAX_FAILURES_PER_ADDRESS),
+            (f"ip+email:{address}|{email}", _MAX_FAILURES_PER_ADDRESS_AND_ACCOUNT),
+        ):
+            hits = _prune(now, _attempts.get(key) or [])
+            if hits:
+                _attempts[key] = hits
+            else:
+                _attempts.pop(key, None)
+            if len(hits) >= ceiling:
+                return _retry_after(now, hits)
+    return None
+
+
+def _record_login_failure(email: str) -> None:
+    now = time.time()
+    address = _client_address()
+    with _attempts_lock:
+        if len(_attempts) > _MAX_TRACKED_KEYS:
+            # Never let the throttle itself become the memory leak.
+            for key in [k for k, v in _attempts.items() if not _prune(now, v)]:
+                _attempts.pop(key, None)
+            if len(_attempts) > _MAX_TRACKED_KEYS:
+                _attempts.clear()
+        for key in (f"ip:{address}", f"ip+email:{address}|{email}"):
+            _attempts[key] = _prune(now, _attempts.get(key) or []) + [now]
+
+
+def _clear_login_failures(email: str) -> None:
+    address = _client_address()
+    with _attempts_lock:
+        _attempts.pop(f"ip:{address}", None)
+        _attempts.pop(f"ip+email:{address}|{email}", None)
 
 
 def _hash_password(password: str) -> str:
@@ -65,11 +162,23 @@ def login():
     password = str(body.get("password") or "")
     if not email or not password:
         return jsonify({"ok": False, "error": "Email and password are required."}), 400
+    wait = _login_is_blocked(email)
+    if wait is not None:
+        minutes = max(1, round(wait / 60))
+        response = jsonify({
+            "ok": False,
+            "error": f"Too many sign-in attempts. Try again in about {minutes} minute"
+                     f"{'s' if minutes != 1 else ''}.",
+        })
+        response.headers["Retry-After"] = str(wait)
+        return response, 429
     row = database.get_user_by_email(email)
     if not row or not _check_password(password, row["password_hash"]):
+        _record_login_failure(email)
         return jsonify({"ok": False, "error": _BAD_LOGIN}), 401
     if not row["active"]:
         return jsonify({"ok": False, "error": "This account has been deactivated."}), 403
+    _clear_login_failures(email)
     user = User(row)
     login_user(user)
     return jsonify({"ok": True, "user": user.public()})
