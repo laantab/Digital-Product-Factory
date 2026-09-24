@@ -5,6 +5,63 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.3 — 2026-09-23
+
+**Book covers are readable over any photograph, and the check that says so can
+now fail.**
+
+### What changed
+
+- Every cover layout now picks its type colour by measuring the photograph
+  underneath it, instead of switching on a single brightness number. The
+  author line measures its own patch of the picture rather than borrowing the
+  title's colour.
+- The shading behind the type moves away from the type instead of always
+  darkening, and is pushed harder when it needs to be. If one direction cannot
+  make a cover readable, the other is tried.
+- `docs/COVER_READABILITY.md` is new: what was wrong, what is promised, the
+  before-and-after measurements, and how to reproduce them.
+
+### What was fixed
+
+- **Your cover could come out unreadable and the Factory would call it fine.**
+  Over a bright photograph the subtitle on one layout measured 2.56:1 against
+  the picture and the title on another measured 3.61:1, where the accessibility
+  standard asks for 4.5:1. Your name on the front measured about 1.4:1 on every
+  layout, over every photograph — very nearly invisible. The same fixtures now
+  measure between 5:1 and 12:1.
+- **The quality check could not fail.** It decided whether the type stood out
+  by counting bright and dark pixels in the title area of the finished cover —
+  but the white letters were the bright pixels and the shadow drawn behind
+  every letter was the dark ones. It was measuring the text against itself, so
+  it passed everything. It now measures the type against the photograph, before
+  the type is drawn, and refuses a cover it cannot read.
+
+### Does anything look different in a book I already made?
+
+A cover you already downloaded is untouched. If you rebuild one over a bright
+or mid-tone photograph, the type will come back dark instead of white where
+that reads better, and your name will be legible. Over a dark photograph
+nothing changes — those covers were always fine.
+
+### Do your steps change?
+
+No. One thing is new: a cover can now be refused. If a photograph cannot carry
+readable type in one layout, that layout is marked as failing and you choose
+another layout or another photograph. That is the check doing its job.
+
+### Release gate
+
+Fast Stability Gate: 48 files, 674 passed, 0 failures. Ebook protected suite:
+136 passed before the change, 136 after. New file
+`tests/test_a_cover_is_readable_over_any_photograph.py`, 10 tests, including
+the one that pins the root cause — white type on a white page must be refused.
+No paid calls: every fixture is generated in-process and the real-photograph
+check uses Pexels, which is free. Spending is unchanged at 26 paid calls /
+$4.10.
+
+---
+
 ## 1.9.2 — 2026-09-23
 
 **The same crossword book now rebuilds to the same puzzles.**
