@@ -50,12 +50,23 @@ No. One thing is new: a cover can now be refused. If a photograph cannot carry
 readable type in one layout, that layout is marked as failing and you choose
 another layout or another photograph. That is the check doing its job.
 
+### What happens when a cover is refused
+
+You see two covers instead of three. The one that failed is simply not offered,
+so there is nothing to click that does not work, and the step stays "Choose a
+cover". If every layout were refused — which takes an unusual photograph — the
+step becomes "Choose another photo" and says so in plain words. A cover you
+picked before this release that now fails sends you back to the picker rather
+than sitting there looking approved.
+
 ### Release gate
 
 Fast Stability Gate: 48 files, 674 passed, 0 failures. Ebook protected suite:
-136 passed before the change, 136 after. New file
+136 passed before the change, 136 after. Two new files:
 `tests/test_a_cover_is_readable_over_any_photograph.py`, 10 tests, including
-the one that pins the root cause — white type on a white page must be refused.
+the one that pins the root cause — white type on a white page must be refused —
+and `tests/test_a_refused_cover_still_leaves_a_way_forward.py`, 8 tests proving
+a refusal never strands you.
 No paid calls: every fixture is generated in-process and the real-photograph
 check uses Pexels, which is free. Spending is unchanged at 26 paid calls /
 $4.10.
