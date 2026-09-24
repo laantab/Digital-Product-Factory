@@ -25,6 +25,7 @@ from services.crossword.seeding import stable_crossword_seed
 from services.math_worksheet.pdf_builder import MathWorksheetPdfRequest, build_math_worksheet_pdf
 from services.spelling_worksheet.pdf_builder import SpellingWorksheetPdfRequest, build_spelling_worksheet_pdf
 from services.word_search.pdf_builder import WordSearchPdfRequest, build_word_search_pdf
+from services.word_search.seeding import stable_word_search_seed
 from services.word_search.word_lists import word_list_fetch_target
 
 _NO_EMOJI = "Do not use emojis. Return only the Markdown document, no preamble."
@@ -688,6 +689,30 @@ def _word_search_pdf_payload(
     # words. Mirrors _crossword_pdf_payload's identical mode calculation
     # in this same file. Custom Word List mode is unchanged.
     mode = "custom_word_list" if plan["use_custom"] and custom_words.strip() else "topic"
+    # v1.9.5: the same saved book must rebuild to the same puzzles. This
+    # request used to pass seed=None explicitly, so services/word_search/
+    # engine.py ran random.Random(None) and seeded itself from the clock --
+    # three rebuilds of one saved book gave three different sets of grids. The
+    # seed is now a pure function of the settings that decide the puzzles; see
+    # services/word_search/seeding.py. An explicit word_search_seed field still
+    # wins, so a future "give me different puzzles" action has a way in.
+    explicit_seed = _f(fixed_fields, "word_search_seed")
+    try:
+        puzzle_seed = int(explicit_seed) if str(explicit_seed).strip() else None
+    except (TypeError, ValueError):
+        puzzle_seed = None
+    if puzzle_seed is None:
+        puzzle_seed = stable_word_search_seed(
+            product_title=plan["title"],
+            theme=_f(fixed_fields, "theme") or "",
+            audience=_f(fixed_fields, "audience") or "",
+            difficulty=plan["difficulty"],
+            grid_size=plan["grid_size"],
+            number_of_puzzles=plan["worksheets"],
+            words_per_puzzle=plan["words_per_puzzle"],
+            mode=mode,
+            custom_words=custom_words,
+        )
     pdf_request = WordSearchPdfRequest(
         product_title=plan["title"],
         subtitle=(cover or {}).get("subtitle") or _f(fields, "subtitle") or "",
@@ -704,7 +729,7 @@ def _word_search_pdf_payload(
         include_cover=include_cover,
         cover_design=cover if is_book else None,
         package_id=pkg,
-        seed=None,
+        seed=puzzle_seed,
     )
     result = build_word_search_pdf(pdf_request)
     if result.errors or not result.pdf_bytes:

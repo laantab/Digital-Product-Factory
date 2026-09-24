@@ -5,6 +5,49 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.5 — 2026-09-24
+
+**The same word search book now rebuilds to the same puzzles.**
+
+### What changed
+
+- Word search books are reproducible, the same way crossword books became
+  reproducible in 1.9.2. The Factory works out where the puzzle engine should
+  start from the book's own settings instead of leaving it to the clock.
+- `docs/WORD_SEARCH_REPRODUCIBILITY.md` is new: how to reproduce the old
+  behaviour, how to verify the fix, and exactly which settings decide the
+  puzzles.
+
+### What was fixed
+
+- **A saved word search book used to come back different every time you
+  rebuilt it.** Open a saved book, change the subtitle, rebuild, and you got
+  different grids and an answer key that no longer matched the puzzles you had
+  already checked. Building one unchanged book three times produced three
+  different books, measured on the live code. Same book and same settings now
+  always produce the same puzzles; change the theme, the difficulty, the grid
+  size, the number of puzzles or the word list and the puzzles change with it.
+
+### Does anything look different in a book I already made?
+
+A book you already downloaded is untouched. If you rebuild a saved word search,
+the puzzles settle on one fixed set from now on — which may differ from the
+last copy you happened to download, because until now every rebuild was a
+different book.
+
+### Do your steps change?
+
+No.
+
+### Release gate
+
+Ebook protected suite green before and after. New file
+`tests/test_a_pale_photograph_still_gets_a_cover.py`, 7 tests; disabling the
+one-line guard it protects makes 2 of them fail, so it is not a formality. No
+paid calls. Spending unchanged at 26 paid calls / $4.10.
+
+---
+
 ## 1.9.4 — 2026-09-24
 
 **What a hard look at 1.9.3 found before it shipped.**
@@ -54,20 +97,6 @@ regression, and it is the reason this entry exists.
 
 No. Fifteen covers over dark photographs were rebuilt and compared byte for
 byte against the version now live: all fifteen identical.
-
-### Do your steps change?
-
-No.
-
-### Release gate
-
-Ebook protected suite green before and after. New file
-`tests/test_a_pale_photograph_still_gets_a_cover.py`, 7 tests; disabling the
-one-line guard it protects makes 2 of them fail, so it is not a formality. No
-paid calls. Spending unchanged at 26 paid calls / $4.10.
-
----
-
 ## 1.9.3 — 2026-09-23
 
 **Book covers are readable over any photograph, and the check that says so can
@@ -133,6 +162,12 @@ a refusal never strands you.
 No paid calls: every fixture is generated in-process and the real-photograph
 check uses Pexels, which is free. Spending is unchanged at 26 paid calls /
 $4.10.
+Word Search's protected suite: 85 passed before the change, and again after
+with the new file. New file `tests/test_word_search_rebuilds_identically.py`,
+11 tests, 5 of which fail on 390aaf8 and pass here, so the suite is not a
+formality. Function lock: word_search unlocked, changed, tested and relocked
+under the two-commit procedure. No paid calls — puzzle generation is local.
+Spending unchanged at 26 paid calls / $4.10.
 
 ---
 
