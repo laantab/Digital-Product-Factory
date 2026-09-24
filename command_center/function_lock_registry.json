@@ -4,9 +4,9 @@
   "functions": {
     "word_search": {
       "display_name": "Word Search",
-      "status": "UNLOCKED",
-      "last_known_good_commit": "bf9c3fc",
-      "factory_version": "1.8.3",
+      "status": "LOCKED",
+      "last_known_good_commit": "ad7b5da",
+      "factory_version": "1.9.5",
       "protected_test_files": [
         "tests/test_word_search_topic_scope_contract.py",
         "tests/test_universal_topic_puzzle_engine.py",
@@ -27,11 +27,11 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": "Claude Opus 5",
-      "unlocked_reason": "v1.9.5: services/product.py passed seed=None to every WordSearchPdfRequest, so services/word_search/engine.py ran random.Random(None) and one saved book rebuilt to different puzzles every time -- the same defect Crossword had in v1.9.2. Adds services/word_search/seeding.py and passes its seed from the customer path.",
-      "relocked_by": null,
-      "relocked_after_tests": null,
-      "notes": "The customer-facing route had never used the shared topic engine, in any release, until a021385. No earlier commit is a valid last-known-good for this route. Relocked at ab6b923 (2026-09-13): Word Search's cover now genuinely attempts Pexels first (via is_photo_realistic_cover), falling back to the existing AI path unchanged when no suitable photo is found. Word Search's puzzle-generation/topic-vocabulary behavior is untouched. Relocked again at 6391ff1 (2026-09-13): unlocked only because static/js/app.js (shared) was edited to fix the ebook build-stall dead end; Word Search's own code and tests are untouched. Relocked at 66b0085 (2026-09-14, v1.7.14): unlocked only because services/packaging.py (a declared shared dependency) now prefers a VERIFIED stored asset at its six STORED embedded-PDF read sites before falling through to the identical legacy base64 decode. Product generation, rebuild paths, QA gates and export layout are unchanged; with no verified asset the executed decode is byte-for-byte the original. Relocked at 2d613c0 (2026-09-15, v1.7.25): unlocked because static/js/app.js (a declared shared dependency) gained the ebook progress screen's live activity light and paused panel. No puzzle, coloring or crossword code path was touched. RELOCKED at 23a6a4f (v1.8.1): unlocked only because static/js/app.js is declared as a whole-file shared dependency and gained the ebook step-by-step polling helpers. Verified by diffing static/js/app.js against origin/main: not one added or removed line mentions coloring, crossword, word search or puzzle."
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Claude Opus 5",
+      "relocked_after_tests": "v1.9.5 (ad7b5da): services/product.py now passes a settings-derived seed to WordSearchPdfRequest via the new services/word_search/seeding.py, so one saved book rebuilds to the same puzzles. Protected suites for word_search and for the locked functions sharing services/product.py (faith_planner, budget_planner): 85 passed before the change; 140 passed after, including the new tests/test_word_search_rebuilds_identically.py and the lock/gate integrity files. Five of those eleven tests fail on 390aaf8 and pass at ad7b5da, so the suite is not vacuous. Fast Stability Gate: 51 files, 700 passed. 0 paid API calls.",
+      "notes": "The customer-facing route had never used the shared topic engine, in any release, until a021385. No earlier commit is a valid last-known-good for this route. Relocked at ab6b923 (2026-09-13): Word Search's cover now genuinely attempts Pexels first (via is_photo_realistic_cover), falling back to the existing AI path unchanged when no suitable photo is found. Word Search's puzzle-generation/topic-vocabulary behavior is untouched. Relocked again at 6391ff1 (2026-09-13): unlocked only because static/js/app.js (shared) was edited to fix the ebook build-stall dead end; Word Search's own code and tests are untouched. Relocked at 66b0085 (2026-09-14, v1.7.14): unlocked only because services/packaging.py (a declared shared dependency) now prefers a VERIFIED stored asset at its six STORED embedded-PDF read sites before falling through to the identical legacy base64 decode. Product generation, rebuild paths, QA gates and export layout are unchanged; with no verified asset the executed decode is byte-for-byte the original. Relocked at 2d613c0 (2026-09-15, v1.7.25): unlocked because static/js/app.js (a declared shared dependency) gained the ebook progress screen's live activity light and paused panel. No puzzle, coloring or crossword code path was touched. RELOCKED at 23a6a4f (v1.8.1): unlocked only because static/js/app.js is declared as a whole-file shared dependency and gained the ebook step-by-step polling helpers. Verified by diffing static/js/app.js against origin/main: not one added or removed line mentions coloring, crossword, word search or puzzle. RELOCKED at ad7b5da (2026-09-24, v1.9.5): unlocked to add services/word_search/seeding.py and pass its seed from services/product.py. Grid building, topic vocabulary, word placement, answer keys, cover selection and packaging are untouched -- the engine already accepted a seed and was simply never given one, exactly as with Crossword in v1.9.2."
     },
     "coloring_book": {
       "display_name": "Coloring Book",
