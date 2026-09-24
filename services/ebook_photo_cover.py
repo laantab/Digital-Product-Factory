@@ -17,7 +17,7 @@ import re
 import shutil
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps, ImageChops
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as rl_canvas
@@ -904,14 +904,26 @@ MIN_TEXT_CONTRAST = 4.5
 #: and vanishes over the bright pane is not a readable title.
 MIN_WORST_PATCH_CONTRAST = 3.0
 
+#: How many pixels of photograph a single text block is judged on. A median
+#: and a 90th percentile do not get better past a few thousand samples.
+SAMPLE_BUDGET = 5000
+
+
+def _srgb_channel(value: int) -> float:
+    c = value / 255.0
+    return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+
+#: The sRGB curve has 256 possible answers per channel, so it is a table, not
+#: a calculation. Measured on one awkward cover: 2.8 million calls to the
+#: exponent, 0.40s of a 2.0s render, gone.
+_SRGB_LUT: tuple[float, ...] = tuple(_srgb_channel(v) for v in range(256))
+
 
 def _srgb_relative_luminance(r: int, g: int, b: int) -> float:
     """WCAG relative luminance. _luma() above is a cheap 0-255 approximation
     used for layout heuristics; contrast has to use the real curve."""
-    def channel(v: int) -> float:
-        c = v / 255.0
-        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
-    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+    return 0.2126 * _SRGB_LUT[r] + 0.7152 * _SRGB_LUT[g] + 0.0722 * _SRGB_LUT[b]
 
 
 def _wcag_ratio(a: float, b: float) -> float:
@@ -924,7 +936,9 @@ def _region_luminances(img: Image.Image, box: tuple[int, int, int, int]) -> list
 
     Sampled on a stride so a full-bleed title band costs a few thousand reads
     rather than a million; pure Python on purpose, because the builder's
-    runtime carries no numpy.
+    runtime carries no numpy. SAMPLE_BUDGET is what a percentile needs, not
+    what the box contains -- at 20000 this was half the cost of an awkward
+    cover, and the measured ratios move by less than 0.02 at 5000.
     """
     x0, y0, x1, y1 = (int(v) for v in box)
     x0 = max(0, x0)
@@ -934,7 +948,7 @@ def _region_luminances(img: Image.Image, box: tuple[int, int, int, int]) -> list
     if x1 - x0 < 4 or y1 - y0 < 4:
         return []
     pix = img.load()
-    step = max(1, int((((x1 - x0) * (y1 - y0)) / 20000) ** 0.5))
+    step = max(1, int((((x1 - x0) * (y1 - y0)) / SAMPLE_BUDGET) ** 0.5))
     out = [
         _srgb_relative_luminance(*pix[x, y][:3])
         for y in range(y0, y1, step)
@@ -1520,6 +1534,72 @@ def _paint_plan(img: Image.Image, plan: dict[str, Any]) -> None:
         )
 
 
+#: The thumbnail inspect_variant judges "blank_white_area" and "not_full_bleed"
+#: on, and the pixel test it uses. Kept here so the render loop and the gate
+#: cannot drift apart -- tests/test_a_pale_photograph_still_gets_a_cover.py
+#: pins that they agree.
+BLEACH_THUMB = (318, 412)
+BLEACH_WHITE_R = 242
+BLEACH_WHITE_G = 242
+BLEACH_WHITE_B = 238
+MAX_WHITE_FRACTION = 0.06
+MAX_EDGE_WHITE_FRACTION = 0.22
+
+
+def _white_mask(small: Image.Image) -> Image.Image:
+    """Where the picture has gone to paper. C-level, not a Python pixel loop."""
+    red, green, blue = small.split()
+    return ImageChops.multiply(
+        ImageChops.multiply(
+            red.point(lambda v: 255 if v > BLEACH_WHITE_R else 0),
+            green.point(lambda v: 255 if v > BLEACH_WHITE_G else 0),
+        ),
+        blue.point(lambda v: 255 if v > BLEACH_WHITE_B else 0),
+    )
+
+
+def bleach_report(img: Image.Image) -> dict[str, float | bool]:
+    """How much of this picture has been washed out to white.
+
+    v1.9.3. The light veil that makes dark type readable will, on an already
+    pale photograph, push it past the very thresholds inspect_variant uses to
+    reject a cover that is not a photograph any more. Measured: a flat
+    photograph at luma 244 or above passed all three layouts on 390aaf8 and
+    failed all three here with blank_white_area and not_full_bleed, which left
+    the customer at "choose another photo" for a picture that had been fine.
+    The render loop now asks this before accepting an attempt.
+    """
+    small = img.resize(BLEACH_THUMB, Image.Resampling.LANCZOS)
+    width, height = small.size
+    mask = _white_mask(small)
+    white = mask.histogram()[255]
+    margin = max(2, int(min(width, height) * 0.03))
+    inner = mask.crop((margin, margin, width - margin, height - margin))
+    inner_white = inner.histogram()[255]
+    edge_n = (width * height) - (inner.size[0] * inner.size[1])
+    pix = small.load()
+    corner_white = any(
+        pix[cx, cy][0] > BLEACH_WHITE_R
+        and pix[cx, cy][1] > BLEACH_WHITE_G
+        and pix[cx, cy][2] > BLEACH_WHITE_B
+        for cx, cy in ((1, 1), (width - 2, 1), (1, height - 2), (width - 2, height - 2))
+    )
+    return {
+        "white_fraction": white / float(width * height),
+        "edge_white_fraction": (white - inner_white) / float(edge_n or 1),
+        "corner_white": corner_white,
+    }
+
+
+def photograph_is_bleached(img: Image.Image) -> bool:
+    report = bleach_report(img)
+    return (
+        bool(report["corner_white"])
+        or float(report["white_fraction"]) > MAX_WHITE_FRACTION
+        or float(report["edge_white_fraction"]) > MAX_EDGE_WHITE_FRACTION
+    )
+
+
 def _plan_ink_is_light(plan: dict[str, Any]) -> bool:
     """Which way this plan's type leans. Defaults to light, as the layouts did
     before there was a choice."""
@@ -1540,27 +1620,50 @@ def measure_plan_contrast(background: Image.Image, plan: dict[str, Any]) -> dict
     the text against itself and could not fail.
     """
     rows: dict[str, dict[str, float]] = {}
+    # Every block that actually puts words on the cover has to be measured. A
+    # block that cannot be sampled -- no fill, no box, a box off the canvas --
+    # is NOT skipped quietly: an unmeasured line is the same failure as an
+    # unreadable one, and fail-open here is precisely the shape of the defect
+    # this release exists to close.
+    expected = 0
+    unmeasured: list[str] = []
     for block in plan.get("blocks") or []:
+        if not (block.get("lines") or []):
+            continue
+        expected += 1
         role = str(block.get("role") or "")
         fill = block.get("fill")
         box = block.get("box")
         if not role or not fill or not box:
+            unmeasured.append(role or "<unnamed>")
             continue
         luminances = _region_luminances(background, tuple(box))
         if not luminances:
+            unmeasured.append(role)
             continue
         rows[role] = ink_contrast(tuple(fill)[:3], luminances)
     if not rows:
-        return {"roles": {}, "weakest_role": "", "typical": 0.0, "worst": 0.0, "readable": True}
+        return {
+            "roles": {},
+            "weakest_role": "",
+            "typical": 0.0,
+            "worst": 0.0,
+            "unmeasured": unmeasured,
+            "readable": not expected,
+        }
     weakest_role = min(rows, key=lambda r: rows[r]["typical"])
+    worst = min(row["worst"] for row in rows.values())
     return {
         "roles": rows,
         "weakest_role": weakest_role,
         "typical": rows[weakest_role]["typical"],
-        "worst": min(row["worst"] for row in rows.values()),
+        "worst": worst,
+        "unmeasured": unmeasured,
         "readable": (
-            rows[weakest_role]["typical"] >= MIN_TEXT_CONTRAST
-            and min(row["worst"] for row in rows.values()) >= MIN_WORST_PATCH_CONTRAST
+            not unmeasured
+            and len(rows) >= expected
+            and rows[weakest_role]["typical"] >= MIN_TEXT_CONTRAST
+            and worst >= MIN_WORST_PATCH_CONTRAST
         ),
     }
 
@@ -1591,8 +1694,14 @@ def render_layout_with_qa(
     # Each direction is pushed harder until the weakest line clears AA. If
     # nothing clears it, the best attempt is kept and the gate below reports
     # weak_contrast rather than shipping a cover nobody can read.
-    attempts: list[tuple[Image.Image, dict[str, Any], dict[str, Any]]] = []
+    # Only the best attempt so far is kept. Holding all six costs about 6 MB
+    # each at cover size, and the six-attempt case is exactly the awkward
+    # photograph the gate now catches -- measured, keeping them all took peak
+    # RSS from 132 MB to 194 MB, on a service that has already been killed
+    # once for memory (v1.8.0).
     best: tuple[Image.Image, dict[str, Any], dict[str, Any]] | None = None
+    best_score = -1.0
+    readable = False
     for direction in (ink_is_light, not ink_is_light):
         for extra in (0.0, 0.22, 0.45):
             img = base.copy()
@@ -1605,20 +1714,31 @@ def render_layout_with_qa(
             )
             plan = plan_typography(ident, editor, layout_id, img, subject=subject)
             contrast = measure_plan_contrast(img, plan)
-            attempts.append((img, plan, contrast))
-            if contrast.get("readable"):
+            # Readable is not enough. The veil that made it readable must not
+            # have washed the photograph out to paper, or the cover fails a
+            # different check and the customer is sent away for a picture that
+            # was fine. See bleach_report().
+            bleached = photograph_is_bleached(img)
+            if contrast.get("readable") and not bleached:
                 best = (img, plan, contrast)
+                readable = True
                 break
-        if best is not None:
+            # Rank by the line that fails hardest, not by the average: the
+            # worst patch under a line is what decides whether a reader loses
+            # a word. A bleached attempt ranks below every intact one, however
+            # well its type measures.
+            score = min(
+                float(contrast.get("worst", 0.0)), float(contrast.get("typical", 0.0))
+            )
+            if bleached:
+                score = -1.0 - (1.0 / (1.0 + score))
+            if best is None or score > best_score:
+                best_score = score
+                best = (img, plan, contrast)
+        if readable:
             break
 
-    if best is None:
-        # Rank by the line that fails hardest, not by the average: the worst
-        # patch under a line is what decides whether a reader loses a word.
-        best = max(
-            attempts,
-            key=lambda a: (min(a[2].get("worst", 0.0), a[2].get("typical", 0.0))),
-        )
+    assert best is not None
     img, plan, contrast = best
     plan["contrast"] = contrast
     if plan.get("pass"):

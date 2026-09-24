@@ -1,9 +1,28 @@
 # Cover readability
 
-**Contract (v1.9.3 onwards):** on a cover that passes the quality gate, every
-line of type measures at least 4.5:1 (WCAG AA) against the photograph beneath
-it, and at least 3:1 against the worst patch of that photograph. A cover that
-cannot reach that is refused, not shipped.
+**Contract (v1.9.3 onwards):** on a cover that passes the quality gate, each
+block of type measures at least **4.5:1** (WCAG AA) against the *median* pixel
+of the photograph under it, and at least **3:1** against its *worst* patch —
+the brightest tenth of those pixels for light ink, the darkest tenth for dark
+ink. Every block that puts words on the cover must be measured; a block that
+cannot be sampled fails the cover rather than being skipped. A cover that
+cannot reach this is refused, not shipped.
+
+State that precisely, because the mechanism is not "every pixel clears AA":
+
+* The bar is enforced per **block** (title, subtitle, series, author), on the
+  block's bounding box, not per glyph.
+* Across a 108-render fixture sweep, 390aaf8 passed 98 covers of which 48 had
+  at least one **line** below 4.5:1, the worst at 1.01:1. This version passed
+  69 of the same 108 and **none** of them had a line below 4.5:1.
+* What can still slip through: where the photograph changes tone sharply
+  *underneath* a line, part of that line can sit between 3:1 and 4.5:1 while
+  the block's median stays high. On a deliberately adversarial half-dark,
+  half-bright fixture about a quarter of the title's glyph pixels measured
+  3.7:1. That is a large improvement on a gate that could not fail at all, and
+  it is not the same as a promise that every glyph clears AA. Tightening the
+  worst-patch bar to 4.5:1 would close it at the cost of refusing many covers
+  a reader would find perfectly legible; that trade is not taken here.
 
 ## What was wrong
 
@@ -97,6 +116,38 @@ look at instead.
 For a real photograph rather than a fixture, run
 `Desktop\Factory tools\Check the cover over a real photo.bat`, which fetches one
 free Pexels photograph and writes the three covers to the Desktop.
+
+## A pale photograph must still get a cover
+
+The light veil that makes dark type readable will, on an *already* pale
+photograph, push it past the very thresholds `inspect_variant` uses to reject a
+cover that has stopped looking like a photograph. Measured on a flat textured
+fixture: at luma 242 all three layouts passed on both versions; at luma 244 and
+above all three passed on `390aaf8` and **all three were refused** here with
+`blank_white_area, not_full_bleed` — leaving the customer at "choose another
+photo" for a fog, a snow scene, an overcast sky or a white studio backdrop that
+had been fine the release before.
+
+`photograph_is_bleached()` is now asked before an attempt is accepted, so a veil
+that washes the picture out is rejected and the other direction is tried. The
+levels above now pass with the weakest line between 4.7:1 and 15.3:1.
+`tests/test_a_pale_photograph_still_gets_a_cover.py` pins it, and also pins that
+the fast C-level white-pixel mask agrees with the gate's own Python count.
+
+## Cost
+
+Rendering one cover: measured on flat fixtures, 1.53s → 1.62s end-to-end
+through `attach_upload` for a dark photograph, 1.58s for mid grey, 2.83s for a
+pale one. The pathological case — a hard tonal edge where one layout can never
+pass, so every recovery editor burns the whole escalation ladder — costs 13.1s
+against a 1.50s baseline. That path is on the builder, which has a 7200-second
+task budget, and it is the case the gate is there to catch.
+
+Two things keep it from being worse: the sRGB curve is a 256-entry table rather
+than an exponent per pixel, and a text block is judged on `SAMPLE_BUDGET`
+samples (5000) rather than every pixel in its box. Peak RSS across a nine-render
+sweep: 132 MB before, 135 MB after; the six-attempt worst case is 160 MB, held
+down by keeping only the best attempt rather than all six.
 
 ## What is deliberately not promised
 

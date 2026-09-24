@@ -188,6 +188,7 @@
     "tests/test_the_release_manager_is_safe.py",
     "tests/test_crossword_rebuilds_identically.py",
     "tests/test_a_cover_is_readable_over_any_photograph.py",
-    "tests/test_a_refused_cover_still_leaves_a_way_forward.py"
+    "tests/test_a_refused_cover_still_leaves_a_way_forward.py",
+    "tests/test_a_pale_photograph_still_gets_a_cover.py"
   ]
 }
