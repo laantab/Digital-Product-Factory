@@ -5,6 +5,137 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.4 — 2026-09-24
+
+**What a hard look at 1.9.3 found before it shipped.**
+
+### What changed
+
+Three reviews were run against 1.9.3 before it was allowed out: the covers were
+judged as a reader sees them on real bright and dark photographs, the path a
+customer takes when a cover is refused was walked end to end, and the code was
+audited adversarially against the claims made for it. The audit found a real
+regression in 1.9.3, fixed below, and two smaller things worth doing.
+
+1.9.3 and 1.9.4 were reviewed together and merged together; 1.9.3 was never
+released on its own. Three separate reviews were run against it — one on the
+covers as a reader sees them, one on what happens to a customer when a cover is
+refused, and one adversarial engineering audit. The audit found a real
+regression, and it is the reason this entry exists.
+
+### What was fixed
+
+- **A pale photograph lost every cover.** Giving dark type its own shading in
+  1.9.3 meant that on an *already* pale photograph — fog, snow, an overcast
+  sky, a white studio backdrop — the shading washed the picture out until the
+  Factory no longer considered it a photograph, and refused all three layouts.
+  Measured: at brightness 244 and above, all three passed before 1.9.3 and all
+  three were refused by it. You would have been told to choose another photo
+  for a picture that was fine. The Factory now checks that its own shading has
+  not washed the picture out, and uses the other direction instead. Those same
+  photographs now pass with the weakest line between 4.7:1 and 15.3:1.
+- **A line of type that could not be measured was quietly ignored.** If any
+  line on a cover could not be measured against the photograph, it was skipped
+  and the rest of the cover could still pass. An unmeasured line is now the
+  same as an unreadable one: the cover is refused. A missing check reading as a
+  pass is the exact shape of the defect 1.9.3 set out to fix.
+
+### What got faster and smaller
+
+- Building a cover over a difficult photograph went from 20.2 to 13.1 seconds,
+  and over an ordinary one from 1.9 to 1.6 seconds, by turning the colour
+  calculation into a lookup table and judging a block of type on a sample
+  rather than on every pixel. The measured contrast figures move by less than
+  0.02 as a result.
+- The Factory now keeps only the best attempt at a cover rather than all six,
+  which took the worst-case memory for one cover from 194 MB back to 160 MB.
+
+### Does anything look different in a book I already made?
+
+No. Fifteen covers over dark photographs were rebuilt and compared byte for
+byte against the version now live: all fifteen identical.
+
+### Do your steps change?
+
+No.
+
+### Release gate
+
+Ebook protected suite green before and after. New file
+`tests/test_a_pale_photograph_still_gets_a_cover.py`, 7 tests; disabling the
+one-line guard it protects makes 2 of them fail, so it is not a formality. No
+paid calls. Spending unchanged at 26 paid calls / $4.10.
+
+---
+
+## 1.9.3 — 2026-09-23
+
+**Book covers are readable over any photograph, and the check that says so can
+now fail.**
+
+### What changed
+
+- Every cover layout now picks its type colour by measuring the photograph
+  underneath it, instead of switching on a single brightness number. The
+  author line measures its own patch of the picture rather than borrowing the
+  title's colour.
+- The shading behind the type moves away from the type instead of always
+  darkening, and is pushed harder when it needs to be. If one direction cannot
+  make a cover readable, the other is tried.
+- `docs/COVER_READABILITY.md` is new: what was wrong, what is promised, the
+  before-and-after measurements, and how to reproduce them.
+
+### What was fixed
+
+- **Your cover could come out unreadable and the Factory would call it fine.**
+  Over a bright photograph the subtitle on one layout measured 2.56:1 against
+  the picture and the title on another measured 3.61:1, where the accessibility
+  standard asks for 4.5:1. Your name on the front measured about 1.4:1 on every
+  layout, over every photograph — very nearly invisible. The same fixtures now
+  measure between 5:1 and 12:1.
+- **The quality check could not fail.** It decided whether the type stood out
+  by counting bright and dark pixels in the title area of the finished cover —
+  but the white letters were the bright pixels and the shadow drawn behind
+  every letter was the dark ones. It was measuring the text against itself, so
+  it passed everything. It now measures the type against the photograph, before
+  the type is drawn, and refuses a cover it cannot read.
+
+### Does anything look different in a book I already made?
+
+A cover you already downloaded is untouched. If you rebuild one over a bright
+or mid-tone photograph, the type will come back dark instead of white where
+that reads better, and your name will be legible. Over a dark photograph
+nothing changes — those covers were always fine.
+
+### Do your steps change?
+
+No. One thing is new: a cover can now be refused. If a photograph cannot carry
+readable type in one layout, that layout is marked as failing and you choose
+another layout or another photograph. That is the check doing its job.
+
+### What happens when a cover is refused
+
+You see two covers instead of three. The one that failed is simply not offered,
+so there is nothing to click that does not work, and the step stays "Choose a
+cover". If every layout were refused — which takes an unusual photograph — the
+step becomes "Choose another photo" and says so in plain words. A cover you
+picked before this release that now fails sends you back to the picker rather
+than sitting there looking approved.
+
+### Release gate
+
+Fast Stability Gate: 48 files, 674 passed, 0 failures. Ebook protected suite:
+136 passed before the change, 136 after. Two new files:
+`tests/test_a_cover_is_readable_over_any_photograph.py`, 10 tests, including
+the one that pins the root cause — white type on a white page must be refused —
+and `tests/test_a_refused_cover_still_leaves_a_way_forward.py`, 8 tests proving
+a refusal never strands you.
+No paid calls: every fixture is generated in-process and the real-photograph
+check uses Pexels, which is free. Spending is unchanged at 26 paid calls /
+$4.10.
+
+---
+
 ## 1.9.2 — 2026-09-23
 
 **The same crossword book now rebuilds to the same puzzles.**

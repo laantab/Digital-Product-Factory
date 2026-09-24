@@ -17,7 +17,7 @@ import re
 import shutil
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps, ImageChops
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as rl_canvas
@@ -873,23 +873,139 @@ def _region_luma(img: Image.Image, box: tuple[int, int, int, int]) -> float:
     return total / max(n, 1)
 
 
-def _contrast_fills(img: Image.Image, box: tuple[int, int, int, int]) -> dict[str, tuple[int, int, int]]:
-    lu = _region_luma(img, box)
-    if lu >= 150:
-        return {
-            "title": (18, 16, 14),
-            "subtitle": (36, 32, 28),
-            "series": (42, 38, 34),
-            "author": (22, 20, 18),
-            "shadow": (255, 255, 255),
-        }
+#: Ink for type that sits on a light part of a photograph.
+DARK_INK: dict[str, tuple[int, int, int]] = {
+    "title": (18, 16, 14),
+    "subtitle": (36, 32, 28),
+    "series": (42, 38, 34),
+    "author": (22, 20, 18),
+    "shadow": (255, 255, 255),
+}
+
+#: Ink for type that sits on a dark part of a photograph.
+LIGHT_INK: dict[str, tuple[int, int, int]] = {
+    "title": (255, 255, 255),
+    "subtitle": (236, 230, 214),
+    "series": (228, 220, 200),
+    "author": (252, 248, 240),
+    "shadow": (8, 10, 16),
+}
+
+#: Roles whose readability decides which ink a cover uses. "shadow" is not a
+#: role -- it is the halo drawn behind the others.
+INK_ROLES = ("title", "subtitle", "series", "author")
+
+#: WCAG AA for body text. A cover is also read as a thumbnail, so the title
+#: does not get the relaxed large-text allowance here.
+MIN_TEXT_CONTRAST = 4.5
+
+#: The same bar against the worst patch of photograph under the type, rather
+#: than the typical one. A title that is readable over most of a window frame
+#: and vanishes over the bright pane is not a readable title.
+MIN_WORST_PATCH_CONTRAST = 3.0
+
+#: How many pixels of photograph a single text block is judged on. A median
+#: and a 90th percentile do not get better past a few thousand samples.
+SAMPLE_BUDGET = 5000
+
+
+def _srgb_channel(value: int) -> float:
+    c = value / 255.0
+    return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+
+#: The sRGB curve has 256 possible answers per channel, so it is a table, not
+#: a calculation. Measured on one awkward cover: 2.8 million calls to the
+#: exponent, 0.40s of a 2.0s render, gone.
+_SRGB_LUT: tuple[float, ...] = tuple(_srgb_channel(v) for v in range(256))
+
+
+def _srgb_relative_luminance(r: int, g: int, b: int) -> float:
+    """WCAG relative luminance. _luma() above is a cheap 0-255 approximation
+    used for layout heuristics; contrast has to use the real curve."""
+    return 0.2126 * _SRGB_LUT[r] + 0.7152 * _SRGB_LUT[g] + 0.0722 * _SRGB_LUT[b]
+
+
+def _wcag_ratio(a: float, b: float) -> float:
+    hi, lo = (a, b) if a >= b else (b, a)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _region_luminances(img: Image.Image, box: tuple[int, int, int, int]) -> list[float]:
+    """Sorted WCAG luminances of the photograph inside box.
+
+    Sampled on a stride so a full-bleed title band costs a few thousand reads
+    rather than a million; pure Python on purpose, because the builder's
+    runtime carries no numpy. SAMPLE_BUDGET is what a percentile needs, not
+    what the box contains -- at 20000 this was half the cost of an awkward
+    cover, and the measured ratios move by less than 0.02 at 5000.
+    """
+    x0, y0, x1, y1 = (int(v) for v in box)
+    x0 = max(0, x0)
+    y0 = max(0, y0)
+    x1 = min(img.width, x1)
+    y1 = min(img.height, y1)
+    if x1 - x0 < 4 or y1 - y0 < 4:
+        return []
+    pix = img.load()
+    step = max(1, int((((x1 - x0) * (y1 - y0)) / SAMPLE_BUDGET) ** 0.5))
+    out = [
+        _srgb_relative_luminance(*pix[x, y][:3])
+        for y in range(y0, y1, step)
+        for x in range(x0, x1, step)
+    ]
+    out.sort()
+    return out
+
+
+def _percentile(sorted_values: list[float], q: float) -> float:
+    if not sorted_values:
+        return 0.0
+    idx = int(q * (len(sorted_values) - 1))
+    return sorted_values[min(len(sorted_values) - 1, max(0, idx))]
+
+
+def ink_contrast(ink: tuple[int, int, int], luminances: list[float]) -> dict[str, float]:
+    """How readable this ink is over this patch of photograph.
+
+    ``typical`` is against the median pixel. ``worst`` is against the pixel
+    that fights the ink hardest -- the brightest tenth for light ink, the
+    darkest tenth for dark ink -- because that is the part of a title that
+    disappears first.
+    """
+    if not luminances:
+        return {"typical": 0.0, "worst": 0.0}
+    value = _srgb_relative_luminance(*ink[:3])
     return {
-        "title": (255, 255, 255),
-        "subtitle": (236, 230, 214),
-        "series": (228, 220, 200),
-        "author": (252, 248, 240),
-        "shadow": (8, 10, 16),
+        "typical": _wcag_ratio(value, _percentile(luminances, 0.50)),
+        "worst": _wcag_ratio(value, _percentile(luminances, 0.90 if value > 0.5 else 0.10)),
     }
+
+
+def _palette_floor(palette: dict[str, tuple[int, int, int]], luminances: list[float]) -> float:
+    """The weakest line this palette would produce. Covers are judged by the
+    line you cannot read, not by the average line."""
+    return min(ink_contrast(palette[role], luminances)["typical"] for role in INK_ROLES)
+
+
+def _contrast_fills(img: Image.Image, box: tuple[int, int, int, int]) -> dict[str, tuple[int, int, int]]:
+    """Pick the ink that is actually readable over this photograph.
+
+    v1.9.3. This used to switch on one number: region luma >= 150 meant dark
+    ink, anything below meant white. A real photograph does not respect a
+    threshold. A bright kitchen measured 148 in full_bleed_editorial's text
+    box and took white type at 2.58:1 against it, while the same photograph
+    measured over 150 in split_studio's box and took dark type at 8.14:1 --
+    one photograph, two layouts, opposite outcomes from a coin flip. Both
+    palettes are now measured against the pixels the type will sit on and the
+    better one wins.
+    """
+    luminances = _region_luminances(img, box)
+    if not luminances:
+        return dict(LIGHT_INK)
+    if _palette_floor(DARK_INK, luminances) > _palette_floor(LIGHT_INK, luminances):
+        return dict(DARK_INK)
+    return dict(LIGHT_INK)
 
 
 def _draw_text_block(draw, lines, font, x, y, fill, *, shadow=True, shadow_fill=(8, 10, 16), line_gap=8, align="left", box_x=0, box_w=0) -> int:
@@ -908,7 +1024,24 @@ def _draw_text_block(draw, lines, font, x, y, fill, *, shadow=True, shadow_fill=
     return cy
 
 
-def _edge_scrim(img: Image.Image, strength: float, *, side: str, height_frac: float) -> None:
+#: The veil that makes light type readable, and the one that makes dark type
+#: readable. v1.9.3: there used to be only the first. On a bright photograph
+#: the ink correctly switched to dark and the veil then darkened the very
+#: pixels the dark ink needed to stand out from, dragging full_bleed_editorial
+#: from 9.06:1 down to 4.10:1. A veil has to move away from the ink, not
+#: towards it.
+DARK_VEIL = (8, 12, 22)
+LIGHT_VEIL = (252, 250, 246)
+
+
+def _edge_scrim(
+    img: Image.Image,
+    strength: float,
+    *,
+    side: str,
+    height_frac: float,
+    tint: tuple[int, int, int] = DARK_VEIL,
+) -> None:
     h = max(1, int(img.height * height_frac))
     a_max = int(190 * strength)
     grad = Image.new("L", (1, h))
@@ -917,7 +1050,7 @@ def _edge_scrim(img: Image.Image, strength: float, *, side: str, height_frac: fl
         alpha = int(a_max * (1 - t)) if side == "top" else int(a_max * t)
         grad.putpixel((0, y), alpha)
     alpha_img = grad.resize((img.width, h), Image.Resampling.BILINEAR)
-    band = Image.new("RGBA", (img.width, h), (8, 12, 22, 0))
+    band = Image.new("RGBA", (img.width, h), tint + (0,))
     band.putalpha(alpha_img)
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     overlay.paste(band, (0, 0 if side == "top" else img.height - h))
@@ -930,17 +1063,35 @@ def _readability_overlay(
     *,
     layout_id: str = "",
     text_bottom_frac: float | None = None,
+    ink_is_light: bool = True,
 ) -> None:
-    """Subtle adaptive veil + edge scrim. Never a panel, frame, or decoration."""
+    """Subtle adaptive veil + edge scrim. Never a panel, frame, or decoration.
+
+    ``ink_is_light`` says which way to move. Light type needs the photograph
+    pushed down; dark type needs it pushed up. Veiling in the wrong direction
+    is worse than not veiling at all.
+    """
+    tint = DARK_VEIL if ink_is_light else LIGHT_VEIL
     mean = _region_luma(img, (0, 0, img.width, img.height))
     adj = float(strength)
-    if mean > 165:
-        adj = min(0.85, adj + 0.10)
-    elif mean < 55:
-        adj = max(0.25, adj - 0.08)
+    if ink_is_light:
+        if mean > 165:
+            adj = min(0.85, adj + 0.10)
+        elif mean < 55:
+            adj = max(0.25, adj - 0.08)
+    else:
+        # Dark ink is only ever chosen over a bright photograph, which already
+        # gives it room. A light veil is therefore a gentle lift, not the
+        # heavy scrim light type needs -- pushed as hard as the dark one it
+        # bleaches the photograph to paper and trips blank_white_area and
+        # not_full_bleed, which is what happened the first time this was
+        # written.
+        adj = min(adj, 0.34)
+        if mean < 120:
+            adj = min(0.34, adj + 0.06)
     veil_a = int(34 * adj)
     if veil_a > 0:
-        veil = Image.new("RGBA", img.size, (8, 12, 22, veil_a))
+        veil = Image.new("RGBA", img.size, tint + (veil_a,))
         img.paste(Image.alpha_composite(img.convert("RGBA"), veil).convert("RGB"))
     spec = LAYOUT_TYPE.get(layout_id) or LAYOUT_TYPE["full_bleed_editorial"]
     anchor = spec["anchor"]
@@ -948,14 +1099,14 @@ def _readability_overlay(
         top_frac = 0.42
         if text_bottom_frac is not None:
             top_frac = min(0.58, max(0.42, float(text_bottom_frac) + 0.08))
-        _edge_scrim(img, adj, side="top", height_frac=top_frac)
-        _edge_scrim(img, adj * 0.72, side="bottom", height_frac=0.24)
+        _edge_scrim(img, adj, side="top", height_frac=top_frac, tint=tint)
+        _edge_scrim(img, adj * 0.72, side="bottom", height_frac=0.24, tint=tint)
     elif anchor == "center":
-        _edge_scrim(img, adj * 0.70, side="top", height_frac=0.26)
-        _edge_scrim(img, adj * 0.78, side="bottom", height_frac=0.28)
+        _edge_scrim(img, adj * 0.70, side="top", height_frac=0.26, tint=tint)
+        _edge_scrim(img, adj * 0.78, side="bottom", height_frac=0.28, tint=tint)
     else:
-        _edge_scrim(img, adj * 0.55, side="top", height_frac=0.18)
-        _edge_scrim(img, adj, side="bottom", height_frac=0.44)
+        _edge_scrim(img, adj * 0.55, side="top", height_frac=0.18, tint=tint)
+        _edge_scrim(img, adj, side="bottom", height_frac=0.44, tint=tint)
 
 
 def _preferred_px(editor: dict) -> dict[str, int]:
@@ -1257,7 +1408,25 @@ def plan_typography(
             auth_y = min(auth_y, COVER_H - margin_y - author_h)
             auth_y = max(auth_y, cy + AUTHOR_GAP)
         row = fitted["author"]
-        _append_block("author", row, author_x, auth_y, fills["author"])
+        # v1.9.3. The author line used to inherit the body's ink. On a
+        # photograph that is bright where the title sits and dark where the
+        # by-line falls, that put dark ink on a dark strip: measured at 1.62:1
+        # on a bright-top/dark-bottom fixture, and around 1.4:1 on both real
+        # photographs the cover check fetched. It gets its own reading of the
+        # pixels it will actually sit on.
+        author_fill = fills["author"]
+        if not include_author_in_stack:
+            author_fills = _contrast_fills(
+                img or probe,
+                (
+                    author_x,
+                    auth_y,
+                    min(COVER_W - margin_x, author_x + int(row["width"]) + 1),
+                    min(COVER_H, auth_y + int(row["height"]) + 1),
+                ),
+            )
+            author_fill = author_fills["author"]
+        _append_block("author", row, author_x, auth_y, author_fill)
 
         by_role = {b["role"]: b for b in blocks}
         if "title" in by_role and "subtitle" in by_role:
@@ -1365,25 +1534,213 @@ def _paint_plan(img: Image.Image, plan: dict[str, Any]) -> None:
         )
 
 
+#: The thumbnail inspect_variant judges "blank_white_area" and "not_full_bleed"
+#: on, and the pixel test it uses. Kept here so the render loop and the gate
+#: cannot drift apart -- tests/test_a_pale_photograph_still_gets_a_cover.py
+#: pins that they agree.
+BLEACH_THUMB = (318, 412)
+BLEACH_WHITE_R = 242
+BLEACH_WHITE_G = 242
+BLEACH_WHITE_B = 238
+MAX_WHITE_FRACTION = 0.06
+MAX_EDGE_WHITE_FRACTION = 0.22
+
+
+def _white_mask(small: Image.Image) -> Image.Image:
+    """Where the picture has gone to paper. C-level, not a Python pixel loop."""
+    red, green, blue = small.split()
+    return ImageChops.multiply(
+        ImageChops.multiply(
+            red.point(lambda v: 255 if v > BLEACH_WHITE_R else 0),
+            green.point(lambda v: 255 if v > BLEACH_WHITE_G else 0),
+        ),
+        blue.point(lambda v: 255 if v > BLEACH_WHITE_B else 0),
+    )
+
+
+def bleach_report(img: Image.Image) -> dict[str, float | bool]:
+    """How much of this picture has been washed out to white.
+
+    v1.9.3. The light veil that makes dark type readable will, on an already
+    pale photograph, push it past the very thresholds inspect_variant uses to
+    reject a cover that is not a photograph any more. Measured: a flat
+    photograph at luma 244 or above passed all three layouts on 390aaf8 and
+    failed all three here with blank_white_area and not_full_bleed, which left
+    the customer at "choose another photo" for a picture that had been fine.
+    The render loop now asks this before accepting an attempt.
+    """
+    small = img.resize(BLEACH_THUMB, Image.Resampling.LANCZOS)
+    width, height = small.size
+    mask = _white_mask(small)
+    white = mask.histogram()[255]
+    margin = max(2, int(min(width, height) * 0.03))
+    inner = mask.crop((margin, margin, width - margin, height - margin))
+    inner_white = inner.histogram()[255]
+    edge_n = (width * height) - (inner.size[0] * inner.size[1])
+    pix = small.load()
+    corner_white = any(
+        pix[cx, cy][0] > BLEACH_WHITE_R
+        and pix[cx, cy][1] > BLEACH_WHITE_G
+        and pix[cx, cy][2] > BLEACH_WHITE_B
+        for cx, cy in ((1, 1), (width - 2, 1), (1, height - 2), (width - 2, height - 2))
+    )
+    return {
+        "white_fraction": white / float(width * height),
+        "edge_white_fraction": (white - inner_white) / float(edge_n or 1),
+        "corner_white": corner_white,
+    }
+
+
+def photograph_is_bleached(img: Image.Image) -> bool:
+    report = bleach_report(img)
+    return (
+        bool(report["corner_white"])
+        or float(report["white_fraction"]) > MAX_WHITE_FRACTION
+        or float(report["edge_white_fraction"]) > MAX_EDGE_WHITE_FRACTION
+    )
+
+
+def _plan_ink_is_light(plan: dict[str, Any]) -> bool:
+    """Which way this plan's type leans. Defaults to light, as the layouts did
+    before there was a choice."""
+    for block in plan.get("blocks") or []:
+        if block.get("role") == "title" and block.get("fill"):
+            return _srgb_relative_luminance(*tuple(block["fill"])[:3]) > 0.5
+    return True
+
+
+def measure_plan_contrast(background: Image.Image, plan: dict[str, Any]) -> dict[str, Any]:
+    """What each line of type will actually measure against the photograph.
+
+    Called on the background BEFORE the type is painted, so the numbers are
+    the photograph's, not the type's own. That distinction is the whole point:
+    the check this replaces counted bright and dark pixels inside the title
+    band of the finished cover, where the white glyphs supplied the bright
+    ones and their own drop shadow supplied the dark ones, so it was reading
+    the text against itself and could not fail.
+    """
+    rows: dict[str, dict[str, float]] = {}
+    # Every block that actually puts words on the cover has to be measured. A
+    # block that cannot be sampled -- no fill, no box, a box off the canvas --
+    # is NOT skipped quietly: an unmeasured line is the same failure as an
+    # unreadable one, and fail-open here is precisely the shape of the defect
+    # this release exists to close.
+    expected = 0
+    unmeasured: list[str] = []
+    for block in plan.get("blocks") or []:
+        if not (block.get("lines") or []):
+            continue
+        expected += 1
+        role = str(block.get("role") or "")
+        fill = block.get("fill")
+        box = block.get("box")
+        if not role or not fill or not box:
+            unmeasured.append(role or "<unnamed>")
+            continue
+        luminances = _region_luminances(background, tuple(box))
+        if not luminances:
+            unmeasured.append(role)
+            continue
+        rows[role] = ink_contrast(tuple(fill)[:3], luminances)
+    if not rows:
+        return {
+            "roles": {},
+            "weakest_role": "",
+            "typical": 0.0,
+            "worst": 0.0,
+            "unmeasured": unmeasured,
+            "readable": not expected,
+        }
+    weakest_role = min(rows, key=lambda r: rows[r]["typical"])
+    worst = min(row["worst"] for row in rows.values())
+    return {
+        "roles": rows,
+        "weakest_role": weakest_role,
+        "typical": rows[weakest_role]["typical"],
+        "worst": worst,
+        "unmeasured": unmeasured,
+        "readable": (
+            not unmeasured
+            and len(rows) >= expected
+            and rows[weakest_role]["typical"] >= MIN_TEXT_CONTRAST
+            and worst >= MIN_WORST_PATCH_CONTRAST
+        ),
+    }
+
+
 def render_layout_with_qa(
     photo: Image.Image, layout_id: str, ident: dict[str, str], editor: dict
 ) -> tuple[Image.Image, dict[str, Any]]:
-    cropped = _cover_crop(_prepare_photo(photo), editor)
-    subject = detect_subject_region(cropped, editor)
-    plan = plan_typography(ident, editor, layout_id, cropped, subject=subject)
-    img = cropped
+    base = _cover_crop(_prepare_photo(photo), editor)
+    subject = detect_subject_region(base, editor)
+    first = plan_typography(ident, editor, layout_id, base, subject=subject)
     text_bottom = 0.0
-    if plan.get("blocks"):
-        body = [b for b in plan["blocks"] if b.get("role") != "author"]
+    if first.get("blocks"):
+        body = [b for b in first["blocks"] if b.get("role") != "author"]
         if body:
             text_bottom = max(b["y"] + b["h"] for b in body) / float(COVER_H)
-    _readability_overlay(
-        img,
-        float(editor["overlay_strength"]),
-        layout_id=layout_id,
-        text_bottom_frac=text_bottom or None,
-    )
-    plan = plan_typography(ident, editor, layout_id, img, subject=subject)
+    ink_is_light = _plan_ink_is_light(first)
+
+    # v1.9.3. One pass used to be the whole story, at whatever veil strength
+    # the editor happened to carry, veiling dark whatever the type was doing.
+    # Two things are tried now, cheapest first, and the first that reads wins:
+    #
+    #   * the veil that suits the ink the photograph asks for, then
+    #   * the other direction, because a photograph that is bright where the
+    #     title sits and dark where the subtitle falls cannot be fixed with
+    #     one ink -- but a strong dark scrim makes the whole text area dark
+    #     and light type then reads across all of it.
+    #
+    # Each direction is pushed harder until the weakest line clears AA. If
+    # nothing clears it, the best attempt is kept and the gate below reports
+    # weak_contrast rather than shipping a cover nobody can read.
+    # Only the best attempt so far is kept. Holding all six costs about 6 MB
+    # each at cover size, and the six-attempt case is exactly the awkward
+    # photograph the gate now catches -- measured, keeping them all took peak
+    # RSS from 132 MB to 194 MB, on a service that has already been killed
+    # once for memory (v1.8.0).
+    best: tuple[Image.Image, dict[str, Any], dict[str, Any]] | None = None
+    best_score = -1.0
+    readable = False
+    for direction in (ink_is_light, not ink_is_light):
+        for extra in (0.0, 0.22, 0.45):
+            img = base.copy()
+            _readability_overlay(
+                img,
+                min(1.0, float(editor["overlay_strength"]) + extra),
+                layout_id=layout_id,
+                text_bottom_frac=text_bottom or None,
+                ink_is_light=direction,
+            )
+            plan = plan_typography(ident, editor, layout_id, img, subject=subject)
+            contrast = measure_plan_contrast(img, plan)
+            # Readable is not enough. The veil that made it readable must not
+            # have washed the photograph out to paper, or the cover fails a
+            # different check and the customer is sent away for a picture that
+            # was fine. See bleach_report().
+            bleached = photograph_is_bleached(img)
+            if contrast.get("readable") and not bleached:
+                best = (img, plan, contrast)
+                readable = True
+                break
+            # Rank by the line that fails hardest, not by the average: the
+            # worst patch under a line is what decides whether a reader loses
+            # a word. A bleached attempt ranks below every intact one, however
+            # well its type measures.
+            score = min(
+                float(contrast.get("worst", 0.0)), float(contrast.get("typical", 0.0))
+            )
+            if bleached:
+                score = -1.0 - (1.0 / (1.0 + score))
+            if best is None or score > best_score:
+                best_score = score
+                best = (img, plan, contrast)
+        if readable:
+            break
+
+    assert best is not None
+    img, plan, contrast = best
+    plan["contrast"] = contrast
     if plan.get("pass"):
         _paint_plan(img, plan)
     qa = inspect_variant(img, layout_id, ident, plan=plan, subject=subject)
@@ -1531,6 +1888,16 @@ def inspect_variant(
                 ):
                     findings.append("subject_overlap")
                     break
+    # The real contrast check, measured against the photograph BEFORE the type
+    # was painted on it (see measure_plan_contrast). It runs before the early
+    # return below, so a cover that is failing for another reason still says
+    # so if it is also unreadable -- and so that a caller who skipped the
+    # measuring step cannot get a pass by accident. A missing check is exactly
+    # what let six unreadable covers through on 2026-09-23.
+    contrast: dict[str, Any] = (plan or {}).get("contrast") or {}
+    if plan is not None and (plan.get("blocks") or contrast.get("roles")):
+        if not contrast.get("roles") or not contrast.get("readable"):
+            findings.append("weak_contrast")
     findings = list(dict.fromkeys(findings))
     if plan is not None and (not plan.get("pass") or findings):
         return {
@@ -1539,6 +1906,7 @@ def inspect_variant(
             "messages": [FINDING_MESSAGES.get(code, code) for code in findings],
             "thumbnail": {"width": 0, "height": 0, "bright_top": 0, "white": 0, "edge_white": 0},
             "plan_sizes": sizes,
+            "contrast": contrast,
         }
     thumb = _thumb(img)
     tw, th = thumb.size
@@ -1598,16 +1966,17 @@ def inspect_variant(
                 title_fill = block.get("fill")
                 break
     dark_title = bool(title_fill) and _luma(*(title_fill[:3])) < 80
+    # The thumbnail counters still earn their place: they catch a title that
+    # dissolves when the cover is shrunk to a store listing. They are NOT a
+    # contrast check -- both counters can be satisfied by the type's own ink
+    # and its own drop shadow, which is exactly how six unreadable covers
+    # passed this gate on 2026-09-23.
     if dark_title:
         if dark_near_title < 16:
             findings.append("title_unreadable_at_thumbnail")
-        if bright_title < 12:
-            findings.append("weak_contrast")
     else:
         if bright_title < 16:
             findings.append("title_unreadable_at_thumbnail")
-        if dark_near_title < 18:
-            findings.append("weak_contrast")
     findings = list(dict.fromkeys(findings))
     return {
         "findings": findings,
@@ -1615,6 +1984,7 @@ def inspect_variant(
         "messages": [FINDING_MESSAGES.get(code, code) for code in findings],
         "thumbnail": {"width": tw, "height": th, "bright_top": bright_title, "white": white, "edge_white": edge_white},
         "plan_sizes": sizes,
+        "contrast": contrast,
     }
 
 

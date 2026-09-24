@@ -151,7 +151,10 @@
         "tests/test_ebook_build_browser_routing.py",
         "tests/test_ebook_build_resume_recovery.py",
         "tests/test_ai_provider_render_safety.py",
-        "tests/test_ebook_manuscript_correction_recovery.py"
+        "tests/test_ebook_manuscript_correction_recovery.py",
+        "tests/test_a_cover_is_readable_over_any_photograph.py",
+        "tests/test_a_refused_cover_still_leaves_a_way_forward.py",
+        "tests/test_a_pale_photograph_still_gets_a_cover.py"
       ],
       "shared_code_dependencies": [
         "services/ebook_package.py",
