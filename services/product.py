@@ -21,6 +21,7 @@ from services.product_cover_agent import (
 from services.ebook_package import EXPORTS_DIR
 from services.coloring_book.pdf_builder import ColoringBookPdfRequest, build_coloring_book_pdf
 from services.crossword.pdf_builder import CrosswordPdfRequest, build_crossword_pdf
+from services.crossword.seeding import stable_crossword_seed
 from services.math_worksheet.pdf_builder import MathWorksheetPdfRequest, build_math_worksheet_pdf
 from services.spelling_worksheet.pdf_builder import SpellingWorksheetPdfRequest, build_spelling_worksheet_pdf
 from services.word_search.pdf_builder import WordSearchPdfRequest, build_word_search_pdf
@@ -1204,6 +1205,31 @@ def _crossword_pdf_payload(
 
     mode = "custom_word_list" if plan["use_custom"] and custom_words.strip() else "topic"
     theme_label = plan.get("sub_topic") or plan["title"]
+    # v1.9.2: the same saved book must rebuild to the same puzzles.
+    # This request used to leave seed at its None default, so the engine ran
+    # random.Random(None) and seeded itself from the clock -- three rebuilds of
+    # one saved book gave three different sets of grids and clue numbers. The
+    # seed is now a pure function of the settings that decide the puzzles;
+    # see services/crossword/seeding.py. An explicit crossword_seed field still
+    # wins, so a future "give me different puzzles" action has a way in without
+    # touching this path again.
+    explicit_seed = _f(fixed_fields, "crossword_seed")
+    try:
+        puzzle_seed = int(explicit_seed) if str(explicit_seed).strip() else None
+    except (TypeError, ValueError):
+        puzzle_seed = None
+    if puzzle_seed is None:
+        puzzle_seed = stable_crossword_seed(
+            product_title=plan["title"],
+            theme=theme_label,
+            sub_topic=theme_label,
+            difficulty=plan["difficulty"],
+            grid_size=plan["grid_size"],
+            number_of_puzzles=plan["worksheets"],
+            words_per_puzzle=plan["words_per_puzzle"],
+            mode=mode,
+            custom_words=custom_words,
+        )
     # Keep Topic-mode resolved vocabulary authoritative for book.py.
     # Custom Word List mode continues to use the user's custom words above.
     pdf_request = CrosswordPdfRequest(
@@ -1223,6 +1249,7 @@ def _crossword_pdf_payload(
         mode=mode,
         package_id=pkg,
         use_ai_words=False,
+        seed=puzzle_seed,
     )
     result = build_crossword_pdf(pdf_request)
     if result.errors or not result.pdf_bytes:

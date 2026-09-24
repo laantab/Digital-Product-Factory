@@ -5,6 +5,76 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.2 — 2026-09-23
+
+**The same crossword book now rebuilds to the same puzzles.**
+
+### What changed
+
+- Crossword books are now reproducible. The Factory works out where the puzzle
+  engine should start from the book's own settings instead of leaving it to the
+  clock, so rebuilding a saved book gives you the book you saved.
+- `docs/CROSSWORD_REPRODUCIBILITY.md` is new. It shows how to reproduce the old
+  behaviour on v1.9.1, how to verify the fix, exactly which settings decide the
+  puzzles, and what is deliberately *not* promised.
+
+### What was fixed
+
+- **A saved crossword book used to come back different every time you rebuilt
+  it.** Open a saved book, correct a typo in the subtitle, rebuild it, and you
+  got a different set of puzzles and a different answer key from the one you had
+  already proof-read. The cause was one missing setting: the Factory never told
+  the puzzle engine where to start, so the engine started from the clock.
+  Building one unchanged book three times produced three different books,
+  measured on the live code. The Factory now works out a starting point from the
+  book's own settings, so the same book and the same settings always produce the
+  same puzzles. Change the theme, the difficulty, the grid size, the number of
+  puzzles or the word list and you get puzzles that match the change, as you
+  would expect. `docs/CROSSWORD_REPRODUCIBILITY.md` shows how to reproduce both
+  the old behaviour and the fix.
+- **The free cover check runs again.** `Check the cover over a real photo`
+  failed instantly for two reasons: it read the wrong field from the Pexels
+  search result, and it assembled the photograph record by hand instead of
+  calling the same function the customer path uses, so the record failed
+  verification. Both are fixed, and the tool now builds its three covers from a
+  throwaway copy of the live version rather than from whatever branch happens to
+  be open in the Factory folder.
+
+### What this does not change
+
+- The PDF file itself is still not byte-identical between two builds: a PDF
+  carries a creation timestamp. The promise is the same book, not the same
+  bytes.
+- Word Search has the same missing setting and is **not** fixed here. It is a
+  separate locked function and needs its own unlock, its own protected tests and
+  its own relock. It is written down in `docs/CROSSWORD_REPRODUCIBILITY.md` so
+  it is not lost.
+
+### Does anything look different in a book I already made?
+
+Only if you rebuild it. A crossword book you already downloaded is untouched.
+If you reopen a saved crossword and rebuild it, the puzzles will settle on one
+fixed set from now on -- which may differ from the last copy you happened to
+download, because until now every rebuild was a different book. From this
+release onward it stays the same every time.
+
+### Do your steps change?
+
+No. Build and rebuild exactly as before.
+
+### Release gate
+
+Fast Stability Gate: 47 files, 664 passed, 0 failures. Full acceptance manifest
+(187 files) run against this branch and against 53a41c9 in the same
+environment: the same five pre-existing failures on both, none of them new.
+Protected suites for Crossword and the two locked functions that share
+`services/product.py`: 139 passed before the change, 163 after. Five of the
+eleven new reproducibility tests fail on 53a41c9 and pass here, so the suite is
+not a formality. No paid calls: puzzle generation is local and the cover check
+uses Pexels, which is free. Spending is unchanged at 26 paid calls / $4.10.
+
+---
+
 ## 1.9.1 — 2026-09-23
 
 **The launch-readiness repairs, in one release.**

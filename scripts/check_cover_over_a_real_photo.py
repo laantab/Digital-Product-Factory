@@ -44,12 +44,11 @@ def main() -> int:
     args = parser.parse_args()
 
     from services.ebook_pexels import (
-        download_pexels_original,
         fetch_pexels_photo,
         pexels_public_status,
         search_pexels,
     )
-    from services.ebook_photo_cover import LAYOUT_IDS, _store_source_bytes, _activate_source
+    from services.ebook_photo_cover import LAYOUT_IDS, attach_pexels
 
     status = pexels_public_status()
     if not status.get("configured"):
@@ -63,21 +62,22 @@ def main() -> int:
     if not photos:
         print("Pexels returned no photographs for that search. Try another --query.")
         return 3
-    photo_id = str(photos[0].get("id") or "")
+    first = photos[0]
+    # search_pexels returns NORMALISED rows, whose id key is "photo_id".
+    # Reading "id" here silently gave "" and the fetch refused it.
+    photo_id = str(first.get("photo_id") or first.get("id") or "")
+    if not photo_id.isdigit():
+        print("Pexels returned a photograph without a usable id.")
+        return 3
     photo = fetch_pexels_photo(photo_id)
-    raw = download_pexels_original(photo)
-    print(f"Photograph {photo_id} by {photo.get('photographer')} -- {len(raw):,} bytes")
+    print(f"Photograph {photo_id} by {photo.get('photographer')}")
 
     data = {"title": TITLE, "subtitle": SUBTITLE, "author": AUTHOR,
             "package_id": f"cover_check_{photo_id}"}
-    source = _store_source_bytes(
-        data, raw, source_type="pexels",
-        filename=f"pexels_{photo_id}.jpg",
-        license_note="Pexels free licence. Fetched for a one-off cover check; not saved to a project.",
-        project_id=None,
-    )
-    source["pexels_id"] = photo_id
-    data = _activate_source(data, source, project_id=None)
+    # Go through the same entry point the customer path uses. The earlier
+    # hand-rolled copy of it stored no source["pexels"] record, and
+    # verify_source rightly refused the result.
+    data = attach_pexels(data, photo_id, project_id=None)
 
     target = out_dir()
     cover = data["cover_design"]
