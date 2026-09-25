@@ -193,6 +193,8 @@
     "tests/test_word_search_rebuilds_identically.py",
     "tests/test_v196_free_image_sources.py",
     "tests/test_v196_one_click_picture_approval.py",
-    "tests/test_v197_missing_photo_is_never_drawn.py"
+    "tests/test_v197_missing_photo_is_never_drawn.py",
+    "tests/test_download_serves_the_latest_export.py",
+    "tests/test_customer_titles_with_ordinary_words.py"
   ]
 }
