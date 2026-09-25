@@ -469,7 +469,24 @@ class _ScaledDraw:
         return getattr(self._d, name)
 
 
+#: Logical font sizes used while one aid is being drawn (v1.9.10). None when
+#: nothing is being measured. Read back by render_aid_png so the size of the
+#: smallest label is known without guessing from pixels.
+_LABEL_TRACK: list[list[int]] = []
+
+#: The narrowest text column any template prints at: letter page, 1.0 in
+#: margins = 6.5 in = 468 pt. A diagram is scaled to the column width.
+DIAGRAM_COLUMN_PT = 468.0
+#: Smallest readable label on the printed page, the same floor the
+#: Editor-in-Chief applies to the book's own text.
+MIN_LABEL_PT = 8.0
+#: Chart label ink (v1.9.10): near-black, not slate, for print contrast.
+_CHART_INK = (17, 17, 17)
+
+
 def _font(size: int, *, bold: bool = False):
+    if _LABEL_TRACK:
+        _LABEL_TRACK[-1].append(int(size))
     paths = ebook_font_paths()
     path = paths.get("bold" if bold else "regular")
     scaled_size = max(1, round(_sc(size)))
@@ -1502,9 +1519,9 @@ def _new_canvas(width: int = 1400, height: int = 900) -> tuple[Image.Image, Imag
 
 
 def _draw_title(draw: ImageDraw.ImageDraw, title: str, width: int) -> None:
-    font = _font(28, bold=True)
+    font = _font(32, bold=True)
     for i, line in enumerate(_wrap(draw, title, font, width - 80)[:2]):
-        draw.text((40, 28 + i * 34), line, font=font, fill=_pal("text"))
+        draw.text((40, 26 + i * 40), line, font=font, fill=_pal("text"))
 
 
 def _looks_currency(aid: dict[str, Any], values: list[float]) -> bool:
@@ -1533,17 +1550,19 @@ def _render_chart(aid: dict[str, Any]) -> Image.Image:
     values = [float(v) for v in (data.get("values") or [])]
     n = min(len(labels), len(values), 8)
     labels, values = labels[:n], values[:n]
-    width, height = 1400, 720 if n <= 6 else 900
+    # v1.9.10: 26 px labels and values (about 8.7 pt at the narrowest printed
+    # column); they were 16-18 px, about 5.3 pt on the page.
+    width, height = 1400, 760 if n <= 6 else 1000
     img, draw = _new_canvas(width, height)
     _draw_title(draw, str(aid.get("title") or "Chart"), width)
     if not values:
         return img
     currency = _looks_currency(aid, values)
     max_v = max(values) or 1.0
-    body = _font(16)
-    value_font = _font(18, bold=True)
+    body = _font(30)
+    value_font = _font(30, bold=True)
     if n <= 6:
-        plot_top, plot_bottom = 130, height - 88
+        plot_top, plot_bottom = 150, height - 100
         gap = 36
         bar_w = min(170, max(72, (width - 160) // max(n, 1) - gap))
         total_w = n * bar_w + (n - 1) * gap
@@ -1555,21 +1574,21 @@ def _render_chart(aid: dict[str, Any]) -> Image.Image:
             draw.rounded_rectangle((x, y, x + bar_w, plot_bottom), 10, fill=_pal("accent"))
             txt = _fmt_chart_value(val, currency=currency)
             tw, _ = _text_size(draw, txt, value_font)
-            draw.text((x + (bar_w - tw) / 2, y - 32), txt, font=value_font, fill=_pal("text"))
-            for j, line in enumerate(_wrap(draw, str(lbl), body, bar_w + 20)[:2]):
+            draw.text((x + (bar_w - tw) / 2, y - 38), txt, font=value_font, fill=_pal("text"))
+            for j, line in enumerate(_wrap(draw, str(lbl), body, bar_w + gap - 4)[:2]):
                 lw, _ = _text_size(draw, line, body)
-                draw.text((x + (bar_w - lw) / 2, plot_bottom + 10 + j * 18), line, font=body, fill=(30, 41, 59))
+                draw.text((x + (bar_w - lw) / 2, plot_bottom + 10 + j * 32), line, font=body, fill=_CHART_INK)
         return img
-    top, bottom, left = 110, height - 80, 360
-    bar_h = min(72, int((bottom - top) / max(n, 1)) - 12)
+    top, bottom, left = 120, height - 60, 420
+    bar_h = min(84, int((bottom - top) / max(n, 1)) - 18)
     for i, (lbl, val) in enumerate(zip(labels, values)):
         y = top + i * (bar_h + 18)
-        bw = int((width - left - 80) * (val / max_v))
+        bw = int((width - left - 200) * (val / max_v))
         draw.rounded_rectangle((left, y, left + max(bw, 8), y + bar_h), 8, fill=_pal("accent"))
-        for line in _wrap(draw, str(lbl), body, left - 60)[:2]:
-            draw.text((40, y + 8), line, font=body, fill=(30, 41, 59))
+        for j, line in enumerate(_wrap(draw, str(lbl), body, left - 60)[:2]):
+            draw.text((40, y + 6 + j * 32), line, font=body, fill=_CHART_INK)
         draw.text(
-            (left + max(bw, 8) + 12, y + 16),
+            (left + max(bw, 8) + 12, y + (bar_h - 32) / 2),
             _fmt_chart_value(val, currency=currency),
             font=value_font,
             fill=_pal("text"),
@@ -1600,12 +1619,13 @@ def _render_horizontal_steps(aid: dict[str, Any], items: list[str], *, kind: str
     _draw_title(draw, str(aid.get("title") or kind.title()), width)
     accent = _pal("secondary") if kind == "timeline" else _pal("primary")
     gap = 22
-    box_w = min(210, max(120, (width - 80 - (n - 1) * gap) // n))
+    # v1.9.10: 26 px labels (about 8.7 pt at the narrowest printed column).
+    box_w = max(120, (width - 80 - (n - 1) * gap) // n)
     total_w = n * box_w + (n - 1) * gap
     x0 = (width - total_w) // 2
     y0 = 150
-    body = _font(16, bold=True)
-    sub = _font(15)
+    body = _font(30, bold=True)
+    sub = _font(30)
     for i, item in enumerate(items):
         x = x0 + i * (box_w + gap)
         draw.rounded_rectangle((x, y0, x + box_w, y0 + 210), 12, fill=(255, 255, 255), outline=accent, width=2)
@@ -1613,9 +1633,9 @@ def _render_horizontal_steps(aid: dict[str, Any], items: list[str], *, kind: str
         num = str(i + 1)
         nw, _ = _text_size(draw, num, body)
         draw.text((x + (box_w - nw) / 2, y0 + 28), num, font=body, fill=(255, 255, 255))
-        for j, line in enumerate(_wrap(draw, item, sub, box_w - 20)[:4]):
+        for j, line in enumerate(_wrap(draw, item, sub, box_w - 24)[:4]):
             lw, _ = _text_size(draw, line, sub)
-            draw.text((x + (box_w - lw) / 2, y0 + 80 + j * 22), line, font=sub, fill=(15, 23, 42))
+            draw.text((x + (box_w - lw) / 2, y0 + 76 + j * 36), line, font=sub, fill=_CHART_INK)
         if i < n - 1:
             ax = x + box_w + 4
             draw.polygon(
@@ -1848,26 +1868,48 @@ def _draw_tick(draw: ImageDraw.ImageDraw, centre: tuple[int, int], *, fill) -> N
 
 
 def _render_steps(aid: dict[str, Any], *, kind: str) -> Image.Image:
-    items = _short_items([_plain_cell(x) for x in (aid.get("items") or [])], 8)
-    n = len(items) or 1
-    height = min(900, 140 + n * 86)
+    """Numbered steps or a checklist, one full-width row per item.
+
+    v1.9.10: sized for the printed page. The canvas is 1400 logical px and
+    prints at the text-column width (as narrow as 468 pt), so 18 px labels
+    came out near 6 pt -- unreadable (Container Gardening for Beginners,
+    pages 8, 18, 28, 32). Labels are now 26 px (about 8.7 pt at the narrowest
+    column), rows grow to fit up to three lines, and nothing is cut off.
+    """
+    items = []
+    for raw in (aid.get("items") or [])[:8]:
+        text = _plain_cell(raw)
+        # A checklist item arrives as "[ ] Water the pot"; the tick is drawn.
+        text = re.sub(r"^\[\s*[xX ]?\s*\]\s*", "", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        if text:
+            items.append(text)
+    probe_img, probe = _new_canvas(1400, 200)
+    body = _font(30)
+    # The whole item is printed -- wrapped, never cut short (up to 4 lines).
+    wrapped = [_wrap(probe, item, body, 1130)[:4] or [""] for item in items] or [[""]]
+    line_h = 40
+    rows = [max(92, 28 + len(lines) * line_h) for lines in wrapped]
+    height = 140 + sum(r + 12 for r in rows) + 20
     img, draw = _new_canvas(1400, height)
     _draw_title(draw, str(aid.get("title") or kind.title()), 1400)
-    body = _font(18)
-    y = 110
+    body = _font(30)
+    num_font = _font(30, bold=True)
+    y = 130
     accent = _pal("secondary") if kind == "timeline" else _pal("primary")
-    for i, item in enumerate(items, start=1):
-        draw.rounded_rectangle((40, y, 1360, y + 72), 10, fill=(255, 255, 255), outline=accent, width=2)
-        draw.ellipse((58, y + 14, 106, y + 62), fill=accent)
+    for i, (lines, row_h) in enumerate(zip(wrapped, rows), start=1):
+        draw.rounded_rectangle((40, y, 1360, y + row_h), 10, fill=(255, 255, 255), outline=accent, width=2)
+        cy = y + row_h / 2
+        draw.ellipse((58, cy - 28, 114, cy + 28), fill=accent)
         if kind == "checklist":
-            _draw_tick(draw, (82, y + 38), fill=(255, 255, 255))
+            _draw_tick(draw, (86, cy), fill=(255, 255, 255))
         else:
-            draw.text((74, y + 24), str(i), font=_font(18, bold=True), fill=(255, 255, 255))
-        for j, line in enumerate(_wrap(draw, item, body, 1180)[:2]):
-            draw.text((128, y + 14 + j * 24), line, font=body, fill=(15, 23, 42))
-        y += 82
-        if y > height - 40:
-            break
+            nw, nh = _text_size(draw, str(i), num_font)
+            draw.text((86 - nw / 2, cy - nh / 2 - 4), str(i), font=num_font, fill=(255, 255, 255))
+        ty = y + (row_h - len(lines) * line_h) / 2
+        for j, line in enumerate(lines):
+            draw.text((138, ty + j * line_h), line, font=body, fill=_CHART_INK)
+        y += row_h + 12
     return img
 
 
@@ -2192,7 +2234,7 @@ def _render_calendar_tracker(aid: dict[str, Any]) -> Image.Image:
                 draw.text((x + 10, y0 + 5), f"Day {dnum}", font=day_font, fill=(255, 255, 255))
                 ty = y0 + 44
                 for line in _wrap(draw, _plain_cell(d.get("label") or ""), body_font, cell_w - 24)[:5]:
-                    draw.text((x + 10, ty), line, font=body_font, fill=(30, 41, 59))
+                    draw.text((x + 10, ty), line, font=body_font, fill=_CHART_INK)
                     ty += 19
                 dur = _plain_cell(d.get("duration") or "")
                 if dur:
@@ -2202,12 +2244,60 @@ def _render_calendar_tracker(aid: dict[str, Any]) -> Image.Image:
     return img
 
 
+def label_min_pt(img: Image.Image, *, column_pt: float = DIAGRAM_COLUMN_PT) -> float:
+    """Size in points of the smallest label in a drawn aid, once printed.
+
+    The picture is scaled to the text column, so a label of `px` logical
+    pixels on a canvas `w` logical pixels wide prints at px * column / w.
+    Returns 0.0 when the aid was not measured (treated as unknown).
+    """
+    try:
+        px = float(img.info.get("label_min_px") or 0)
+        w = float(img.info.get("canvas_logical_w") or 0)
+    except Exception:  # noqa: BLE001
+        return 0.0
+    if px <= 0 or w <= 0:
+        return 0.0
+    return px * float(column_pt) / w
+
+
 def render_aid_png(aid: dict[str, Any], *, scale: float = 1.0) -> Image.Image:
     """Render one aid to a PNG. scale=2.0 re-runs the same drawing instructions
-    at double resolution (not a resize of a 1x render) -- see _ScaledDraw."""
+    at double resolution (not a resize of a 1x render) -- see _ScaledDraw.
+
+    v1.9.10: records the smallest label size used (logical px) and the canvas
+    width on the image, so label_min_pt() can tell how large it prints."""
     if scale and scale != 1.0:
         with _RenderScale(scale):
             return render_aid_png(aid, scale=1.0)
+    img = _measured(lambda: _render_aid_png_inner(aid))
+    kind = str(aid.get("type") or "").lower()
+    # v1.9.10: a list-shaped diagram that would print below the readable
+    # floor is redrawn as the readable numbered list. Numeric charts and
+    # comparison tables have no list form; the Editor-in-Chief and the
+    # visuals check refuse those instead of shipping them unreadable.
+    if (label_min_pt(img) < MIN_LABEL_PT and kind not in ("chart", "comparison", "photo")
+            and [x for x in (aid.get("items") or []) if str(x or "").strip()]):
+        style = "checklist" if kind == "checklist" else ("timeline" if kind == "timeline" else "workflow")
+        img = _measured(lambda: _render_steps(aid, kind=style))
+    return img
+
+
+def _measured(draw_fn) -> Image.Image:
+    _LABEL_TRACK.append([])
+    try:
+        img = draw_fn()
+    finally:
+        sizes = _LABEL_TRACK.pop()
+    try:
+        img.info["label_min_px"] = min(sizes) if sizes else 0
+        img.info["canvas_logical_w"] = img.size[0] / (_RENDER_SCALE[0] or 1.0)
+    except Exception:  # noqa: BLE001
+        pass
+    return img
+
+
+def _render_aid_png_inner(aid: dict[str, Any]) -> Image.Image:
     kind = str(aid.get("type") or "").lower()
     if kind == "chart":
         return _render_chart(aid)
@@ -2227,15 +2317,18 @@ def render_aid_png(aid: dict[str, Any], *, scale: float = 1.0) -> Image.Image:
         raw_items = [_plain_cell(x) for x in (aid.get("items") or [])]
         if _station_map_layout(aid):
             return _render_station_map(aid, _short_items(raw_items, 7))
-        items = _short_items(raw_items, 6)
-        if items and all(len(x) <= 48 for x in items):
+        # v1.9.10: every step is kept (up to 8; it used to drop steps 7 and 8)
+        # and boxes side by side are used only while their text stays readable.
+        items = _short_items(raw_items, 8)
+        if items and len(items) <= 4 and all(len(x) <= 40 for x in items):
             return _render_horizontal_steps(aid, items, kind="workflow")
-        return _render_steps({**aid, "items": items}, kind="workflow")
+        return _render_steps({**aid, "items": raw_items}, kind="workflow")
     if kind == "timeline":
-        items = _short_items([_plain_cell(x) for x in (aid.get("items") or [])], 6)
-        if items and all(len(x) <= 48 for x in items):
+        raw_items = [_plain_cell(x) for x in (aid.get("items") or [])]
+        items = _short_items(raw_items, 8)
+        if items and len(items) <= 6 and all(len(x) <= 48 for x in items):
             return _render_timeline_roadmap(aid, items)
-        return _render_steps({**aid, "items": items}, kind="timeline")
+        return _render_steps({**aid, "items": raw_items}, kind="timeline")
     if kind == "checklist":
         return _render_steps(aid, kind=kind)
     img, draw = _new_canvas()
@@ -2538,6 +2631,25 @@ def validate_visual_readiness(data: dict, *, html: str | None = None) -> VisualV
                 continue
         resolved += 1
 
+    # v1.9.10: the words inside every Factory-drawn chart, at their printed
+    # size. The one-click build never ran the Editor-in-Chief, so this is the
+    # gate every book passes: an unreadable chart stops here, plainly.
+    for aid in required_aids(plan):
+        if is_photo_aid(aid):
+            continue
+        try:
+            size = label_min_pt(render_aid_png(aid))
+        except Exception:  # noqa: BLE001
+            continue
+        if 0 < size < MIN_LABEL_PT:
+            idx = aid.get("chapter_index") or ""
+            ctitle = str(aid.get("chapter") or aid.get("title") or "a chapter")
+            where = f"Chapter {idx}: {ctitle}" if idx else ctitle
+            findings.append(
+                f"The chart in {where} would print its text at {size:.1f} pt; "
+                f"charts must be at least {MIN_LABEL_PT:.0f} pt to read."
+            )
+
     # Every check above asks about one file: does it exist, is it a real PNG,
     # does its hash match, is it captioned. A book can pass all of them and
     # still be nine copies of the same rounded box — which is what shipped.
@@ -2663,8 +2775,9 @@ def figure_html(aid: dict[str, Any], *, palette: dict[str, tuple[int, int, int]]
             with _RenderPalette(palette):
                 img = render_aid_png(aid, scale=2.0)
             buf = io.BytesIO()
-            img.convert("RGB").save(buf, format="JPEG", quality=88)
-            uri = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+            # v1.9.10: lossless PNG. JPEG blurred the edges of chart lettering.
+            img.convert("RGB").save(buf, format="PNG", optimize=True)
+            uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
             # scale=2.0 doubles pixel dimensions for print sharpness; report
             # the same logical width/height _embed_preview_image would.
             w, h = img.size[0] // 2, img.size[1] // 2
