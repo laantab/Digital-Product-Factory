@@ -7400,7 +7400,7 @@ function _renderEbookPictureReview(root, s, pid, bookTitle) {
     return `<li class="rounded-lg border ${it.ready ? "border-slate-200" : "border-rose-300"} bg-white p-2 text-xs" data-pic-tile="${vid}">
         ${img}
         <p class="font-semibold text-slate-900 mt-1">Chapter ${escapeHtml(String(it.chapter_index || ""))}: ${escapeHtml(it.chapter || "")}</p>
-        <p class="text-slate-600">${who}</p>
+        <p class="text-slate-600" data-pic-credit>${who}</p>
         ${it.ready ? "" : `<p class="text-rose-700 mt-1">This chapter still needs a picture.</p>`}
         ${replace}
       </li>`;

@@ -215,13 +215,24 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         "Approve & Save",
     )
     #: The ten-stage operational rail must never appear on the customer screen.
+    PICTURE_CREDIT_SELECTORS = ("[data-pic-credit]", "[data-pic-replace]")
+
     RAIL_WORDS = ("Preflight", "Outline", "Manuscript", "Visuals", "Preview approval")
 
     def _screen(self, page) -> str:
         return page.locator("[data-view='ebook-build']").inner_text()
 
-    def _assert_screen_is_customer_safe(self, page, *, where: str, allow: tuple = ()) -> None:
+    def _assert_screen_is_customer_safe(self, page, *, where: str, allow: tuple = (),
+                                        allow_selectors: tuple = ()) -> None:
         text = self._screen(page)
+        # v1.9.6: the owner asked for each picture's source and photographer
+        # to be shown. On the picture sheet ONLY the credit lines and the
+        # "Try <source>" buttons may name the source (Pexels, Unsplash,
+        # Pixabay); the same word anywhere else on the screen still fails.
+        for sel in allow_selectors:
+            loc = page.locator(f"[data-view='ebook-build'] {sel}")
+            for i in range(loc.count()):
+                text = text.replace(loc.nth(i).inner_text(), "", 1)
         # v1.9.6: an exact, owner-chosen label may be allowed on one screen
         # (the picture sheet's "Approve All Visuals" button). Only that exact
         # phrase is removed; the same word anywhere else still fails.
@@ -303,16 +314,36 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         # with no further production clicks.
         page.wait_for_selector("[data-ebook-picture-review]", timeout=600000)
         self._assert_screen_is_customer_safe(page, where="picture sheet",
-                                             allow=("Approve All Visuals",))
+                                             allow=("Approve All Visuals",),
+                                             allow_selectors=self.PICTURE_CREDIT_SELECTORS)
         tiles = page.locator("[data-ebook-contact-sheet] [data-pic-tile]")
         self.assertGreater(tiles.count(), 0, "the picture sheet shows no pictures")
         for i in range(tiles.count()):
             self.assertIn("Chapter", tiles.nth(i).inner_text(),
                           "a picture on the sheet does not say which chapter it is for")
+        # A picture the checker refused is replaced from the sheet, one
+        # tile at a time, exactly as a customer would. Nothing is approved
+        # until every chapter has a picture.
+        replaced = 0
+        for _ in range(40):
+            if page.locator("[data-ebook-approve-pictures]:not([disabled])").count():
+                break
+            needs = page.locator("[data-pic-tile]:has-text('still needs a picture') [data-pic-replace]").first
+            if not needs.count():
+                break
+            needs.click()
+            replaced += 1
+            page.wait_for_selector("[data-pic-replace]:not([disabled])", timeout=60000)
         approve_btn = page.locator("[data-ebook-approve-pictures]")
         expect(approve_btn).to_be_enabled(timeout=30000)
+        self._assert_screen_is_customer_safe(page, where="picture sheet after replacing",
+                                             allow=("Approve All Visuals",),
+                                             allow_selectors=self.PICTURE_CREDIT_SELECTORS)
+        advances_before_approval = len(advances)
         approve_btn.click()
         page.wait_for_selector("[data-ebook-build-done]", timeout=600000)
+        self.assertGreater(len(advances), advances_before_approval,
+                           "the build did not carry on by itself after Approve All Visuals")
         done_text = self._screen(page)
         self.assertIn("Your ebook is ready", done_text)
         self.assertIn("100%", done_text)
@@ -498,6 +529,61 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         self.assertEqual(after.get("paid"), before_reopen.get("paid"))
         self.assertEqual(after.get("pexels_http"), before_reopen.get("pexels_http"))
         self.assertEqual(int(after.get("paid") or 0), 0)
+        context.close()
+
+    def test_24_picture_sheet_names_each_photo_source_and_stays_customer_safe(self):
+        """v1.9.6: the sheet shows chapter, source and photographer, and only there."""
+        context = self.browser.new_context()
+        page = context.new_page()
+        page.goto(self.base + "/", wait_until="domcontentloaded")
+        payload = {
+            "ok": True, "project_id": 999999, "finished": False, "failed": False, "percent": 40,
+            "title": "Container Gardening for Beginners",
+            "message": "Your pictures are ready. Look them over, change any you like, then press Approve All Visuals.",
+            "awaiting_picture_approval": True,
+            "picture_review": {
+                "approvable": True, "findings": [],
+                "image_sources": [{"provider": "pexels", "label": "Pexels", "configured": True},
+                                  {"provider": "unsplash", "label": "Unsplash", "configured": True}],
+                "items": [
+                    {"visual_id": "v1", "chapter_index": 1, "chapter": "Soil and Pots", "ready": True,
+                     "replaceable": True, "thumb": "", "source_label": "Pexels",
+                     "credit": {"provider": "pexels", "provider_label": "Pexels", "photographer": "Ada Grower",
+                                "photographer_url": "https://www.pexels.com/@ada", "provider_url": "https://www.pexels.com/"}},
+                    {"visual_id": "v2", "chapter_index": 2, "chapter": "Watering", "ready": True,
+                     "replaceable": True, "thumb": "", "source_label": "Unsplash",
+                     "credit": {"provider": "unsplash", "provider_label": "Unsplash", "photographer": "Bo Leaf",
+                                "photographer_url": "https://unsplash.com/@bo?utm_source=x&utm_medium=referral",
+                                "provider_url": "https://unsplash.com/?utm_source=x&utm_medium=referral"}},
+                ],
+            },
+        }
+        page.route("**/ebook/build/999999/status",
+                   lambda route: route.fulfill(status=200, content_type="application/json",
+                                               body=json.dumps(payload)))
+        page.route("**/ebook/build/999999/advance",
+                   lambda route: route.fulfill(status=200, content_type="application/json",
+                                               body=json.dumps(payload)))
+        page.evaluate("openEbookBuild(999999)")
+        page.wait_for_selector("[data-ebook-picture-review]", timeout=30000)
+        tiles = page.locator("[data-pic-tile]")
+        self.assertEqual(tiles.count(), 2)
+        self.assertIn("Chapter 1: Soil and Pots", tiles.nth(0).inner_text())
+        self.assertIn("Photo by Ada Grower on Pexels", tiles.nth(0).inner_text())
+        self.assertIn("Photo by Bo Leaf on Unsplash", tiles.nth(1).inner_text())
+        self.assertIn("utm_medium=referral",
+                      tiles.nth(1).locator("[data-pic-credit] a").first.get_attribute("href"))
+        self.assertEqual(page.locator("[data-ebook-approve-pictures]").count(), 1)
+        self._assert_screen_is_customer_safe(page, where="picture sheet with real sources",
+                                             allow=("Approve All Visuals",),
+                                             allow_selectors=self.PICTURE_CREDIT_SELECTORS)
+        # Outside the credit lines and Try buttons the source name must not appear.
+        outside = self._screen(page)
+        for sel in self.PICTURE_CREDIT_SELECTORS:
+            loc = page.locator(f"[data-view='ebook-build'] {sel}")
+            for i in range(loc.count()):
+                outside = outside.replace(loc.nth(i).inner_text(), "", 1)
+        self.assertNotIn("Pexels", outside)
         context.close()
 
     def test_22_repeat_build_click_attaches_to_the_same_project(self):
