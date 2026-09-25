@@ -23,10 +23,13 @@ from command_center.server import app as cc_app
 # ---------------------------------------------------------------------------
 
 def test_identifies_factory_v13_as_the_source_of_truth():
-    info = status.get_git_info()
-    assert info["folder_name"] == "Factory-v1.3"
-    assert info["is_expected_folder"] is True
+    # v1.9.7: the Command Center names Factory-v1.3 as the source of truth and
+    # says honestly whether THIS copy is it. The old test also required the
+    # checkout folder to be named Factory-v1.3, so it failed in every other
+    # folder (a separate test folder, a cloud copy) while the product was right.
     assert status.EXPECTED_FOLDER_NAME == "Factory-v1.3"
+    info = status.get_git_info()
+    assert info["is_expected_folder"] is (info["folder_name"] == "Factory-v1.3")
 
 
 def test_displays_the_current_branch():

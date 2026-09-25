@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import os
 from pathlib import Path
 
 from services.storage import StorageError, get_storage, sha256_hex
@@ -196,3 +197,47 @@ def legacy_embedded_fields(data: dict | None) -> dict[str, int]:
         if raw:
             found[field] = len(raw)
     return found
+
+
+def refresh_stale_export(exports_root: str | Path, package_id: str, filename: str) -> bool:
+    """Replace a local export copy that is older than the verified stored one.
+
+    v1.9.8. The website keeps its own copy of finished files on its disk and
+    /download serves that copy first. When a book is exported again on the
+    builder, storage and the asset record get the new bytes, but the
+    website's copy stayed the old one -- and the download check then refused
+    it (export_sha256_mismatch) forever. Container Gardening for Beginners,
+    2026-09-25: re-exported, Finished 100%, both downloads 403.
+
+    Only a VERIFIED, approved stored asset can replace the local copy, and
+    only when the two differ. Returns True when the file was replaced.
+    Never raises; any doubt leaves the local file exactly as it was.
+    """
+    try:
+        import database
+
+        local = Path(exports_root) / str(package_id) / str(filename)
+        if not local.is_file():
+            return False
+        if not database.list_assets_exist():
+            return False
+        record = database.find_asset_by_export_path(str(package_id), str(filename))
+        if not record or not record.get("approved"):
+            return False
+        want = str(record.get("checksum") or "").lower()
+        if not want:
+            return False
+        if sha256_hex(local.read_bytes()).lower() == want:
+            return False
+        payload = verified_asset_bytes(record["storage_key"])
+        if payload is None or sha256_hex(payload).lower() != want:
+            return False
+        tmp = local.with_name(local.name + ".refresh-tmp")
+        tmp.write_bytes(payload)
+        os.replace(tmp, local)
+        return True
+    except Exception:                                  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("could not refresh a stale export copy")
+        return False

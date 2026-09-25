@@ -53,8 +53,12 @@ class DatabasePathIsolationTests(unittest.TestCase):
         )
 
     def test_real_projects_db_is_not_the_active_db(self):
+        # v1.9.7: the rule is that tests never use the working folder's
+        # projects.db. That holds whether or not the file exists, so it is no
+        # longer a precondition -- a fresh checkout or a separate test folder
+        # has no projects.db, and this test used to fail there for that reason
+        # alone.
         real_db = (ROOT / "projects.db").resolve()
-        self.assertTrue(real_db.is_file(), "sanity check: real projects.db should exist")
         # The active DB_PATH must not point at that exact file.
         self.assertNotEqual(Path(database.DB_PATH).resolve(), real_db)
 

@@ -1267,6 +1267,8 @@ ACTIVITY_FAILED = "failed"
 #: Comfortably longer than one chapter, so a slow chapter is not mistaken
 #: for a stall.
 ACTIVE_WITHIN_SECONDS = 90
+#: A queued build untouched this long is shown as Paused with Continue (v1.9.7).
+QUEUED_GIVE_UP_SECONDS = 15 * 60
 
 
 def _seconds_since(timestamp: str) -> float | None:
@@ -1335,7 +1337,14 @@ def activity_for(project_id: int, data: dict, *, retrying: bool = False) -> dict
     if lease_live or recently_moved:
         return {"state": ACTIVITY_WORKING, "spinning": True,
                 "label": "Working", "idle_seconds": idle_for}
-    if queued:
+    # v1.9.7: a queued job nobody has picked up for a long time is not
+    # "picking this back up". Container Gardening for Beginners showed that
+    # spinner for ~63 hours: in workflow mode a queued row only moves when
+    # something asks Render to run it, and nothing did. Past the limit the
+    # screen says Paused and offers Continue, which hands the book to the
+    # builder again (the duplicate guard still allows only one task).
+    queued_too_long = idle_for is not None and idle_for > QUEUED_GIVE_UP_SECONDS
+    if queued and not queued_too_long:
         return {"state": ACTIVITY_QUEUED, "spinning": True,
                 "label": "Picking this back up", "idle_seconds": idle_for}
     return {"state": ACTIVITY_STALLED, "spinning": False,

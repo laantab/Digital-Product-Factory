@@ -261,3 +261,18 @@ def test_an_unfinished_build_is_still_reported_honestly():
     activity = activity_for(project["id"], data)
     assert activity["state"] == ACTIVITY_STALLED
     assert activity["spinning"] is False
+
+
+def test_a_job_queued_for_days_offers_continue_instead_of_spinning():
+    """v1.9.7. Container Gardening for Beginners: queued ~63 hours, spinner
+    "Picking this back up" the whole time, no Continue button."""
+    from services.ebook_build_orchestrator import QUEUED_GIVE_UP_SECONDS
+
+    project = _project()
+    store.enqueue(project["id"])
+    activity = activity_for(project["id"], _data(seconds_ago=63 * 3600))
+    assert activity["state"] == ACTIVITY_STALLED
+    assert activity["spinning"] is False
+    # Still within the limit it is honestly "picking back up".
+    fresh = activity_for(project["id"], _data(seconds_ago=QUEUED_GIVE_UP_SECONDS - 60))
+    assert fresh["state"] == ACTIVITY_QUEUED

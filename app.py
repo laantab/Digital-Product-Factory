@@ -3272,6 +3272,14 @@ def download_export_route(package_id: str, filename: str):
             return _error("Invalid download id.", 400)
     except OSError:
         return _error("Export file not found.", 404)
+    # v1.9.8: a book exported again on the builder leaves this machine's copy
+    # stale; bring it up to the verified stored version before serving.
+    try:
+        from services.storage.compat import refresh_stale_export
+
+        refresh_stale_export(EXPORTS_DIR, package_id, filename)
+    except Exception:  # noqa: BLE001
+        pass
     if not os.path.isfile(file_path):
         # Upgrade 0, Phase 0B-3B1 — asset-first, legacy-authoritative.
         # No disk copy: a VERIFIED stored asset may still hold these bytes.

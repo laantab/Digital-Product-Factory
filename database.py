@@ -675,7 +675,27 @@ def is_customer_clutter_record(project: dict) -> bool:
     haystack = _customer_hide_haystack(project).lower()
     if any(phrase in haystack for phrase in _CUSTOMER_HIDE_PHRASES):
         return True
-    return bool(_CUSTOMER_HIDE_WORD_RE.search(haystack))
+    # The same unmistakable test phrases classify_customer_visibility uses.
+    if any(phrase in haystack for phrase in _STRONG_TEST_PHRASES):
+        return True
+    # v1.9.7. A bare word is evidence only where the customer did not write
+    # it -- the same rule v1.9.1 gave classify_customer_visibility. Here it
+    # was still applied to the title, so real books such as "SAT Test Prep",
+    # "QA Engineer Career Guide", "Workflow Automation for Small Business" or
+    # "Seed Starting for Beginners" vanished from Saved Projects and from
+    # Continue. The title is checked only for an unmistakable label, e.g.
+    # "[TEST]"; the record's own metadata is still checked for the words.
+    data = project.get("data") if isinstance(project.get("data"), dict) else {}
+    title = " ".join(str(x or "") for x in (project.get("name"), data.get("title"), data.get("name")))
+    if _EXPLICIT_MARKER_RE.search(title):
+        return True
+    metadata = " ".join(
+        str(x).strip() for x in (
+            project.get("type"), data.get("source"), data.get("product_type"),
+            data.get("product_label"), data.get("status"), data.get("_test_reason"),
+        ) if str(x or "").strip()
+    )
+    return bool(_CUSTOMER_HIDE_WORD_RE.search(metadata))
 
 
 _CUSTOMER_ALLOWED_STATUSES = frozenset(

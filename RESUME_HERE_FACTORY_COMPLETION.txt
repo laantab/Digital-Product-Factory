@@ -1,0 +1,14 @@
+RESUME HERE - FACTORY COMPLETION (updated 2026-09-25, end of session)
+
+Live: main a582639 = Factory 1.9.7 on website and builder.
+Ready to merge when the owner approves: draft PR #26, branch v1.9.8-pilot-sweep, head e79735e.
+
+Container Gardening for Beginners (project 5): EXPORT BLOCKED, files left intact.
+Record says export not started (export_ready false; only HTML recorded). The live PDF and ZIP are an earlier run's files.
+Current PDF sha256 618b5d46a7f3d7a59cd3388fe8f0c624392ca237a6e76fa6816b813d0e44c525 (6,808,881 bytes).
+Current ZIP sha256 34fadfb6799e32a25146dd98c19daa4e0d5a72e79d7e65a46bfcec63eba920e4 (14,814,430 bytes).
+Blocker: a new export overwrites the same storage keys (exports ebook-5). The owner requires a verified backup first. Claude saved hash-verified copies to the owner's Downloads twice (BACKUP- and BACKUP2- names) but has no access to confirm they are on disk, and has no other storage large enough. The owner declined further PC checks.
+To finish: once a backup is confirmed by any means, press Continue on the book (export-only; packaging makes no paid calls), then verify Finished/100%, downloads x2 identical, Saved Projects, spending unchanged.
+Spending: 26 paid calls / $4.10, cap $7. Do not regenerate. Do not press Approve Product for the owner.
+
+Rules: no paid calls; no .env/secret/billing/DNS/Render-plan changes; keep the unsaved Pin Factory files in Factory-v1.3.
