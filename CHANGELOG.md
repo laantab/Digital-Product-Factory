@@ -16,6 +16,9 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ### What was fixed
 
+- A book that was exported again kept offering its old PDF and ZIP, and the
+  download safety check then refused them. Downloads now use the newest
+  checked copy.
 - Books whose titles contain everyday words such as "Test", "QA",
   "Workflow", "Seed" or "Internal" (for example "SAT Test Prep" or "Seed
   Starting for Beginners") were hidden from Saved Projects and from Continue.
