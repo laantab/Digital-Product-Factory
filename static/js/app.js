@@ -7410,7 +7410,10 @@ function _renderEbookPictureReview(root, s, pid, bookTitle) {
     `<div data-ebook-picture-review>
        <p class="text-xs font-semibold uppercase tracking-wide text-brand-600">Check your pictures</p>
        <h2 class="text-xl font-bold text-slate-900 mt-1">${escapeHtml(bookTitle)}</h2>
-       <p class="text-sm text-slate-600 mt-2 mb-3" data-ebook-build-message>${escapeHtml(s.message || "Your pictures are ready.")}</p>
+       <p class="text-sm text-slate-600 mt-2 mb-3" data-ebook-build-message>${escapeHtml(review.approvable
+         ? (s.message || "Your pictures are ready.")
+         : "Some chapters still need a picture. Replace them below, then press Approve All Visuals.")}</p>
+       ${_ebookBuildBar(s.percent)}
        ${findings ? `<ul class="list-disc pl-5 text-sm text-amber-800 mb-3">${findings}</ul>` : ""}
        <ol class="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" data-ebook-contact-sheet>${tiles}</ol>
        <div class="mt-4 flex flex-wrap items-center gap-2">

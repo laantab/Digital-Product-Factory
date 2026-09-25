@@ -220,8 +220,13 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
     def _screen(self, page) -> str:
         return page.locator("[data-view='ebook-build']").inner_text()
 
-    def _assert_screen_is_customer_safe(self, page, *, where: str) -> None:
+    def _assert_screen_is_customer_safe(self, page, *, where: str, allow: tuple = ()) -> None:
         text = self._screen(page)
+        # v1.9.6: an exact, owner-chosen label may be allowed on one screen
+        # (the picture sheet's "Approve All Visuals" button). Only that exact
+        # phrase is removed; the same word anywhere else still fails.
+        for phrase in allow:
+            text = text.replace(phrase, "")
         for needle in self.FORBIDDEN_SCREEN_TEXT:
             self.assertNotIn(needle, text, f"{where} showed internal text {needle!r}")
         for word in self.RAIL_WORDS:
@@ -292,7 +297,21 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         page.wait_for_selector("[data-ebook-build-bar]", timeout=30000)
         self._assert_screen_is_customer_safe(page, where="after refresh")
 
-        # 5 The build reaches 100% with no further production clicks.
+        # 5 v1.9.6: the build stops ONCE for the pictures. One sheet shows
+        # every chosen picture with its chapter and source; the customer
+        # presses Approve All Visuals once, and the build then reaches 100%
+        # with no further production clicks.
+        page.wait_for_selector("[data-ebook-picture-review]", timeout=600000)
+        self._assert_screen_is_customer_safe(page, where="picture sheet",
+                                             allow=("Approve All Visuals",))
+        tiles = page.locator("[data-ebook-contact-sheet] [data-pic-tile]")
+        self.assertGreater(tiles.count(), 0, "the picture sheet shows no pictures")
+        for i in range(tiles.count()):
+            self.assertIn("Chapter", tiles.nth(i).inner_text(),
+                          "a picture on the sheet does not say which chapter it is for")
+        approve_btn = page.locator("[data-ebook-approve-pictures]")
+        expect(approve_btn).to_be_enabled(timeout=30000)
+        approve_btn.click()
         page.wait_for_selector("[data-ebook-build-done]", timeout=600000)
         done_text = self._screen(page)
         self.assertIn("Your ebook is ready", done_text)
