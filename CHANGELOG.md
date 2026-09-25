@@ -5,6 +5,40 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.10 — 2026-09-25
+
+**Charts you can read.**
+
+### What changed
+
+- Every chart the Factory draws now prints its words at 8 pt or larger on
+  the PDF page. Step and checklist charts show one full-width row per step,
+  bar charts use larger labels and values, and nothing is cut short.
+- The Editor-in-Chief now measures the text inside each chart at its printed
+  size and refuses a book with a chart below 8 pt. The one-click build checks
+  the same thing before your pictures can be approved.
+
+### What was fixed
+
+- Charts printed their words at about 5 to 6 pt, too small to read.
+- Step charts left out every step after the sixth.
+- Checklists could show "[ ]" in front of each item.
+
+### Do your steps change?
+
+No.
+
+### Does anything look different in a book I already made?
+
+Only when it is built again: its charts are redrawn larger. Photos and
+writing are unchanged.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
 ## 1.9.8 — 2026-09-25
 
 **Pilot fixes: your real books always show, and a waiting book always offers Continue.**
