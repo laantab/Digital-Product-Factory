@@ -1,0 +1,17 @@
+RESUME HERE - FACTORY COMPLETION (updated 2026-09-25)
+
+Live: main a582639 = Factory 1.9.7 on website and builder.
+Work branch: launch-sweep (Factory 1.9.8), from a582639.
+
+Next steps, in order:
+1. Save a backup copy of Container Gardening's current PDF and ZIP
+   (PDF sha256 618b5d46a7f3d7a59cd3388fe8f0c624392ca237a6e76fa6816b813d0e44c525, 6,808,881 bytes;
+    ZIP sha256 34fadfb6799e32a25146dd98c19daa4e0d5a72e79d7e65a46bfcec63eba920e4, 14,814,430 bytes).
+2. Run the export-only step once (Continue). Owner authorized. Stop if spending moves from 26 / $4.10.
+3. Verify Finished/100%, downloads x2 identical, Saved Projects, spending unchanged.
+4. Run "Save and Test Factory 1.9.8.bat" on the PC; open draft PR for launch-sweep.
+5. Editor-in-Chief real-photo cover check.
+6. Owner: Approve Product on Container Gardening; one merge click for 1.9.8.
+
+Rules: no paid calls; no .env/secret/billing/DNS/Render-plan changes; don't regenerate
+Container Gardening; don't press Approve Product; keep the unsaved Pin Factory files in Factory-v1.3.

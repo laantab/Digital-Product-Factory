@@ -5,6 +5,39 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.8 — 2026-09-25
+
+**Pilot fixes: your real books always show, and a waiting book always offers Continue.**
+
+### What changed
+
+- A book that has been waiting more than 15 minutes now says "Paused" and
+  shows a Continue button, instead of spinning "Picking this back up" forever.
+
+### What was fixed
+
+- Books whose titles contain everyday words such as "Test", "QA",
+  "Workflow", "Seed" or "Internal" (for example "SAT Test Prep" or "Seed
+  Starting for Beginners") were hidden from Saved Projects and from Continue.
+  They now show. Records marked as internal tests are still hidden.
+- Three old automated checks failed on any computer except one folder. They
+  now check the real rule everywhere. No safety check was loosened.
+
+### Do your steps change?
+
+No.
+
+### Does anything look different in a book I already made?
+
+No. Books that were hidden only because of a word in their title now appear
+in Saved Projects.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
 ## 1.9.7 — 2026-09-25
 
 **Missing pictures are shown honestly, and accepting a picture tells the truth.**
