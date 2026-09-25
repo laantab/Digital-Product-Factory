@@ -461,8 +461,13 @@ class EbookVisualPipelineTests(unittest.TestCase):
         }
         booking_img = render_aid_png(booking)
         station_img = render_aid_png(station)
-        self.assertEqual(booking_img.size, (1400, 460))
-        self.assertEqual(station_img.size, (1400, 900))
+        # v1.9.10: both are drawn as readable numbered lists (their old
+        # side-by-side boxes printed at 4.7 pt and dropped steps past six).
+        from services.ebook_visual_pipeline import MIN_LABEL_PT, label_min_pt
+        self.assertEqual(booking_img.size[0], 1400)
+        self.assertEqual(station_img.size[0], 1400)
+        self.assertGreaterEqual(label_min_pt(booking_img), MIN_LABEL_PT)
+        self.assertGreaterEqual(label_min_pt(station_img), MIN_LABEL_PT)
         self.assertNotEqual(booking_img.tobytes(), station_img.tobytes())
         self.assertGreater(station_img.size[1], booking_img.size[1])
         bg = (250, 248, 244)
@@ -470,8 +475,9 @@ class EbookVisualPipelineTests(unittest.TestCase):
         lower = station_img.crop((0, h // 2, w, h))
         solid = PILImage.new("RGB", lower.size, bg)
         self.assertNotEqual(lower.tobytes(), solid.tobytes())
-        truncated = render_aid_png({**station, "layout": None, "items": stages})
-        self.assertEqual(truncated.size[1], 460)
+        # Without the station layout, all seven stages are still drawn.
+        plain = render_aid_png({**station, "layout": None, "items": stages})
+        self.assertGreater(plain.size[1], booking_img.size[1])
         self.assertEqual(len(stages), 7)
 
     def test_station_map_materialize_keeps_seven_stages(self):
@@ -513,7 +519,8 @@ class EbookVisualPipelineTests(unittest.TestCase):
         self.assertEqual(aid["items"], stages)
         self.assertTrue(os.path.isfile(aid["asset_path"]))
         self.assertEqual(int(aid["width"]), 1400)
-        self.assertEqual(int(aid["height"]), 900)
+        # v1.9.10: seven readable rows, not a fixed 900 px station picture.
+        self.assertGreater(int(aid["height"]), 7 * 84)
         # No book-level editorial assertion here (review_visual_set, v1.5.0):
         # this plan is deliberately one workflow aid in one chapter, to keep
         # this test's assertions above about materialize_visual_plan's own
