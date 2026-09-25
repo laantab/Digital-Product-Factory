@@ -7319,6 +7319,11 @@ function renderEbookBuild(status) {
     return;
   }
 
+  if (s.awaiting_picture_approval && s.picture_review) {
+    _renderEbookPictureReview(root, s, pid, bookTitle);
+    return;
+  }
+
   // The manuscript is the book. Once it has passed its quality check it is
   // worth reading, whether or not the cover and PDF exist yet -- so show it
   // as a milestone in its own right instead of only a percentage.
@@ -7365,6 +7370,109 @@ function renderEbookBuild(status) {
   if (stalledBtn && pid) stalledBtn.onclick = () => resumeEbookBuild(pid);
 }
 
+//: v1.9.6. The one pause in the one-click build: every chosen picture on one
+//: sheet with its chapter and source. The customer can replace any picture
+//: (from any free source that is switched on) and then presses Approve All
+//: Visuals once; the build then carries on to the PDF and ZIP by itself.
+function _renderEbookPictureReview(root, s, pid, bookTitle) {
+  const review = s.picture_review || {};
+  const items = review.items || [];
+  const sources = (review.image_sources || []).filter((src) => src && src.configured);
+  const safeHref = (u) => (/^(https:\/\/|data:image\/)/i.test(String(u || "")) ? String(u) : "");
+  const link = (href, text) => (/^https:\/\//i.test(String(href || ""))
+    ? `<a class="underline" href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`
+    : escapeHtml(text));
+  const tiles = items.map((it) => {
+    const c = it.credit || {};
+    const vid = escapeHtml(String(it.visual_id || ""));
+    const who = c.photographer
+      ? `${c.provider === "pixabay" ? "Image" : "Photo"} by ${link(c.photographer_url, c.photographer)} ${c.provider === "pixabay" ? "from" : "on"} ${link(c.provider_url, c.provider_label || "")}`
+      : escapeHtml(it.source_label || "Factory-created graphic");
+    const img = safeHref(it.thumb)
+      ? `<img alt="Chapter ${escapeHtml(String(it.chapter_index || ""))} picture" class="w-full h-32 object-cover rounded border border-slate-200 bg-slate-50" src="${escapeHtml(safeHref(it.thumb))}" referrerpolicy="no-referrer" />`
+      : `<div class="w-full h-32 rounded border border-rose-200 bg-rose-50 flex items-center justify-center text-xs text-rose-700">No picture yet</div>`;
+    const replace = it.replaceable
+      ? `<div class="flex flex-wrap gap-1 mt-2">
+           <button type="button" class="btn-secondary text-xs" data-pic-replace="${vid}" data-pic-source="">Another free photo</button>
+           ${sources.map((src) => `<button type="button" class="btn-secondary text-xs" data-pic-replace="${vid}" data-pic-source="${escapeHtml(src.provider)}">Try ${escapeHtml(src.label)}</button>`).join("")}
+         </div>`
+      : "";
+    return `<li class="rounded-lg border ${it.ready ? "border-slate-200" : "border-rose-300"} bg-white p-2 text-xs" data-pic-tile="${vid}">
+        ${img}
+        <p class="font-semibold text-slate-900 mt-1">Chapter ${escapeHtml(String(it.chapter_index || ""))}: ${escapeHtml(it.chapter || "")}</p>
+        <p class="text-slate-600" data-pic-credit>${who}</p>
+        ${it.ready ? "" : `<p class="text-rose-700 mt-1">This chapter still needs a picture.</p>`}
+        ${replace}
+      </li>`;
+  }).join("");
+  const findings = (review.findings || []).map((f) => `<li>${escapeHtml(String(f))}</li>`).join("");
+  root.innerHTML = card(
+    `<div data-ebook-picture-review>
+       <p class="text-xs font-semibold uppercase tracking-wide text-brand-600">Check your pictures</p>
+       <h2 class="text-xl font-bold text-slate-900 mt-1">${escapeHtml(bookTitle)}</h2>
+       <p class="text-sm text-slate-600 mt-2 mb-3" data-ebook-build-message>${escapeHtml(review.approvable
+         ? (s.message || "Your pictures are ready.")
+         : "Some chapters still need a picture. Replace them below, then press Approve All Visuals.")}</p>
+       ${_ebookBuildBar(s.percent)}
+       ${findings ? `<ul class="list-disc pl-5 text-sm text-amber-800 mb-3">${findings}</ul>` : ""}
+       <ol class="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" data-ebook-contact-sheet>${tiles}</ol>
+       <div class="mt-4 flex flex-wrap items-center gap-2">
+         <button type="button" class="btn-primary" data-ebook-approve-pictures ${review.approvable ? "" : "disabled"}>Approve All Visuals</button>
+         ${review.approvable ? "" : `<span class="text-xs text-slate-500">Every chapter needs a picture before you can approve.</span>`}
+       </div>
+     </div>`
+  );
+  root.querySelectorAll("[data-pic-replace]").forEach((btn) => {
+    btn.onclick = async () => {
+      root.querySelectorAll("[data-pic-replace],[data-ebook-approve-pictures]").forEach((b) => { b.disabled = true; });
+      try {
+        const res = await api(`/ebook-workspace/${pid}/visuals`, {
+          method: "POST",
+          body: JSON.stringify({ action: "replace", visual_id: btn.getAttribute("data-pic-replace"),
+                                 mode: btn.getAttribute("data-pic-source") || "stock" }),
+        });
+        toast(res && res.handed_off ? "Finding a new picture. This sheet updates by itself." : "New picture ready.");
+        await _ebookPictureSheetRefresh(pid, !!(res && res.handed_off));
+      } catch (e) {
+        toast(e.message || "That picture could not be replaced.", "error");
+        await _ebookPictureSheetRefresh(pid, false);
+      }
+    };
+  });
+  const approve = root.querySelector("[data-ebook-approve-pictures]");
+  if (approve) {
+    approve.onclick = async () => {
+      if (approve.disabled) return;
+      approve.disabled = true;  // one approval, one click
+      try {
+        await api(`/ebook-workspace/${pid}/visuals`, { method: "POST", body: JSON.stringify({ action: "approve" }) });
+        toast("Pictures approved. Building your PDF and ZIP.");
+        _ebookBuildRun += 1;
+        await _ebookBuildLoop(pid, _ebookBuildRun);
+      } catch (e) {
+        toast(e.message || "The pictures could not be approved yet.", "error");
+        approve.disabled = false;
+      }
+    };
+  }
+}
+
+//: Re-read the sheet. Read-only: the status route never starts work. When a
+//: replacement was handed to the builder, watch for up to three minutes.
+async function _ebookPictureSheetRefresh(pid, watch) {
+  const deadline = Date.now() + (watch ? 3 * 60 * 1000 : 0);
+  let first = true;
+  do {
+    if (!first) await new Promise((r) => setTimeout(r, 4000));
+    first = false;
+    try {
+      const status = await api(`/ebook/build/${pid}/status`);
+      renderEbookBuild(status);
+      if (!watch || !status.awaiting_picture_approval) return;
+    } catch (e) { /* keep the current sheet */ }
+  } while (Date.now() < deadline);
+}
+
 //: Drive the build to a conclusion. One request in flight, always.
 async function _ebookBuildLoop(projectId, runToken, opts) {
   if (_ebookBuildBusy) return;
@@ -7404,6 +7512,11 @@ async function _ebookBuildLoop(projectId, runToken, opts) {
       if (status.paused_after) {
         // The build is deliberately held so the customer can read what has
         // been produced. Reporting continues; nothing more is run.
+        return;
+      }
+      if (status.awaiting_picture_approval) {
+        // v1.9.6: waiting for Approve All Visuals. Stop asking; the sheet
+        // on screen restarts the build after the customer approves.
         return;
       }
       // A recoverable wait is not progress. Pause before trying the stage again.
@@ -7821,19 +7934,45 @@ function showEbookWorkspaceStage(stageId) {
          </div>`
       : "";
     const sourceLabel = (a) => a.source_label || ((a.type === "photo" || a.type === "stock photo") ? "Stock photo" : "Factory-created graphic");
+    // v1.9.6: free picture sources the owner has switched on (no keys here).
+    const freeSources = (review.image_sources || []).filter((src) => src && src.configured);
+    const safeHref = (u) => (/^https:\/\//i.test(String(u || "")) ? String(u) : "");
+    const creditHtml = (c) => {
+      if (!c || !c.provider_label) return "";
+      const who = c.photographer
+        ? (safeHref(c.photographer_url)
+            ? `<a class="underline" href="${escapeHtml(safeHref(c.photographer_url))}" target="_blank" rel="noopener">${escapeHtml(c.photographer)}</a>`
+            : escapeHtml(c.photographer))
+        : "";
+      const site = safeHref(c.provider_url)
+        ? `<a class="underline" href="${escapeHtml(safeHref(c.provider_url))}" target="_blank" rel="noopener">${escapeHtml(c.provider_label)}</a>`
+        : escapeHtml(c.provider_label);
+      const verb = c.provider === "pixabay" ? "Image" : "Photo";
+      const joiner = c.provider === "pixabay" ? "from" : "on";
+      return `<p class="text-xs text-slate-600 mt-1" data-ws-photo-credit="${escapeHtml(c.provider)}">${who ? `${verb} by ${who} ${joiner} ${site}` : `Source: ${site}`}</p>`;
+    };
     const cards = assets.map((a) => {
       const isPhoto = a.type === "photo" || a.type === "stock photo";
       const missing = !a.has_file || a.match_status === "reject";
+      const credit = a.credit || {};
+      // Unsplash pictures are shown from Unsplash's own address, as its API requires.
+      const shownSrc = safeHref(credit.hotlink_preview_url) || a.thumb_data_uri || "";
+      const vidAttr = escapeHtml(String(a.visual_id || ""));
+      const sourceButtons = freeSources.map((src) =>
+        `<button type="button" class="btn-secondary text-xs" data-ws-replace-photo="${vidAttr}" data-ws-replace-source="${escapeHtml(src.provider)}">Try ${escapeHtml(src.label)}</button>`
+      ).join("");
       return `
       <article class="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-        ${a.thumb_data_uri ? `<img alt="${escapeHtml(a.title || a.description || "Visual")}" class="w-full h-40 object-contain rounded border border-slate-200 bg-slate-50 mb-2" src="${escapeHtml(a.thumb_data_uri)}" />` : `<p class="text-xs text-rose-700 mb-2">This visual is not ready yet</p>`}
+        ${shownSrc ? `<img alt="${escapeHtml(a.title || a.description || "Visual")}" class="w-full h-40 object-contain rounded border border-slate-200 bg-slate-50 mb-2" src="${escapeHtml(shownSrc)}" referrerpolicy="no-referrer" />` : `<p class="text-xs text-rose-700 mb-2">This visual is not ready yet</p>`}
         <p class="font-semibold text-slate-900">Chapter ${escapeHtml(String(a.chapter_index || ""))}: ${escapeHtml(a.chapter || "")}</p>
         <p class="text-xs uppercase tracking-wide text-slate-500 mt-1">${escapeHtml(a.type || "")} · ${escapeHtml(sourceLabel(a))}</p>
+        ${isPhoto ? creditHtml(credit) : ""}
         <p class="text-sm text-slate-700 mt-2">${escapeHtml(a.description || a.caption || a.title || "")}</p>
         ${isPhoto ? `<details class="mt-2">
           <summary class="text-xs font-semibold text-slate-600 cursor-pointer">Edit a Visual</summary>
           <div class="flex flex-wrap gap-2 mt-2">
-            <button type="button" class="btn-secondary text-xs" data-ws-replace-photo="${escapeHtml(String(a.visual_id || ""))}">Try another stock photo</button>
+            <button type="button" class="btn-secondary text-xs" data-ws-replace-photo="${vidAttr}">Try another free photo</button>
+            ${sourceButtons}
             ${review.ai_edit_enabled ? `<button type="button" class="btn-secondary text-xs" data-ws-generate-ai="${escapeHtml(String(a.visual_id || ""))}">Generate AI alternative</button>` : ""}
             <label class="btn-secondary text-xs cursor-pointer">Upload my own image
               <input type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" class="hidden" data-ws-upload-photo="${escapeHtml(String(a.visual_id || ""))}" />
@@ -8154,7 +8293,7 @@ function showEbookWorkspaceStage(stageId) {
   panel.querySelectorAll("[data-ws-replace-photo]").forEach((btn) => {
     btn.onclick = () => postEbookWorkspaceAction(
       `/ebook-workspace/${ws.project_id}/visuals`,
-      { action: "replace", visual_id: btn.getAttribute("data-ws-replace-photo"), mode: "stock" },
+      { action: "replace", visual_id: btn.getAttribute("data-ws-replace-photo"), mode: btn.getAttribute("data-ws-replace-source") || "stock" },
       "Replacement photograph staged for review."
     );
   });
@@ -8490,7 +8629,7 @@ async function _wsPollUntilStepLands(projectId, runToken, okMessage) {
 
     // The builder stops after the stage the customer asked for and waits.
     // That hold IS the step landing.
-    if (status && (status.held_after || status.finished || status.failed)) {
+    if (status && (status.held_after || status.awaiting_picture_approval || status.finished || status.failed)) {
       try {
         const ws = await api(`/ebook-workspace/${projectId}`);
         if (ws && ws.workspace) renderEbookWorkspace(ws.workspace);

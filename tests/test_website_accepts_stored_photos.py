@@ -30,10 +30,58 @@ class WebsiteAcceptsStoredPhotos(_StorageCase):
 
     def _website_copy(self):
         data = self._build_on_builder()
+        self._store_a_real_photo(data)
         # The builder's temporary disk is gone when its task ends.
         shutil.rmtree(self.builder_root)
         data["_project_id"] = self.pid
         return data
+
+    def _store_a_real_photo(self, data):
+        """v1.9.7: give the book one genuine, text-free photograph in storage.
+
+        The zero-cost fixture renders only local graphics, which are full of
+        printed words. Relabelling one of those as a photograph (the old
+        fixture) made the picture checker refuse it for its text, so the test
+        measured the checker, not storage. Here a new text-free photograph is
+        written on the builder and published exactly as the builder publishes
+        a Pexels picture, so the test exercises what it names.
+        """
+        import hashlib
+        import io
+        import random
+        from PIL import Image, ImageDraw, ImageFilter
+        from services.ebook_visual_pipeline import _publish_visual
+        from services.ebook_visual_pipeline import publishing_for_project as _scope
+
+        aid = next(a for a in required_aids(data["visual_plan"]) if a.get("asset_path"))
+        rnd = random.Random(7)
+        w, h = 1600, 1067
+        # Soft, smooth shapes only: sharp random noise reads as "text" to OCR.
+        img = Image.new("RGB", (w, h), (118, 150, 96))
+        d = ImageDraw.Draw(img)
+        for _ in range(14):
+            cx, cy, r = rnd.randint(0, w), rnd.randint(0, h), rnd.randint(120, 380)
+            d.ellipse((cx - r, cy - r, cx + r, cy + r),
+                      fill=(40 + rnd.randint(0, 60), 90 + rnd.randint(0, 80), 30 + rnd.randint(0, 40)))
+        img = img.filter(ImageFilter.GaussianBlur(40))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        raw = buf.getvalue()
+        path = os.path.join(os.path.dirname(str(aid["asset_path"])), "v_stored_real_photo.png")
+        with open(path, "wb") as fh:
+            fh.write(raw)
+        aid.update({"type": "photo", "source": "pexels", "match_status": "needs_user_review",
+                    "photographer": "Test Photographer", "photo_id": "1",
+                    "attribution": "Photo by Test Photographer on Pexels",
+                    "page_url": "https://www.pexels.com/photo/1/",
+                    "pexels": {"photo_id": "1", "photographer": "Test Photographer"},
+                    "asset_path": path, "sha256": hashlib.sha256(raw).hexdigest(),
+                    "width": w, "height": h,
+                    # The photograph's own description matches its brief, as a
+                    # well-chosen Pexels picture's does.
+                    "alt": " ".join(str(aid.get(k) or "") for k in ("title", "caption", "brief")).strip()})
+        with self._on(self.builder_root), _scope(self.pid):
+            _publish_visual(aid, path)
 
     def _photo(self, data):
         photos = [a for a in required_aids(data["visual_plan"]) if is_photo_aid(a)]
@@ -118,3 +166,39 @@ class WebsiteAcceptsStoredPhotos(_StorageCase):
         led = data["ebook_workspace"]["paid_call_ledger"]
         self.assertEqual((led["spent_usd"], led["remaining_usd"], led["paid_calls"]), (4.1, 2.9, 26))
         self.assertFalse(data.get("visual_ai_spend_usd"))
+
+
+class AcceptSaysWhenAPictureCannotBeUsed(WebsiteAcceptsStoredPhotos):
+    """v1.9.7: accepting a refused picture must not report success."""
+
+    def test_refused_picture_is_not_reported_as_accepted(self):
+        data = self._build_on_builder()
+        data["_project_id"] = self.pid
+        # A picture far too small to print, labelled as a photograph. Refused
+        # on every machine -- unlike printed-text detection, this does not
+        # depend on an OCR engine being installed (Windows PCs have none).
+        from PIL import Image
+
+        aid = next(a for a in required_aids(data["visual_plan"]) if a.get("asset_path"))
+        tiny = os.path.join(os.path.dirname(str(aid["asset_path"])), "v_tiny_photo.png")
+        Image.new("RGB", (160, 107), (90, 140, 70)).save(tiny, "PNG")
+        aid["asset_path"] = tiny
+        aid["width"], aid["height"] = 160, 107
+        aid.update({"type": "photo", "source": "pexels", "match_status": "needs_user_review",
+                    "photographer": "T", "photo_id": "2", "attribution": "Photo by T on Pexels",
+                    "page_url": "https://www.pexels.com/photo/2/",
+                    "pexels": {"photo_id": "2", "photographer": "T"}})
+        with self._on(self.builder_root):
+            data, msg = wsa.visuals(data, {"action": "accept-photo", "visual_id": aid["visual_id"]})
+        after = next(a for a in required_aids(data["visual_plan"]) if a["visual_id"] == aid["visual_id"])
+        self.assertFalse(after.get("user_accepted"))
+        self.assertNotIn("accepted", msg.lower())
+        self.assertIn("replace", msg.lower())
+
+    # Inherited tests already run in the parent class.
+    test_accept_photo_works_when_the_file_is_only_in_storage = None
+    test_every_light_action_fetches_from_storage_first = None
+    test_approve_reads_stored_pictures_instead_of_calling_them_missing = None
+    test_before_the_fix_this_is_exactly_the_live_failure = None
+    test_a_photo_storage_cannot_supply_still_fails_honestly = None
+    test_no_paid_call_and_no_ledger_change = None

@@ -53,6 +53,15 @@ services:
         sync: false
       - key: PEXELS_API_KEY
         sync: false
+      # v1.9.6 free picture sources after Pexels. Optional: a missing key
+      # just skips that source. Needed on BOTH services (the builder picks
+      # pictures; the website shows the review screen).
+      - key: UNSPLASH_ACCESS_KEY
+        sync: false
+      - key: UNSPLASH_APP_NAME
+        sync: false
+      - key: PIXABAY_API_KEY
+        sync: false
       - key: TAVILY_API_KEY
         sync: false
       # Access control. The site now REFUSES traffic (503) unless one of these
@@ -98,6 +107,15 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: PEXELS_API_KEY
+        sync: false
+      # v1.9.6 free picture sources after Pexels. Optional: a missing key
+      # just skips that source. Needed on BOTH services (the builder picks
+      # pictures; the website shows the review screen).
+      - key: UNSPLASH_ACCESS_KEY
+        sync: false
+      - key: UNSPLASH_APP_NAME
+        sync: false
+      - key: PIXABAY_API_KEY
         sync: false
       - key: TAVILY_API_KEY
         sync: false

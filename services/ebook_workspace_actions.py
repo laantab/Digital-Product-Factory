@@ -112,7 +112,19 @@ def visuals(data: dict, payload: dict) -> tuple[dict, str]:
     if action in {"accept-photo", "accept"}:
         from services.ebook_visual_pipeline import accept_photo_aid
 
-        data = accept_photo_aid(data, str(payload.get("visual_id") or ""))
+        vid = str(payload.get("visual_id") or "")
+        data = accept_photo_aid(data, vid)
+        # v1.9.7: say what actually happened. Acceptance cannot override a
+        # picture the checker refused (printed text, watermark, too small,
+        # duplicate, wrong scene); the old message still said "accepted".
+        from services.ebook_visual_pipeline import required_aids as _aids
+
+        plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else None
+        aid = next((a for a in _aids(plan) if str(a.get("visual_id")) == vid), {})
+        if not aid.get("user_accepted"):
+            return data, ("This picture cannot be used: "
+                          + (str(aid.get("rejection_reason") or "it did not pass the picture check"))
+                          + ". Please replace it.")
         return data, "Photograph accepted for this brief. Visuals are not approved."
 
     if action in {"view-full-size", "seen-full-size"}:

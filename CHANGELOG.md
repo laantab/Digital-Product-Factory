@@ -5,6 +5,96 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.7 — 2026-09-25
+
+**Missing pictures are shown honestly, and accepting a picture tells the truth.**
+
+### What changed
+
+- Nothing new to learn. The picture sheet is now more honest about which
+  chapters still need a picture and which pictures cannot be used.
+
+### What was fixed
+
+- A chapter photo that could not be found used to be replaced by a card
+  showing the chapter's own title, marked as done. A photo slot now stays
+  "missing" until a real picture is there, so the picture sheet says plainly
+  which chapter still needs one.
+- Pressing accept on a picture the checker had refused (printed words,
+  watermark, too small, a copy of another chapter's picture) still said
+  "accepted". It now says the picture cannot be used and asks you to replace it.
+- The website can accept a real photo that exists only in storage (the
+  builder's copy is gone after each run). The test for this used a picture
+  full of words and so always failed; it now uses a real photo and passes.
+
+### Do your steps change?
+
+No.
+
+### Does anything look different in a book I already made?
+
+No. Existing pictures and saved books are untouched.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
+## 1.9.6 — 2026-09-25
+
+**Two more free picture sources, and one picture check before your PDF.**
+
+### What changed
+
+- When the Factory cannot find a good Pexels photo for a chapter, it now tries
+  Unsplash, then Pixabay. Pexels is still tried first. Paid AI pictures are
+  still only a last resort, only with your permission, and only within the
+  book's budget.
+- The picture review screen shows where each picture came from and who took
+  it, with links. Each picture has "Try Pexels", "Try Unsplash" and "Try
+  Pixabay" buttons (only for the sources that are switched on).
+- Each source's own rules are followed: Unsplash pictures are shown from
+  Unsplash and each chosen picture is reported to Unsplash as a download;
+  Pixabay searches are remembered for 24 hours and chosen pictures are saved
+  by the Factory instead of linked.
+- Unsplash and Pixabay pictures are never used as a book cover.
+- **The one-click build now stops once for your pictures.** After the
+  pictures are chosen you see every one on a single sheet, with its chapter
+  and where it came from. Replace any picture, then press **Approve All
+  Visuals** once and the build carries on by itself to the PDF and ZIP.
+  While it waits, nothing runs and nothing is spent.
+
+### What was fixed
+
+- A chapter picture that Pexels could not supply used to stay missing, which
+  blocked the book's PDF and ZIP. Two more free sources now get a chance
+  before the book is held up.
+- The one-click build used to approve its own pictures. You now approve them.
+
+### How to switch the new sources on
+
+Add the Unsplash access key (and, optionally, the app name you registered
+with Unsplash) and the Pixabay key to both Render services and to the
+Factory's settings file on the PC. Without a key, that source is simply
+skipped.
+
+### Do your steps change?
+
+Yes, one: press **Approve All Visuals** when the picture sheet appears.
+
+### Does anything look different in a book I already made?
+
+No. Existing Pexels pictures and saved books are untouched.
+
+### Release gate
+
+Fast Stability Gate 700 passed. New tests: 14 for the picture sources and 7
+for the picture pause. Full release gate compared with 1.9.5 in the same
+environment: no new failures. No paid calls.
+
+---
+
 ## 1.9.5 — 2026-09-24
 
 **The same word search book now rebuilds to the same puzzles.**

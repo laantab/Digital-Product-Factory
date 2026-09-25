@@ -25,6 +25,15 @@ from services.ebook_pexels import (
     search_pexels,
     topic_pexels_query,
 )
+from services.image_sources import (
+    AUTOMATIC_QUERY_LIMIT,
+    PROVIDER_PEXELS,
+    ImageSourceError,
+    configured_providers,
+    download_provider_image,
+    record_chosen,
+    search_provider,
+)
 from services.ebook_visual_match import (
     MATCH_PASS,
     MATCH_REJECT,
@@ -465,6 +474,47 @@ def _fill_photo_aid_fixture(aid: dict[str, Any], *, package_id: str, chapter: st
     return publish_factory_photo(filled, package_id)
 
 
+def _stock_provider_order(providers: Any = None) -> tuple[str, ...]:
+    """Which free sources to try, in order. Pexels is always first.
+
+    None means automatic: Pexels (always -- its own service reports "not
+    configured" safely), then every other configured free source. An explicit
+    list (a customer choosing "Try Unsplash") is honoured as given, but only
+    known, configured sources are used.
+    """
+    if providers is None:
+        rest = tuple(p for p in configured_providers() if p != PROVIDER_PEXELS)
+        return (PROVIDER_PEXELS,) + rest
+    wanted = [str(p or "").strip().lower() for p in (providers or [])]
+    allowed = set(configured_providers()) | {PROVIDER_PEXELS}
+    out: list[str] = []
+    for p in wanted:
+        if p in allowed and p not in out:
+            out.append(p)
+    return tuple(out)
+
+
+def _search_stock(provider: str, query: str) -> list[dict[str, Any]]:
+    if provider == PROVIDER_PEXELS:
+        # Unchanged Pexels behaviour: landscape first, then portrait.
+        for orientation in ("landscape", "portrait"):
+            result = search_pexels(query, orientation=orientation, per_page=12)
+            photos = list(result.get("photos") or [])
+            if photos:
+                return photos
+        return []
+    # One search per query for the other sources (their rate rules are
+    # stricter), with no orientation filter.
+    result = search_provider(provider, query, orientation="", per_page=12)
+    return list(result.get("photos") or [])
+
+
+def _download_stock(provider: str, photo: dict[str, Any]) -> bytes:
+    if provider == PROVIDER_PEXELS:
+        return download_pexels_original(photo)
+    return download_provider_image(photo)
+
+
 def fill_photo_aid_from_pexels(
     aid: dict[str, Any],
     *,
@@ -473,8 +523,13 @@ def fill_photo_aid_from_pexels(
     topic: str = "",
     audience: str = "",
     chapter: str = "",
+    providers: Any = None,
 ) -> dict[str, Any]:
-    """Retrieve one stock-photo slot via the shared Pexels service and store it locally.
+    """Retrieve one photo slot from the free sources and store it locally.
+
+    Pexels first, then Unsplash, then Pixabay (each only if configured). The
+    name is kept so every existing caller and test keeps working; with only
+    Pexels configured the behaviour is exactly the previous Pexels-only path.
 
     Candidates are scored against a structured visual brief. A rejected image is
     never reused. Metadata cannot mark a photo ready for approval.
@@ -517,129 +572,87 @@ def fill_photo_aid_from_pexels(
     if ebook_fixture_mode():
         return _fill_photo_aid_fixture(out, package_id=package_id, chapter=chapter)
     last_error = "No matching photograph was found."
-    try:
-        for query in queries:
-            out["pexels_query"] = query
-            photos: list[dict[str, Any]] = []
-            for orientation in ("landscape", "portrait"):
-                result = search_pexels(query, orientation=orientation, per_page=12)
-                photos = list(result.get("photos") or [])
-                if photos:
-                    break
-            if not photos:
-                failed_queries.append(query)
-                continue
-            ranked, skipped = rank_pexels_candidates(brief, photos, rejected_ids=rejected_ids)
-            for row in skipped:
-                pid = str(row.get("photo_id") or "")
-                if pid:
-                    rejected_ids.add(pid)
-            if not ranked:
-                failed_queries.append(query)
-                last_error = (
-                    (skipped[0].get("rejection_reason") if skipped else "")
-                    or "Every Pexels result failed the visual brief."
-                )
-                continue
-            filled = None
-            for photo in ranked[:5]:
-                raw = download_pexels_original(photo)
-                inspected = score_photo_against_brief(
-                    brief,
-                    alt=str(photo.get("alt") or ""),
-                    page_url=str(photo.get("page_url") or ""),
-                    filename=str(photo.get("photo_id") or ""),
-                    image_bytes=raw,
-                    planned_caption=str(out.get("caption") or out.get("title") or ""),
-                    # The book's subject and the chapter's own words, so a
-                    # candidate that only matches the heading cannot pass.
-                    book_topic=f"{topic} {title}".strip(),
-                    chapter_body=str(out.get("chapter_body") or ""),
-                )
-                if inspected.status == MATCH_REJECT:
-                    pid = str(photo.get("photo_id") or "")
+    technical: list[Exception] = []
+    attempted = 0
+    garden = is_garden_topic(title=title, topic=topic, chapter=chapter, caption=str(out.get("caption") or ""))
+    for provider in _stock_provider_order(providers):
+        provider_queries = queries if provider == PROVIDER_PEXELS else queries[:AUTOMATIC_QUERY_LIMIT]
+        try:
+            for query in provider_queries:
+                out["pexels_query"] = query
+                photos = _search_stock(provider, query)
+                if not photos:
+                    failed_queries.append(query)
+                    continue
+                ranked, skipped = rank_pexels_candidates(brief, photos, rejected_ids=rejected_ids)
+                for row in skipped:
+                    pid = str(row.get("photo_id") or "")
                     if pid:
                         rejected_ids.add(pid)
-                    last_error = inspected.rejection_reason or last_error
+                if not ranked:
+                    failed_queries.append(query)
+                    last_error = (
+                        (skipped[0].get("rejection_reason") if skipped else "")
+                        or "Every Pexels result failed the visual brief."
+                    )
                     continue
-                if is_garden_topic(title=title, topic=topic, chapter=chapter, caption=str(out.get("caption") or "")):
-                    if not garden_photo_usable(photo):
+                filled = None
+                for photo in ranked[:5]:
+                    raw = _download_stock(provider, photo)
+                    inspected = score_photo_against_brief(
+                        brief,
+                        alt=str(photo.get("alt") or ""),
+                        page_url=str(photo.get("page_url") or ""),
+                        filename=str(photo.get("photo_id") or ""),
+                        image_bytes=raw,
+                        planned_caption=str(out.get("caption") or out.get("title") or ""),
+                        # The book's subject and the chapter's own words, so a
+                        # candidate that only matches the heading cannot pass.
+                        book_topic=f"{topic} {title}".strip(),
+                        chapter_body=str(out.get("chapter_body") or ""),
+                    )
+                    if inspected.status == MATCH_REJECT:
+                        pid = str(photo.get("photo_id") or "")
+                        if pid:
+                            rejected_ids.add(pid)
+                        last_error = inspected.rejection_reason or last_error
+                        continue
+                    if garden and not garden_photo_usable(photo):
                         pid = str(photo.get("photo_id") or "")
                         if pid:
                             rejected_ids.add(pid)
                         last_error = "Photograph is not a container-garden scene."
                         continue
-                # Candidates arrive best-ranked first, so the first one that
-                # is not rejected is the best available. Overwriting on every
-                # iteration kept the LAST candidate inspected instead -- so
-                # when nothing scored a clean PASS the weakest of the shortlist
-                # won. Keep the best, and stop early on a genuine PASS.
-                if filled is None or inspected.status == MATCH_PASS:
-                    filled = store_interior_photo(out, raw, package_id=package_id)
-                    filled["_inspected"] = inspected
-                    filled["_photo"] = photo
-                    filled["_query"] = query
-                if inspected.status == MATCH_PASS:
-                    break
-            if filled is None:
-                failed_queries.append(query)
+                    # Candidates arrive best-ranked first, so the first one that
+                    # is not rejected is the best available. Keep the best, and
+                    # stop early on a genuine PASS.
+                    if filled is None or inspected.status == MATCH_PASS:
+                        filled = store_interior_photo(out, raw, package_id=package_id)
+                        filled["_inspected"] = inspected
+                        filled["_photo"] = photo
+                        filled["_query"] = query
+                    if inspected.status == MATCH_PASS:
+                        break
+                if filled is None:
+                    failed_queries.append(query)
+                    continue
+                return _finish_stock_fill(
+                    filled, out, provider=provider, package_id=package_id,
+                    failed_queries=failed_queries, rejected_ids=rejected_ids,
+                )
+            attempted += 1
+        except (PexelsError, ImageSourceError) as exc:
+            # A source that is blocked in test mode was never really tried.
+            if getattr(exc, "code", "") == "test_blocked" and provider != PROVIDER_PEXELS:
                 continue
-            inspected = filled.pop("_inspected")
-            photo = filled.pop("_photo")
-            query = filled.pop("_query")
-            filled["type"] = str(out.get("type") or "stock photo")
-            filled["source"] = "pexels"
-            filled["attribution"] = str(photo.get("attribution") or "")
-            filled["photographer"] = str(photo.get("photographer") or "")
-            filled["page_url"] = str(photo.get("page_url") or photo.get("photographer_url") or "")
-            filled["source_url"] = str(photo.get("page_url") or "")
-            filled["photo_id"] = str(photo.get("photo_id") or "")
-            filled["alt"] = str(photo.get("alt") or "")
-            filled["pexels_query"] = query
-            filled["license_note"] = str(photo.get("license_note") or "")
-            filled["failed_queries"] = list(dict.fromkeys(failed_queries))
-            filled["rejected_photo_ids"] = sorted(rejected_ids)
-            filled["approved"] = False
-            filled = apply_match_report(filled, inspected)
-            filled["status"] = "resolved"
-            filled["retryable"] = filled.get("match_status") != "pass"
-            filled["error"] = "" if filled.get("match_status") != "reject" else inspected.rejection_reason
-            filled["rendered"] = True
-            filled["has_file"] = True
-            filled["acquisition_outcome"] = (
-                STOCK_ACCEPTED
-                if filled.get("match_status") == MATCH_PASS
-                else SEMANTIC_REJECTION
-            )
-            filled = publish_factory_photo(filled, package_id)
-            local = str(filled.get("asset_path") or "")
-            factory = str(filled.get("factory_asset_path") or "")
-            if not photo_file_is_valid(local) and not photo_file_is_valid(factory):
-                return stamp_photo_aid_metadata(
-                    out,
-                    status="missing",
-                    error="Stored photograph could not be opened.",
-                )
-            try:
-                from PIL import Image
-
-                for path in (local, factory):
-                    if path and os.path.isfile(path):
-                        with Image.open(path) as img:
-                            img.verify()
-            except Exception:
-                return stamp_photo_aid_metadata(
-                    out,
-                    status="missing",
-                    error="Stored photograph could not be opened.",
-                )
-            return filled
-        out["failed_queries"] = list(dict.fromkeys(failed_queries))
-        out["rejected_photo_ids"] = sorted(rejected_ids)
-        missing = stamp_photo_aid_metadata(out, status="missing", error=last_error)
-        missing["acquisition_outcome"] = _classify_stock_failure(last_error)
-        return missing
-    except PexelsError as exc:
+            technical.append(exc)
+            continue
+    out["failed_queries"] = list(dict.fromkeys(failed_queries))
+    out["rejected_photo_ids"] = sorted(rejected_ids)
+    if technical and not attempted:
+        # Every source that was tried failed technically: same result as the
+        # previous Pexels-only path (customer message from the first failure).
+        exc = technical[0]
         from services.ebook_pexels import customer_pexels_message
 
         msg = customer_pexels_message(exc)
@@ -648,6 +661,84 @@ def fill_photo_aid_from_pexels(
         missing["error_code"] = getattr(exc, "code", "request_failed")
         missing["acquisition_outcome"] = TECHNICAL_FAILURE
         return missing
+    missing = stamp_photo_aid_metadata(out, status="missing", error=last_error)
+    missing["acquisition_outcome"] = _classify_stock_failure(last_error)
+    return missing
+
+
+#: Alias with an honest name; the old name stays for existing callers.
+fill_photo_aid_from_free_sources = fill_photo_aid_from_pexels
+
+
+def _finish_stock_fill(
+    filled: dict[str, Any],
+    out: dict[str, Any],
+    *,
+    provider: str,
+    package_id: str,
+    failed_queries: list[str],
+    rejected_ids: set[str],
+) -> dict[str, Any]:
+    inspected = filled.pop("_inspected")
+    photo = filled.pop("_photo")
+    query = filled.pop("_query")
+    filled["type"] = str(out.get("type") or "stock photo")
+    filled["source"] = provider
+    filled["attribution"] = str(photo.get("attribution") or "")
+    filled["photographer"] = str(photo.get("photographer") or "")
+    filled["photographer_url"] = str(photo.get("photographer_url") or "")
+    filled["page_url"] = str(photo.get("page_url") or photo.get("photographer_url") or "")
+    filled["source_url"] = str(photo.get("page_url") or "")
+    filled["photo_id"] = str(photo.get("photo_id") or "")
+    filled["alt"] = str(photo.get("alt") or "")
+    filled["pexels_query"] = query
+    filled["search_query"] = query
+    filled["license_note"] = str(photo.get("license_note") or "")
+    if provider != PROVIDER_PEXELS:
+        filled["provider_photo_id"] = str(photo.get("provider_photo_id") or "")
+        filled["provider_home_url"] = str(photo.get("provider_home_url") or "")
+        # Unsplash: the review screen must show the API's own URL.
+        filled["preview_url"] = str(photo.get("preview_url") or "") if provider == "unsplash" else ""
+        filled["download_location"] = str(photo.get("download_location") or "")
+        # Provider duties for a CHOSEN picture (Unsplash download tracking).
+        filled.update(record_chosen(photo))
+    filled["failed_queries"] = list(dict.fromkeys(failed_queries))
+    filled["rejected_photo_ids"] = sorted(rejected_ids)
+    filled["approved"] = False
+    filled = apply_match_report(filled, inspected)
+    filled["status"] = "resolved"
+    filled["retryable"] = filled.get("match_status") != "pass"
+    filled["error"] = "" if filled.get("match_status") != "reject" else inspected.rejection_reason
+    filled["rendered"] = True
+    filled["has_file"] = True
+    filled["acquisition_outcome"] = (
+        STOCK_ACCEPTED
+        if filled.get("match_status") == MATCH_PASS
+        else SEMANTIC_REJECTION
+    )
+    filled = publish_factory_photo(filled, package_id)
+    local = str(filled.get("asset_path") or "")
+    factory = str(filled.get("factory_asset_path") or "")
+    if not photo_file_is_valid(local) and not photo_file_is_valid(factory):
+        return stamp_photo_aid_metadata(
+            out,
+            status="missing",
+            error="Stored photograph could not be opened.",
+        )
+    try:
+        from PIL import Image
+
+        for path in (local, factory):
+            if path and os.path.isfile(path):
+                with Image.open(path) as img:
+                    img.verify()
+    except Exception:
+        return stamp_photo_aid_metadata(
+            out,
+            status="missing",
+            error="Stored photograph could not be opened.",
+        )
+    return filled
 
 
 def _local_visual_for_aid(aid: dict[str, Any], *, chapter: str = "") -> dict[str, Any] | None:
