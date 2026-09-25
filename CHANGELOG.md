@@ -7,7 +7,7 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ## 1.9.6 — 2026-09-25
 
-**Two more free picture sources: Unsplash and Pixabay.**
+**Two more free picture sources, and one picture check before your PDF.**
 
 ### What changed
 
@@ -29,11 +29,19 @@ The version shown in the bottom-left of the app matches the newest entry here.
   Visuals** once and the build carries on by itself to the PDF and ZIP.
   While it waits, nothing runs and nothing is spent.
 
-### How to switch them on
+### What was fixed
 
-Add `UNSPLASH_ACCESS_KEY` (and optionally `UNSPLASH_APP_NAME`) and/or
-`PIXABAY_API_KEY` to both Render services and to `.env` on the PC. Without a
-key, that source is simply skipped.
+- A chapter picture that Pexels could not supply used to stay missing, which
+  blocked the book's PDF and ZIP. Two more free sources now get a chance
+  before the book is held up.
+- The one-click build used to approve its own pictures. You now approve them.
+
+### How to switch the new sources on
+
+Add the Unsplash access key (and, optionally, the app name you registered
+with Unsplash) and the Pixabay key to both Render services and to the
+Factory's settings file on the PC. Without a key, that source is simply
+skipped.
 
 ### Do your steps change?
 
@@ -42,6 +50,12 @@ Yes, one: press **Approve All Visuals** when the picture sheet appears.
 ### Does anything look different in a book I already made?
 
 No. Existing Pexels pictures and saved books are untouched.
+
+### Release gate
+
+Fast Stability Gate 700 passed. New tests: 14 for the picture sources and 7
+for the picture pause. Full release gate compared with 1.9.5 in the same
+environment: no new failures. No paid calls.
 
 ---
 
