@@ -23,12 +23,21 @@ The version shown in the bottom-left of the app matches the newest entry here.
   Pixabay searches are remembered for 24 hours and chosen pictures are saved
   by the Factory instead of linked.
 - Unsplash and Pixabay pictures are never used as a book cover.
+- **The one-click build now stops once for your pictures.** After the
+  pictures are chosen you see every one on a single sheet, with its chapter
+  and where it came from. Replace any picture, then press **Approve All
+  Visuals** once and the build carries on by itself to the PDF and ZIP.
+  While it waits, nothing runs and nothing is spent.
 
 ### How to switch them on
 
 Add `UNSPLASH_ACCESS_KEY` (and optionally `UNSPLASH_APP_NAME`) and/or
 `PIXABAY_API_KEY` to both Render services and to `.env` on the PC. Without a
 key, that source is simply skipped.
+
+### Do your steps change?
+
+Yes, one: press **Approve All Visuals** when the picture sheet appears.
 
 ### Does anything look different in a book I already made?
 

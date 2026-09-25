@@ -1580,6 +1580,15 @@ def ebook_workspace_visuals_route(project_id: int):
                 return jsonify(handed)
 
         data, msg = wsa.visuals(data, dict(body))
+        if action == "approve":
+            # v1.9.6. Approve All Visuals is the customer's one approval of the
+            # pictures. It ends the one-click wait and any step-by-step hold on
+            # visuals, so the build can carry on to the PDF and ZIP. It starts
+            # no work itself: the build screen's next request does that.
+            from services.ebook_build_orchestrator import build_state, clear_pause
+
+            data = clear_pause(data)
+            build_state(data)["awaiting_picture_approval"] = False
         project = database.update_project(project_id, None, data) or project
         return jsonify({"ok": True, "workspace": workspace_public_view(project), "message": msg})
     except ValueError as exc:
@@ -4194,6 +4203,15 @@ def ebook_build_advance_route(project_id: int):
             # so it earns the job a fresh set of attempts, exactly as
             # /resume does. Without it a book that had used all 60 attempts
             # was handed to the builder, and the builder refused it.
+            # v1.9.6. While the book waits for Approve All Visuals there is
+            # nothing for the builder to do, so no task is started. The
+            # customer's approval (a light action on this service) ends the
+            # wait; the next poll then hands the rest of the book off.
+            _waiting = status_payload(dict(project.get("data") or {}), project_id)
+            if _waiting.get("awaiting_picture_approval"):
+                _waiting["advanced"] = False
+                _waiting["execution_mode"] = _execution_mode.WORKFLOW
+                return jsonify(_waiting)
             body = request.get_json(silent=True) or {}
             customer_continue = bool(body.get("continue")) if isinstance(body, dict) else False
             handed = _workflow_hand_off(project_id, route="advance",

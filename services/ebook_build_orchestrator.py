@@ -55,6 +55,8 @@ COMPLETE = "COMPLETE"
 BLOCKED = "BLOCKED"
 FAILED_RECOVERABLE = "FAILED_RECOVERABLE"
 FAILED_FINAL = "FAILED_FINAL"
+#: v1.9.6: a stage whose work is done and is waiting for the customer.
+PENDING_CUSTOMER = "WAITING_FOR_CUSTOMER"
 
 #: Ordered build stages. These mirror the workspace rail, which remains the
 #: source of truth for what has actually been validated.
@@ -590,24 +592,44 @@ def _run_manuscript(data: dict, pid: int) -> dict:
     return approve_stage(data, "manuscript")
 
 
+#: v1.9.6. The one-click build stops once, after the pictures are chosen,
+#: so the customer can look at every picture on one sheet, replace any, and
+#: press Approve All Visuals. Their approval is what lets the build carry on
+#: to the cover, the PDF and the ZIP. Nothing is approved on their behalf.
+MSG_PICTURES_READY = (
+    "Your pictures are ready. Look them over, change any you like, "
+    "then press Approve All Visuals."
+)
+
+
+def awaiting_picture_approval(data: dict, state: dict | None = None) -> bool:
+    """True while the build is waiting for the customer to approve the pictures.
+
+    Only true when the pictures have been prepared and the customer has not
+    approved them yet. Once the rail says visuals are approved the wait is
+    over, whatever the flag still says.
+    """
+    from services.ebook_project_workspace import is_approved
+
+    state = state if isinstance(state, dict) else build_state(data)
+    if not state.get("awaiting_picture_approval"):
+        return False
+    ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+    if is_approved(ws, "visuals"):
+        return False
+    return isinstance(data.get("visual_plan"), dict)
+
+
 def _run_visuals(data: dict, pid: int) -> dict:
-    from services.ebook_design_workspace import approve_visuals_local, prepare_visuals_local
+    from services.ebook_design_workspace import prepare_visuals_local
 
     data = prepare_visuals_local(data)
-    try:
-        return approve_visuals_local(data)
-    except ValueError:
-        # Approval was refused. Return the prepared data anyway so the work is
-        # persisted: acquiring a visual plan costs real photograph downloads
-        # (a hundred megabytes for a nine-chapter book), and letting the
-        # exception escape threw all of it away on every retry, so each
-        # attempt re-downloaded everything and hit the same wall.
-        #
-        # This does not mark the stage done. stage_is_validated() reads the
-        # workspace rail, which prepare_visuals_local has just set to
-        # needs_correction, so the orchestrator still records the stage as
-        # unfinished and the real validator still decides.
-        return data
+    # v1.9.6: never approve here. Hold for the customer's one approval.
+    state = build_state(data)
+    state["awaiting_picture_approval"] = True
+    state["customer_message"] = MSG_PICTURES_READY
+    state["_no_retry_message"] = True
+    return data
 
 
 def _run_cover(data: dict, pid: int) -> dict:
@@ -1045,6 +1067,14 @@ def advance_build(project_id: int) -> dict:
     if held_after(data, state):
         return status_payload(data, project_id)
 
+    # v1.9.6: waiting for the customer to approve the pictures. Nothing runs,
+    # and no attempt is spent, until they do.
+    if stage == "visuals" and awaiting_picture_approval(data, state):
+        return status_payload(data, project_id)
+    if state.get("awaiting_picture_approval") and stage != "visuals":
+        # Approved: the wait is over. Clear the flag and carry on.
+        state["awaiting_picture_approval"] = False
+
     rec = _stage_record(state, stage)
     if int(rec.get("attempts") or 0) >= _max_attempts(stage) and rec.get("status") != COMPLETE:
         _release_stage(state, stage, FAILED_FINAL, rec.get("error") or "attempt ceiling reached")
@@ -1081,12 +1111,22 @@ def advance_build(project_id: int) -> dict:
         # default, and popped so it is never persisted or shown as-is.
         still_working = bool(new_state.pop("_no_retry_message", False))
         still_working_message = str(new_state.get("customer_message") or "")
+        runner_awaits = bool(new_state.get("awaiting_picture_approval"))
         new_state.update({k: v for k, v in state.items() if k not in ("stages",)})
+        if runner_awaits:
+            # Set by _run_visuals just now; the claim-time copy must not erase it.
+            new_state["awaiting_picture_approval"] = True
         new_state["stages"] = state["stages"]
 
         if stage_is_validated(updated, stage):
             _release_stage(new_state, stage, COMPLETE)
             new_state["customer_message"] = STAGE_MESSAGES.get(stage, MSG_WORKING)
+        elif stage == "visuals" and awaiting_picture_approval(updated, new_state):
+            # Prepared and waiting for the customer: not a failure, and it
+            # must not count against the stage's attempts.
+            _release_stage(new_state, stage, PENDING_CUSTOMER)
+            _stage_record(new_state, stage)["attempts"] = 0
+            new_state["customer_message"] = MSG_PICTURES_READY
         else:
             # The code ran but the validator is not satisfied. That is not done.
             _release_stage(new_state, stage, FAILED_RECOVERABLE, "stage output did not validate")
@@ -1340,6 +1380,43 @@ def status_payload(data: dict, project_id: int) -> dict:
         # "waiting for you" from this, never from paused_after alone, which
         # is set while the stage is still being worked on.
         "held_after": held_after(data, state),
+        # v1.9.6: the one-click build is waiting for Approve All Visuals.
+        "awaiting_picture_approval": bool(stage == "visuals" and awaiting_picture_approval(data, state)),
+        "picture_review": (
+            _picture_review(data)
+            if stage == "visuals" and awaiting_picture_approval(data, state) else None
+        ),
+    }
+
+
+def _picture_review(data: dict) -> dict:
+    """One sheet: every chosen picture with its chapter and source. Read-only."""
+    try:
+        from services.ebook_visual_pipeline import visual_review_payload
+
+        review = visual_review_payload(json.loads(json.dumps(data, default=str)))
+    except Exception:                                  # noqa: BLE001
+        log.exception("could not build the picture review sheet")
+        return {"items": [], "approvable": False, "image_sources": []}
+    items = []
+    for a in review.get("assets") or []:
+        credit = a.get("credit") or {}
+        items.append({
+            "visual_id": a.get("visual_id"),
+            "chapter": a.get("chapter"),
+            "chapter_index": a.get("chapter_index"),
+            "type": a.get("type"),
+            "source_label": credit.get("provider_label") or a.get("source_label"),
+            "credit": credit,
+            "thumb": credit.get("hotlink_preview_url") or a.get("thumb_data_uri") or "",
+            "ready": bool(a.get("has_file")) and a.get("match_status") != "reject",
+            "replaceable": bool(a.get("replace_enabled")),
+        })
+    return {
+        "items": items,
+        "approvable": bool(review.get("approvable")),
+        "findings": list(review.get("findings") or [])[:3],
+        "image_sources": review.get("image_sources") or [],
     }
 
 

@@ -191,6 +191,7 @@
     "tests/test_a_refused_cover_still_leaves_a_way_forward.py",
     "tests/test_a_pale_photograph_still_gets_a_cover.py",
     "tests/test_word_search_rebuilds_identically.py",
-    "tests/test_v196_free_image_sources.py"
+    "tests/test_v196_free_image_sources.py",
+    "tests/test_v196_one_click_picture_approval.py"
   ]
 }
