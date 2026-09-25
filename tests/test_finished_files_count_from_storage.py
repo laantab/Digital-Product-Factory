@@ -110,3 +110,37 @@ def test_the_export_stage_counts_a_recovered_book_as_done(tmp_path, monkeypatch)
     monkeypatch.setattr("services.storage.compat.read_export_or_legacy",
                         _storage({"ebook-5/ebook.pdf": PDF, "ebook-5/package.zip": ZIP}))
     assert orch.stage_is_validated(_data(), "export") is True
+
+
+# --------------------------------------------------------------------- v1.9.7
+# Container Gardening for Beginners, live, 2026-09-25: PDF and ZIP downloaded
+# fine, yet the status said 90% "Picking this back up" for ~62 hours. The
+# status route passes the stored project data, which does not carry its own
+# id, so the finished files were never fetched back and the book never read
+# as finished.
+
+def test_status_counts_a_stored_book_as_finished_without_an_id_in_its_data(tmp_path, monkeypatch):
+    monkeypatch.setattr("services.packaging.EXPORTS_DIR", str(tmp_path))
+    seen = []
+
+    def read(project_id, relative_path, legacy_path=None):
+        seen.append(int(project_id))
+        return {"ebook-5/ebook.pdf": PDF, "ebook-5/package.zip": ZIP}.get(str(relative_path))
+
+    monkeypatch.setattr("services.storage.compat.read_export_or_legacy", read)
+    data = _data()
+    data.pop("_project_id")
+    monkeypatch.setattr(orch, "stage_is_validated",
+                        lambda d, s, _real=orch.stage_is_validated: True if s != "export" else _real(d, s))
+    payload = orch.status_payload(data, 5)
+    assert payload["finished"] is True, payload
+    assert seen and set(seen) == {5}
+
+
+def test_download_rule_is_used_when_the_project_key_misses(tmp_path, monkeypatch):
+    """Same stored asset /download serves, found by its export folder."""
+    monkeypatch.setattr("services.packaging.EXPORTS_DIR", str(tmp_path))
+    monkeypatch.setattr("services.storage.compat.read_export_or_legacy", _storage({}))
+    monkeypatch.setattr(orch, "_verified_export_by_path",
+                        lambda pkg, name: {"ebook.pdf": PDF, "package.zip": ZIP}.get(name) if pkg == "ebook-5" else None)
+    assert orch._export_files_on_disk(_data()) is True

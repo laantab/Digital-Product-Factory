@@ -247,6 +247,23 @@ def _rail(data: dict) -> dict:
     return rail if isinstance(rail, dict) else {}
 
 
+def _verified_export_by_path(package_id: str, name: str) -> bytes | None:
+    """Verified stored bytes for exports/<package_id>/<name>, or None. Never raises."""
+    try:
+        import database
+
+        if not database.list_assets_exist():
+            return None
+        record = database.find_asset_by_export_path(package_id, name)
+        if not record or not record.get("approved"):
+            return None
+        from services.storage.compat import verified_asset_bytes
+
+        return verified_asset_bytes(record["storage_key"])
+    except Exception:                                  # noqa: BLE001
+        return None
+
+
 def _recover_export_files(data: dict, pkg_dir: str) -> None:
     """Bring this project's finished PDF and ZIP back to THIS machine.
 
@@ -271,6 +288,11 @@ def _recover_export_files(data: dict, pkg_dir: str) -> None:
             if os.path.isfile(path):
                 continue
             payload = read_export_or_legacy(pid, f"{package_id}/{name}")
+            if not payload:
+                # v1.9.7: the same lookup /download uses -- the stored asset
+                # record for this export folder -- so the status screen and
+                # the download button can never disagree about a finished book.
+                payload = _verified_export_by_path(package_id, name)
             if not payload or not payload.startswith(magic):
                 continue
             os.makedirs(pkg_dir, exist_ok=True)
@@ -1322,6 +1344,18 @@ def activity_for(project_id: int, data: dict, *, retrying: bool = False) -> dict
 
 def status_payload(data: dict, project_id: int) -> dict:
     """Everything the customer's screen needs, and nothing they shouldn't see."""
+    # v1.9.7: the route hands over the stored project data, which need not
+    # carry its own id. Without it the finished PDF and ZIP could not be
+    # fetched back from storage, so a finished book (Container Gardening for
+    # Beginners) sat at 90% "Picking this back up" for days while its files
+    # downloaded fine. The route's id is authoritative.
+    if isinstance(data, dict) and int(project_id or 0) > 0:
+        try:
+            has_id = int(data.get("_project_id") or 0) > 0
+        except (TypeError, ValueError):
+            has_id = False
+        if not has_id:
+            data["_project_id"] = int(project_id)
     state = build_state(data)
     stage = next_incomplete_stage(data)
     finished = stage is None
