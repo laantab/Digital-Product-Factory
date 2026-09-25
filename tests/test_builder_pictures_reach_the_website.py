@@ -32,6 +32,12 @@ from tests.test_builder_images_travel_through_storage import InMemoryDriver
 from tests.test_ebook_visual_pipeline import _manuscript_ready, _paid_patches
 
 import database
+# v1.9.8: import every module that binds get_storage at import time BEFORE
+# any test patches it. Otherwise the first import happens inside a patch and
+# that module keeps the in-memory test driver for the rest of the run, which
+# broke later storage tests depending on file order (seen on Windows).
+import services.storage.compat  # noqa: E402,F401
+import services.storage.executor  # noqa: E402,F401
 from services import ebook_visual_pipeline as vp
 from services.ebook_design_workspace import prepare_visuals_local
 from services.ebook_visual_pipeline import (
