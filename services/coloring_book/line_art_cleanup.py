@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import cv2
+import os
+
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
@@ -106,6 +108,15 @@ def _dollar_templates() -> list[np.ndarray]:
         r"C:\Windows\Fonts\impact.ttf",
         r"C:\Windows\Fonts\consolab.ttf",
     ]
+    # v1.9.9: the Windows paths above do not exist on Linux -- including the
+    # live Render services -- so the template list came back EMPTY there and
+    # no "$" was ever removed. When none of them load, fall back to the
+    # Liberation faces shipped in services/fonts (Liberation Sans is the free
+    # metric match for Arial). Windows keeps exactly its old templates.
+    if not any(os.path.isfile(fp) for fp in fonts):
+        shipped = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
+        fonts = [os.path.join(shipped, name) for name in (
+            "LiberationSans-Bold.ttf", "LiberationSerif-Bold.ttf", "LiberationSans-Regular.ttf")]
     for size in range(36, 140, 8):
         for fp in fonts:
             try:

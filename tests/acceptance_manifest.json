@@ -199,6 +199,7 @@
     "tests/test_chart_text_is_readable_on_the_page.py",
     "tests/test_release_review_container_gardening.py",
     "tests/test_release_review_gates_approval.py",
-    "tests/test_chart_text_editor.py"
+    "tests/test_chart_text_editor.py",
+    "tests/test_dollar_templates_exist_everywhere.py"
   ]
 }
