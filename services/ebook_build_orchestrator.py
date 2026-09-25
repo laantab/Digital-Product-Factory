@@ -691,6 +691,12 @@ def _cover_from_approved_interior_photo(data: dict, pid: int) -> dict:
         for aid in (chapter.get("aids") or []):
             if str(aid.get("type") or "").lower() not in {"photo", "stock photo"}:
                 continue
+            # v1.9.6: interior pictures from Unsplash or Pixabay are never
+            # promoted to the cover. Their API rules differ from Pexels (for
+            # example Unsplash forbids selling unaltered photos on products)
+            # and the cover record only understands Pexels provenance.
+            if str(aid.get("source") or "").lower() in {"unsplash", "pixabay"}:
+                continue
             path = str(aid.get("asset_path") or "")
             if path and os.path.isfile(path) and str(aid.get("match_status") or "") == "pass":
                 candidates.append(aid)

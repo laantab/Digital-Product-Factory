@@ -5,6 +5,37 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.6 — 2026-09-25
+
+**Two more free picture sources: Unsplash and Pixabay.**
+
+### What changed
+
+- When the Factory cannot find a good Pexels photo for a chapter, it now tries
+  Unsplash, then Pixabay. Pexels is still tried first. Paid AI pictures are
+  still only a last resort, only with your permission, and only within the
+  book's budget.
+- The picture review screen shows where each picture came from and who took
+  it, with links. Each picture has "Try Pexels", "Try Unsplash" and "Try
+  Pixabay" buttons (only for the sources that are switched on).
+- Each source's own rules are followed: Unsplash pictures are shown from
+  Unsplash and each chosen picture is reported to Unsplash as a download;
+  Pixabay searches are remembered for 24 hours and chosen pictures are saved
+  by the Factory instead of linked.
+- Unsplash and Pixabay pictures are never used as a book cover.
+
+### How to switch them on
+
+Add `UNSPLASH_ACCESS_KEY` (and optionally `UNSPLASH_APP_NAME`) and/or
+`PIXABAY_API_KEY` to both Render services and to `.env` on the PC. Without a
+key, that source is simply skipped.
+
+### Does anything look different in a book I already made?
+
+No. Existing Pexels pictures and saved books are untouched.
+
+---
+
 ## 1.9.5 — 2026-09-24
 
 **The same word search book now rebuilds to the same puzzles.**

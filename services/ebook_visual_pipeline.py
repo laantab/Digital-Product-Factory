@@ -2496,6 +2496,9 @@ def validate_visual_readiness(data: dict, *, html: str | None = None) -> VisualV
             if "pexels" in source_l and not page_url:
                 findings.append(f"Visual {vid} photograph is missing a Pexels source URL.")
                 continue
+            if source_l in {"unsplash", "pixabay"} and not (page_url and str(aid.get("photographer") or "").strip()):
+                findings.append(f"Visual {vid} photograph is missing its source page or photographer.")
+                continue
             report = evaluate_photo_aid(aid)
             aid.update(apply_match_report(aid, report))
             block = photo_blocks_approval(aid)
@@ -2922,6 +2925,8 @@ def _preview_data_uri(path: str, max_w: int = 1200) -> str:
 
 
 def visual_review_payload(data: dict) -> dict[str, Any]:
+    from services.image_sources import credit_for, image_sources_status
+
     plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else {}
     if isinstance(plan, dict):
         stamp_plan_photo_matches(plan)
@@ -2970,6 +2975,8 @@ def visual_review_payload(data: dict) -> dict[str, Any]:
                 "internally_ready": bool(aid.get("internally_ready") or match_status == MATCH_PASS),
                 "user_accepted": bool(aid.get("user_accepted")),
                 "replace_enabled": is_photo,
+                # v1.9.6: where the picture came from and who took it.
+                "credit": credit_for(aid) if is_photo else {},
             }
         )
         technical_assets.append(
@@ -3039,6 +3046,8 @@ def visual_review_payload(data: dict) -> dict[str, Any]:
         "customer_message": str(plan.get("customer_visual_message") or (customer_findings[0] if customer_findings else "")),
         "budget_message": str(plan.get("customer_budget_message") or ""),
         "ai_edit_enabled": bool(ai_edit_enabled),
+        # v1.9.6: which free sources can be chosen (booleans only, no keys).
+        "image_sources": image_sources_status(),
     }
 
 
@@ -3408,6 +3417,9 @@ def replace_photo_aid(
                 allow_ai=True,
             )
         else:
+            # v1.9.6: "Try Pexels / Unsplash / Pixabay" searches only that
+            # free source; any other replace tries all of them, Pexels first.
+            chosen = mode_l if mode_l in {"pexels", "unsplash", "pixabay"} else ""
             filled = fill_photo_aid_from_pexels(
                 aid,
                 package_id=pkg,
@@ -3415,6 +3427,7 @@ def replace_photo_aid(
                 topic=str(data.get("topic") or data.get("title") or ""),
                 audience=str(data.get("audience") or ""),
                 chapter=str(aid.get("chapter") or ""),
+                providers=(chosen,) if chosen else None,
             )
         filled["approved"] = False
         filled["user_accepted"] = False

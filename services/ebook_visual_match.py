@@ -1735,6 +1735,11 @@ def customer_safe_visual_plan(visual_plan: dict | None) -> dict[str, Any]:
         "replacement_queries",
         "failed_queries",
         "rejected_photo_ids",
+        # v1.9.6 provider records: links and tracking addresses stay out of
+        # the customer PDF/ZIP; the attribution TEXT is kept.
+        "download_location",
+        "provider_home_url",
+        "search_query",
     }
     for ch in list(plan.get("chapters") or []):
         if not isinstance(ch, dict):

@@ -7821,19 +7821,45 @@ function showEbookWorkspaceStage(stageId) {
          </div>`
       : "";
     const sourceLabel = (a) => a.source_label || ((a.type === "photo" || a.type === "stock photo") ? "Stock photo" : "Factory-created graphic");
+    // v1.9.6: free picture sources the owner has switched on (no keys here).
+    const freeSources = (review.image_sources || []).filter((src) => src && src.configured);
+    const safeHref = (u) => (/^https:\/\//i.test(String(u || "")) ? String(u) : "");
+    const creditHtml = (c) => {
+      if (!c || !c.provider_label) return "";
+      const who = c.photographer
+        ? (safeHref(c.photographer_url)
+            ? `<a class="underline" href="${escapeHtml(safeHref(c.photographer_url))}" target="_blank" rel="noopener">${escapeHtml(c.photographer)}</a>`
+            : escapeHtml(c.photographer))
+        : "";
+      const site = safeHref(c.provider_url)
+        ? `<a class="underline" href="${escapeHtml(safeHref(c.provider_url))}" target="_blank" rel="noopener">${escapeHtml(c.provider_label)}</a>`
+        : escapeHtml(c.provider_label);
+      const verb = c.provider === "pixabay" ? "Image" : "Photo";
+      const joiner = c.provider === "pixabay" ? "from" : "on";
+      return `<p class="text-xs text-slate-600 mt-1" data-ws-photo-credit="${escapeHtml(c.provider)}">${who ? `${verb} by ${who} ${joiner} ${site}` : `Source: ${site}`}</p>`;
+    };
     const cards = assets.map((a) => {
       const isPhoto = a.type === "photo" || a.type === "stock photo";
       const missing = !a.has_file || a.match_status === "reject";
+      const credit = a.credit || {};
+      // Unsplash pictures are shown from Unsplash's own address, as its API requires.
+      const shownSrc = safeHref(credit.hotlink_preview_url) || a.thumb_data_uri || "";
+      const vidAttr = escapeHtml(String(a.visual_id || ""));
+      const sourceButtons = freeSources.map((src) =>
+        `<button type="button" class="btn-secondary text-xs" data-ws-replace-photo="${vidAttr}" data-ws-replace-source="${escapeHtml(src.provider)}">Try ${escapeHtml(src.label)}</button>`
+      ).join("");
       return `
       <article class="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-        ${a.thumb_data_uri ? `<img alt="${escapeHtml(a.title || a.description || "Visual")}" class="w-full h-40 object-contain rounded border border-slate-200 bg-slate-50 mb-2" src="${escapeHtml(a.thumb_data_uri)}" />` : `<p class="text-xs text-rose-700 mb-2">This visual is not ready yet</p>`}
+        ${shownSrc ? `<img alt="${escapeHtml(a.title || a.description || "Visual")}" class="w-full h-40 object-contain rounded border border-slate-200 bg-slate-50 mb-2" src="${escapeHtml(shownSrc)}" referrerpolicy="no-referrer" />` : `<p class="text-xs text-rose-700 mb-2">This visual is not ready yet</p>`}
         <p class="font-semibold text-slate-900">Chapter ${escapeHtml(String(a.chapter_index || ""))}: ${escapeHtml(a.chapter || "")}</p>
         <p class="text-xs uppercase tracking-wide text-slate-500 mt-1">${escapeHtml(a.type || "")} · ${escapeHtml(sourceLabel(a))}</p>
+        ${isPhoto ? creditHtml(credit) : ""}
         <p class="text-sm text-slate-700 mt-2">${escapeHtml(a.description || a.caption || a.title || "")}</p>
         ${isPhoto ? `<details class="mt-2">
           <summary class="text-xs font-semibold text-slate-600 cursor-pointer">Edit a Visual</summary>
           <div class="flex flex-wrap gap-2 mt-2">
-            <button type="button" class="btn-secondary text-xs" data-ws-replace-photo="${escapeHtml(String(a.visual_id || ""))}">Try another stock photo</button>
+            <button type="button" class="btn-secondary text-xs" data-ws-replace-photo="${vidAttr}">Try another free photo</button>
+            ${sourceButtons}
             ${review.ai_edit_enabled ? `<button type="button" class="btn-secondary text-xs" data-ws-generate-ai="${escapeHtml(String(a.visual_id || ""))}">Generate AI alternative</button>` : ""}
             <label class="btn-secondary text-xs cursor-pointer">Upload my own image
               <input type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" class="hidden" data-ws-upload-photo="${escapeHtml(String(a.visual_id || ""))}" />
@@ -8154,7 +8180,7 @@ function showEbookWorkspaceStage(stageId) {
   panel.querySelectorAll("[data-ws-replace-photo]").forEach((btn) => {
     btn.onclick = () => postEbookWorkspaceAction(
       `/ebook-workspace/${ws.project_id}/visuals`,
-      { action: "replace", visual_id: btn.getAttribute("data-ws-replace-photo"), mode: "stock" },
+      { action: "replace", visual_id: btn.getAttribute("data-ws-replace-photo"), mode: btn.getAttribute("data-ws-replace-source") || "stock" },
       "Replacement photograph staged for review."
     );
   });
