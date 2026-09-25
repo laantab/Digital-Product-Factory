@@ -116,8 +116,22 @@ def test_sequences_are_reset_after_an_id_preserving_import():
 
 
 def test_selecting_postgres_without_a_driver_fails_closed(monkeypatch):
+    # v1.9.9: simulate the missing driver instead of relying on this machine
+    # not having one. Where psycopg IS installed (the live site, the cloud
+    # test machine) the old test tried a real connection and failed with a
+    # network error, never reaching the rule it names.
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_psycopg(name, *args, **kwargs):
+        if name == "psycopg" or name.startswith("psycopg."):
+            raise ImportError("psycopg is not installed")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_psycopg)
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h/db")
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="driver is not installed"):
         dialect.connect()
 
 
