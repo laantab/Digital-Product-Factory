@@ -174,8 +174,16 @@ class AcceptSaysWhenAPictureCannotBeUsed(WebsiteAcceptsStoredPhotos):
     def test_refused_picture_is_not_reported_as_accepted(self):
         data = self._build_on_builder()
         data["_project_id"] = self.pid
-        # A rendered diagram full of printed words, labelled as a photograph.
+        # A picture far too small to print, labelled as a photograph. Refused
+        # on every machine -- unlike printed-text detection, this does not
+        # depend on an OCR engine being installed (Windows PCs have none).
+        from PIL import Image
+
         aid = next(a for a in required_aids(data["visual_plan"]) if a.get("asset_path"))
+        tiny = os.path.join(os.path.dirname(str(aid["asset_path"])), "v_tiny_photo.png")
+        Image.new("RGB", (160, 107), (90, 140, 70)).save(tiny, "PNG")
+        aid["asset_path"] = tiny
+        aid["width"], aid["height"] = 160, 107
         aid.update({"type": "photo", "source": "pexels", "match_status": "needs_user_review",
                     "photographer": "T", "photo_id": "2", "attribution": "Photo by T on Pexels",
                     "page_url": "https://www.pexels.com/photo/2/",
