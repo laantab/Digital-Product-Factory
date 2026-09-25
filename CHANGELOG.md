@@ -5,6 +5,42 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.7 — 2026-09-25
+
+**Missing pictures are shown honestly, and accepting a picture tells the truth.**
+
+### What changed
+
+- Nothing new to learn. The picture sheet is now more honest about which
+  chapters still need a picture and which pictures cannot be used.
+
+### What was fixed
+
+- A chapter photo that could not be found used to be replaced by a card
+  showing the chapter's own title, marked as done. A photo slot now stays
+  "missing" until a real picture is there, so the picture sheet says plainly
+  which chapter still needs one.
+- Pressing accept on a picture the checker had refused (printed words,
+  watermark, too small, a copy of another chapter's picture) still said
+  "accepted". It now says the picture cannot be used and asks you to replace it.
+- The website can accept a real photo that exists only in storage (the
+  builder's copy is gone after each run). The test for this used a picture
+  full of words and so always failed; it now uses a real photo and passes.
+
+### Do your steps change?
+
+No.
+
+### Does anything look different in a book I already made?
+
+No. Existing pictures and saved books are untouched.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
 ## 1.9.6 — 2026-09-25
 
 **Two more free picture sources, and one picture check before your PDF.**
