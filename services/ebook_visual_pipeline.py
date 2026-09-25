@@ -480,6 +480,8 @@ DIAGRAM_COLUMN_PT = 468.0
 #: Smallest readable label on the printed page, the same floor the
 #: Editor-in-Chief applies to the book's own text.
 MIN_LABEL_PT = 8.0
+#: Chart label ink (v1.9.10): near-black, not slate, for print contrast.
+_CHART_INK = (17, 17, 17)
 
 
 def _font(size: int, *, bold: bool = False):
@@ -1517,9 +1519,9 @@ def _new_canvas(width: int = 1400, height: int = 900) -> tuple[Image.Image, Imag
 
 
 def _draw_title(draw: ImageDraw.ImageDraw, title: str, width: int) -> None:
-    font = _font(28, bold=True)
+    font = _font(32, bold=True)
     for i, line in enumerate(_wrap(draw, title, font, width - 80)[:2]):
-        draw.text((40, 28 + i * 34), line, font=font, fill=_pal("text"))
+        draw.text((40, 26 + i * 40), line, font=font, fill=_pal("text"))
 
 
 def _looks_currency(aid: dict[str, Any], values: list[float]) -> bool:
@@ -1557,8 +1559,8 @@ def _render_chart(aid: dict[str, Any]) -> Image.Image:
         return img
     currency = _looks_currency(aid, values)
     max_v = max(values) or 1.0
-    body = _font(26)
-    value_font = _font(26, bold=True)
+    body = _font(30)
+    value_font = _font(30, bold=True)
     if n <= 6:
         plot_top, plot_bottom = 150, height - 100
         gap = 36
@@ -1575,7 +1577,7 @@ def _render_chart(aid: dict[str, Any]) -> Image.Image:
             draw.text((x + (bar_w - tw) / 2, y - 38), txt, font=value_font, fill=_pal("text"))
             for j, line in enumerate(_wrap(draw, str(lbl), body, bar_w + gap - 4)[:2]):
                 lw, _ = _text_size(draw, line, body)
-                draw.text((x + (bar_w - lw) / 2, plot_bottom + 10 + j * 32), line, font=body, fill=(30, 41, 59))
+                draw.text((x + (bar_w - lw) / 2, plot_bottom + 10 + j * 32), line, font=body, fill=_CHART_INK)
         return img
     top, bottom, left = 120, height - 60, 420
     bar_h = min(84, int((bottom - top) / max(n, 1)) - 18)
@@ -1584,7 +1586,7 @@ def _render_chart(aid: dict[str, Any]) -> Image.Image:
         bw = int((width - left - 200) * (val / max_v))
         draw.rounded_rectangle((left, y, left + max(bw, 8), y + bar_h), 8, fill=_pal("accent"))
         for j, line in enumerate(_wrap(draw, str(lbl), body, left - 60)[:2]):
-            draw.text((40, y + 6 + j * 32), line, font=body, fill=(30, 41, 59))
+            draw.text((40, y + 6 + j * 32), line, font=body, fill=_CHART_INK)
         draw.text(
             (left + max(bw, 8) + 12, y + (bar_h - 32) / 2),
             _fmt_chart_value(val, currency=currency),
@@ -1622,8 +1624,8 @@ def _render_horizontal_steps(aid: dict[str, Any], items: list[str], *, kind: str
     total_w = n * box_w + (n - 1) * gap
     x0 = (width - total_w) // 2
     y0 = 150
-    body = _font(26, bold=True)
-    sub = _font(26)
+    body = _font(30, bold=True)
+    sub = _font(30)
     for i, item in enumerate(items):
         x = x0 + i * (box_w + gap)
         draw.rounded_rectangle((x, y0, x + box_w, y0 + 210), 12, fill=(255, 255, 255), outline=accent, width=2)
@@ -1633,7 +1635,7 @@ def _render_horizontal_steps(aid: dict[str, Any], items: list[str], *, kind: str
         draw.text((x + (box_w - nw) / 2, y0 + 28), num, font=body, fill=(255, 255, 255))
         for j, line in enumerate(_wrap(draw, item, sub, box_w - 24)[:4]):
             lw, _ = _text_size(draw, line, sub)
-            draw.text((x + (box_w - lw) / 2, y0 + 76 + j * 32), line, font=sub, fill=(15, 23, 42))
+            draw.text((x + (box_w - lw) / 2, y0 + 76 + j * 36), line, font=sub, fill=_CHART_INK)
         if i < n - 1:
             ax = x + box_w + 4
             draw.polygon(
@@ -1883,22 +1885,22 @@ def _render_steps(aid: dict[str, Any], *, kind: str) -> Image.Image:
         if text:
             items.append(text)
     probe_img, probe = _new_canvas(1400, 200)
-    body = _font(26)
+    body = _font(30)
     # The whole item is printed -- wrapped, never cut short (up to 4 lines).
-    wrapped = [_wrap(probe, item, body, 1150)[:4] or [""] for item in items] or [[""]]
-    line_h = 34
-    rows = [max(84, 24 + len(lines) * line_h) for lines in wrapped]
-    height = 130 + sum(r + 12 for r in rows) + 20
+    wrapped = [_wrap(probe, item, body, 1130)[:4] or [""] for item in items] or [[""]]
+    line_h = 40
+    rows = [max(92, 28 + len(lines) * line_h) for lines in wrapped]
+    height = 140 + sum(r + 12 for r in rows) + 20
     img, draw = _new_canvas(1400, height)
     _draw_title(draw, str(aid.get("title") or kind.title()), 1400)
-    body = _font(26)
-    num_font = _font(26, bold=True)
-    y = 120
+    body = _font(30)
+    num_font = _font(30, bold=True)
+    y = 130
     accent = _pal("secondary") if kind == "timeline" else _pal("primary")
     for i, (lines, row_h) in enumerate(zip(wrapped, rows), start=1):
         draw.rounded_rectangle((40, y, 1360, y + row_h), 10, fill=(255, 255, 255), outline=accent, width=2)
         cy = y + row_h / 2
-        draw.ellipse((60, cy - 26, 112, cy + 26), fill=accent)
+        draw.ellipse((58, cy - 28, 114, cy + 28), fill=accent)
         if kind == "checklist":
             _draw_tick(draw, (86, cy), fill=(255, 255, 255))
         else:
@@ -1906,7 +1908,7 @@ def _render_steps(aid: dict[str, Any], *, kind: str) -> Image.Image:
             draw.text((86 - nw / 2, cy - nh / 2 - 4), str(i), font=num_font, fill=(255, 255, 255))
         ty = y + (row_h - len(lines) * line_h) / 2
         for j, line in enumerate(lines):
-            draw.text((134, ty + j * line_h), line, font=body, fill=(15, 23, 42))
+            draw.text((138, ty + j * line_h), line, font=body, fill=_CHART_INK)
         y += row_h + 12
     return img
 
@@ -2232,7 +2234,7 @@ def _render_calendar_tracker(aid: dict[str, Any]) -> Image.Image:
                 draw.text((x + 10, y0 + 5), f"Day {dnum}", font=day_font, fill=(255, 255, 255))
                 ty = y0 + 44
                 for line in _wrap(draw, _plain_cell(d.get("label") or ""), body_font, cell_w - 24)[:5]:
-                    draw.text((x + 10, ty), line, font=body_font, fill=(30, 41, 59))
+                    draw.text((x + 10, ty), line, font=body_font, fill=_CHART_INK)
                     ty += 19
                 dur = _plain_cell(d.get("duration") or "")
                 if dur:
@@ -2773,8 +2775,9 @@ def figure_html(aid: dict[str, Any], *, palette: dict[str, tuple[int, int, int]]
             with _RenderPalette(palette):
                 img = render_aid_png(aid, scale=2.0)
             buf = io.BytesIO()
-            img.convert("RGB").save(buf, format="JPEG", quality=88)
-            uri = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+            # v1.9.10: lossless PNG. JPEG blurred the edges of chart lettering.
+            img.convert("RGB").save(buf, format="PNG", optimize=True)
+            uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
             # scale=2.0 doubles pixel dimensions for print sharpness; report
             # the same logical width/height _embed_preview_image would.
             w, h = img.size[0] // 2, img.size[1] // 2
