@@ -356,12 +356,25 @@ def test_cli_rejects_an_unknown_action_without_doing_anything(client, capsys):
     assert database.list_assets(project["id"]) == []
 
 
-def test_cli_verify_does_not_migrate(client, capsys):
-    import services.storage.production_migration as pm
+def test_cli_verify_does_not_migrate(client, capsys, monkeypatch):
+    """`verify` reads objects back from R2, so it refuses to run without R2
+    configured (a deliberate fail-closed guard, kept) -- and either way it
+    never migrates anything.
 
+    v1.9.7: the old test expected `verify` to succeed with no R2 at all,
+    which the guard has refused since R2 verification was introduced.
+    """
+    import services.storage.production_migration as pm
+    from services.storage.r2 import R2ConfigurationError
+
+    for name in ("FACTORY_R2_ACCESS_KEY_ID", "FACTORY_R2_ACCOUNT_ID",
+                 "FACTORY_R2_BUCKET", "FACTORY_R2_SECRET_ACCESS_KEY"):
+        monkeypatch.delenv(name, raising=False)
     project = _project()
-    assert pm.main(["verify"]) == 0
+    with pytest.raises(R2ConfigurationError):
+        pm.main(["verify"])
     assert database.list_assets(project["id"]) == [], "verify must never migrate"
+
 
 
 # ============================ the guarded production sequence ==============
