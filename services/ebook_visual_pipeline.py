@@ -2350,7 +2350,12 @@ def materialize_visual_plan(visual_plan: dict, *, package_id: str) -> dict[str, 
                 continue
             path = _aid_file(package_id, vid)
             kind = str(aid.get("type") or "").lower()
-            if kind == "photo":
+            # v1.9.7: every photograph slot, not only type "photo". A "stock
+            # photo" slot with no picture used to fall through to the card
+            # renderer below, which drew the slot's title as a text card and
+            # marked it resolved -- a placeholder standing in for a missing
+            # photograph. A photograph is never drawn; missing stays missing.
+            if kind == "photo" or is_photo_aid(aid):
                 existing = Path(local_visual_path(aid) or str(path))
                 if existing.is_file() and existing != path:
                     path.write_bytes(existing.read_bytes())
