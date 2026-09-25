@@ -17,6 +17,7 @@ from services.editor_in_chief import (
     CorrectionSession, Finding, ReviewReport,
     KIND_JUDGMENT, KIND_OBJECTIVE, SEV_CRITICAL, SEV_MAJOR, SEV_MINOR,
     analyse_rendered_pages, check_assets_present, check_chart_and_table_data,
+    check_diagram_label_size,
     check_cross_project_duplication, check_customer_facing_leaks,
     check_identity_consistency, check_image_resolution, check_package_identity,
     check_page_count, check_page_quality, check_placeholder_and_leak,
@@ -198,6 +199,8 @@ def review_ebook(
     f += check_image_resolution(assets, print_product=print_product)
     rep.checks_run.append("chart_and_table_data")
     f += check_chart_and_table_data(candidate.get("aids") or [])
+    rep.checks_run.append("chart_text_size_on_page")
+    f += check_diagram_label_size(candidate.get("aids") or [])
     rep.checks_run.append("safety_sensitive_visual_verification")
     f += check_visual_subject_verification(
         assets, subject_text=f"{title} {manuscript[:4000]}")

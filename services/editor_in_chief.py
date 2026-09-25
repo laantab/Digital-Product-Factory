@@ -909,3 +909,50 @@ _OWNER = {
     "interior_design": "layout", "accessibility": "layout",
     "package_integrity": "packaging", "customer_value": "editorial_direction",
 }
+
+
+# ---------------------------------------------------------------------------
+# v1.9.10. Chart and diagram text at its printed size
+# ---------------------------------------------------------------------------
+def check_diagram_label_size(aids: list[dict[str, Any]], *, column_pt: float | None = None,
+                             min_pt: float | None = None) -> list[Finding]:
+    """Every Factory-drawn chart's smallest label, measured at its size on the PDF page.
+
+    Diagrams are drawn as pictures and scaled to the text column. The book's
+    own text had an 8 pt floor, but nothing measured the words inside these
+    pictures: Container Gardening for Beginners shipped five charts whose
+    labels printed near 6 pt. This redraws each non-photo aid exactly as the
+    book does, reads the smallest font it used, and converts it to points at
+    the narrowest column any template prints.
+    """
+    from services.ebook_visual_pipeline import (
+        DIAGRAM_COLUMN_PT, MIN_LABEL_PT, is_photo_aid, label_min_pt, render_aid_png,
+    )
+
+    column = float(column_pt or DIAGRAM_COLUMN_PT)
+    floor = float(min_pt or MIN_LABEL_PT)
+    out: list[Finding] = []
+    for aid in aids or []:
+        if not isinstance(aid, dict) or is_photo_aid(aid):
+            continue
+        title = str(aid.get("title") or aid.get("visual_id") or "chart")
+        try:
+            size = label_min_pt(render_aid_png(aid), column_pt=column)
+        except Exception as exc:  # noqa: BLE001
+            out.append(Finding(
+                code="CHART_TEXT_UNMEASURED", category="accessibility", severity=SEV_CRITICAL,
+                kind=KIND_OBJECTIVE, summary="Chart could not be drawn to measure its text.",
+                asset=title, detail=str(exc)[:200]))
+            continue
+        if size <= 0:
+            out.append(Finding(
+                code="CHART_TEXT_UNMEASURED", category="accessibility", severity=SEV_CRITICAL,
+                kind=KIND_OBJECTIVE, summary="Chart text size could not be measured.", asset=title))
+        elif size < floor:
+            out.append(Finding(
+                code="CHART_TEXT_TOO_SMALL", category="accessibility", severity=SEV_CRITICAL,
+                kind=KIND_OBJECTIVE,
+                summary=f"Chart text prints at {size:.1f} pt, below the {floor:.0f} pt readable floor.",
+                asset=title,
+                detail=f"smallest label {size:.1f} pt at a {column:.0f} pt text column"))
+    return out
