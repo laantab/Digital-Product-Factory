@@ -196,11 +196,16 @@ def edit_chart_text(data: dict, payload: dict) -> tuple[dict, str]:
     problems = [f for f in chart_wording_findings(proposed, page=None, chapter=chapter) if f.level == HARD]
     if problems:
         raise ValueError("The new chart text still has a problem: " + problems[0].why)
-    target["previous_text"] = {"title": target.get("title"), "items": list(target.get("items") or [])}
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    before = {"title": target.get("title"), "items": list(target.get("items") or []), "replaced_at": now}
+    # Every earlier wording is kept, oldest first -- a second edit never loses
+    # what the book originally said. previous_text is the most recent one.
+    target.setdefault("text_history", []).append(before)
+    target["previous_text"] = before
     target["items"] = items
     if title:
         target["title"] = title
-    target["text_edited"] = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "by": "owner"}
+    target["text_edited"] = {"at": now, "by": "owner"}
     data["export_ready"] = False
     build = data.get("ebook_build") if isinstance(data.get("ebook_build"), dict) else None
     if build and isinstance(build.get("stages"), dict) and isinstance(build["stages"].get("export"), dict):

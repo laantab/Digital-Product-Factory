@@ -57,3 +57,28 @@ def test_photos_cannot_be_edited_as_charts():
 def test_edit_chart_is_a_light_action_with_no_paid_call():
     assert "edit-chart" in wsa.VISUAL_TEXT_ACTIONS
     assert wsa.is_light("/ebook-workspace/<int:project_id>/visuals", "edit-chart")
+
+
+def test_the_manuscript_and_every_other_part_of_the_book_are_byte_identical():
+    import json
+
+    data = _data()
+    snapshot = copy.deepcopy(data)
+    data, _ = wsa.visuals(data, {"action": "edit-chart", "visual_id": "v_ch4", "items": CH7_CORRECTED})
+    changed = {k for k in set(snapshot) | set(data) if snapshot.get(k) != data.get(k)}
+    assert changed == {"visual_plan", "export_ready", "ebook_build"}, changed
+    assert data["content"] == snapshot["content"]
+    for ch_old, ch_new in zip(snapshot["visual_plan"]["chapters"], data["visual_plan"]["chapters"]):
+        for a_old, a_new in zip(ch_old["aids"], ch_new["aids"]):
+            if a_old["visual_id"] != "v_ch4":
+                assert json.dumps(a_old, sort_keys=True) == json.dumps(a_new, sort_keys=True)
+
+
+def test_every_earlier_wording_is_kept_across_repeated_edits():
+    data = _data()
+    first = ["Check the mix with your finger before you water.", "Water deeply until it drains."]
+    data, _ = wsa.visuals(data, {"action": "edit-chart", "visual_id": "v_ch4", "items": first})
+    data, _ = wsa.visuals(data, {"action": "edit-chart", "visual_id": "v_ch4", "items": CH7_CORRECTED})
+    aid = _aid(data, "v_ch4")
+    assert [h["items"] for h in aid["text_history"]] == [CH7_AS_SHIPPED, first]
+    assert aid["previous_text"]["items"] == first and aid["items"] == CH7_CORRECTED

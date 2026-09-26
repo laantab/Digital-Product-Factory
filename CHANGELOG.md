@@ -17,14 +17,21 @@ The version shown in the bottom-left of the app matches the newest entry here.
   every picture with its PDF page and chapter, and lists what to correct,
   grouped so you fix each thing once.
 - Approve Product only works after this review has passed for that exact PDF.
-- An AI review of whether charts and photos fit their chapters runs only when
-  you authorize its stated cost. Until then, those checks say Not verified.
+- An AI review of whether charts and photos fit their chapters is optional and
+  shows its cost before it runs. If you decline it, each picture shows "Needs
+  your review" on the contact sheet; you accept or reject it yourself. Nothing
+  unchecked is ever shown as passed.
+- You can correct the words in a chart (its heading and items). The book's
+  writing is never changed, earlier wording is kept, and the next Continue
+  redraws the chart at no cost.
 
 ### What was fixed
 
 - Books could be marked finished with charts too small to read, charts that
   mixed labels with questions or used sentence fragments, repeated photos, or
   a PDF that did not match the one in the ZIP. The review now refuses these.
+- On the live site, the coloring-book "$" remover removed nothing: it only knew
+  fonts found on Windows computers. It now uses the Factory's own fonts.
 
 ### Do your steps change?
 
