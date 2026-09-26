@@ -2130,8 +2130,11 @@ def ebook_approve_product_route(project_id: int):
     sha = _hl.sha256(pdf or b"").hexdigest()
     ok, why = release_review_allows_approval(data, sha)
     if not pdf or not ok:
-        return jsonify({"ok": False, "error": why or "The PDF could not be read.",
-                        "review_url": f"/ebook-workspace/{project_id}/release-review"}), 409
+        # A normal answer, not an error code: "review first" is an expected
+        # step in the customer's path, and the screen opens the review.
+        return jsonify({"ok": False, "needs_review": True,
+                        "error": why or "The PDF could not be read.",
+                        "review_url": f"/ebook-workspace/{project_id}/release-review"})
     from services.ebook_customer_path import save_factory_ebook
 
     data["product_approval"] = {"approved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -2140,8 +2143,8 @@ def ebook_approve_product_route(project_id: int):
         saved = save_factory_ebook(data, name=str(data.get("title") or project.get("name") or "Ebook"),
                                    project_id=project_id, user_confirmed=True)
     except ValueError as exc:
-        return jsonify({"ok": False, "error": str(exc),
-                        "review_url": f"/ebook-workspace/{project_id}/release-review"}), 409
+        return jsonify({"ok": False, "needs_review": True, "error": str(exc),
+                        "review_url": f"/ebook-workspace/{project_id}/release-review"})
     return jsonify({"ok": True, **(saved if isinstance(saved, dict) else {})})
 
 
