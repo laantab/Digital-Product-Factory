@@ -21,6 +21,9 @@ The version shown in the bottom-left of the app matches the newest entry here.
   shows its cost before it runs. If you decline it, each picture shows "Needs
   your review" on the contact sheet; you accept or reject it yourself. Nothing
   unchecked is ever shown as passed.
+- When a book is exported again, its previous PDF and ZIP are kept and can be
+  downloaded from the book's earlier versions. If the old files cannot be kept
+  safely, the new export does not replace them.
 - You can correct the words in a chart (its heading and items). The book's
   writing is never changed, earlier wording is kept, and the next Continue
   redraws the chart at no cost.

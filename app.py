@@ -1982,6 +1982,46 @@ def _release_files(project_id: int, data: dict) -> tuple[bytes | None, bytes | N
     return out[0], out[1]
 
 
+@app.get("/ebook-workspace/<int:project_id>/previous-exports")
+def ebook_previous_exports_route(project_id: int):
+    """v1.9.11: earlier PDF/ZIP versions kept when the book was exported again."""
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    out = []
+    for row in database.list_assets(project_id) or []:
+        if str(row.get("kind")) != "export_previous":
+            continue
+        key = str(row.get("storage_key") or "")
+        m = re.search(r"/previous/([0-9a-f]{16})/([A-Za-z0-9_.-]+)$", key)
+        if not m:
+            continue
+        out.append({"name": m.group(2), "sha256": row.get("checksum"), "bytes": row.get("byte_size"),
+                    "url": f"/ebook-workspace/{project_id}/previous-exports/{m.group(1)}/{m.group(2)}"})
+    return jsonify({"previous": out})
+
+
+@app.get("/ebook-workspace/<int:project_id>/previous-exports/<sha16>/<name>")
+def ebook_previous_export_download(project_id: int, sha16: str, name: str):
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    if not re.fullmatch(r"[0-9a-f]{16}", sha16 or "") or name not in ("ebook.pdf", "package.zip"):
+        return _error("Not found.", 404)
+    from services.storage.compat import verified_asset_bytes
+
+    for row in database.list_assets(project_id) or []:
+        key = str(row.get("storage_key") or "")
+        if str(row.get("kind")) == "export_previous" and key.endswith(f"/previous/{sha16}/{name}"):
+            raw = verified_asset_bytes(key)
+            if raw is None:
+                return _error("That earlier version could not be verified.", 409)
+            mime = "application/pdf" if name.endswith(".pdf") else "application/zip"
+            return Response(raw, mimetype=mime, headers={
+                "Content-Disposition": f'attachment; filename="previous-{sha16}-{name}"'})
+    return _error("Not found.", 404)
+
+
 @app.get("/ebook-workspace/<int:project_id>/release-review/estimate")
 def ebook_release_review_estimate_route(project_id: int):
     project, err = _ebook_workspace_project_or_404(project_id)
