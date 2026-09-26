@@ -198,6 +198,7 @@
     "tests/test_customer_titles_with_ordinary_words.py",
     "tests/test_chart_text_is_readable_on_the_page.py",
     "tests/test_release_review_container_gardening.py",
-    "tests/test_release_review_gates_approval.py"
+    "tests/test_release_review_gates_approval.py",
+    "tests/test_chart_text_editor.py"
   ]
 }

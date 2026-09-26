@@ -2027,7 +2027,14 @@ def ebook_release_review_route(project_id: int):
         else:
             reviewer = make_provider_reviewer()
             charge = est["estimated_usd"] if est["billable"] else 0.0
-    rev = review_release(data, pdf, zipb, ai_reviewer=reviewer, ai_note=note)
+    import hashlib as _hl
+
+    prior = data.get("release_review") if isinstance(data.get("release_review"), dict) else {}
+    same_pdf = prior.get("pdf_sha256") == _hl.sha256(pdf or b"").hexdigest()
+    decisions = dict(prior.get("decisions") or {}) if same_pdf else {}
+    acks = list(prior.get("acknowledged_editorial") or []) if same_pdf else []
+    rev = review_release(data, pdf, zipb, ai_reviewer=reviewer, ai_note=note,
+                         decisions=decisions, acknowledged_editorial=acks)
     if reviewer is not None and rev.ai.get("ran") and charge:
         ledger = data["ebook_workspace"]["paid_call_ledger"]
         ledger["spent_usd"] = round(float(ledger.get("spent_usd") or 0) + charge, 4)
@@ -2039,14 +2046,38 @@ def ebook_release_review_route(project_id: int):
             "purpose": "editor_in_chief_release_review", "estimated_cost_usd": charge,
             "meta": {"pdf_sha256": rev.pdf_sha256}})
     stored = rev.to_dict()
-    prior = data.get("release_review") if isinstance(data.get("release_review"), dict) else {}
-    stored["acknowledged_editorial"] = (list(prior.get("acknowledged_editorial") or [])
-                                        if prior.get("pdf_sha256") == rev.pdf_sha256 else [])
+    stored["decisions"] = decisions
+    stored["acknowledged_editorial"] = acks
     data["release_review"] = stored
     database.update_project(project_id, None, data)
     out = rev.to_dict(with_thumbs=True)
-    out["acknowledged_editorial"] = stored["acknowledged_editorial"]
+    out["decisions"] = decisions
     return jsonify(out)
+
+
+@app.post("/ebook-workspace/<int:project_id>/release-review/decision")
+def ebook_release_review_decision_route(project_id: int):
+    """The owner accepts or rejects one visual on the contact sheet (this exact PDF)."""
+    body = request.get_json(silent=True) or {}
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    data = dict(project.get("data") or {})
+    rr = data.get("release_review") if isinstance(data.get("release_review"), dict) else None
+    if not rr:
+        return _error("Run the review first.", 409)
+    choice = str(body.get("decision") or "").lower()
+    if choice not in ("accept", "reject", "undo"):
+        return _error("Choose accept or reject.", 400)
+    page = str(int(body.get("page") or 0))
+    decisions = dict(rr.get("decisions") or {})
+    if choice == "undo":
+        decisions.pop(page, None)
+    else:
+        decisions[page] = choice
+    rr["decisions"] = decisions
+    database.update_project(project_id, None, data)
+    return jsonify({"ok": True, "decisions": decisions})
 
 
 @app.post("/ebook-workspace/<int:project_id>/release-review/acknowledge")
@@ -2061,7 +2092,7 @@ def ebook_release_review_acknowledge_route(project_id: int):
         return _error("Run the review first.", 409)
     notes = [f["code"] + "@" + str(f.get("page")) for g in rr.get("groups") or [] for f in g["findings"]
              if f["level"] == "editorial"]
-    rr["acknowledged_editorial"] = notes
+    rr["acknowledged_editorial"] = sorted(set(list(rr.get("acknowledged_editorial") or []) + notes))
     database.update_project(project_id, None, data)
     return jsonify({"ok": True, "acknowledged": notes})
 
@@ -2077,10 +2108,12 @@ def release_review_allows_approval(data: dict, pdf_sha256: str) -> tuple[bool, s
         return False, "The review found problems that must be corrected first."
     if counts.get("not_verified"):
         return False, "Some checks could not be verified. Complete them first."
-    editorial = [f["code"] + "@" + str(f.get("page")) for g in rr.get("groups") or [] for f in g["findings"]
-                 if f["level"] == "editorial"]
-    if editorial and sorted(editorial) != sorted(rr.get("acknowledged_editorial") or []):
+    if counts.get("needs_human_review"):
+        return False, "Accept or reject each visual on the contact sheet first."
+    if counts.get("editorial"):
         return False, "Read and accept the editorial notes first."
+    if rr.get("status") != "Ready for approval":
+        return False, "The review has not passed."
     return True, ""
 
 
@@ -2131,7 +2164,7 @@ main{max-width:1100px;margin:0 auto;padding:16px}.status{font-size:22px;font-wei
 .sheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
 .card{background:#fff;border:2px solid #e5e7eb;border-radius:8px;padding:6px;font-size:13px}
 .card img{width:100%;display:block;border-radius:4px}.card.rejected{border-color:#dc2626}
-.card.not_verified{border-color:#d97706}.group{background:#fff;border-radius:8px;padding:12px;margin:10px 0}
+.card.not_verified,.card.needs_human_review{border-color:#d97706}.card.accepted_by_owner{border-color:#2563eb}.group{background:#fff;border-radius:8px;padding:12px;margin:10px 0}
 .group h3{margin:0 0 6px;font-size:16px}.f{margin:6px 0 0 0;font-size:14px}.lvl{font-weight:700}
 button,a.btn{background:#111827;color:#fff;border:0;border-radius:6px;padding:10px 14px;font-size:14px;
 margin:6px 6px 0 0;cursor:pointer;text-decoration:none;display:inline-block}button[disabled]{opacity:.4}
@@ -2145,11 +2178,14 @@ headers:{'Content-Type':'application/json'},body:JSON.stringify(authorize?{autho
 const d=await r.json();show(d);}
 async function show(d){const st=document.getElementById('status');
 st.textContent=d.status;st.className='status '+(d.ready?'ready':d.status==='Changes required'?'changes':'unverified');
+const label={ok:'Measured checks passed',rejected:'Rejected - replace',not_verified:'Not verified',
+needs_human_review:'Needs your review',accepted_by_owner:'Accepted by you'};
 document.getElementById('sheet').innerHTML=(d.visuals||[]).map(v=>`<div class="card ${esc(v.status)}">
 <img src="${v.thumb||''}" alt=""><b>PDF page ${v.page}</b> &middot; ${esc(v.kind)}<br>${esc(v.chapter||'Cover')}<br>
-${v.status==='ok'?'Acceptable':v.status==='rejected'?'Rejected':'Not verified'}</div>`).join('');
+${label[v.status]||esc(v.status)}${v.status==='needs_human_review'?`<br><button onclick="decide(${v.page},'accept')">Accept</button><button onclick="decide(${v.page},'reject')">Reject</button>`:''}
+${v.status==='accepted_by_owner'?`<br><button onclick="decide(${v.page},'undo')">Undo</button>`:''}</div>`).join('');
 document.getElementById('groups').innerHTML=(d.groups||[]).map(g=>`<div class=group><h3>${esc(g.correction)}</h3>
-${g.findings.map(f=>`<div class=f><span class=lvl>${f.level==='hard'?'Must fix':f.level==='editorial'?'Editorial note':'Not verified'}</span>
+${g.findings.map(f=>`<div class=f><span class=lvl>${f.level==='hard'?'Must fix':f.level==='editorial'?'Editorial note':f.level==='needs_human_review'?'Needs your review':'Not verified'}</span>
 &middot; page ${f.page??'-'}${f.chapter?' &middot; '+esc(f.chapter):''}<br>${esc(f.subject)}<br><i>Why:</i> ${esc(f.why)}<br>
 <i>Correction:</i> ${esc(f.fix)}</div>`).join('')}</div>`).join('')||'<p>No corrections needed.</p>';
 const est=await (await fetch(`/ebook-workspace/${PID}/release-review/estimate`)).json();
@@ -2160,6 +2196,8 @@ document.getElementById('actions').innerHTML=
 (d.ai&&d.ai.ran?'':`<button onclick="if(confirm('Run the AI review for about $${est.estimated_usd.toFixed(2)}? It is charged to this book.'))run(${est.estimated_usd})">Run AI review (about $${est.estimated_usd.toFixed(2)})</button>`)+
 (editorial?`<button onclick="fetch('/ebook-workspace/${PID}/release-review/acknowledge',{method:'POST'}).then(()=>run(0))">I have read the editorial notes</button>`:'')+
 `<button ${d.ready?'':'disabled'} onclick="fetch('/ebook-workspace/${PID}/approve-product',{method:'POST'}).then(r=>r.json()).then(x=>alert(x.ok?'Approved.':x.error))">Approve Product</button>`;}
+async function decide(page,decision){await fetch(`/ebook-workspace/${PID}/release-review/decision`,{method:'POST',
+headers:{'Content-Type':'application/json'},body:JSON.stringify({page,decision})});run(0);}
 run(0);
 </script></body></html>"""
 

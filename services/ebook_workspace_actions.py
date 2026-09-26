@@ -79,6 +79,9 @@ def visuals(data: dict, payload: dict) -> tuple[dict, str]:
             pid = 0
         localize_visual_plan(data, project_id=pid)
 
+    if action == "edit-chart":
+        return edit_chart_text(data, payload)
+
     if action == "approve":
         return approve_visuals_local(data), "Visuals approved."
 
@@ -145,8 +148,61 @@ def visuals(data: dict, payload: dict) -> tuple[dict, str]:
 #: "I have looked at this photograph" to a builder would mean starting an
 #: instance to write one boolean, and the customer waiting for it.
 VISUAL_LIGHT_ACTIONS = frozenset({
-    "approve", "accept", "accept-photo", "view-full-size", "seen-full-size",
+    "approve", "accept", "accept-photo", "view-full-size", "seen-full-size", "edit-chart",
 })
+
+
+def edit_chart_text(data: dict, payload: dict) -> tuple[dict, str]:
+    """v1.9.11: the owner corrects a Factory-drawn chart's heading and items.
+
+    Container Gardening for Beginners shipped a chapter 5 chart mixing labels
+    with questions and a chapter 7 chart of sentence fragments, and there was
+    no way to correct a chart's words. This changes ONLY that chart's title and
+    items -- never the manuscript -- refuses text the Editor-in-Chief would
+    refuse, and marks the export out of date so the next Continue re-packages
+    the book (redrawing its charts; no paid call). Photos, cover and approvals
+    are untouched.
+    """
+    from datetime import datetime, timezone
+
+    from services.ebook_release_review import HARD, chart_wording_findings
+    from services.ebook_visual_pipeline import is_photo_aid
+
+    vid = str(payload.get("visual_id") or "").strip()
+    items = [str(x or "").strip() for x in (payload.get("items") or [])]
+    items = [x for x in items if x]
+    title = str(payload.get("title") or "").strip()
+    if not vid:
+        raise ValueError("Choose the chart to edit.")
+    if not 2 <= len(items) <= 8:
+        raise ValueError("A chart needs between 2 and 8 items.")
+    if any(len(x) > 220 for x in items):
+        raise ValueError("Keep each chart item under 220 characters.")
+    plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else {}
+    target = None
+    for ch in plan.get("chapters") or []:
+        for aid in ch.get("aids") or []:
+            if isinstance(aid, dict) and str(aid.get("visual_id")) == vid:
+                target, chapter = aid, str(ch.get("chapter") or "")
+    if target is None:
+        raise ValueError("That chart is not in this book.")
+    if is_photo_aid(target):
+        raise ValueError("That is a photo, not a chart.")
+    proposed = {**target, "items": items, "title": title or target.get("title")}
+    problems = [f for f in chart_wording_findings(proposed, page=None, chapter=chapter) if f.level == HARD]
+    if problems:
+        raise ValueError("The new chart text still has a problem: " + problems[0].why)
+    target["previous_text"] = {"title": target.get("title"), "items": list(target.get("items") or [])}
+    target["items"] = items
+    if title:
+        target["title"] = title
+    target["text_edited"] = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "by": "owner"}
+    data["export_ready"] = False
+    build = data.get("ebook_build") if isinstance(data.get("ebook_build"), dict) else None
+    if build and isinstance(build.get("stages"), dict) and isinstance(build["stages"].get("export"), dict):
+        build["stages"]["export"]["status"] = "NOT_STARTED"
+        build["finished"] = False
+    return data, "Chart text updated. Continue the build to redraw it in the PDF and ZIP."
 
 
 # ---------------------------------------------------------------------------

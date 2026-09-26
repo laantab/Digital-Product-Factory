@@ -54,7 +54,7 @@ def test_approval_is_refused_before_any_review(world):
 def test_review_without_authorization_calls_no_provider_and_is_not_ready(world):
     with patch("services.ebook_release_review.make_provider_reviewer", _no_provider):
         d = world["client"].post(f"/ebook-workspace/{world['pid']}/release-review", json={}).get_json()
-    assert d["status"] == "Not verified" and not d["ready"]
+    assert d["status"] == "Needs human review" and not d["ready"]
     assert [v["page"] for v in d["visuals"]] == [1, 3, 4, 5, 6, 7]
     assert all(v.get("thumb", "").startswith("data:image/jpeg") for v in d["visuals"])
     r = world["client"].post(f"/ebook-workspace/{world['pid']}/approve-product")
@@ -103,3 +103,29 @@ def test_the_review_screen_renders(world):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Editor-in-Chief review" in html and "Approve all acceptable visuals" in html
+
+
+def test_declining_ai_then_accepting_every_visual_allows_approval_without_paying(world):
+    c, pid = world["client"], world["pid"]
+    with patch("services.ebook_release_review.make_provider_reviewer", _no_provider):
+        d = c.post(f"/ebook-workspace/{pid}/release-review", json={}).get_json()
+        for v in d["visuals"]:
+            assert c.post(f"/ebook-workspace/{pid}/release-review/decision",
+                          json={"page": v["page"], "decision": "accept"}).status_code == 200
+        d = c.post(f"/ebook-workspace/{pid}/release-review", json={}).get_json()
+    assert d["status"] == "Ready for approval", d["groups"]
+    assert d["counts"]["needs_human_review"] == 0 and len(d["accepted"]) == 6
+    assert c.post(f"/ebook-workspace/{pid}/approve-product").status_code == 200
+    led = database.get_project(pid)["data"]["ebook_workspace"]["paid_call_ledger"]
+    assert (led["paid_calls"], led["spent_usd"]) == (26, 4.1)
+
+
+def test_decisions_do_not_carry_over_to_a_changed_pdf(world):
+    c, pid = world["client"], world["pid"]
+    d = c.post(f"/ebook-workspace/{pid}/release-review", json={}).get_json()
+    for v in d["visuals"]:
+        c.post(f"/ebook-workspace/{pid}/release-review/decision", json={"page": v["page"], "decision": "accept"})
+    _, pdf2, _ = _book(ch7=CH7_AS_SHIPPED)
+    (world["root"] / world["pkg"] / "ebook.pdf").write_bytes(pdf2)
+    d = c.post(f"/ebook-workspace/{pid}/release-review", json={}).get_json()
+    assert d["status"] != "Ready for approval" and d["decisions"] == {}

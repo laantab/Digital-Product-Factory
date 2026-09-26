@@ -161,11 +161,41 @@ def test_a_corrected_book_is_ready_for_approval():
         (1, "cover"), (3, "photo"), (4, "photo"), (5, "chart"), (6, "chart"), (7, "photo")]
 
 
-def test_without_ai_the_book_is_not_verified_never_ready():
+def test_declining_ai_makes_every_visual_a_human_review_item_never_a_pass():
     data, pdf, z = _book()
     rev = rr.review_release(data, pdf, z, ai_reviewer=None)
-    assert rev.status == rr.STATUS_UNVERIFIED
-    assert "AI_REVIEW_NOT_RUN" in _codes(rev)
+    assert rev.status == rr.STATUS_HUMAN
+    human = [f for f in rev.findings if f.level == rr.NEEDS_HUMAN]
+    assert sorted(f.page for f in human) == [1, 3, 4, 5, 6, 7]
+    assert all(v.status == rr.NEEDS_HUMAN for v in rev.visuals)
+    assert not any("pass" in v.status for v in rev.visuals)
+
+
+def test_the_owner_accepting_every_visual_makes_it_ready_and_is_recorded_as_accepted():
+    data, pdf, z = _book()
+    rev = rr.review_release(data, pdf, z, ai_reviewer=None,
+                            decisions={str(p): "accept" for p in (1, 3, 4, 5, 6, 7)})
+    assert rev.status == rr.STATUS_READY
+    assert len(rev.accepted) == 6 and all(a["decision"] == "accepted by owner" for a in rev.accepted)
+    assert {v.status for v in rev.visuals} == {"accepted_by_owner"}
+
+
+def test_the_owner_rejecting_a_photo_requires_its_replacement():
+    data, pdf, z = _book()
+    rev = rr.review_release(data, pdf, z, ai_reviewer=None,
+                            decisions={"1": "accept", "3": "accept", "4": "accept", "5": "accept",
+                                       "6": "accept", "7": "reject"})
+    assert rev.status == rr.STATUS_CHANGES
+    f = next(x for x in rev.findings if x.code == "REJECTED_BY_OWNER")
+    assert f.page == 7 and "Replace" in f.fix
+
+
+def test_accepting_visuals_never_overrides_a_measured_failure():
+    data, pdf, z = _book(chart_width_pt=280)
+    rev = rr.review_release(data, pdf, z, ai_reviewer=None,
+                            decisions={str(p): "accept" for p in range(1, 8)})
+    assert rev.status == rr.STATUS_CHANGES
+    assert "CHART_TEXT_TOO_SMALL" in _codes(rev)
 
 
 # ---------------------------------------------------------------- 6 pt chart

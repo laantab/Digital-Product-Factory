@@ -41,10 +41,12 @@ from PIL import Image
 HARD = "hard"
 EDITORIAL = "editorial"
 NOT_VERIFIED = "not_verified"
+NEEDS_HUMAN = "needs_human_review"     # a judgment the owner makes on the contact sheet
 
 STATUS_READY = "Ready for approval"
 STATUS_CHANGES = "Changes required"
 STATUS_UNVERIFIED = "Not verified"
+STATUS_HUMAN = "Needs human review"
 
 MIN_TEXT_PT = 8.0
 MIN_CONTRAST = 4.5
@@ -106,6 +108,7 @@ class Review:
     checks_run: list[str] = field(default_factory=list)
     ai: dict[str, Any] = field(default_factory=dict)
     reviewed_at: str = ""
+    accepted: list[dict] = field(default_factory=list)
 
     @property
     def ready(self) -> bool:
@@ -119,7 +122,7 @@ class Review:
                 order.append(f.group)
                 by[f.group] = []
             by[f.group].append(f)
-        rank = {HARD: 0, NOT_VERIFIED: 1, EDITORIAL: 2}
+        rank = {HARD: 0, NOT_VERIFIED: 1, NEEDS_HUMAN: 2, EDITORIAL: 3}
         order.sort(key=lambda g: min(rank.get(f.level, 3) for f in by[g]))
         return [{"correction": g, "level": min((f.level for f in by[g]), key=lambda x: rank.get(x, 3)),
                  "findings": [f.to_dict() for f in by[g]]} for g in order]
@@ -130,7 +133,8 @@ class Review:
             "pdf_sha256": self.pdf_sha256, "zip_sha256": self.zip_sha256,
             "reviewed_at": self.reviewed_at, "checks_run": list(self.checks_run),
             "counts": {lvl: sum(1 for f in self.findings if f.level == lvl)
-                       for lvl in (HARD, EDITORIAL, NOT_VERIFIED)},
+                       for lvl in (HARD, EDITORIAL, NOT_VERIFIED, NEEDS_HUMAN)},
+            "accepted": list(self.accepted),
             "groups": self.groups(),
             "visuals": [v.to_dict(with_thumb=with_thumbs) for v in self.visuals],
             "ai": dict(self.ai),
@@ -306,6 +310,8 @@ def review_release(
     *,
     ai_reviewer: Callable[[dict], list[dict]] | None = None,
     ai_note: str = "",
+    decisions: dict | None = None,
+    acknowledged_editorial: list[str] | None = None,
 ) -> Review:
     """Review the exported book. Never raises; unexpected errors become NOT_VERIFIED."""
     rev = Review(status=STATUS_UNVERIFIED, reviewed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
@@ -546,12 +552,60 @@ def review_release(
     # 10. AI judgment -----------------------------------------------------------
     rev.checks_run.append("ai_judgment")
     _ai_judgment(rev, data, doc, aids, matched, chapter_page, ai_reviewer, ai_note)
-
-    hard = any(f.level == HARD for f in rev.findings)
-    unverified = any(f.level == NOT_VERIFIED for f in rev.findings)
-    editorial = any(f.level == EDITORIAL for f in rev.findings)
-    rev.status = STATUS_CHANGES if (hard or editorial) else (STATUS_UNVERIFIED if unverified else STATUS_READY)
+    _apply_owner_decisions(rev, decisions or {}, acknowledged_editorial or [])
+    rev.status = compute_status(rev.findings)
     return rev
+
+
+def compute_status(findings: list[Finding]) -> str:
+    """Hard problems first; then anything unchecked; then the owner's pending calls."""
+    if any(f.level == HARD for f in findings):
+        return STATUS_CHANGES
+    if any(f.level == NOT_VERIFIED for f in findings):
+        return STATUS_UNVERIFIED
+    if any(f.level in (NEEDS_HUMAN, EDITORIAL) for f in findings):
+        return STATUS_HUMAN
+    return STATUS_READY
+
+
+def decision_key(f: Finding) -> str:
+    return f"{f.code}@{f.page}"
+
+
+def _apply_owner_decisions(rev: Review, decisions: dict, acknowledged: list[str]) -> None:
+    """The owner's accept / reject on the contact sheet, recorded for this exact PDF.
+
+    Accepting a human-review item or an editorial note removes it from what is
+    outstanding and is recorded in rev.accepted -- it is shown as "Accepted by
+    you", never as "Passed". Rejecting a visual turns it into a hard finding:
+    that visual must be replaced.
+    """
+    keep: list[Finding] = []
+    accepted: list[dict] = []
+    for f in rev.findings:
+        page_key = str(f.page) if f.page is not None else ""
+        choice = str(decisions.get(page_key) or "") if f.level == NEEDS_HUMAN else ""
+        if f.level == NEEDS_HUMAN and choice == "accept":
+            accepted.append({**f.to_dict(), "decision": "accepted by owner"})
+            continue
+        if f.level == NEEDS_HUMAN and choice == "reject":
+            for v in rev.visuals:
+                if v.page == f.page:
+                    v.status = "rejected"
+            keep.append(Finding("REJECTED_BY_OWNER", HARD, f.page, f.chapter, f.subject,
+                                "You rejected this visual on the contact sheet.",
+                                "Replace it with a better picture for this chapter, or redraw the chart.",
+                                f"Replace the visual on page {f.page}"))
+            continue
+        if f.level == EDITORIAL and decision_key(f) in acknowledged:
+            accepted.append({**f.to_dict(), "decision": "accepted by owner"})
+            continue
+        keep.append(f)
+    rev.findings[:] = keep
+    rev.accepted = accepted
+    for v in rev.visuals:
+        if v.status == NEEDS_HUMAN and decisions.get(str(v.page)) == "accept":
+            v.status = "accepted_by_owner"
 
 
 def _check_chart(rev: Review, aid: dict, v: Visual, img: Image.Image, placed_w: float) -> None:
@@ -680,12 +734,25 @@ AI_SYSTEM = (
 def _ai_judgment(rev: Review, data: dict, doc, aids, matched, chapter_page, ai_reviewer, ai_note) -> None:
     F = rev.findings.append
     if ai_reviewer is None:
-        rev.ai = {"ran": False, "note": ai_note or "AI review not authorized."}
-        F(Finding("AI_REVIEW_NOT_RUN", NOT_VERIFIED, None, "", "chart meaning, photo relevance, consistency",
-                  "Whether each chart and photo truly fits its chapter was not checked. "
-                  + (ai_note or "The AI review needs your authorization for its stated cost."),
-                  "Authorize the AI review, or review each chart and photo yourself on this screen.",
-                  "Run the AI review"))
+        # v1.9.11 rule: without a paid AI review, relevance and visual quality
+        # are judged by the owner. Each visual that passed the measurable
+        # checks becomes a "Needs human review" item on the contact sheet --
+        # never a pass.
+        rev.ai = {"ran": False, "note": ai_note or "AI review not run; your review decides."}
+        for v in rev.visuals:
+            if v.status == "rejected":
+                continue
+            what = {"cover": "cover", "photo": "photo", "chart": "chart"}.get(v.kind, "visual")
+            ask = ("Does this photo clearly show what the chapter is about, and is it good enough to sell?"
+                   if what in ("photo", "cover") else
+                   "Does every heading and item say what the chapter says, in plain, useful words?")
+            F(Finding("NEEDS_HUMAN_REVIEW", NEEDS_HUMAN, v.page, v.chapter or ("Cover" if what == "cover" else ""),
+                      f"{what} on page {v.page}",
+                      "Relevance and visual quality were not judged by AI. " + ask,
+                      "Accept it on the contact sheet, or reject it to have it replaced.",
+                      "Your review of each visual"))
+            if v.status == "ok":
+                v.status = NEEDS_HUMAN
         return
     req = ai_request(data, doc, aids, matched, chapter_page)
     try:
