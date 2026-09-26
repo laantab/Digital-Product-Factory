@@ -5,6 +5,41 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.11 — 2026-09-25
+
+**The Editor-in-Chief reviews the finished PDF and ZIP before you can approve a book.**
+
+### What changed
+
+- A new review screen checks the book you will actually sell: the exported
+  PDF and ZIP, against the manuscript, the picture plan, the approved pictures
+  and the template. It says Ready for approval or Changes required, shows
+  every picture with its PDF page and chapter, and lists what to correct,
+  grouped so you fix each thing once.
+- Approve Product only works after this review has passed for that exact PDF.
+- An AI review of whether charts and photos fit their chapters runs only when
+  you authorize its stated cost. Until then, those checks say Not verified.
+
+### What was fixed
+
+- Books could be marked finished with charts too small to read, charts that
+  mixed labels with questions or used sentence fragments, repeated photos, or
+  a PDF that did not match the one in the ZIP. The review now refuses these.
+
+### Do your steps change?
+
+Yes: open the Editor-in-Chief review before approving a finished book.
+
+### Does anything look different in a book I already made?
+
+No. The book itself is unchanged; it is reviewed before approval.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
 ## 1.9.10 — 2026-09-25
 
 **Charts you can read.**

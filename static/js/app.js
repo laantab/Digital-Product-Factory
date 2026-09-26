@@ -7261,6 +7261,7 @@ function renderEbookBuild(status) {
            ${pdf ? `<button type="button" data-ebook-dl-pdf class="${NS_BTN}">Download PDF</button>` : ""}
            ${zip ? `<button type="button" data-ebook-dl-zip class="${NS_BTN}">Download ZIP</button>` : ""}
            <button type="button" data-ebook-changes class="${NS_BTN}">Make Changes</button>
+           <a href="/ebook-workspace/${pid}/release-review" target="_blank" class="${NS_BTN}">Editor-in-Chief review</a>
            <button type="button" data-ebook-approve class="${NS_BTN}">Approve Product</button>
          </div>
        </div>`
@@ -7624,17 +7625,16 @@ async function approveEbookProduct(projectId, btn) {
   if (!projectId) return;
   if (btn) btn.disabled = true;
   try {
-    const proj = await api(`/projects/${projectId}`);
-    const data = (proj && proj.data) || {};
-    const saved = await api("/ebook/save", {
-      method: "POST",
-      body: JSON.stringify({
-        project_id: projectId,
-        name: data.title || "Ebook",
-        data,
-      }),
-    });
-    toast(saved.message || "Project saved successfully.");
+    // v1.9.11: approval goes through the Editor-in-Chief release review of
+    // this exact PDF. If it has not passed, open the review screen instead.
+    const r = await fetch(`/ebook-workspace/${projectId}/approve-product`, { method: "POST" });
+    const out = await r.json().catch(() => ({}));
+    if (!r.ok || !out.ok) {
+      toast(out.error || "Review this book before approving it.", "error");
+      window.open(out.review_url || `/ebook-workspace/${projectId}/release-review`, "_blank");
+      return;
+    }
+    toast(out.message || "Product approved.");
     loadProjects();
   } catch (e) {
     toast(e.message || "We couldn't save that yet.", "error");
