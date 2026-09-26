@@ -196,6 +196,11 @@
     "tests/test_v197_missing_photo_is_never_drawn.py",
     "tests/test_download_serves_the_latest_export.py",
     "tests/test_customer_titles_with_ordinary_words.py",
-    "tests/test_chart_text_is_readable_on_the_page.py"
+    "tests/test_chart_text_is_readable_on_the_page.py",
+    "tests/test_release_review_container_gardening.py",
+    "tests/test_release_review_gates_approval.py",
+    "tests/test_chart_text_editor.py",
+    "tests/test_dollar_templates_exist_everywhere.py",
+    "tests/test_previous_exports_are_kept.py"
   ]
 }

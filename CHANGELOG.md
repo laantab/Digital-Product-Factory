@@ -5,6 +5,51 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.11 — 2026-09-25
+
+**The Editor-in-Chief reviews the finished PDF and ZIP before you can approve a book.**
+
+### What changed
+
+- A new review screen checks the book you will actually sell: the exported
+  PDF and ZIP, against the manuscript, the picture plan, the approved pictures
+  and the template. It says Ready for approval or Changes required, shows
+  every picture with its PDF page and chapter, and lists what to correct,
+  grouped so you fix each thing once.
+- Approve Product only works after this review has passed for that exact PDF.
+- An AI review of whether charts and photos fit their chapters is optional and
+  shows its cost before it runs. If you decline it, each picture shows "Needs
+  your review" on the contact sheet; you accept or reject it yourself. Nothing
+  unchecked is ever shown as passed.
+- When a book is exported again, its previous PDF and ZIP are kept and can be
+  downloaded from the book's earlier versions. If the old files cannot be kept
+  safely, the new export does not replace them.
+- You can correct the words in a chart (its heading and items). The book's
+  writing is never changed, earlier wording is kept, and the next Continue
+  redraws the chart at no cost.
+
+### What was fixed
+
+- Books could be marked finished with charts too small to read, charts that
+  mixed labels with questions or used sentence fragments, repeated photos, or
+  a PDF that did not match the one in the ZIP. The review now refuses these.
+- On the live site, the coloring-book "$" remover removed nothing: it only knew
+  fonts found on Windows computers. It now uses the Factory's own fonts.
+
+### Do your steps change?
+
+Yes: open the Editor-in-Chief review before approving a finished book.
+
+### Does anything look different in a book I already made?
+
+No. The book itself is unchanged; it is reviewed before approval.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
 ## 1.9.10 — 2026-09-25
 
 **Charts you can read.**

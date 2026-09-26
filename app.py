@@ -1951,6 +1951,300 @@ def ebook_workspace_preflight_route(project_id: int):
         return _error(str(exc), 500)
 
 
+# ---------------------------------------------------------------------------
+# v1.9.11 Editor-in-Chief release review: the exported PDF and ZIP, before approval
+# ---------------------------------------------------------------------------
+from datetime import datetime, timezone  # noqa: E402  (release review timestamps)
+
+
+def _release_files(project_id: int, data: dict) -> tuple[bytes | None, bytes | None]:
+    """The book's current PDF and ZIP bytes, exactly as /download would serve them."""
+    pkg = str(data.get("export_package_id") or data.get("package_id") or f"ebook-{project_id}")
+    if not _PACKAGE_ID_RE.match(pkg):
+        return None, None
+    out: list[bytes | None] = []
+    for name in ("ebook.pdf", "package.zip"):
+        raw = None
+        try:
+            from services.storage.compat import read_export_or_legacy, refresh_stale_export
+
+            refresh_stale_export(EXPORTS_DIR, pkg, name)
+            path = os.path.join(EXPORTS_DIR, pkg, name)
+            if os.path.isfile(path):
+                with open(path, "rb") as fh:
+                    raw = fh.read()
+            else:
+                raw = read_export_or_legacy(int(project_id), f"{pkg}/{name}")
+        except Exception:  # noqa: BLE001
+            app.logger.exception("release review could not read %s", name)
+            raw = None
+        out.append(raw)
+    return out[0], out[1]
+
+
+@app.get("/ebook-workspace/<int:project_id>/previous-exports")
+def ebook_previous_exports_route(project_id: int):
+    """v1.9.11: earlier PDF/ZIP versions kept when the book was exported again."""
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    out = []
+    for row in database.list_assets(project_id) or []:
+        if str(row.get("kind")) != "export_previous":
+            continue
+        key = str(row.get("storage_key") or "")
+        m = re.search(r"/previous/([0-9a-f]{16})/([A-Za-z0-9_.-]+)$", key)
+        if not m:
+            continue
+        out.append({"name": m.group(2), "sha256": row.get("checksum"), "bytes": row.get("byte_size"),
+                    "url": f"/ebook-workspace/{project_id}/previous-exports/{m.group(1)}/{m.group(2)}"})
+    return jsonify({"previous": out})
+
+
+@app.get("/ebook-workspace/<int:project_id>/previous-exports/<sha16>/<name>")
+def ebook_previous_export_download(project_id: int, sha16: str, name: str):
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    if not re.fullmatch(r"[0-9a-f]{16}", sha16 or "") or name not in ("ebook.pdf", "package.zip"):
+        return _error("Not found.", 404)
+    from services.storage.compat import verified_asset_bytes
+
+    for row in database.list_assets(project_id) or []:
+        key = str(row.get("storage_key") or "")
+        if str(row.get("kind")) == "export_previous" and key.endswith(f"/previous/{sha16}/{name}"):
+            raw = verified_asset_bytes(key)
+            if raw is None:
+                return _error("That earlier version could not be verified.", 409)
+            mime = "application/pdf" if name.endswith(".pdf") else "application/zip"
+            return Response(raw, mimetype=mime, headers={
+                "Content-Disposition": f'attachment; filename="previous-{sha16}-{name}"'})
+    return _error("Not found.", 404)
+
+
+@app.get("/ebook-workspace/<int:project_id>/release-review/estimate")
+def ebook_release_review_estimate_route(project_id: int):
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    from services.ebook_release_review import estimate_ai_cost
+
+    est = estimate_ai_cost(dict(project.get("data") or {}))
+    ledger = ((project.get("data") or {}).get("ebook_workspace") or {}).get("paid_call_ledger") or {}
+    est["remaining_usd"] = float(ledger.get("remaining_usd") if ledger.get("remaining_usd") is not None
+                                 else float(ledger.get("budget_cap_usd") or 0) - float(ledger.get("spent_usd") or 0))
+    return jsonify(est)
+
+
+@app.post("/ebook-workspace/<int:project_id>/release-review")
+def ebook_release_review_route(project_id: int):
+    """Run the release review. The AI part runs only when the owner authorized its stated cost."""
+    body = request.get_json(silent=True) or {}
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    data = dict(project.get("data") or {})
+    from services.ebook_release_review import (
+        estimate_ai_cost, make_provider_reviewer, review_release,
+    )
+
+    pdf, zipb = _release_files(project_id, data)
+    reviewer, note, charge = None, "", 0.0
+    try:
+        authorized = float(body.get("authorize_ai_usd") or 0)
+    except (TypeError, ValueError):
+        authorized = 0.0
+    if authorized > 0:
+        est = estimate_ai_cost(data)
+        ws = data.setdefault("ebook_workspace", {})
+        ledger = ws.setdefault("paid_call_ledger", {})
+        cap = float(ledger.get("budget_cap_usd") or 0)
+        spent = float(ledger.get("spent_usd") or 0)
+        if est["billable"] and authorized + 1e-9 < est["estimated_usd"]:
+            note = f"Authorized ${authorized:.2f} is below the stated cost ${est['estimated_usd']:.2f}."
+        elif est["billable"] and spent + est["estimated_usd"] > cap + 1e-9:
+            note = f"The AI review (${est['estimated_usd']:.2f}) would exceed the book's ${cap:.2f} cap."
+        else:
+            reviewer = make_provider_reviewer()
+            charge = est["estimated_usd"] if est["billable"] else 0.0
+    import hashlib as _hl
+
+    prior = data.get("release_review") if isinstance(data.get("release_review"), dict) else {}
+    same_pdf = prior.get("pdf_sha256") == _hl.sha256(pdf or b"").hexdigest()
+    decisions = dict(prior.get("decisions") or {}) if same_pdf else {}
+    acks = list(prior.get("acknowledged_editorial") or []) if same_pdf else []
+    rev = review_release(data, pdf, zipb, ai_reviewer=reviewer, ai_note=note,
+                         decisions=decisions, acknowledged_editorial=acks)
+    if reviewer is not None and rev.ai.get("ran") and charge:
+        ledger = data["ebook_workspace"]["paid_call_ledger"]
+        ledger["spent_usd"] = round(float(ledger.get("spent_usd") or 0) + charge, 4)
+        ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + 1
+        if ledger.get("budget_cap_usd") is not None:
+            ledger["remaining_usd"] = round(float(ledger["budget_cap_usd"]) - ledger["spent_usd"], 4)
+        ledger.setdefault("calls", []).append({
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "provider": "openai",
+            "purpose": "editor_in_chief_release_review", "estimated_cost_usd": charge,
+            "meta": {"pdf_sha256": rev.pdf_sha256}})
+    stored = rev.to_dict()
+    stored["decisions"] = decisions
+    stored["acknowledged_editorial"] = acks
+    data["release_review"] = stored
+    database.update_project(project_id, None, data)
+    out = rev.to_dict(with_thumbs=True)
+    out["decisions"] = decisions
+    return jsonify(out)
+
+
+@app.post("/ebook-workspace/<int:project_id>/release-review/decision")
+def ebook_release_review_decision_route(project_id: int):
+    """The owner accepts or rejects one visual on the contact sheet (this exact PDF)."""
+    body = request.get_json(silent=True) or {}
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    data = dict(project.get("data") or {})
+    rr = data.get("release_review") if isinstance(data.get("release_review"), dict) else None
+    if not rr:
+        return _error("Run the review first.", 409)
+    choice = str(body.get("decision") or "").lower()
+    if choice not in ("accept", "reject", "undo"):
+        return _error("Choose accept or reject.", 400)
+    page = str(int(body.get("page") or 0))
+    decisions = dict(rr.get("decisions") or {})
+    if choice == "undo":
+        decisions.pop(page, None)
+    else:
+        decisions[page] = choice
+    rr["decisions"] = decisions
+    database.update_project(project_id, None, data)
+    return jsonify({"ok": True, "decisions": decisions})
+
+
+@app.post("/ebook-workspace/<int:project_id>/release-review/acknowledge")
+def ebook_release_review_acknowledge_route(project_id: int):
+    """The owner has read the editorial notes and accepts the book as it is."""
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    data = dict(project.get("data") or {})
+    rr = data.get("release_review") if isinstance(data.get("release_review"), dict) else None
+    if not rr:
+        return _error("Run the review first.", 409)
+    notes = [f["code"] + "@" + str(f.get("page")) for g in rr.get("groups") or [] for f in g["findings"]
+             if f["level"] == "editorial"]
+    rr["acknowledged_editorial"] = sorted(set(list(rr.get("acknowledged_editorial") or []) + notes))
+    database.update_project(project_id, None, data)
+    return jsonify({"ok": True, "acknowledged": notes})
+
+
+def release_review_allows_approval(data: dict, pdf_sha256: str) -> tuple[bool, str]:
+    rr = data.get("release_review") if isinstance(data.get("release_review"), dict) else None
+    if not rr:
+        return False, "The Editor-in-Chief has not reviewed this book yet."
+    if rr.get("pdf_sha256") != pdf_sha256:
+        return False, "The PDF changed after the last review. Review it again."
+    counts = rr.get("counts") or {}
+    if counts.get("hard"):
+        return False, "The review found problems that must be corrected first."
+    if counts.get("not_verified"):
+        return False, "Some checks could not be verified. Complete them first."
+    if counts.get("needs_human_review"):
+        return False, "Accept or reject each visual on the contact sheet first."
+    if counts.get("editorial"):
+        return False, "Read and accept the editorial notes first."
+    if rr.get("status") != "Ready for approval":
+        return False, "The review has not passed."
+    return True, ""
+
+
+@app.post("/ebook-workspace/<int:project_id>/approve-product")
+def ebook_approve_product_route(project_id: int):
+    """Approve the book -- only after a passing release review of this exact PDF."""
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    data = dict(project.get("data") or {})
+    pdf, _zip = _release_files(project_id, data)
+    import hashlib as _hl
+
+    sha = _hl.sha256(pdf or b"").hexdigest()
+    ok, why = release_review_allows_approval(data, sha)
+    if not pdf or not ok:
+        # A normal answer, not an error code: "review first" is an expected
+        # step in the customer's path, and the screen opens the review.
+        return jsonify({"ok": False, "needs_review": True,
+                        "error": why or "The PDF could not be read.",
+                        "review_url": f"/ebook-workspace/{project_id}/release-review"})
+    from services.ebook_customer_path import save_factory_ebook
+
+    data["product_approval"] = {"approved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                "pdf_sha256": sha}
+    try:
+        saved = save_factory_ebook(data, name=str(data.get("title") or project.get("name") or "Ebook"),
+                                   project_id=project_id, user_confirmed=True)
+    except ValueError as exc:
+        return jsonify({"ok": False, "needs_review": True, "error": str(exc),
+                        "review_url": f"/ebook-workspace/{project_id}/release-review"})
+    return jsonify({"ok": True, **(saved if isinstance(saved, dict) else {})})
+
+
+@app.get("/ebook-workspace/<int:project_id>/release-review")
+def ebook_release_review_page(project_id: int):
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    title = str((project.get("data") or {}).get("title") or project.get("name") or "Ebook")
+    return RELEASE_REVIEW_PAGE.replace("__PID__", str(int(project_id))).replace(
+        "__TITLE__", title.replace("<", "&lt;").replace(">", "&gt;"))
+
+
+RELEASE_REVIEW_PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width, initial-scale=1"><title>Editor-in-Chief review</title>
+<style>body{font-family:system-ui,Arial,sans-serif;margin:0;background:#f5f5f4;color:#111}
+header{background:#111827;color:#fff;padding:16px 20px}h1{font-size:20px;margin:0}
+main{max-width:1100px;margin:0 auto;padding:16px}.status{font-size:22px;font-weight:700;margin:8px 0 14px}
+.ready{color:#047857}.changes{color:#b91c1c}.unverified{color:#92400e}
+.sheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.card{background:#fff;border:2px solid #e5e7eb;border-radius:8px;padding:6px;font-size:13px}
+.card img{width:100%;display:block;border-radius:4px}.card.rejected{border-color:#dc2626}
+.card.not_verified,.card.needs_human_review{border-color:#d97706}.card.accepted_by_owner{border-color:#2563eb}.group{background:#fff;border-radius:8px;padding:12px;margin:10px 0}
+.group h3{margin:0 0 6px;font-size:16px}.f{margin:6px 0 0 0;font-size:14px}.lvl{font-weight:700}
+button,a.btn{background:#111827;color:#fff;border:0;border-radius:6px;padding:10px 14px;font-size:14px;
+margin:6px 6px 0 0;cursor:pointer;text-decoration:none;display:inline-block}button[disabled]{opacity:.4}
+</style></head><body><header><h1>Editor-in-Chief review: __TITLE__</h1></header><main>
+<div id=status class=status>Reviewing the PDF and ZIP...</div><div id=actions></div>
+<h2>Every visual in the PDF</h2><div id=sheet class=sheet></div><h2>What to correct</h2><div id=groups></div>
+</main><script>
+const PID=__PID__;const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function run(authorize){const r=await fetch(`/ebook-workspace/${PID}/release-review`,{method:'POST',
+headers:{'Content-Type':'application/json'},body:JSON.stringify(authorize?{authorize_ai_usd:authorize}:{})});
+const d=await r.json();show(d);}
+async function show(d){const st=document.getElementById('status');
+st.textContent=d.status;st.className='status '+(d.ready?'ready':d.status==='Changes required'?'changes':'unverified');
+const label={ok:'Measured checks passed',rejected:'Rejected - replace',not_verified:'Not verified',
+needs_human_review:'Needs your review',accepted_by_owner:'Accepted by you'};
+document.getElementById('sheet').innerHTML=(d.visuals||[]).map(v=>`<div class="card ${esc(v.status)}">
+<img src="${v.thumb||''}" alt=""><b>PDF page ${v.page}</b> &middot; ${esc(v.kind)}<br>${esc(v.chapter||'Cover')}<br>
+${label[v.status]||esc(v.status)}${v.status==='needs_human_review'?`<br><button onclick="decide(${v.page},'accept')">Accept</button><button onclick="decide(${v.page},'reject')">Reject</button>`:''}
+${v.status==='accepted_by_owner'?`<br><button onclick="decide(${v.page},'undo')">Undo</button>`:''}</div>`).join('');
+document.getElementById('groups').innerHTML=(d.groups||[]).map(g=>`<div class=group><h3>${esc(g.correction)}</h3>
+${g.findings.map(f=>`<div class=f><span class=lvl>${f.level==='hard'?'Must fix':f.level==='editorial'?'Editorial note':f.level==='needs_human_review'?'Needs your review':'Not verified'}</span>
+&middot; page ${f.page??'-'}${f.chapter?' &middot; '+esc(f.chapter):''}<br>${esc(f.subject)}<br><i>Why:</i> ${esc(f.why)}<br>
+<i>Correction:</i> ${esc(f.fix)}</div>`).join('')}</div>`).join('')||'<p>No corrections needed.</p>';
+const est=await (await fetch(`/ebook-workspace/${PID}/release-review/estimate`)).json();
+const rejected=(d.visuals||[]).filter(v=>v.status==='rejected').length;
+const editorial=(d.groups||[]).some(g=>g.findings.some(f=>f.level==='editorial'));
+document.getElementById('actions').innerHTML=
+`<a class=btn href="/?ebook-workspace=${PID}&stage=visuals">Approve all acceptable visuals${rejected?' and replace '+rejected+' rejected':''}</a>`+
+(d.ai&&d.ai.ran?'':`<button onclick="if(confirm('Run the AI review for about $${est.estimated_usd.toFixed(2)}? It is charged to this book.'))run(${est.estimated_usd})">Run AI review (about $${est.estimated_usd.toFixed(2)})</button>`)+
+(editorial?`<button onclick="fetch('/ebook-workspace/${PID}/release-review/acknowledge',{method:'POST'}).then(()=>run(0))">I have read the editorial notes</button>`:'')+
+`<button ${d.ready?'':'disabled'} onclick="fetch('/ebook-workspace/${PID}/approve-product',{method:'POST'}).then(r=>r.json()).then(x=>alert(x.ok?'Approved.':x.error))">Approve Product</button>`;}
+async function decide(page,decision){await fetch(`/ebook-workspace/${PID}/release-review/decision`,{method:'POST',
+headers:{'Content-Type':'application/json'},body:JSON.stringify({page,decision})});run(0);}
+run(0);
+</script></body></html>"""
+
+
 @app.post("/ebook-workspace/<int:project_id>/rewind")
 def ebook_workspace_rewind_route(project_id: int):
     """Go backward without losing approved manuscript work."""
