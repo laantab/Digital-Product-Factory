@@ -55,4 +55,5 @@ def test_photos_cannot_be_edited_as_charts():
 
 
 def test_edit_chart_is_a_light_action_with_no_paid_call():
-    assert "edit-chart" in wsa.VISUAL_LIGHT_ACTIONS
+    assert "edit-chart" in wsa.VISUAL_TEXT_ACTIONS
+    assert wsa.is_light("/ebook-workspace/<int:project_id>/visuals", "edit-chart")

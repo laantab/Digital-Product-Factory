@@ -148,8 +148,12 @@ def visuals(data: dict, payload: dict) -> tuple[dict, str]:
 #: "I have looked at this photograph" to a builder would mean starting an
 #: instance to write one boolean, and the customer waiting for it.
 VISUAL_LIGHT_ACTIONS = frozenset({
-    "approve", "accept", "accept-photo", "view-full-size", "seen-full-size", "edit-chart",
+    "approve", "accept", "accept-photo", "view-full-size", "seen-full-size",
 })
+
+#: v1.9.11: visual actions that change only text and never touch a picture.
+#: Instant, no paid call, so they also stay on the website in workflow mode.
+VISUAL_TEXT_ACTIONS = frozenset({"edit-chart"})
 
 
 def edit_chart_text(data: dict, payload: dict) -> tuple[dict, str]:
@@ -412,7 +416,7 @@ def is_light(route: str, action: str) -> bool:
     action = str(action or "").strip().lower()
     route = str(route)
     if route.endswith("/visuals"):
-        return action in VISUAL_LIGHT_ACTIONS
+        return action in VISUAL_LIGHT_ACTIONS or action in VISUAL_TEXT_ACTIONS
     if route.endswith("/cover"):
         return action in COVER_LIGHT_ACTIONS
     return False

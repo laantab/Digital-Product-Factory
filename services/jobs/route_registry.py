@@ -153,6 +153,18 @@ ROUTES: tuple[dict, ...] = (
     _h("/ebook-workspace/<int:project_id>/preflight",
        "runs hard design preflight across the whole book"),
     _l("/ebook-workspace/<int:project_id>/rewind", "moves the rail backward"),
+    # v1.9.11 Editor-in-Chief release review. Reads the one exported PDF and
+    # ZIP and redraws that book's charts to measure them; generates nothing.
+    # The optional AI part is a single short text call, run only after the
+    # owner authorizes its stated cost.
+    _l("/ebook-workspace/<int:project_id>/release-review",
+       "reads the exported PDF and ZIP and measures them; no generation"),
+    _l("/ebook-workspace/<int:project_id>/release-review/decision",
+       "records the owner's accept or reject for one visual"),
+    _l("/ebook-workspace/<int:project_id>/release-review/acknowledge",
+       "records that the owner read the editorial notes"),
+    _l("/ebook-workspace/<int:project_id>/approve-product",
+       "checks the stored review against the PDF's fingerprint and saves"),
 
     _l("/generate-ad", "assembles ad copy from stored fields"),
     _l("/generate-traffic-content", "assembles copy from stored fields"),
