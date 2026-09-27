@@ -5,6 +5,43 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.12 — 2026-09-27
+
+**A tidier copyright page and page numbers you can read.**
+
+### What changed
+
+- The copyright page is now a short, tight block: the book title, then
+  "Copyright © year Author. All rights reserved.", then the usual
+  no-reproduction line, all in one small, dark type size. The old
+  "Title: X. Author: Y." sentence and the large gaps are gone.
+- Page numbers in the footer are larger (11 pt instead of 9 pt), bold and
+  near-black on every template. Before, they printed small and grey.
+- Nothing else about the book changes: same writing, pictures, charts and
+  running title.
+
+### What was fixed
+
+- Every template asked for a darker page number in its style rules, but the
+  PDF maker ignored those rules, so all six templates printed a small grey
+  number. The number's size and colour are now set where the PDF maker
+  always honours them, and a test checks the printed PDF on all six.
+
+### Do your steps change?
+
+No. Export the book again to get the new copyright page and page numbers.
+
+### Does anything look different in a book I already made?
+
+Only after it is exported again: its copyright page and page numbers change.
+Nothing is charged.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
 ## 1.9.11 — 2026-09-25
 
 **The Editor-in-Chief reviews the finished PDF and ZIP before you can approve a book.**
