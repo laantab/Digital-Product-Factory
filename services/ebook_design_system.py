@@ -467,10 +467,26 @@ def theme_css(theme_id: str | None) -> str:
     return t.css_vars() + _shared_book_css(t) + _template_structure_css(t)
 
 
+def page_number_inline_style(theme_id: str | None) -> str:
+    """v1.9.12. Larger, near-black running page number, as an inline style.
+
+    Inline on purpose. The shared footer rule and each template's
+    page-furniture rule all style .foot-num, and xhtml2pdf 0.2.17 resolves
+    them unpredictably: whichever order they were written in, the printed
+    number stayed at the 9pt footer size in muted grey on every template.
+    An inline style is the one thing that reliably reaches the page
+    (checked by rendering all six templates, not by reading the CSS).
+    """
+    t = get_theme(theme_id)
+    return f"font-size: {PAGE_NUMBER_SIZE_PT}pt; color: {t.color_text}; font-weight: bold;"
+
+
 #: Where the running-footer frame begins, in inches from the top of a
 #: letter page, and the clear space kept between the body frame and it.
 FOOTER_TOP_IN = 10.05
 FOOTER_GAP_IN = 0.10
+#: Running-footer page number size (v1.9.12: was the 9pt footer size, grey).
+PAGE_NUMBER_SIZE_PT = 11.0
 
 
 def _shared_book_css(t: EbookTheme) -> str:
@@ -1080,6 +1096,16 @@ ol.workflow li, .workflow li {{
 .title-author {{ margin: 0 0 12pt; font-size: 12pt; }}
 .title-page .caption {{ margin: 16pt 0 0; }}
 .legal-page, .toc-page, .chapter-page, .back-matter-page {{ display: block; }}
+/* v1.9.12. A tight copyright block: small heading, one type size, close
+   line spacing, no big rule or loose gaps. */
+.legal-page h2 {{
+  font-size: 13pt; margin: 0 0 8pt; padding-bottom: 0; border-bottom: none;
+}}
+.legal-page p {{
+  font-size: 10pt; line-height: 1.4; margin: 0 0 4pt; color: {t.color_text};
+}}
+.legal-page p.legal-title {{ font-style: italic; margin-bottom: 8pt; }}
+.legal-page p.caption {{ font-size: 10pt; font-style: normal; color: {t.color_text}; margin: 8pt 0 0; }}
 .heading-keep {{
   display: block;
   page-break-inside: avoid;
@@ -1371,23 +1397,27 @@ def _template_structure_css(t: EbookTheme) -> str:
     if table:
         out.append(table)
 
+    # v1.9.12: no template sets the page number's colour here any more. A
+    # colour on .foot-num in this block made xhtml2pdf print the number in the
+    # footer's muted grey whatever was asked; the number's size and near-black
+    # colour now come from page_number_inline_style().
     # Running footer: this renderer ignores text-align inside the footer frame
     # and the id rule outranks a class rule, so only colour and weight -- set
     # at the same specificity -- actually reach the page.
     furniture = {
         "title_left": f"#page-footer .foot-title {{ color: {t.color_muted}; font-weight: 400; }}\n"
-                      f"#page-footer .foot-num {{ color: {t.color_text}; font-weight: 400; }}",
+                      f"#page-footer .foot-num {{ font-weight: 400; }}",
         "chapter_right_bar": f"#page-footer .foot-title {{ color: {t.color_muted}; font-weight: 400; }}\n"
-                             f"#page-footer .foot-num {{ color: {t.color_accent}; font-weight: 700; }}",
+                             f"#page-footer .foot-num {{ font-weight: 700; }}",
         "centered_soft": f"#page-footer .foot-title {{ color: {t.color_muted}; font-style: italic; }}\n"
                          f"#page-footer .foot-sep {{ color: {t.color_rule}; }}",
-        "number_tab": f"#page-footer .foot-num {{ color: {t.color_primary}; font-weight: 800; }}\n"
+        "number_tab": f"#page-footer .foot-num {{ font-weight: 800; }}\n"
                       f"#page-footer .foot-title {{ color: {t.color_muted}; }}",
         "small_caps_centered": f"#page-footer .foot-title {{ color: {t.color_primary}; font-style: italic; }}\n"
-                               f"#page-footer .foot-num {{ color: {t.color_muted}; font-style: italic; }}",
+                               f"#page-footer .foot-num {{ font-style: italic; }}",
         "section_split": f"#page-footer .foot-title {{ color: {t.color_primary}; font-weight: 700; }}\n"
                          f"#page-footer .foot-sep {{ color: {t.color_accent}; }}\n"
-                         f"#page-footer .foot-num {{ color: {t.color_text}; font-weight: 700; }}",
+                         f"#page-footer .foot-num {{ font-weight: 700; }}",
     }.get(t.page_furniture)
     if furniture:
         out.append(furniture)

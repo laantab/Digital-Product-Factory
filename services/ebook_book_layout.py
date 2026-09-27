@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import html
 import re
+from datetime import datetime
 from typing import Any
 
 import markdown as _markdown
 from bs4 import BeautifulSoup
 
 from services.ebook_design_spec import EbookDesign, is_unnumbered_back_matter_title
-from services.ebook_design_system import LAYOUT_GUARDS, get_theme, theme_css
+from services.ebook_design_system import LAYOUT_GUARDS, get_theme, page_number_inline_style, theme_css
 from services.ebook_package import _split_chapters, _sanitize_html, fix_inline_hyphen_lists_html, _MD_TOC_LINE_RE
 
 # Visual/todo tokens: [photo], [photo: cat], [insert image] — not [photographylaunchpad.com].
@@ -884,7 +885,7 @@ def render_designed_ebook_html(
         '<div id="page-footer">'
         f'<span class="foot-title">{_e(title)}</span>'
         '<span class="foot-sep"> &#183; </span>'
-        '<span class="foot-num"><pdf:pagenumber /></span>'
+        f'<span class="foot-num" style="{page_number_inline_style(design.theme_id)}"><pdf:pagenumber /></span>'
         "</div>"
     )
     if include_title_page:
@@ -900,9 +901,11 @@ def render_designed_ebook_html(
 
     parts.append('<section class="legal-page" id="copyright">')
     parts.append("<h2>Copyright</h2>")
-    parts.append(
-        f"<p>Title: {_e(title)}. Author: {_e(author)}. All rights reserved.</p>"
-    )
+    # v1.9.12. A conventional, tight copyright block instead of the old
+    # "Title: X. Author: Y." sentence.
+    parts.append(f'<p class="legal-title">{_e(title)}</p>')
+    holder = f" {_e(author)}" if str(author or "").strip() else ""
+    parts.append(f"<p>Copyright &#169; {datetime.now().year}{holder}. All rights reserved.</p>")
     if preamble:
         toc_only = all(
             (not ln.strip()) or _MD_TOC_LINE_RE.match(ln) or ln.strip().startswith("#")
