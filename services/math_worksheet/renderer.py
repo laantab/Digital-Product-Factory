@@ -74,6 +74,48 @@ def _draw_text(
         pdf.restoreState()
 
 
+def _draw_page_counter(
+    pdf: canvas.Canvas,
+    page_w: float,
+    page_h: float,
+    label: str,
+    *,
+    font_bold: str,
+    heading: str,
+    heading_font: str,
+    heading_size: float,
+    heading_baseline: float,
+) -> None:
+    """v1.9.13. "Page N of M" in the Factory page-number standard.
+
+    Same place as before (top right, inside the margin), now 10 pt bold
+    near-black instead of 8 pt light grey. A long centred heading can reach the
+    right-hand side; when it would, the counter moves up just far enough to
+    clear the heading's tallest letters, so the two can never overlap.
+    """
+    from reportlab.pdfbase.pdfmetrics import getAscent, getDescent
+
+    from services.page_number_style import PAGE_NUMBER_SIZE_PT, PAGE_NUMBER_INK
+
+    size = PAGE_NUMBER_SIZE_PT
+    safe = ascii_pdf_text(label)
+    right = page_w - _MARGIN
+    left = right - pdf.stringWidth(safe, font_bold, size)
+    baseline = page_h - _MARGIN - 8
+    head = ascii_pdf_text(heading)
+    head_w = pdf.stringWidth(head, heading_font, heading_size)
+    head_right = page_w / 2.0 + head_w / 2.0
+    if head_right > left - 6:
+        head_top = heading_baseline + getAscent(heading_font, heading_size)
+        # getDescent is negative: the counter's lowest point sits above the heading.
+        baseline = max(baseline, head_top + 1.5 - getDescent(font_bold, size))
+    _draw_text(
+        pdf, right, baseline, label,
+        font_name=font_bold, font_size=size, align="right",
+        fill=colors.HexColor(PAGE_NUMBER_INK),
+    )
+
+
 def _draw_header(
     pdf: canvas.Canvas,
     title: str,
@@ -113,11 +155,10 @@ def _draw_header(
     y_line = page_h - _MARGIN - 42
     pdf.line(_MARGIN, y_line, page_w - _MARGIN, y_line)
 
-    _draw_text(
-        pdf, page_w - _MARGIN, page_h - _MARGIN - 8,
-        f"Page {page_num} of {total_pages}",
-        font_name=font, font_size=8, align="right",
-        fill=colors.HexColor("#9CA3AF"),
+    _draw_page_counter(
+        pdf, page_w, page_h, f"Page {page_num} of {total_pages}",
+        font_bold=font_bold, heading=title[:80], heading_font=font_bold,
+        heading_size=16, heading_baseline=page_h - _MARGIN - 18,
     )
 
     # Single instruction line — never redrawn elsewhere on this page.
@@ -201,11 +242,10 @@ def _draw_answer_key_page(
     pdf.setLineWidth(0.5)
     pdf.line(_MARGIN, page_h - _MARGIN - 26, page_w - _MARGIN, page_h - _MARGIN - 26)
 
-    _draw_text(
-        pdf, page_w - _MARGIN, page_h - _MARGIN - 8,
-        f"Page {page_num} of {total_pages}",
-        font_name=font, font_size=8, align="right",
-        fill=colors.HexColor("#9CA3AF"),
+    _draw_page_counter(
+        pdf, page_w, page_h, f"Page {page_num} of {total_pages}",
+        font_bold=font_bold, heading=heading, heading_font=font_bold,
+        heading_size=14, heading_baseline=page_h - _MARGIN - 16,
     )
 
     # Two independent columns with equal gutters and per-column headers.

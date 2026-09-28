@@ -224,12 +224,32 @@ def _draw_practice_page(
     pdf.setFillColor(colors.black)
     pdf.drawCentredString(page_w / 2.0, page_h - _MARGIN - 16, f"Spelling Practice — {title[:60]}")
 
-    pdf.setFont("Helvetica", 9)
-    pdf.setFillColor(_C_GRAY_500)
     page_label = f"Section {section_num}: {section.label}"
     if total_pages > 1:
-        page_label += f"  (page {page_num} of {total_pages})"
-    pdf.drawCentredString(page_w / 2.0, page_h - _MARGIN - 30, page_label)
+        # v1.9.13. The page counter keeps its place at the end of the section
+        # line, but prints in the Factory page-number standard (10 pt bold
+        # near-black) instead of the line's 9 pt grey. The whole line stays
+        # centred exactly as before.
+        from services.page_number_style import PAGE_NUMBER_INK, PAGE_NUMBER_SIZE_PT
+
+        counter = f"(page {page_num} of {total_pages})"
+        lead = page_label + "  "
+        lead_w = pdf.stringWidth(lead, "Helvetica", 9)
+        counter_w = pdf.stringWidth(counter, "Helvetica-Bold", PAGE_NUMBER_SIZE_PT)
+        x0 = page_w / 2.0 - (lead_w + counter_w) / 2.0
+        # 2 pt lower than the old 9 pt line so the taller 10 pt counter
+        # stays clear of the page heading above; still well above the rule.
+        y = page_h - _MARGIN - 32
+        pdf.setFont("Helvetica", 9)
+        pdf.setFillColor(_C_GRAY_500)
+        pdf.drawString(x0, y, lead)
+        pdf.setFont("Helvetica-Bold", PAGE_NUMBER_SIZE_PT)
+        pdf.setFillColor(colors.HexColor(PAGE_NUMBER_INK))
+        pdf.drawString(x0 + lead_w, y, counter)
+    else:
+        pdf.setFont("Helvetica", 9)
+        pdf.setFillColor(_C_GRAY_500)
+        pdf.drawCentredString(page_w / 2.0, page_h - _MARGIN - 30, page_label)
 
     pdf.setStrokeColor(_C_GRAY_200)
     pdf.setLineWidth(0.5)

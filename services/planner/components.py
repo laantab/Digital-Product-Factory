@@ -517,8 +517,14 @@ def page_footer(pdf: canvas.Canvas, T: PlannerTheme, size: tuple[float, float], 
     hairline(pdf, T, m, base + 12, w - m, base + 12, token="rule", width=0.6)
     small_caps(pdf, T, m, base, running_title, size=6.8)
     ornament(pdf, T, w / 2, base + 12, width=34, scale=0.75)
-    text(pdf, w - m, base - 1, str(page_num), font=f.display, size=9.5,
-         fill=T.rgb("primary"), align="right")
+    # v1.9.13: the Factory-wide page-number standard (10 pt bold near-black).
+    # The number stays where it was; it was 9.5 pt in the theme's accent
+    # colour, which printed faint on the burgundy and green themes. f.display
+    # is already a bold face.
+    from services.page_number_style import PAGE_NUMBER_SIZE_PT, page_number_ink
+
+    text(pdf, w - m, base - 1, str(page_num), font=f.display, size=PAGE_NUMBER_SIZE_PT,
+         fill=colors.HexColor(page_number_ink(T.ink)), align="right")
 
 
 def body_bottom() -> float:
