@@ -442,13 +442,26 @@ def _attempt_idempotency_key(data: dict, stage: str, pid: int, *, suffix: str = 
     replays safely, a real retry is a new logical call (v1.7.26).
     """
     try:
-        rec = _stage_record(build_state(data), stage)
+        state = build_state(data)
+        rec = _stage_record(state, stage)
         attempt = int(rec.get("attempts") or 0)
+        generation = int(state.get("resume_generation") or 0)
     except Exception:                                      # noqa: BLE001
         # A key must never be the reason a build cannot run.
-        attempt = 0
+        attempt, generation = 0, 0
     tail = f"-{suffix}" if suffix else ""
-    return f"orch-{stage}{tail}-{pid}-a{attempt}"
+    # v1.9.14. The attempt number alone is not unique for the life of a
+    # build: the customer's Continue (resume_build) sets it back to 0, so
+    # attempt 1 after a resume carried the SAME key as attempt 1 before it
+    # and replayed that old result. "Container Gardening" (project 7) did
+    # exactly this on 2026-09-28: after Continue, all 60 manuscript
+    # attempts replayed the 2026-09-17 corrections ("a1".."a60"), did no
+    # work, and failed on the same finding. Each Continue therefore starts
+    # a new generation, and the generation is part of the key. Builds that
+    # were never resumed keep their original keys, so a retried request
+    # within one attempt still replays safely.
+    gen = f"-r{generation}" if generation > 0 else ""
+    return f"orch-{stage}{tail}-{pid}{gen}-a{attempt}"
 
 
 def _confirm_kwargs(est: dict, data: dict, key: str) -> dict:
@@ -1228,6 +1241,10 @@ def resume_build(project_id: int) -> dict:
         rec["attempts"] = 0
         rec["running_since"] = 0
         rec["error"] = ""
+        # v1.9.14. Attempts restart at 1, so the idempotency keys built from
+        # them must not: a new generation keeps every key after this resume
+        # distinct from every key before it (see _attempt_idempotency_key).
+        state["resume_generation"] = int(state.get("resume_generation") or 0) + 1
     state["failed"] = False
     state["customer_message"] = MSG_RESUMED
     state["updated_at"] = _now()
