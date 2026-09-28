@@ -378,7 +378,7 @@ td.tcard-cell { padding: 6pt 8pt; background: #f8fafc; vertical-align: top; bord
   page-break-inside: avoid !important; break-inside: avoid !important; }
 .va-label { font-size: 8pt; font-weight: bold; text-transform: uppercase;
   color: #7c3aed; margin-bottom: 6pt; }
-.va-title { font-size: 12pt; font-weight: bold; color: #312e81; margin-bottom: 8pt; }
+.va-title { font-size: 12pt; font-weight: bold; color: #312e81; margin-bottom: 3pt; }
 .va-caption { font-size: 9pt; color: #64748b; font-style: italic; margin-top: 8pt; }
 .va-tip-box { border-left-color: #0d9488; background: #f0fdfa; }
 .va-action-step-box { border-left-color: #d97706; background: #fffbeb; }
@@ -452,7 +452,7 @@ img.pdf-visual-img { max-height: 2.75in; margin: 4pt auto 6pt; }
 .faq-item { border: 1pt solid #e2e8f0; border-radius: 6pt; padding: 10pt 12pt; background: #fff; }
 .faq-q { font-size: 10pt; font-weight: bold; color: #1e1b4b; margin-bottom: 4pt; }
 .faq-a { font-size: 10pt; color: #475569; line-height: 1.5; }
-.ws-table-wrap { overflow-x: auto; margin-bottom: 8pt; }
+.ws-table-wrap { overflow-x: auto; margin-bottom: 3pt; }
 .ws-table { border-collapse: collapse; width: 100%; font-size: 9pt; }
 .ws-table-fixed { table-layout: fixed; width: 100%; }
 .ws-table th { background: #f5f3ff; color: #4c1d95; font-weight: bold; padding: 7pt 10pt; text-align: left; border-bottom: 2pt solid #c4b5fd; }
@@ -1429,6 +1429,32 @@ def _extract_publishing_pages(soup: BeautifulSoup, summary: str | None) -> tuple
         heading = _section_heading(page)
         if _norm_heading(heading) == "product summary":
             has_summary = True
+        # v1.9.13. The section's page number prints in the Factory standard
+        # (10 pt bold near-black) instead of the footer's 9 pt grey or blue.
+        # Inline, because stylesheet rules for it lose to each template's own
+        # footer rules in xhtml2pdf. PDF only: the on-screen preview is unchanged.
+        from services.page_number_style import page_number_css
+
+        for num in page.select(".page-footer .page-num"):
+            num["style"] = page_number_css()
+            # A template's own "font-weight: 700" on .page-num outranked even
+            # the inline bold (Clean Business printed regular type), so the
+            # number is also wrapped in <b>, which xhtml2pdf always honours.
+            if num.find("b") is None:
+                bold = soup.new_tag("b")
+                bold.string = num.get_text()
+                num.clear()
+                num.append(bold)
+            # xhtml2pdf ignores the screen layout's float/flex, so the number
+            # printed glued to the brand ("Lonnie Brown2"). A separator keeps
+            # them apart, as in the ebook footer, and a little space under the
+            # footer keeps the larger number clear of the next section's heading.
+            footer = num.find_parent(class_="page-footer")
+            if footer is not None and not footer.get("data-pn-std"):
+                footer["data-pn-std"] = "1"
+                footer["style"] = (footer.get("style", "") + "; margin-bottom: 3pt;").lstrip("; ")
+                if num.previous_sibling is not None:
+                    num.insert_before(" \u00b7 ")
         body = _prepare_pdf_content(page)
         parts.append(f'<section class="pdf-page {cls}">{body}</section>')
 

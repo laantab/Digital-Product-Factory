@@ -477,16 +477,20 @@ def page_number_inline_style(theme_id: str | None) -> str:
     An inline style is the one thing that reliably reaches the page
     (checked by rendering all six templates, not by reading the CSS).
     """
-    t = get_theme(theme_id)
-    return f"font-size: {PAGE_NUMBER_SIZE_PT}pt; color: {t.color_text}; font-weight: bold;"
+    from services.page_number_style import page_number_css
+
+    # v1.9.13: size, weight and ink come from the one Factory-wide standard
+    # (10 pt bold near-black); the template keeps its own near-black ink.
+    return page_number_css(get_theme(theme_id).color_text)
 
 
 #: Where the running-footer frame begins, in inches from the top of a
 #: letter page, and the clear space kept between the body frame and it.
 FOOTER_TOP_IN = 10.05
 FOOTER_GAP_IN = 0.10
-#: Running-footer page number size (v1.9.12: was the 9pt footer size, grey).
-PAGE_NUMBER_SIZE_PT = 11.0
+#: Running-footer page number size. v1.9.12 raised it from the 9 pt grey
+#: footer type to 11 pt; v1.9.13 sets every product to the one print standard.
+from services.page_number_style import PAGE_NUMBER_SIZE_PT  # noqa: E402
 
 
 def _shared_book_css(t: EbookTheme) -> str:
