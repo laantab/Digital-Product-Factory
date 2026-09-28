@@ -760,7 +760,7 @@ def build_crossword_puzzles_with_qa(
                 from services.factory.topic_vocabulary import resolve_topic_category
 
                 curated, _conf = resolve_topic_category(str(theme_arg or ""))
-                if not pack_key and curated and expected_count > 1:
+                if curated and expected_count > 1:
                     # v1.9.15: a curated topic is never padded with another
                     # pack's words. Build a smaller book from its own words
                     # instead, one puzzle fewer each time, and say so with
@@ -781,6 +781,9 @@ def build_crossword_puzzles_with_qa(
                         s_qa.fixes_applied = [f for f in s_qa.fixes_applied if not str(f).startswith(mine)]
                         s_qa.fixes_applied.append(note)
                         return s_puzzles, [note] + [w for w in s_warnings if not str(w).startswith(mine)], [], s_qa
+                if curated:
+                    # Never rebuild a curated topic from another pack.
+                    pack_key = ""
                 if not pack_key:
                     fail_msg = (
                         "Crossword could not find enough topic-relevant words and clues for this theme. "

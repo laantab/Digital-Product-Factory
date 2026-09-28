@@ -161,7 +161,20 @@ def _get_replacement_words(
 
     Returns (words, clues_map, used_fallback).
     Never silently substitutes the EVERYDAY_LIFE pack for an unmatched topic.
+
+    v1.9.15: a theme the shared, curated topic packs resolve ("Garden
+    plants", "Herb garden", "Ocean animals" ...) only ever gets replacement
+    words from its own curated pack -- never from a broad fallback pack
+    (NATURE_PACK gave a "Garden Plants" book ELEPHANT, TORNADO, WHALE).
     """
+    from services.factory.topic_vocabulary import resolve_topic_category
+
+    if resolve_topic_category(theme)[0]:
+        suggested, _warnings, _errors = suggest_crossword_words_from_topic(
+            theme, max_words=count + len(exclude) + 5)
+        own = [w.upper() for w in suggested if w.upper() not in exclude][:count]
+        return own, (generate_clues_for_words(own, theme=theme) if own else {}), False
+
     pack_key = select_fallback_pack(theme)
     if not pack_key:
         return [], {}, False
@@ -464,7 +477,11 @@ def build_crossword_book_with_recovery(
 
     # Stage 3: fallback book vocabulary (last resort before error).
     # Only for a matched pack — never silent EVERYDAY_LIFE substitution.
-    pack_key = select_fallback_pack(theme)
+    # v1.9.15: never for a curated shared-pack topic either (see
+    # _get_replacement_words) -- its book is its own words or nothing.
+    from services.factory.topic_vocabulary import resolve_topic_category
+
+    pack_key = "" if resolve_topic_category(theme)[0] else select_fallback_pack(theme)
     if not pack_key:
         fail_msg = (
             "Crossword could not find enough topic-relevant words and clues for this theme. "
