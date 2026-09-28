@@ -719,6 +719,7 @@ def _draw_coloring_page(
             pdf.drawCentredString(page_w / 2.0, page_h / 2.0, "[Basic Test Fallback]")
 
     # Captions only when explicitly requested — never dump the full prompt
+    caption_drawn = False
     if page.caption and len(str(page.caption)) <= 120:
         _draw_centered_text(
             pdf, page_w / 2.0, margin * 0.55,
@@ -726,17 +727,37 @@ def _draw_coloring_page(
             font_name="Helvetica-Oblique",
             font_size=8,
         )
+        caption_drawn = True
 
     # Book mode: small page number footer only (no title / topic / prompt header)
     if not single_sheet:
-        _draw_centered_text(
-            pdf,
-            page_w / 2.0,
-            0.28 * 72.0,
-            str(page_index + 1),
-            font_name="Helvetica",
-            font_size=9,
-        )
+        # v1.9.13: the Factory page-number standard, 10 pt bold near-black
+        # (was 9 pt regular), on the same baseline in the footer strip under
+        # the picture. Without a caption it stays centred, exactly where it
+        # was. With a caption -- which is centred on nearly the same line, so
+        # the two used to print on top of each other -- the number moves to
+        # the right-hand margin of that strip.
+        from reportlab.pdfbase.pdfmetrics import getAscent, getDescent, stringWidth
+
+        from services.page_number_style import PAGE_NUMBER_INK, PAGE_NUMBER_SIZE_PT
+
+        num_font = "Helvetica-Bold"
+        label = str(page_index + 1)
+        baseline = 0.28 * 72.0
+        pdf.setFillColor(colors.HexColor(PAGE_NUMBER_INK))
+        pdf.setFont(num_font, PAGE_NUMBER_SIZE_PT)
+        if caption_drawn:
+            right = page_w - margin
+            num_left = right - stringWidth(label, num_font, PAGE_NUMBER_SIZE_PT)
+            cap_w = stringWidth(str(page.caption)[:100], "Helvetica-Oblique", 8)
+            if page_w / 2.0 + cap_w / 2.0 > num_left - 6:
+                # A caption so long it reaches the margin: sit just above it.
+                cap_top = margin * 0.55 + getAscent("Helvetica-Oblique", 8)
+                baseline = max(baseline, cap_top + 1.5 - getDescent(num_font, PAGE_NUMBER_SIZE_PT))
+            pdf.drawRightString(right, baseline, label)
+        else:
+            pdf.drawCentredString(page_w / 2.0, baseline, label)
+        pdf.setFillColor(colors.black)
 
 
 def _draw_comic_title(
