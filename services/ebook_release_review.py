@@ -568,6 +568,55 @@ def compute_status(findings: list[Finding]) -> str:
     return STATUS_READY
 
 
+def snapshot(rev: Review) -> dict[str, Any]:
+    """v1.9.15. The measured review BEFORE the owner's decisions, for storage.
+
+    Scanning the PDF, ZIP and every picture is the expensive part of a review
+    (it runs in the website's own process). The owner's accept / reject and
+    "I have read the notes" change nothing that was measured, so they are
+    re-applied to this snapshot with with_decisions() instead of scanning the
+    same PDF again on every click. Thumbnails are kept so the contact sheet
+    can be shown again without reopening the PDF.
+    """
+    import base64
+
+    return {
+        "status": rev.status,
+        "findings": [f.to_dict() for f in rev.findings],
+        "visuals": [{**v.to_dict(), "thumb_b64": base64.b64encode(v.thumb_jpeg).decode("ascii")
+                     if v.thumb_jpeg else ""} for v in rev.visuals],
+        "pdf_sha256": rev.pdf_sha256, "zip_sha256": rev.zip_sha256,
+        "checks_run": list(rev.checks_run), "ai": dict(rev.ai), "reviewed_at": rev.reviewed_at,
+    }
+
+
+def with_decisions(snap: dict, decisions: dict | None, acknowledged: list[str] | None) -> Review:
+    """Rebuild the measured review from snapshot() and apply the owner's decisions.
+
+    Gives exactly the result review_release() gives for the same PDF and the
+    same decisions: that function also applies _apply_owner_decisions and then
+    compute_status, in that order, to the same measured findings.
+    """
+    import base64
+
+    rev = Review(status=str(snap.get("status") or STATUS_UNVERIFIED),
+                 pdf_sha256=str(snap.get("pdf_sha256") or ""), zip_sha256=str(snap.get("zip_sha256") or ""),
+                 checks_run=list(snap.get("checks_run") or []), ai=dict(snap.get("ai") or {}),
+                 reviewed_at=str(snap.get("reviewed_at") or ""))
+    fields_f = Finding.__dataclass_fields__
+    rev.findings = [Finding(**{k: f.get(k) for k in fields_f}) for f in snap.get("findings") or []]
+    for v in snap.get("visuals") or []:
+        thumb = base64.b64decode(v.get("thumb_b64") or "") if v.get("thumb_b64") else b""
+        rev.visuals.append(Visual(page=int(v["page"]), chapter=str(v.get("chapter") or ""),
+                                  kind=str(v.get("kind") or ""), visual_id=str(v.get("visual_id") or ""),
+                                  width=int(v.get("width") or 0), height=int(v.get("height") or 0),
+                                  placed_width_pt=float(v.get("placed_width_pt") or 0),
+                                  status=str(v.get("status") or "ok"), thumb_jpeg=thumb))
+    _apply_owner_decisions(rev, decisions or {}, acknowledged or [])
+    rev.status = compute_status(rev.findings)
+    return rev
+
+
 def decision_key(f: Finding) -> str:
     return f"{f.code}@{f.page}"
 
