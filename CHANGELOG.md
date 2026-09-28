@@ -5,6 +5,52 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.13 — 2026-09-27
+
+**Page numbers you can read on paper, in every product.**
+
+### What changed
+
+- Every page number the Factory prints now follows one standard: 10 pt,
+  bold, near-black. That covers ebooks in all six templates, planners in
+  all six themes, coloring books, math worksheets, spelling worksheets and
+  Publishing Studio PDFs.
+- Page sizes, which pages are numbered and how they are counted are exactly
+  as before. Numbers stay in the same place, with three small exceptions
+  that stop them touching other text (below).
+
+### What was fixed
+
+- Each product picked its own page-number style, and most were hard to read
+  in print: planners used 9.5 pt in the theme colour (faint on the burgundy
+  and green themes), coloring books 9 pt regular, math worksheets 8 pt light
+  grey, spelling worksheets 9 pt grey, Publishing Studio 9 pt grey or blue.
+  Ebooks were 11 pt since 1.9.12. They now all come from one place.
+- A coloring page with a caption printed the page number on top of the
+  caption. The number now moves to the right-hand margin of the same line
+  when there is a caption.
+- A math worksheet with a very long title could print "Page 1 of 2" over the
+  title. The counter now moves up just enough to clear it.
+- In Publishing Studio PDFs the number printed glued to the brand name
+  ("Lonnie Brown2"). A separator now keeps them apart.
+- On spelling worksheets the section line moves down 2 pt when it carries
+  the page counter, so the larger counter stays clear of the heading.
+
+### Do your steps change?
+
+No. Build or export as usual.
+
+### Does anything look different in a book I already made?
+
+Only if it is exported again: its page numbers change. Nothing is charged.
+Books already exported keep their files until you export them again.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
 ## 1.9.12 — 2026-09-27
 
 **A tidier copyright page and page numbers you can read.**
