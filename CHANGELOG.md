@@ -5,6 +5,39 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.14 — 2026-09-28
+
+**Continue really continues a stuck ebook instead of repeating the old failure.**
+
+### What changed
+
+- When you press Continue on an ebook that stopped, every new try is now
+  treated as new work. Before, the tries after Continue reused the old
+  tries' records, so the Factory repeated the old result 60 times in a few
+  minutes, did nothing, and stopped again.
+
+### What was fixed
+
+- "Container Gardening" (the step-by-step container book) stopped at 30%
+  on the manuscript step. After Continue, all 60 tries replayed the
+  September 17 corrections instead of correcting the two chapters that
+  still need it, so the book could never move on. Each Continue now starts
+  a fresh set of tries.
+
+### Do your steps change?
+
+No. Continue works the way it always said it did.
+
+### Does anything look different in a book I already made?
+
+No. Finished books are not touched.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
 ## 1.9.13 — 2026-09-27
 
 **Page numbers you can read on paper, in every product.**
