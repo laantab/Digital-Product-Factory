@@ -757,6 +757,30 @@ def build_crossword_puzzles_with_qa(
                 from services.crossword.crossword_repair import build_crossword_book_with_recovery as _recovery_fn
 
                 pack_key = select_fallback_pack(str(theme_arg or ""))
+                from services.factory.topic_vocabulary import resolve_topic_category
+
+                curated, _conf = resolve_topic_category(str(theme_arg or ""))
+                if not pack_key and curated and expected_count > 1:
+                    # v1.9.15: a curated topic is never padded with another
+                    # pack's words. Build a smaller book from its own words
+                    # instead, one puzzle fewer each time, and say so with
+                    # the same marker the rest of the pipeline already
+                    # honours for a deliberately smaller book.
+                    passed_now = len([p for p in best if not p.errors and p.clues])
+                    smaller = max(1, min(expected_count - 1, passed_now or expected_count - 1))
+                    s_puzzles, s_warnings, s_errors, s_qa = build_crossword_puzzles_with_qa(
+                        build_fn, max_attempts=max_attempts, seed=base_seed,
+                        **{**kwargs, "number_of_puzzles": smaller})
+                    if s_qa.passed and s_puzzles:
+                        built = len([p for p in s_puzzles if not p.errors and p.clues]) or smaller
+                        note = (f'Only the "{curated}" topic words could fill {built} puzzles well -- '
+                                f"built {built} of the requested {expected_count} puzzles "
+                                "instead of leaving the book incomplete.")
+                        mine = f'Only the "{curated}" topic words could fill'
+                        s_qa.warnings = [note] + [w for w in s_qa.warnings if not str(w).startswith(mine)]
+                        s_qa.fixes_applied = [f for f in s_qa.fixes_applied if not str(f).startswith(mine)]
+                        s_qa.fixes_applied.append(note)
+                        return s_puzzles, [note] + [w for w in s_warnings if not str(w).startswith(mine)], [], s_qa
                 if not pack_key:
                     fail_msg = (
                         "Crossword could not find enough topic-relevant words and clues for this theme. "

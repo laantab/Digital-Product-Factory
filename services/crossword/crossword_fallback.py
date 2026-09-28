@@ -1400,6 +1400,17 @@ def _normalize_theme(theme: str) -> str:
     """
     t = str(theme or "").lower().strip()
 
+    # v1.9.15: a theme that the shared, curated topic packs resolve
+    # (services.factory.topic_vocabulary -- "House plants", "Herb garden",
+    # "Garden plants", "Ocean animals", ...) has its own real word list.
+    # It must never be "recovered" into one of these broad fallback packs:
+    # "Garden plants" became NATURE_PACK (ELEPHANT, TORNADO, WHALE) and
+    # "Dog training" became ACTIVITIES_PACK. No fallback pack for those.
+    from services.factory.topic_vocabulary import resolve_topic_category
+
+    if resolve_topic_category(t)[0]:
+        return ""
+
     # Gold Rush — checked FIRST because it is very specific and must not
     # fall through to the everyday_life default (the root cause of the
     # "Goal Rush" broken-output bug).
