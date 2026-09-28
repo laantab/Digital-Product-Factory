@@ -28,7 +28,6 @@ import os
 import unittest
 from unittest.mock import patch
 
-from services.crossword.crossword_fallback import get_fallback_words_and_clues, select_fallback_pack
 from services.crossword.pdf_builder import CrosswordPdfRequest, build_crossword_pdf
 from services.crossword.word_entries import suggest_crossword_words_from_topic
 from services.factory.topic_vocabulary import resolve_topic_category
@@ -131,12 +130,22 @@ class EveryPhrasingResolves(unittest.TestCase):
                     self.assertGreaterEqual(len(got), 40)
                     self.assertTrue(got <= _pack(category), got - _pack(category))
 
-    def test_no_broad_fallback_pack_for_a_curated_topic(self):
+    def test_crossword_repair_only_ever_uses_the_topic_pack(self):
+        """Replacement words for a failed crossword come from the topic's
+        own pack, never from a broad fallback pack (NATURE_PACK)."""
+        from services.crossword.crossword_repair import _get_replacement_words
+
         for category, phrasings in TOPICS.items():
-            for topic in phrasings:
-                with self.subTest(topic=topic):
-                    self.assertEqual(select_fallback_pack(topic), "")
-                    self.assertEqual(get_fallback_words_and_clues(topic, count=20), ([], {}))
+            for topic in phrasings[:5]:
+                for use_fallback in (False, True):
+                    with self.subTest(topic=topic, use_fallback=use_fallback), _no_ai():
+                        words, clues, used = _get_replacement_words(
+                            topic, 8, set(), use_fallback, seed=3)
+                        self.assertTrue(words)
+                        self.assertTrue(_norm(words) <= _pack(category), _norm(words) - _pack(category))
+                        self.assertFalse(used)
+                        for w in words:
+                            self.assertEqual(clues[w.upper()], _clue(category, w.upper()))
 
 
 class WordSearchBooks(unittest.TestCase):
