@@ -185,6 +185,42 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         except Exception:
             pass
 
+    # The page loads Tailwind, marked, JSZip and the Inter font from the
+    # internet. A machine that cannot reach them (a locked-down network, a CI
+    # sandbox) got an unstyled page -- the build progress bar had no height,
+    # so Playwright rightly called it hidden -- plus "Failed to load resource"
+    # console errors, and test_21 failed for a reason unrelated to the
+    # Factory. The browser now gets local copies of the same assets on every
+    # machine (tests/fixtures/browser_assets/README.md says what each one is
+    # and how the Tailwind file is rebuilt), so the tests check the same
+    # styled, working page with or without the network. Nothing the tests
+    # assert is relaxed.
+    ASSETS = ROOT / "tests" / "fixtures" / "browser_assets"
+
+    def _new_context(self, **kwargs):
+        context = self.browser.new_context(**kwargs)
+        css = (self.ASSETS / "factory-tailwind.css").read_text(encoding="utf-8")
+        tailwind = (
+            "window.tailwind = window.tailwind || {};"
+            "(function(){var s=document.createElement('style');"
+            "s.setAttribute('data-test-tailwind','local');"
+            f"s.textContent={json.dumps(css)};"
+            "(document.head||document.documentElement).appendChild(s);})();"
+        )
+        marked = (self.ASSETS / "marked-15.0.12.min.js").read_text(encoding="utf-8")
+        jszip = (self.ASSETS / "jszip-3.10.1.min.js").read_text(encoding="utf-8")
+
+        def serve(body, content_type):
+            return lambda route: route.fulfill(status=200, content_type=content_type, body=body)
+
+        js = "application/javascript"
+        context.route("https://cdn.tailwindcss.com/**", serve(tailwind, js))
+        context.route("https://cdn.tailwindcss.com", serve(tailwind, js))
+        context.route("https://cdn.jsdelivr.net/npm/marked/marked.min.js", serve(marked, js))
+        context.route("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js", serve(jszip, js))
+        context.route("https://fonts.googleapis.com/**", serve("", "text/css"))
+        return context
+
     # ------------------------------------------------------------------
     # ONE-BUTTON CUSTOMER PATH
     #
@@ -253,7 +289,7 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
     def test_21_step_container_gardening_customer_path(self):
         from playwright.sync_api import expect
 
-        context = self.browser.new_context(accept_downloads=True)
+        context = self._new_context(accept_downloads=True)
         page = context.new_page()
         console_errors = []
         page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
@@ -533,7 +569,7 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
 
     def test_24_picture_sheet_names_each_photo_source_and_stays_customer_safe(self):
         """v1.9.6: the sheet shows chapter, source and photographer, and only there."""
-        context = self.browser.new_context()
+        context = self._new_context()
         page = context.new_page()
         page.goto(self.base + "/", wait_until="domcontentloaded")
         payload = {
@@ -588,7 +624,7 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
 
     def test_22_repeat_build_click_attaches_to_the_same_project(self):
         """A second Build click must attach, never create a second project."""
-        context = self.browser.new_context()
+        context = self._new_context()
         page = context.new_page()
         page.goto(self.base + "/", wait_until="domcontentloaded")
 
@@ -616,7 +652,7 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         """Only ebook routes to the build screen. Other builders are untouched."""
         from playwright.sync_api import expect
 
-        context = self.browser.new_context()
+        context = self._new_context()
         page = context.new_page()
         page.goto(self.base + "/", wait_until="domcontentloaded")
         page.evaluate("go('factory')")
