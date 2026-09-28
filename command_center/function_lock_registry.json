@@ -4,7 +4,7 @@
   "functions": {
     "word_search": {
       "display_name": "Word Search",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "1f87bfd",
       "factory_version": "1.9.15",
       "protected_test_files": [
@@ -13,7 +13,7 @@
         "tests/test_word_search_short_topic_repair.py",
         "tests/test_word_search_stability.py",
         "tests/test_word_search_rebuilds_identically.py",
-        "tests/test_house_plants_puzzle_topic_v1_9_15.py"
+        "tests/test_plant_puzzle_topics_v1_9_15.py"
       ],
       "shared_code_dependencies": [
         "services/factory/topic_vocabulary.py",
@@ -28,10 +28,10 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Claude Opus 5.5",
-      "relocked_after_tests": "v1.9.15 (1f87bfd): data/topic_vocabulary_packs.json (declared shared dependency) gained a curated house_plants pack (35 words and clues) so \"House plants\" resolves for Crossword and Word Search; no puzzle code changed. Crossword + Word Search protected tests: 147 passed before, 152 passed after (incl. 5 new house-plant tests). 0 paid API calls.",
+      "unlocked_by": "Claude Opus 5.5",
+      "unlocked_reason": "v1.9.15 (round 2): same plant-topic packs as Crossword, plus services/word_search: a topic-mode book short of words was padded with generic puzzle words (WORD, FIND, PUZZLE, FUN) and a book whose words-per-puzzle was deliberately reduced then failed its own QA; topic mode now never pads with generic words and QA checks what was actually built.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "The customer-facing route had never used the shared topic engine, in any release, until a021385. No earlier commit is a valid last-known-good for this route. Relocked at ab6b923 (2026-09-13): Word Search's cover now genuinely attempts Pexels first (via is_photo_realistic_cover), falling back to the existing AI path unchanged when no suitable photo is found. Word Search's puzzle-generation/topic-vocabulary behavior is untouched. Relocked again at 6391ff1 (2026-09-13): unlocked only because static/js/app.js (shared) was edited to fix the ebook build-stall dead end; Word Search's own code and tests are untouched. Relocked at 66b0085 (2026-09-14, v1.7.14): unlocked only because services/packaging.py (a declared shared dependency) now prefers a VERIFIED stored asset at its six STORED embedded-PDF read sites before falling through to the identical legacy base64 decode. Product generation, rebuild paths, QA gates and export layout are unchanged; with no verified asset the executed decode is byte-for-byte the original. Relocked at 2d613c0 (2026-09-15, v1.7.25): unlocked because static/js/app.js (a declared shared dependency) gained the ebook progress screen's live activity light and paused panel. No puzzle, coloring or crossword code path was touched. RELOCKED at 23a6a4f (v1.8.1): unlocked only because static/js/app.js is declared as a whole-file shared dependency and gained the ebook step-by-step polling helpers. Verified by diffing static/js/app.js against origin/main: not one added or removed line mentions coloring, crossword, word search or puzzle. RELOCKED at ad7b5da (2026-09-24, v1.9.5): unlocked to add services/word_search/seeding.py and pass its seed from services/product.py. Grid building, topic vocabulary, word placement, answer keys, cover selection and packaging are untouched -- the engine already accepted a seed and was simply never given one, exactly as with Crossword in v1.9.2. RELOCKED at ff0e92a (2026-09-25, v1.9.6): unlocked only because static/js/app.js (declared whole-file shared dependencies) changed for the ebook's free picture sources and the one-click picture-approval pause. Diff against 32fdd1d: not one added or removed line mentions coloring, crossword, word search or puzzle. RELOCKED at 108f8b8 (2026-09-25, v1.9.6): static/js/app.js picture-sheet wording and progress bar; still no line mentioning coloring, crossword, word search or puzzle. RELOCKED at e58330d (2026-09-25, v1.9.6): data-pic-credit marker on the ebook picture sheet only. RELOCKED at 92266ba (2026-09-25, v1.9.11): ebook-only change in shared app.js. Relocked at 1f87bfd (2026-09-28, v1.9.15): unlocked because data/topic_vocabulary_packs.json (a declared shared dependency) gained a curated house_plants pack; \"House plants\" had matched plant_parts (Word Search: PETAL, SEPAL...) or been refused (Crossword). Engine code unchanged; covered by tests/test_house_plants_puzzle_topic_v1_9_15.py."
     },
     "coloring_book": {
@@ -67,7 +67,7 @@
     },
     "crossword": {
       "display_name": "Crossword",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "1f87bfd",
       "factory_version": "1.9.15",
       "protected_test_files": [
@@ -77,7 +77,7 @@
         "tests/test_crossword_cover_selection_repair.py",
         "tests/test_crossword_controlled_repair.py",
         "tests/test_crossword_rebuilds_identically.py",
-        "tests/test_house_plants_puzzle_topic_v1_9_15.py"
+        "tests/test_plant_puzzle_topics_v1_9_15.py"
       ],
       "shared_code_dependencies": [
         "services/factory/topic_vocabulary.py",
@@ -92,10 +92,10 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Claude Opus 5.5",
-      "relocked_after_tests": "v1.9.15 (1f87bfd): data/topic_vocabulary_packs.json (declared shared dependency) gained a curated house_plants pack (35 words and clues) so \"House plants\" resolves for Crossword and Word Search; no puzzle code changed. Crossword + Word Search protected tests: 147 passed before, 152 passed after (incl. 5 new house-plant tests). 0 paid API calls.",
+      "unlocked_by": "Claude Opus 5.5",
+      "unlocked_reason": "v1.9.15 (round 2): \"Herb Garden\" and \"Garden Plants\" fell through to the old keyword scoring and got plant_parts anatomy words (PETAL, SEPAL, XYLEM); adding curated herb_garden and garden_plants packs and enlarging house_plants in data/topic_vocabulary_packs.json (a declared shared dependency).",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "The only generator formally enrolled in PROTECTED_GENERATOR_RULE.md before 2026-09-12. e81298e is the commit that both created the shared topic engine and fixed Crossword's topic-scope contamination and dropped-answer-key defects (2026-09-09). Relocked at ab6b923 (2026-09-13): Crossword's cover now genuinely attempts Pexels first (via is_photo_realistic_cover), falling back to the existing AI path unchanged when no suitable photo is found. Crossword's puzzle-generation/topic-vocabulary behavior is untouched. Relocked again at 6391ff1 (2026-09-13): unlocked only because static/js/app.js (shared) was edited to fix the ebook build-stall dead end; Crossword's own code and tests are untouched. Relocked at 66b0085 (2026-09-14, v1.7.14): unlocked only because services/packaging.py (a declared shared dependency) now prefers a VERIFIED stored asset at its six STORED embedded-PDF read sites before falling through to the identical legacy base64 decode. Product generation, rebuild paths, QA gates and export layout are unchanged; with no verified asset the executed decode is byte-for-byte the original. Relocked at 2d613c0 (2026-09-15, v1.7.25): unlocked because static/js/app.js (a declared shared dependency) gained the ebook progress screen's live activity light and paused panel. No puzzle, coloring or crossword code path was touched. RELOCKED at 23a6a4f (v1.8.1): unlocked only because static/js/app.js is declared as a whole-file shared dependency and gained the ebook step-by-step polling helpers. Verified by diffing static/js/app.js against origin/main: not one added or removed line mentions coloring, crossword, word search or puzzle. RELOCKED at 946dc52 (2026-09-23, v1.9.2): unlocked to add services/crossword/seeding.py and pass its seed from services/product.py. Puzzle generation, topic vocabulary, clue writing, answer keys, cover selection and packaging are untouched -- the engine already accepted a seed and was simply never given one. Word Search has the same missing seed and was deliberately left alone: it is a separate LOCKED function, recorded in docs/CROSSWORD_REPRODUCIBILITY.md. RELOCKED at ff0e92a (2026-09-25, v1.9.6): unlocked only because static/js/app.js (declared whole-file shared dependencies) changed for the ebook's free picture sources and the one-click picture-approval pause. Diff against 32fdd1d: not one added or removed line mentions coloring, crossword, word search or puzzle. RELOCKED at 108f8b8 (2026-09-25, v1.9.6): static/js/app.js picture-sheet wording and progress bar; still no line mentioning coloring, crossword, word search or puzzle. RELOCKED at e58330d (2026-09-25, v1.9.6): data-pic-credit marker on the ebook picture sheet only. RELOCKED at 92266ba (2026-09-25, v1.9.11): ebook-only change in shared app.js. Relocked at 1f87bfd (2026-09-28, v1.9.15): unlocked because data/topic_vocabulary_packs.json (a declared shared dependency) gained a curated house_plants pack; \"House plants\" had matched plant_parts (Word Search: PETAL, SEPAL...) or been refused (Crossword). Engine code unchanged; covered by tests/test_house_plants_puzzle_topic_v1_9_15.py."
     },
     "invite_protection": {
