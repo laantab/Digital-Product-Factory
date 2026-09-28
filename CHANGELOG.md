@@ -5,6 +5,49 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.15 — 2026-09-28
+
+**House-plant puzzles use house-plant words, and the Editor-in-Chief review never gets stuck.**
+
+### What changed
+
+- Crossword and Word Search now know the topic "House plants" (also
+  "Houseplants", "Indoor plants", "Potted plants" and "House plant care").
+  Both use the same list of 35 house-plant words and clues, such as POTHOS,
+  MONSTERA, REPOT, DRAINAGE and GROWLIGHT.
+- The Editor-in-Chief review screen now keeps the review it made. Opening
+  it again shows that review at once. Accept, Reject and "I have read the
+  editorial notes" update the result straight away instead of re-checking
+  the whole book each time.
+- If the review cannot finish, the screen says so and shows a Try again
+  button. Your earlier decisions are kept.
+
+### What was fixed
+
+- "House plants" gave Word Search flower-part words (PETAL, SEPAL, POLLEN,
+  CHLOROPHYLL) that have nothing to do with house plants, and Crossword
+  refused the topic. Both now make real house-plant puzzles.
+- The review screen could stay on "Reviewing the PDF and ZIP..." forever
+  with no buttons when the website answered with an error. Every Accept or
+  Reject also started the full review again, which made that more likely.
+- The "Approve all acceptable visuals" button on the review screen opened
+  the dashboard instead of the book's Visuals step.
+
+### Do your steps change?
+
+No.
+
+### Does anything look different in a book I already made?
+
+No. Finished books, PDFs and ZIPs are not touched. A review made before
+this version is run once more the first time you open it.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
 ## 1.9.14 — 2026-09-28
 
 **Continue really continues a stuck ebook instead of repeating the old failure.**
