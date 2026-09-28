@@ -202,6 +202,7 @@
     "tests/test_chart_text_editor.py",
     "tests/test_dollar_templates_exist_everywhere.py",
     "tests/test_previous_exports_are_kept.py",
-    "tests/test_ebook_copyright_and_page_numbers_v1_9_12.py"
+    "tests/test_ebook_copyright_and_page_numbers_v1_9_12.py",
+    "tests/test_page_numbers_print_standard_v1_9_13.py"
   ]
 }
