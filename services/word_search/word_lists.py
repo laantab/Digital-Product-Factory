@@ -132,10 +132,17 @@ def supplement_entries_to_count(
     grid_size: int,
     topic: str = "",
     matched_pack_id: str = "",
+    allow_generic: bool = True,
 ) -> tuple[list[WordEntry], list[str]]:
     """Fill a short word list using ONLY the matched topic pack or generic fallback.
 
     NEVER cross-supplement with unrelated topic packs.
+
+    allow_generic=False (v1.9.15, used for every Create From Topic book):
+    never add the topic-agnostic generic_fallback words (WORD, FIND,
+    PUZZLE, FUN ...). They are not about the customer's topic; a topic
+    book that is short of real topic words is made smaller instead (see
+    the adaptive sizing in services.word_search.book).
     """
     warnings: list[str] = []
     target = max(1, int(target))
@@ -162,7 +169,7 @@ def supplement_entries_to_count(
     # Only use generic_fallback — NEVER pull from unrelated topic packs
     if len(expanded) < target:
         data = _load_topics_data()
-        pool: list[str] = list(data.get("generic_fallback", []))
+        pool: list[str] = list(data.get("generic_fallback", [])) if allow_generic else []
         # If we have a matched pack, also allow words from that pack
         if matched_pack_id:
             for pack in data.get("topics", []):

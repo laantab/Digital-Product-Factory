@@ -2073,9 +2073,13 @@ def ebook_release_review_route(project_id: int):
     same_pdf = prior.get("pdf_sha256") == _hl.sha256(pdf or b"").hexdigest()
     decisions = dict(prior.get("decisions") or {}) if same_pdf else {}
     acks = list(prior.get("acknowledged_editorial") or []) if same_pdf else []
-    rev = review_release(data, pdf, zipb, ai_reviewer=reviewer, ai_note=note,
-                         decisions=decisions, acknowledged_editorial=acks)
-    if reviewer is not None and rev.ai.get("ran") and charge:
+    # v1.9.15: measure once with no decisions, keep that measurement, then
+    # apply the owner's decisions to it. Accept / Reject / "I have read the
+    # notes" re-apply decisions to the stored measurement instead of scanning
+    # the whole PDF and ZIP again on every click.
+    base = review_release(data, pdf, zipb, ai_reviewer=reviewer, ai_note=note,
+                          decisions={}, acknowledged_editorial=[])
+    if reviewer is not None and base.ai.get("ran") and charge:
         ledger = data["ebook_workspace"]["paid_call_ledger"]
         ledger["spent_usd"] = round(float(ledger.get("spent_usd") or 0) + charge, 4)
         ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + 1
@@ -2084,12 +2088,53 @@ def ebook_release_review_route(project_id: int):
         ledger.setdefault("calls", []).append({
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "provider": "openai",
             "purpose": "editor_in_chief_release_review", "estimated_cost_usd": charge,
-            "meta": {"pdf_sha256": rev.pdf_sha256}})
+            "meta": {"pdf_sha256": base.pdf_sha256}})
+    from services.ebook_release_review import snapshot as _rr_snapshot
+
+    return _store_release_review(project_id, data, _rr_snapshot(base), decisions, acks)
+
+
+def _store_release_review(project_id: int, data: dict, base: dict, decisions: dict, acks: list):
+    """Apply the owner's decisions to a stored measurement, save, and answer with the full review."""
+    from services.ebook_release_review import with_decisions
+
+    rev = with_decisions(base, decisions, acks)
     stored = rev.to_dict()
     stored["decisions"] = decisions
     stored["acknowledged_editorial"] = acks
+    stored["base"] = base
     data["release_review"] = stored
     database.update_project(project_id, None, data)
+    out = rev.to_dict(with_thumbs=True)
+    out["decisions"] = decisions
+    return jsonify(out)
+
+
+def _stored_release_review(data: dict) -> dict | None:
+    rr = data.get("release_review") if isinstance(data.get("release_review"), dict) else None
+    return rr if rr and isinstance(rr.get("base"), dict) else None
+
+
+@app.get("/ebook-workspace/<int:project_id>/release-review/current")
+def ebook_release_review_current_route(project_id: int):
+    """The saved review of the current PDF, with the owner's decisions, without re-scanning.
+
+    404 {needs_run: true} when there is none, or the PDF changed since it was made.
+    """
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    data = dict(project.get("data") or {})
+    rr = _stored_release_review(data)
+    import hashlib as _hl
+
+    pdf, _zip = _release_files(project_id, data)
+    if not rr or not pdf or rr["base"].get("pdf_sha256") != _hl.sha256(pdf).hexdigest():
+        return jsonify({"needs_run": True}), 404
+    from services.ebook_release_review import with_decisions
+
+    decisions = dict(rr.get("decisions") or {})
+    rev = with_decisions(rr["base"], decisions, list(rr.get("acknowledged_editorial") or []))
     out = rev.to_dict(with_thumbs=True)
     out["decisions"] = decisions
     return jsonify(out)
@@ -2116,8 +2161,15 @@ def ebook_release_review_decision_route(project_id: int):
     else:
         decisions[page] = choice
     rr["decisions"] = decisions
+    if _stored_release_review(data):
+        # Status, counts and the contact sheet change with the decision now,
+        # not only after the next full review.
+        return _store_release_review(project_id, data, rr["base"], decisions,
+                                     list(rr.get("acknowledged_editorial") or []))
+    # A review saved before v1.9.15 has no stored measurement: keep the
+    # decision; the page runs the review once to apply it.
     database.update_project(project_id, None, data)
-    return jsonify({"ok": True, "decisions": decisions})
+    return jsonify({"ok": True, "decisions": decisions, "needs_run": True})
 
 
 @app.post("/ebook-workspace/<int:project_id>/release-review/acknowledge")
@@ -2133,8 +2185,11 @@ def ebook_release_review_acknowledge_route(project_id: int):
     notes = [f["code"] + "@" + str(f.get("page")) for g in rr.get("groups") or [] for f in g["findings"]
              if f["level"] == "editorial"]
     rr["acknowledged_editorial"] = sorted(set(list(rr.get("acknowledged_editorial") or []) + notes))
+    if _stored_release_review(data):
+        return _store_release_review(project_id, data, rr["base"], dict(rr.get("decisions") or {}),
+                                     rr["acknowledged_editorial"])
     database.update_project(project_id, None, data)
-    return jsonify({"ok": True, "acknowledged": notes})
+    return jsonify({"ok": True, "acknowledged": notes, "needs_run": True})
 
 
 def release_review_allows_approval(data: dict, pdf_sha256: str) -> tuple[bool, str]:
@@ -2216,9 +2271,25 @@ margin:6px 6px 0 0;cursor:pointer;text-decoration:none;display:inline-block}butt
 <h2>Every visual in the PDF</h2><div id=sheet class=sheet></div><h2>What to correct</h2><div id=groups></div>
 </main><script>
 const PID=__PID__;const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-async function run(authorize){const r=await fetch(`/ebook-workspace/${PID}/release-review`,{method:'POST',
+let busy=false;
+function setBusy(b){busy=b;document.querySelectorAll('#actions button,#sheet button').forEach(x=>{if(b)x.disabled=true;});}
+async function call(url,opts,ms){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||180000);
+try{const r=await fetch(url,{...(opts||{}),signal:c.signal});let d=null;try{d=await r.json();}catch(e){d=null;}
+return {ok:r.ok,status:r.status,d};}catch(e){return {ok:false,status:0,d:null,aborted:c.signal.aborted};}finally{clearTimeout(t);}}
+function failed(res,what){const st=document.getElementById('status');
+st.textContent=what+' did not finish.';st.className='status changes';
+const why=res.aborted?'It took too long.':res.status?('The server answered '+res.status+'.'):'The server could not be reached.';
+document.getElementById('actions').innerHTML=`<p>${esc(why)} Nothing was changed. Your earlier decisions are kept.</p><button onclick="run(0)">Try again</button>`;busy=false;}
+async function run(authorize){if(busy)return;setBusy(true);const st=document.getElementById('status');
+st.textContent='Reviewing the PDF and ZIP...';st.className='status';
+const res=await call(`/ebook-workspace/${PID}/release-review`,{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify(authorize?{authorize_ai_usd:authorize}:{})});
-const d=await r.json();show(d);}
+if(!res.ok||!res.d||!res.d.status)return failed(res,'The review');busy=false;show(res.d);}
+async function load(){busy=true;const res=await call(`/ebook-workspace/${PID}/release-review/current`,{},30000);busy=false;
+if(res.ok&&res.d&&res.d.status)return show(res.d);run(0);}
+async function post(url,body,what){if(busy)return;setBusy(true);
+const res=await call(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})},60000);
+busy=false;if(!res.ok||!res.d)return failed(res,what);if(res.d.needs_run)return run(0);if(res.d.status)return show(res.d);run(0);}
 async function show(d){const st=document.getElementById('status');
 st.textContent=d.status;st.className='status '+(d.ready?'ready':d.status==='Changes required'?'changes':'unverified');
 const label={ok:'Measured checks passed',rejected:'Rejected - replace',not_verified:'Not verified',
@@ -2231,17 +2302,16 @@ document.getElementById('groups').innerHTML=(d.groups||[]).map(g=>`<div class=gr
 ${g.findings.map(f=>`<div class=f><span class=lvl>${f.level==='hard'?'Must fix':f.level==='editorial'?'Editorial note':f.level==='needs_human_review'?'Needs your review':'Not verified'}</span>
 &middot; page ${f.page??'-'}${f.chapter?' &middot; '+esc(f.chapter):''}<br>${esc(f.subject)}<br><i>Why:</i> ${esc(f.why)}<br>
 <i>Correction:</i> ${esc(f.fix)}</div>`).join('')}</div>`).join('')||'<p>No corrections needed.</p>';
-const est=await (await fetch(`/ebook-workspace/${PID}/release-review/estimate`)).json();
+let est=null;try{const e=await call(`/ebook-workspace/${PID}/release-review/estimate`,{},20000);if(e.ok&&e.d&&typeof e.d.estimated_usd==='number')est=e.d;}catch(e){}
 const rejected=(d.visuals||[]).filter(v=>v.status==='rejected').length;
 const editorial=(d.groups||[]).some(g=>g.findings.some(f=>f.level==='editorial'));
 document.getElementById('actions').innerHTML=
-`<a class=btn href="/?ebook-workspace=${PID}&stage=visuals">Approve all acceptable visuals${rejected?' and replace '+rejected+' rejected':''}</a>`+
-(d.ai&&d.ai.ran?'':`<button onclick="if(confirm('Run the AI review for about $${est.estimated_usd.toFixed(2)}? It is charged to this book.'))run(${est.estimated_usd})">Run AI review (about $${est.estimated_usd.toFixed(2)})</button>`)+
-(editorial?`<button onclick="fetch('/ebook-workspace/${PID}/release-review/acknowledge',{method:'POST'}).then(()=>run(0))">I have read the editorial notes</button>`:'')+
+`<a class=btn href="/?view=ebook-workspace&project_id=${PID}&stage=visuals">Approve all acceptable visuals${rejected?' and replace '+rejected+' rejected':''}</a>`+
+(d.ai&&d.ai.ran||!est?'':`<button onclick="if(confirm('Run the AI review for about $${est.estimated_usd.toFixed(2)}? It is charged to this book.'))run(${est.estimated_usd})">Run AI review (about $${est.estimated_usd.toFixed(2)})</button>`)+
+(editorial?`<button onclick="post('/ebook-workspace/${PID}/release-review/acknowledge',{},'Saving your answer')">I have read the editorial notes</button>`:'')+
 `<button ${d.ready?'':'disabled'} onclick="fetch('/ebook-workspace/${PID}/approve-product',{method:'POST'}).then(r=>r.json()).then(x=>alert(x.ok?'Approved.':x.error))">Approve Product</button>`;}
-async function decide(page,decision){await fetch(`/ebook-workspace/${PID}/release-review/decision`,{method:'POST',
-headers:{'Content-Type':'application/json'},body:JSON.stringify({page,decision})});run(0);}
-run(0);
+function decide(page,decision){post(`/ebook-workspace/${PID}/release-review/decision`,{page,decision},'Saving your decision');}
+load();
 </script></body></html>"""
 
 

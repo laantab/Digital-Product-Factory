@@ -303,6 +303,21 @@ def build_word_search_pdf(request: WordSearchPdfRequest) -> WordSearchPdfResult:
             number_of_puzzles=len(puzzles),
             words_per_puzzle=actual_words_per_puzzle,
         )
+    else:
+        # v1.9.15: the same adaptive sizing can instead keep the puzzle
+        # count and reduce words-per-puzzle (book.py says so in a warning
+        # "... reduced to N words per puzzle (requested M) ..."). Validate
+        # against that deliberate N, not the original M -- otherwise every
+        # such book (for example a 6-puzzle "House plants" book) failed QA
+        # with "has 8 word(s) but 10 were requested".
+        import re as _re
+        from dataclasses import replace
+
+        for _w in warnings:
+            _m = _re.search(r"reduced to (\d+) words per puzzle \(requested (\d+)\)", str(_w))
+            if _m and int(_m.group(2)) == int(request.words_per_puzzle or 0):
+                qa_request = replace(request, words_per_puzzle=int(_m.group(1)))
+                break
 
     pdf_bytes, layout, book_qa = _build_book_with_minimax_renderer(qa_request, puzzles)
     result.qa_report = book_qa

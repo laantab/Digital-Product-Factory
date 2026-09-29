@@ -5,6 +5,62 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.15 — 2026-09-28
+
+**Plant puzzles use plant words, and the Editor-in-Chief review never gets stuck.**
+
+### What changed
+
+- Crossword and Word Search now have their own word lists and clues for
+  three plant topics: "House plants" (64 words), "Herb garden" (51) and
+  "Garden plants" (62). Capital letters, extra spaces, hyphens and
+  run-together spellings all work ("HERB GARDEN", "Garden-Plants",
+  "Houseplants"). "Herb gardening" now uses the herb list too.
+- A Create From Topic puzzle book never adds filler words. Word Search
+  used to fill a short book with generic words (WORD, FIND, PUZZLE, FUN).
+  Crossword could rebuild a book from an unrelated list (a "Garden Plants"
+  book came back with ELEPHANT, TORNADO and WHALE). Both now make the book
+  a little smaller instead and say so.
+- The Editor-in-Chief review screen now keeps the review it made. Opening
+  it again shows that review at once. Accept, Reject and "I have read the
+  editorial notes" update the result straight away instead of re-checking
+  the whole book each time.
+- If the review cannot finish, the screen says so and shows a Try again
+  button. Your earlier decisions are kept.
+
+### What was fixed
+
+- "House plants", "Herb garden" and "Garden plants" gave flower-part
+  words (PETAL, SEPAL, POLLEN, XYLEM) that have nothing to do with the
+  topic, or Crossword refused the topic. Both now make real puzzles.
+- A Word Search book that had to use fewer words per puzzle failed its
+  own check ("has 8 word(s) but 10 were requested"). It now builds.
+- The review screen could stay on "Reviewing the PDF and ZIP..." forever
+  with no buttons when the website answered with an error. Every Accept or
+  Reject also started the full review again, which made that more likely.
+- The "Approve all acceptable visuals" button on the review screen opened
+  the dashboard instead of the book's Visuals step.
+- The browser customer-path test no longer fails on a computer that cannot
+  reach the internet. It now uses local copies of the page's styles and
+  scripts and checks exactly the same things.
+
+### Do your steps change?
+
+No.
+
+### Does anything look different in a book I already made?
+
+No. Finished books, PDFs and ZIPs are not touched. A review made before
+this version is run once more the first time you open it. A new puzzle
+book for a short topic may have fewer puzzles, or fewer words in each
+puzzle, than you asked for, instead of filler words.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
 ## 1.9.14 — 2026-09-28
 
 **Continue really continues a stuck ebook instead of repeating the old failure.**

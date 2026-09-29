@@ -184,6 +184,9 @@ def build_word_search_puzzles(
                     grid_size=size,
                     topic=theme_label,
                     matched_pack_id=matched_pack_id,
+                    # v1.9.15: a topic book is never padded with generic
+                    # puzzle words; it is made smaller instead (below).
+                    allow_generic=book_mode != "topic",
                 )
                 warnings.extend(topup_warnings)
         if len(entries) < required_words:
