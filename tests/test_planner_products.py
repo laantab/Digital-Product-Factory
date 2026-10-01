@@ -444,11 +444,11 @@ class PlannerExportPackageTests(unittest.TestCase):
             os.environ["FLASK_EXPORTS_DIR"] = self._prev
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def _export(self, planner_type: str):
+    def _export(self, planner_type: str, **fields):
         from services.packaging import EXPORTS_DIR, build_product_export
         from services.product import generate_product
 
-        data = generate_product(planner_type, {"pages": "24", "author": "Pkg Test"})
+        data = generate_product(planner_type, {"pages": "24", "author": "Pkg Test", **fields})
         project = {"id": 1, "name": data["title"], "type": "product", "data": data}
         result = build_product_export(project)
         return data, result, EXPORTS_DIR
@@ -464,6 +464,16 @@ class PlannerExportPackageTests(unittest.TestCase):
                 self.assertTrue(os.path.isfile(path))
                 with fitz.open(path) as doc:
                     self.assertEqual(doc.page_count, data["declared_pages"])
+
+    def test_selected_budget_theme_reaches_the_packaged_pdf(self):
+        data, result, exports_dir = self._export("budget_planner", design_theme="warm_envelope")
+        self.assertEqual(data["fields"]["design_theme"], "warm_envelope")
+        self.assertEqual(data["layout_info"]["design_theme"], "warm_envelope")
+        path = os.path.join(exports_dir, result["package_id"], data["filename"])
+        with fitz.open(path) as doc:
+            self.assertEqual(doc.page_count, data["declared_pages"])
+            fonts = {font[3] for page in doc for font in page.get_fonts(full=True)}
+            self.assertTrue(any("Serif" in name for name in fonts), fonts)
 
     def test_the_package_never_falls_back_to_ebook_files(self):
         for pt in ("faith_planner", "budget_planner"):

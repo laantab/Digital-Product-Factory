@@ -1,9 +1,9 @@
 {
   "schema_note": "Digital Product Factory Pro Competitive Upgrade Roadmap, established 2026-09-12. This is the durable strategic source of truth so a future Claude session cannot lose the strategic direction: quality/reliability/design/publishing/simplicity, NOT more product breadth, until these six upgrades are complete. Status values: NOT_STARTED, IN_PROGRESS, BLOCKED, VERIFYING, COMPLETE_LOCKED. Do not reorder upgrades without a real dependency reason (see each entry's `dependencies`). Do not begin an upgrade after the current one unless the owner explicitly approves skipping ahead.",
-  "updated_at": "2026-09-17T14:00:00-07:00",
+  "updated_at": "2026-09-30T15:04:00-07:00",
   "vision": "A beginner should go from IDEA -> MARKET OPPORTUNITY -> PRODUCT -> PROFESSIONAL DESIGN -> COVER -> VISUALS -> QA -> PREVIEW -> APPROVAL -> MULTIPLE EXPORT FORMATS -> READY-TO-SELL PACKAGE with as little technical knowledge and manual work as possible. The customer experience stays: Create -> Preview -> Approve -> Download. Digital Product Factory Pro is not a Designrr clone -- it is a complete AI-assisted digital-product production system competing on: Factory Market Advantage before creation, multiple product types, one-click production, free/local resources first with controlled paid-AI fallback, automatic QA, professional covers and interiors, protected working generators, automatic packaging, ready-to-sell outputs, and minimal technical interaction.",
   "standing_priority": "QUALITY -> RELIABILITY -> DESIGN -> PUBLISHING -> SIMPLICITY, not additional product types, until all six upgrades are COMPLETE_LOCKED. Do not add a new product generator unless the owner explicitly approves one.",
-  "current_upgrade": "upgrade_1_cover_system",
+  "current_upgrade": "upgrade_2_interior_themes",
   "upgrade_order": [
     "upgrade_1_cover_system",
     "upgrade_2_interior_themes",
@@ -50,8 +50,8 @@
       "name": "Designrr-Quality Interior Themes and Templates",
       "objective": "A professional, reusable interior theme/template system controlling typography, headings/subheadings, colors, chapter openers, section breaks, callout boxes, quote blocks, checklists, tables, margins, spacing, image placement, TOC styling, and page furniture -- so a customer gets a professionally designed product by picking a theme, not by manually designing every page.",
       "why_it_matters_competitively": "Designrr's core strength is templated interior design. Matching or exceeding that with automated, theme-driven layout (rather than one-size-fits-all output) is required for the Factory to be perceived as equally or more professional, without asking beginners to make design decisions.",
-      "current_foundation": "services/planner/themes.py + services/planner/cover.py already implement a working theme-driven design system for Planners (palette, typography, cover art recipe per theme) -- the closest existing precedent. Ebook has ebook_design_workspace.py/ebook_visual_pipeline.py for layout, but no equivalent named theme-family system across Business/Wellness/Faith/Education/etc.",
-      "gap_remaining": "No cross-product theme-family system exists yet for Ebook/Word Search/Crossword/Coloring Book interiors matching the planner precedent's depth (only Planners have real theme families today). Target theme families (Business/Professional, Wellness, Faith, Education, Children's, Personal Development, Finance, Minimal/Modern, Luxury/Premium, Feminine, Masculine, Vintage, Bold/Contemporary) do not exist for Ebook interiors.",
+      "current_foundation": "Ebook guided design stage: six selectable professional styles with a local preview and a saved selection; Faith Planner: five selectable themes; Budget Planner: Ledger, Calm Cashflow, Warm Envelope; Math Worksheet: Classic Classroom, Calm Focus, Bright Practice. Each changed product keeps its legacy default. Theme differentiation, PDF output, page safety, and content preservation have automated coverage.",
+      "gap_remaining": "No unmet offline acceptance criterion was found in the final audit. The remaining criterion is live verification of theme selection and downloads after deployment. The local-only scope currently keeps this branch off GitHub/Render, so Upgrade 2 stays VERIFYING until live verification can be performed. The generic saved-Ebook recovery panel exposes two legacy styles while the guided Ebook design stage exposes six; this panel is a separate legacy/recovery path and does not limit the six-style guided customer flow.",
       "dependencies": [
         "upgrade_1_cover_system"
       ],
@@ -61,7 +61,7 @@
         "faith_planner",
         "budget_planner"
       ],
-      "function_lock_impact": "Not yet started -- to be determined during Phase A (read-only audit) of this upgrade. Ebook is PROTECTED; whichever shared files a theme system introduces must be declared as dependencies for every affected function before implementation, per standing Function Lock discipline.",
+      "function_lock_impact": "Math Worksheet and Budget Planner changes passed their protected suites. The shared form change required the documented Word Search, Crossword, and Coloring Book unlock/relock procedure; the puzzle functions are relocked at code commit 23d714c. No live code was changed.",
       "acceptance_criteria": [
         "A customer can choose a theme and receive a professionally designed product without manual per-page design.",
         "Themes improve readability and professional presentation, not merely decoration.",
@@ -72,9 +72,9 @@
       "fast_gate_requirement": true,
       "full_gate_requirement": true,
       "live_verification_required": true,
-      "status": "NOT_STARTED",
-      "status_detail": "Not started. Upgrade 1 must finish first per roadmap order.",
-      "next_step": "Do not begin until the owner approves starting Upgrade 2. When approved, start with a read-only Phase A audit of existing theme-like systems (services/planner/themes.py, ebook_design_workspace.py) before any implementation."
+      "status": "VERIFYING",
+      "status_detail": "Offline implementation and acceptance checks are complete in local branch upgrade2-math-worksheet-themes-local (code 431ff2c, VERSION 1.9.18). Ebook audit: the guided design stage renders all six catalog cards and previews; POST /ebook-workspace/<id>/design persists the selected design in the project record, and PDF/ZIP export uses that design. Faith Planner audit: the form offers five keys, generate_product carries the normalized key into layout metadata, and all five PDF themes pass visual-difference and Editor-in-Chief checks. Final full release gate passed 2,969 tests, 0 failures, 0 errors, one approved Project 351 conditional skip, and 1,592 subtests (4,562 total cases, exit 0). No push, merge, deploy, paid call, or live customer build occurred. Live verification is outstanding.",
+      "next_step": "Before closing Upgrade 2 as COMPLETE_LOCKED, perform a read-only live check of selected themes and downloaded PDF output after this branch is deployed. Until then, retain VERIFYING and do not start Upgrade 3 under the roadmap dependency rule. No live action is authorized in this local-only work session."
     },
     "upgrade_3_visual_editing": {
       "number": 3,

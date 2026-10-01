@@ -97,10 +97,12 @@ def _check_topic_relevance(puzzle: PuzzleResult, result: WordSearchQAResult) -> 
     if not topic_lower:
         return
 
-    # Check warnings for "Used local vocabulary pack" to know a real pack was matched.
-    # If a pack matched, we trust the words — the pack-matching logic already verified
-    # semantic relevance via keywords + semantic overlap.
+    # Trusted source markers are added only after the local resolver verifies
+    # a curated pack or the free semantic vocabulary endpoint returns words
+    # directly for this exact topic. Never infer this from a product title.
     pack_used = any("Used local vocabulary pack" in w for w in puzzle.warnings)
+    free_source_used = any("Used free vocabulary source" in w for w in puzzle.warnings)
+    verified_source = pack_used or free_source_used
 
     generic_words: list[str] = []
     for word in puzzle.word_bank:
@@ -117,7 +119,7 @@ def _check_topic_relevance(puzzle: PuzzleResult, result: WordSearchQAResult) -> 
     # Dodge Charger, for American automobiles) -- exactly the case the
     # docstring above already says to trust. Only treat it as a sign that
     # no real pack was found when, in fact, none was.
-    if generic_words and not pack_used:
+    if generic_words and not verified_source:
         result.errors.append(
             f"Word list contains generic fallback words {generic_words!r} "
             f"that are unrelated to topic \"{puzzle.topic}\". "
@@ -126,7 +128,7 @@ def _check_topic_relevance(puzzle: PuzzleResult, result: WordSearchQAResult) -> 
         )
 
     # Level 3 blocking: no pack matched + insufficient quality = ask for input
-    if not pack_used:
+    if not verified_source:
         if generic_words or not has_real_topic_content(puzzle.word_bank, puzzle.topic):
             topic_clean = str(puzzle.topic or "").strip()
             result.errors.append(

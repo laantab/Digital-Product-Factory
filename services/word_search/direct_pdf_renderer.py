@@ -43,8 +43,21 @@ _BOX_PADDING_PT = 8.0
 _CELL_MIN_PT = 18.0
 _CELL_MAX_PT = 28.0
 
-# Answer key styling - black capsule outline with red letters inside
-_CAPSULE_STROKE = colors.black  # Black outline
+# Answer key styling. Distinct dark outlines keep intersecting answers
+# traceable; answer letters remain red for a second, printer-friendly cue.
+_CAPSULE_STROKES = tuple(
+    colors.HexColor(value)
+    for value in (
+        "#1D4ED8",  # blue
+        "#047857",  # green
+        "#B45309",  # amber
+        "#7E22CE",  # purple
+        "#BE123C",  # rose
+        "#0F766E",  # teal
+        "#4338CA",  # indigo
+        "#4D7C0F",  # olive
+    )
+)
 _CAPSULE_WIDTH = 1.5
 _ANSWER_COLOR = colors.HexColor("#dc2626")  # Red letters
 # Capsule geometry rules:
@@ -600,10 +613,18 @@ def _draw_answer_capsules(
     
     valid_count = 0
     
-    for entry in solution_table.entries:
+    for index, entry in enumerate(solution_table.entries):
         cx, cy, length, width, angle = _calculate_capsule_geometry(entry, grid)
         if length > 0 and width > 0:
-            _draw_capsule_direct(c, cx, cy, length, width, angle)
+            _draw_capsule_direct(
+                c,
+                cx,
+                cy,
+                length,
+                width,
+                angle,
+                stroke_color=_CAPSULE_STROKES[index % len(_CAPSULE_STROKES)],
+            )
             valid_count += 1
     
     # Update layout counters
@@ -619,6 +640,8 @@ def _draw_capsule_direct(
     length: float,
     width: float,
     angle_degrees: float,
+    *,
+    stroke_color=colors.black,
 ) -> None:
     """Fallback: Draw capsule using PDF canvas transforms for rotation."""
     # Save state
@@ -633,7 +656,7 @@ def _draw_capsule_direct(
     half_w = width / 2
     corner_radius = half_w  # Fully rounded ends
     
-    c.setStrokeColor(_CAPSULE_STROKE)
+    c.setStrokeColor(stroke_color)
     c.setLineWidth(_CAPSULE_WIDTH)
     c.roundRect(-half_l, -half_w, length, width, corner_radius, stroke=1, fill=0)
     
@@ -880,7 +903,16 @@ def _draw_answer_page(
         font_name="Helvetica",
         font_size=10,
     )
-    y -= 24.0
+    y -= 20.0
+    _draw_centered_text(
+        c,
+        page_w / 2.0,
+        y - 8.0,
+        "Each answer has its own colored outline; answer letters are red.",
+        font_name="Helvetica",
+        font_size=8,
+    )
+    y -= 16.0
     layout.answer_box_top_y = y
 
     cell_size = layout.cell_size_pt if layout.cell_size_pt > 0 else _cell_size_pt(

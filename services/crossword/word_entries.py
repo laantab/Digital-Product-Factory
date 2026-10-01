@@ -81,16 +81,21 @@ def parse_crossword_word_list(raw: str, *, max_word_len: int = 15) -> ParsedCros
 
 
 def _score_topic_match(topic_lower: str, keywords: list[str]) -> int:
+    """Score complete keyword tokens/phrases, never character fragments."""
     score = 0
+    topic_tokens = topic_lower.split()
+    topic_set = set(topic_tokens)
     for keyword in keywords:
-        kw = keyword.lower().strip()
-        if not kw:
+        kw_tokens = re.findall(r"[a-z0-9]+", str(keyword or "").lower())
+        if not kw_tokens:
             continue
-        if kw in topic_lower or topic_lower in kw:
+        if len(kw_tokens) == 1 and kw_tokens[0] in topic_set:
             score += 3
-        for token in topic_lower.split():
-            if token == kw or kw in token or token in kw:
-                score += 1
+        elif len(kw_tokens) > 1 and any(
+            topic_tokens[index:index + len(kw_tokens)] == kw_tokens
+            for index in range(len(topic_tokens) - len(kw_tokens) + 1)
+        ):
+            score += 3 * len(kw_tokens)
     return score
 
 
@@ -109,12 +114,50 @@ def _clean_crossword_words(raw_words: list[str], *, max_words: int, max_len: int
     return cleaned
 
 
+def _custom_list_error(message: str) -> str:
+    text = str(message or "").strip()
+    if "custom word list" in text.lower():
+        return text
+    return (text + " Please provide a custom word list.").strip()
+
+
+def _free_words_with_specific_clues(topic: str, raw_words: list[str], *, max_words: int) -> list[str]:
+    """Keep free-source answers only when local clue generation is specific.
+
+    The free word endpoint supplies vocabulary, not licensed-to-republish
+    definitions. Crossword exports use the Factory's own clue library and
+    rules; if those produce a generic/repeated clue, the candidate is
+    discarded and the customer gets a custom-list request instead.
+    """
+    from services.crossword.clues import simple_clue
+    from services.factory.topic_intelligence import is_placeholder_phrase
+
+    output: list[str] = []
+    seen_clues: set[str] = set()
+    topic_stub = re.sub(r"\s+", " ", str(topic or "").strip()).casefold()
+    generic_markers = ("related to ", "common word:", "common everyday word:",
+                       "word meaning:", "crossword answer (", "a common word:")
+    for word in _clean_crossword_words(raw_words, max_words=max_words):
+        clue = re.sub(r"\s+", " ", simple_clue(word, theme=topic)).strip()
+        clue_key = clue.casefold()
+        if (not clue or is_placeholder_phrase(clue)
+                or any(marker in clue_key for marker in generic_markers)
+                or (topic_stub and clue_key == f"related to {topic_stub}.")
+                or clue_key in seen_clues):
+            continue
+        seen_clues.add(clue_key)
+        output.append(word)
+    return output
+
+
 def suggest_crossword_words_from_topic(topic: str, *, max_words: int = 40) -> tuple[list[str], list[str], list[str]]:
-    """Local topic vocabulary — uses the same topic packs as Word Search (no API).
+    """Curated vocabulary first, then topic-aware legacy packs and free lookup.
 
     When the JSON pack has fewer than 50 words and a crossword fallback pack exists
     for the same topic, supplements with fallback words to ensure enough vocabulary for
-    a full multi-puzzle book.
+    a full multi-puzzle book. A free-source answer is accepted only when the
+    Factory can supply specific, non-repeated clues from its own library or
+    local rules. No paid AI call is made here.
     """
     from services.factory.topic_intelligence import is_instruction_fragment
 
@@ -189,9 +232,8 @@ def suggest_crossword_words_from_topic(topic: str, *, max_words: int = 40) -> tu
             best_words = list(entry.get("words", []))
             best_id = str(entry.get("id", ""))
 
-    # Require minimum score of 2 for a confident pack match.
-    # Semantic relevance check is used as extra validation for marginal keyword
-    # scores (score == 2) but BYPASSED for strong keyword matches (score >= 3).
+    # Require complete-token keyword matches and a topic-to-vocabulary check.
+    # The old substring shortcut let "Beekeeping" become a generic insect pack.
     # The char-overlap heuristic fails for theme-word matches like
     # "activities" → activities_pack (share almost no chars) even though the
     # keyword match is perfect by definition.
@@ -211,11 +253,7 @@ def suggest_crossword_words_from_topic(topic: str, *, max_words: int = 40) -> tu
 
     words: list[str] = []
     if best_score >= _MIN_SCORE and best_words:
-        # Strong keyword match (score >= 3): bypass semantic check.
-        # Marginal match (score == 2): validate with semantic relevance.
-        # (A 2-token overlap like "fun" <-> "software" gets score 3 but
-        # semantic check correctly rejects the unrelated computer_parts pack.)
-        use_pack = (best_score >= 3) or _semantic_relevance(best_words, topic_lower)
+        use_pack = _semantic_relevance(best_words, topic_lower)
         if use_pack:
             words = _clean_crossword_words(best_words, max_words=max_words)
             if words:
@@ -272,12 +310,20 @@ def suggest_crossword_words_from_topic(topic: str, *, max_words: int = 40) -> tu
         elif len(fb_words) <= len(words) or not overlap:
             # Fallback pack is too small OR not relevant to this topic.
             # Block: insufficient topic-matched vocabulary.
-            errors.append(
-                f'The topic "{topic_clean}" matched a small local vocabulary pack '
-                f'({len(words)} words) with no sufficient relevant fallback. '
-                f"Please provide a custom word list for this topic."
-            )
-            return [], warnings, errors
+            from services.factory.topic_word_source import lookup_topic_words
+
+            free_result = lookup_topic_words(topic_clean, max_words, crossword=True)
+            free_words = _free_words_with_specific_clues(topic_clean, free_result.words, max_words=max_words)
+            if len(free_words) >= 8:
+                words = _clean_crossword_words(list(dict.fromkeys(words + free_words)), max_words=max_words)
+                warnings.extend(free_result.warnings)
+                warnings.append(f'Used free vocabulary source for "{topic_clean}".')
+            else:
+                errors.append(_custom_list_error(
+                    free_result.errors[0] if free_result.errors else
+                    f'The topic "{topic_clean}" has too few relevant words and clues.'
+                ))
+                return [], warnings, errors
 
     # No JSON pack matched (words == 0): check if _normalize_theme maps to a
     # specific fallback pack (not generic everyday_life). If so, use that pack
@@ -297,12 +343,25 @@ def suggest_crossword_words_from_topic(topic: str, *, max_words: int = 40) -> tu
                 )
                 return words[:max_words], warnings, errors
 
+        # No local curated or named fallback pack matched. Try the free
+        # semantic word source, requiring real dictionary definitions so
+        # the crossword never exports placeholder clues.
+        from services.factory.topic_word_source import lookup_topic_words
+
+        free_result = lookup_topic_words(topic_clean, max_words, crossword=True)
+        free_words = _free_words_with_specific_clues(topic_clean, free_result.words, max_words=max_words)
+        if len(free_words) >= 8:
+            warnings.extend(free_result.warnings)
+            warnings.append(f'Used free vocabulary source for "{topic_clean}".')
+            return free_words, warnings, errors
+
         # Fail closed for unmatched specific topics. Do not invent household /
         # everyday vocabulary or pretend title tokens are a real word list.
-        errors.append(
+        errors.append(_custom_list_error(
+            free_result.errors[0] if free_result.errors else
             "Crossword could not find enough topic-relevant words and clues for this theme. "
-            "Please correct the theme or provide a custom word list."
-        )
+            "Please correct the theme."
+        ))
         return [], warnings, errors
 
     if len(words) < max_words:

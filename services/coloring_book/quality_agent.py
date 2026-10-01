@@ -495,6 +495,7 @@ def validate_coloring_book_page(
     main_character: str = "",
     setting: str = "",
     topic_field: str = "",
+    allow_ai_vision: bool = True,
 ) -> PageQualityResult:
     """
     Validate a single coloring book page against structural and visual quality gates.
@@ -510,6 +511,9 @@ def validate_coloring_book_page(
 
     Returns:
         PageQualityResult with pass/fail and any issues found
+
+    ``allow_ai_vision=False`` runs the deterministic image checks only; use it
+    for sample review flows that must not incur an unannounced paid call.
     """
     result = PageQualityResult(
         page_number=page_number,
@@ -543,17 +547,27 @@ def validate_coloring_book_page(
     except OSError:
         pass
 
-    # Gate 4: AI vision analysis
+    # Gate 4: AI vision analysis. Sample approvals run deterministic-only so
+    # asking to inspect a sample cannot silently add a paid vision call.
     image_b64 = _encode_image_jpeg(image_path)
     if image_b64:
-        vision = _analyze_line_art_image(image_b64)
-        result.ai_vision_notes = vision.get("notes", "")
+        if allow_ai_vision:
+            vision = _analyze_line_art_image(image_b64)
+            result.ai_vision_notes = vision.get("notes", "")
 
-        if not vision.get("passed", False):
-            for issue in vision.get("issues") or []:
-                result.issues.append(f"Page {page_number} vision: {issue}")
-        elif vision.get("notes"):
-            result.ai_vision_notes = vision["notes"]
+            if not vision.get("passed", False):
+                for issue in vision.get("issues") or []:
+                    result.issues.append(f"Page {page_number} vision: {issue}")
+            elif vision.get("notes"):
+                result.ai_vision_notes = vision["notes"]
+        else:
+            deterministic_issues = _run_deterministic_image_checks(image_b64)
+            result.ai_vision_notes = (
+                "Deterministic image checks only; review the sample before approval."
+            )
+            result.issues.extend(
+                f"Page {page_number}: {issue}" for issue in deterministic_issues
+            )
     else:
         result.issues.append(f"Page {page_number}: Could not encode image for vision analysis.")
 
@@ -568,6 +582,7 @@ def validate_coloring_book_pages(
     topic_field: str = "",
     regenerate: bool = True,
     regenerate_fn: Callable[[str, str], bool] | None = None,
+    allow_ai_vision: bool = True,
 ) -> ColoringBookQualityResult:
     """
     Validate all pages in a coloring book. Optionally regenerates failed images.
@@ -586,6 +601,8 @@ def validate_coloring_book_pages(
 
     Returns:
         ColoringBookQualityResult with per-page results and totals
+
+    ``allow_ai_vision=False`` keeps every page check deterministic and local.
     """
     results: list[PageQualityResult] = []
     errors: list[str] = []
@@ -604,6 +621,7 @@ def validate_coloring_book_pages(
             main_character=main_character,
             setting=setting,
             topic_field=topic_field,
+            allow_ai_vision=allow_ai_vision,
         )
         results.append(result)
 
@@ -621,6 +639,7 @@ def validate_coloring_book_pages(
                         main_character=main_character,
                         setting=setting,
                         topic_field=topic_field,
+                        allow_ai_vision=allow_ai_vision,
                     )
                     result2.regenerated = True
                     idx = next(i for i, r in enumerate(results) if r.page_number == page_num)

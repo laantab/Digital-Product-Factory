@@ -308,9 +308,36 @@ LEDGER = PlannerTheme(
     ornament="line", line_style="ruled", corner_radius=4.0,
 )
 
+CALM_CASHFLOW = PlannerTheme(
+    key="calm_cashflow", label="Calm Cashflow",
+    tagline="Soft blue and sea-glass green, with a clear, quiet ledger layout.",
+    planner_types=(BUDGET,),
+    paper="#FFFFFF", ink="#203040", muted="#52677A",
+    primary="#315A7D", accent="#3C8B83", accent_soft="#EAF4F3",
+    band="#EFF5F8", rule="#CCD9E2",
+    cover_bg="#315A7D", cover_text="#F7FBFD", cover_accent="#72B7A8",
+    cover_art="sunrise_sky", cover_style_default="soft_overlay",
+    display_face="sans", body_face="sans", header_style="soft",
+    ornament="line", line_style="ruled", corner_radius=6.0,
+)
+
+WARM_ENVELOPE = PlannerTheme(
+    key="warm_envelope", label="Warm Envelope",
+    tagline="Cream paper, walnut brown, and leaf green with a classic serif display.",
+    planner_types=(BUDGET,),
+    paper="#FFFCF5", ink="#30281F", muted="#625647",
+    primary="#70452E", accent="#6E8A4A", accent_soft="#F4EDDF",
+    band="#F7F0E3", rule="#D9CBB4",
+    cover_bg="#4B3528", cover_text="#FFF9EE", cover_accent="#D7A64B",
+    cover_art="walnut_grain", cover_style_default="photo_panel",
+    display_face="serif", body_face="sans", header_style="band",
+    ornament="chevron", line_style="ruled", corner_radius=4.0,
+)
+
 THEMES: dict[str, PlannerTheme] = {
     t.key: t for t in (WARM_GRACE, MODERN_MINIMAL, FLORAL_DEVOTION,
-                       FAMILY_HERITAGE, JOYFUL_LIGHT, LEDGER)
+                       FAMILY_HERITAGE, JOYFUL_LIGHT, LEDGER,
+                       CALM_CASHFLOW, WARM_ENVELOPE)
 }
 
 DEFAULT_THEME = {FAITH: WARM_GRACE.key, BUDGET: LEDGER.key}

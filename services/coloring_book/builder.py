@@ -36,6 +36,14 @@ def _is_image_ai_available() -> bool:
     except Exception:
         return False
 
+
+def _is_planetary_coloring_subject(theme: str, topic: str) -> bool:
+    """Identify explicit planet/solar-system requests without matching generic space art."""
+    text = f"{theme or ''} {topic or ''}".lower()
+    return bool(
+        re.search(r"\bplanets?\b|\bsolar system\b|\b(?:mercury|venus|earth|mars|jupiter|saturn|uranus|neptune)\b", text)
+    )
+
 EXPORTS_DIR = os.environ.get(
     "FLASK_EXPORTS_DIR",
     os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "exports"),
@@ -1187,6 +1195,16 @@ def build_coloring_book(
         if not prompt:
             prompt = f"A detailed line-art coloring page of {page_topic}."
         prompt = finalize_interior_prompt(prompt, bible, art_style)
+        if _is_planetary_coloring_subject(theme, page_topic):
+            prompt += (
+                " PLANET ART REQUIREMENTS: make the planet the large, centered main subject, "
+                "fully visible and occupying about 60–75% of the usable page height. Draw a "
+                "recognizable round globe with clean, connected coloring-book outlines and "
+                "large open regions. Do not draw a box, rectangle, frame, chart, stray bars, "
+                "or detached marks. For Saturn, make the elliptical rings clearly wrap around "
+                "the round globe, passing behind and in front without hiding its shape. Keep "
+                "the whole illustration inside generous page margins."
+            )
 
         pages.append(ColoringPageResult(
             page_number=i + 1,
@@ -1433,7 +1451,7 @@ def build_coloring_book(
         pages
         and not ai_failed
         and quality_mode != "basic_test"
-        and stage == "full"
+        and stage in {"sample_interior", "full"}
         and any(p.image_path and os.path.isfile(p.image_path) for p in pages)
     ):
         page_dicts = [p.as_dict() for p in pages if p.image_path]
@@ -1444,6 +1462,9 @@ def build_coloring_book(
             topic_field=topic,
             regenerate=False,
             regenerate_fn=None,
+            # Sample review must stay free of AI vision calls. The customer
+            # still explicitly inspects and approves the one generated page.
+            allow_ai_vision=stage == "full",
         )
         for qr in qc_result.pages:
             if qr.image_path:

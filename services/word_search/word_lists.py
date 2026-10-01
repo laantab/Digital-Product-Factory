@@ -1,4 +1,4 @@
-"""Word list parsing and local topic vocabulary (no API calls)."""
+"""Word list parsing, curated topics, and fail-closed free-source fallback."""
 from __future__ import annotations
 
 import json
@@ -189,16 +189,27 @@ def supplement_entries_to_count(
 
 
 def _score_topic_match(topic_lower: str, keywords: list[str]) -> int:
+    """Score only whole-token or whole-phrase matches.
+
+    Substring scoring made "Beekeeping" match the unrelated "bee/insects"
+    pack and allowed short fragments such as "art" to match "party". The
+    shared curated resolver still runs first; legacy packs now need an actual
+    topic token or phrase match.
+    """
     score = 0
+    topic_tokens = topic_lower.split()
+    topic_set = set(topic_tokens)
     for keyword in keywords:
-        kw = keyword.lower().strip()
-        if not kw:
+        kw_tokens = re.findall(r"[a-z0-9]+", str(keyword or "").lower())
+        if not kw_tokens:
             continue
-        if kw in topic_lower or topic_lower in kw:
+        if len(kw_tokens) == 1 and kw_tokens[0] in topic_set:
             score += 3
-        for token in topic_lower.split():
-            if token == kw or kw in token or token in kw:
-                score += 1
+        elif len(kw_tokens) > 1 and any(
+            topic_tokens[index:index + len(kw_tokens)] == kw_tokens
+            for index in range(len(topic_tokens) - len(kw_tokens) + 1)
+        ):
+            score += 3 * len(kw_tokens)
     return score
 
 
@@ -209,10 +220,12 @@ def suggest_words_from_topic(
     max_words: int = 12,
 ) -> tuple[list[str], list[str], list[str], str]:
     """
-    Local topic vocabulary lookup only — no OpenAI/Tavily.
+    Curated and legacy local topic lookup, then the free Datamuse source.
+    This function never makes a paid OpenAI/Tavily call.
 
     Returns (suggested_display_words, warnings, errors, matched_pack_id).
-    matched_pack_id is "" when no topic pack matched (fallback used).
+    matched_pack_id is "datamuse" when the free source supplies the list,
+    and "" when no safe list can be returned.
     """
     warnings: list[str] = []
     errors: list[str] = []
@@ -240,6 +253,25 @@ def suggest_words_from_topic(
         # re-flagged as "no matching vocabulary pack found".
         warnings.append(f'Used local vocabulary pack "{shared.category}" for topic "{topic_clean}".')
         return shared.words[:max_words], warnings, errors, shared.category or ""
+
+    # Reject obvious gibberish before calling the free service. This keeps
+    # nonsense tokens out of external requests and preserves the existing
+    # customer-safe failure for topics such as "zxqv nebula spoons 9382".
+    topic_tokens = [t for t in re.split(r"[^A-Za-z0-9]+", topic_clean) if t]
+    readable_tokens = [
+        t for t in topic_tokens
+        if t.isalpha() and len(t) >= 3 and re.search(r"[aeiouyAEIOUY]", t)
+    ]
+    has_gibberish_token = any(
+        t.isdigit() or (t.isalpha() and not re.search(r"[aeiouyAEIOUY]", t))
+        for t in topic_tokens
+    )
+    if has_gibberish_token and len(readable_tokens) < 4:
+        errors.append(
+            f'We could not build a strong enough word set for "{topic_clean}". '
+            "Try a broader topic or add your own word list."
+        )
+        return [], warnings, errors, ""
 
     data = _load_topics_data()
     topic_lower = topic_clean.lower()
@@ -284,7 +316,9 @@ def suggest_words_from_topic(
                 return match_count >= max(1, int(len(topic_words) * 0.50))
         return False
 
-    # Use pack when score >= _MIN_SCORE AND (score >= 5 (two+ strong keyword hits, trust it)
+    # Use a pack only when actual topic tokens support it. Never trust a
+    # score built from partial substrings; that is how "Beekeeping" became
+    # an unrelated insects list.
     # OR score == 4 AND the topic is primarily about the pack domain
     # OR semantic relevance passes for score 2-3).
     #
@@ -294,18 +328,28 @@ def suggest_words_from_topic(
     # - "Purple Moon Business Ideas" (4 words) → only "business" matches → 1/4=25% → FAIL
     #
     # Also covers: "business_training" topic → "business"+"training" both in keywords → 2/2=100% → PASS.
+    # A whole, multi-word curated keyword phrase (or two exact keyword
+    # hits) is itself a deliberate local mapping and outranks the semantic
+    # fallback. This preserves explicit packs such as "computer parts".
     confident_match = best_score >= 5
     single_strong_kw_ok = False
-    if best_score == 4:
+    if best_score == 3:
         for entry in data.get("topics", []):
             if str(entry.get("id", "")) == best_id:
-                pack_keywords = {kw.lower() for kw in entry.get("keywords", [])}
+                pack_keywords = {
+                    " ".join(re.findall(r"[a-z0-9]+", str(kw or "").lower()))
+                    for kw in entry.get("keywords", [])
+                }
                 topic_significant = {
                     t for t in re.split(r"[^A-Za-z0-9]+", topic_lower) if len(t) >= 3
                 }
-                topic_kw_hits = sum(1 for tw in topic_significant if tw in pack_keywords)
-                threshold = max(1, int(len(topic_significant) * 0.50))
-                single_strong_kw_ok = topic_kw_hits >= threshold
+                # A one-word request exactly named by the pack is a valid
+                # built-in topic. Do not let one shared token match a longer
+                # unrelated topic such as "Dog training" -> business.
+                single_strong_kw_ok = (
+                    len(topic_significant) == 1
+                    and next(iter(topic_significant)) in pack_keywords
+                )
                 break
     weak_match_ok = best_score >= _MIN_SCORE and (
         _semantic_relevance(best_words, topic_lower) or single_strong_kw_ok
@@ -316,6 +360,31 @@ def suggest_words_from_topic(
         words = best_words[:max_words]
         warnings.append(f'Used local vocabulary pack "{best_id}" for topic "{topic_clean}".')
     else:
+        # Curated shared and legacy packs have had first refusal. For topics
+        # they do not cover, use the free semantic vocabulary source. If it
+        # cannot provide a usable set, fail clearly rather than turn the
+        # customer's title tokens or generic puzzle words into a word bank.
+        from services.factory.topic_word_source import lookup_topic_words
+
+        free_result = lookup_topic_words(topic_clean, max_words, crossword=False)
+        free_words = free_result.words
+        if len(free_words) >= 4:
+            words = free_words
+            best_id = "datamuse"
+            warnings.extend(free_result.warnings)
+            warnings.append(f'Used free vocabulary source for "{topic_clean}".')
+        else:
+            detail = free_result.errors[0] if free_result.errors else (
+                "The free word source did not return enough words."
+            )
+            message = (
+                f'The topic "{topic_clean}" does not match any known vocabulary pack. '
+                f"{detail} Add a custom word list or choose a broader topic."
+            )
+            errors.append(message)
+            return [], warnings, errors, ""
+
+    if best_id != "datamuse" and not (confident_match or weak_match_ok):
         # No confident match — use only the topic tokens themselves.
         # NEVER pull from unrelated topic packs; that caused
         # "computer parts" to get "apple, banana, cherry" from cross-pack supplementation.
@@ -331,27 +400,14 @@ def suggest_words_from_topic(
         # else in this Factory for "enough for one real puzzle"), turns a
         # nonsense topic into the same friendly "add custom words" outcome
         # a topic with zero matching content already got.
-        tokens = [
-            t for t in re.split(r"[^A-Za-z0-9]+", topic_clean)
-            if len(t) >= 3 and t.isalpha() and re.search(r"[aeiouyAEIOUY]", t)
-        ]
-        words = []
-        for token in tokens:
-            word = token.upper()
-            if word not in words:
-                words.append(word)
-        if len(words) < 4:
+        # Kept as a defensive guard: free lookup above must either return a
+        # real vocabulary set or have already returned a specific error.
+        if not words:
             errors.append(
-                f'We could not build a strong enough word set for "{topic_clean}" yet. '
-                "Try a broader topic or add your own words."
+                f'We could not build a strong enough word set for "{topic_clean}". '
+                "Add your own word list or choose a broader topic."
             )
             return [], warnings, errors, ""
-        warnings.append(
-            f'No exact local pack matched "{topic_clean}". '
-            "Topic tokens used as starter words; supplementation restricted."
-        )
-        # Clear the matched pack id so supplement uses generic_fallback only
-        best_id = ""
 
     if audience_note:
         warnings.append(f'Audience note "{audience_note}" recorded; word list is not API-filtered in Phase 1.')

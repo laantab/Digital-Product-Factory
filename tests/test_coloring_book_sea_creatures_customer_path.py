@@ -10,10 +10,13 @@ import io
 import os
 import shutil
 import sys
+import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
+
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -73,6 +76,7 @@ class SeaCreaturesColoringBookCustomerPathTests(unittest.TestCase):
                 pass
         for folder in self._export_dirs:
             shutil.rmtree(folder, ignore_errors=True)
+
 
     def _track_pkg(self, package_id: str | None):
         if package_id:
@@ -481,7 +485,147 @@ class SeaCreaturesColoringBookAuthorTests(unittest.TestCase):
                 "59c3d7cd0e22963cad995d762b4126f593ea97df2458577f80c431672aca4bac",
             )
 
+class PlanetSampleQualityGateTests(unittest.TestCase):
+    """A bad approval sample must be stopped before the customer sees a PDF."""
+
+    @staticmethod
+    def _write_planet_image(path: str, *, tiny: bool) -> bool:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        image = Image.new("RGB", (1024, 1536), "white")
+        draw = ImageDraw.Draw(image)
+        if tiny:
+            # Reproduces the supplied sample: a small planet-like mark floating
+            # in a mostly empty coloring page.
+            draw.ellipse((470, 700, 550, 790), outline="black", width=6)
+            draw.ellipse((445, 730, 575, 760), outline="black", width=6)
+        else:
+            # Positive control: a large, printable subject with open coloring
+            # space and safe margins.
+            draw.ellipse((180, 220, 844, 1316), outline="black", width=8)
+            draw.ellipse((320, 440, 704, 824), outline="black", width=6)
+            draw.arc((240, 700, 780, 1240), 200, 340, fill="black", width=6)
+        image.save(path, "PNG")
+        return True
+
+    def _build_planet_sample(self, package_id: str, *, tiny: bool):
+        from services.coloring_book.pdf_builder import (
+            ColoringBookPdfRequest,
+            build_coloring_book_pdf,
+        )
+
+        plan = {
+            "title": "Planets",
+            "subtitle": "A Coloring Book",
+            "pages": [
+                {
+                    "topic": "Saturn",
+                    "line_art_prompt": (
+                        "Draw Saturn as a large, centered, friendly planet with "
+                        "clean coloring-book line art and simple open regions."
+                    ),
+                }
+            ],
+        }
+        captured_prompts: list[str] = []
+
+        def generate_sample(prompt, path, **kwargs):
+            captured_prompts.append(prompt)
+            return self._write_planet_image(path, tiny=tiny)
+
+        with patch("services.coloring_book.builder.chat_json", return_value=plan), patch(
+            "services.coloring_book.builder._generate_line_art_image",
+            side_effect=generate_sample,
+        ), patch("services.coloring_book.pdf_builder.EXPORTS_DIR", str(Path(package_id).parent)), patch(
+            "services.coloring_book.builder.EXPORTS_DIR", str(Path(package_id).parent)
+        ):
+            result = build_coloring_book_pdf(
+                ColoringBookPdfRequest(
+                    product_title="Planets",
+                    theme="Planets",
+                    page_count=1,
+                    include_cover=False,
+                    output_type="single_page",
+                    quality_mode="ai_image_coloring_page",
+                    package_id=Path(package_id).name,
+                    generation_stage="sample_interior",
+                    character_approved=True,
+                )
+            )
+        return result, captured_prompts
+
+    def test_tiny_planet_sample_is_rejected_without_paid_vision(self):
+        with tempfile.TemporaryDirectory() as td, patch(
+            "services.coloring_book.quality_agent._analyze_line_art_image",
+            side_effect=AssertionError("sample QA must not make a paid vision call"),
+        ):
+            result, prompts = self._build_planet_sample(os.path.join(td, "tiny_planet"), tiny=True)
+
+        self.assertTrue(result.errors, "malformed sample must be blocked")
+        self.assertFalse(result.pdf_bytes, "blocked sample must not be emitted as a PDF")
+        self.assertTrue(any("too small" in error.lower() for error in result.errors), result.errors)
+        self.assertTrue(result.qa_result and result.qa_result.get("blocked_export"))
+        self.assertTrue(prompts)
+        self.assertIn("PLANET ART REQUIREMENTS", prompts[0])
+        self.assertIn("Do not draw a box, rectangle", prompts[0])
+
+    def test_well_sized_planet_sample_can_render_without_paid_vision(self):
+        with tempfile.TemporaryDirectory() as td, patch(
+            "services.coloring_book.quality_agent._analyze_line_art_image",
+            side_effect=AssertionError("sample QA must not make a paid vision call"),
+        ):
+            result, _prompts = self._build_planet_sample(os.path.join(td, "good_planet"), tiny=False)
+
+        self.assertFalse(result.errors, result.errors)
+        self.assertTrue(result.pdf_bytes, "valid sample should still produce its preview PDF")
+        self.assertTrue(result.qa_result and result.qa_result.get("all_passed"))
+
+    def test_sample_without_a_quality_result_fails_closed(self):
+        from types import SimpleNamespace
+        from services.coloring_book.pdf_builder import (
+            ColoringBookPdfRequest,
+            build_coloring_book_pdf,
+        )
+
+        with tempfile.TemporaryDirectory() as td:
+            image_path = os.path.join(td, "saturn.png")
+            self._write_planet_image(image_path, tiny=False)
+            page = SimpleNamespace(
+                page_number=1,
+                topic="Saturn",
+                line_art_prompt="A large coloring page of Saturn and its rings.",
+                caption="",
+                image_path=image_path,
+                as_dict=lambda: {
+                    "page_number": 1,
+                    "topic": "Saturn",
+                    "line_art_prompt": "A large coloring page of Saturn and its rings.",
+                    "caption": "",
+                    "image_path": image_path,
+                },
+            )
+            book = SimpleNamespace(
+                errors=[], warnings=[], pages=[page], quality_result=None,
+                character_bible={}, cover_prompt="", consistency_notes=[],
+                product_title="Planets", subtitle="",
+            )
+            with patch("services.coloring_book.pdf_builder.build_coloring_book", return_value=book):
+                result = build_coloring_book_pdf(
+                    ColoringBookPdfRequest(
+                        product_title="Planets",
+                        theme="Planets",
+                        page_count=1,
+                        include_cover=False,
+                        output_type="single_page",
+                        quality_mode="ai_image_coloring_page",
+                        package_id="missing_qa_planet",
+                        generation_stage="sample_interior",
+                    )
+                )
+
+        self.assertFalse(result.pdf_bytes)
+        self.assertTrue(any("quality review did not run" in error.lower() for error in result.errors))
+
+
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -12,6 +12,7 @@ from reportlab.pdfgen import canvas
 
 from services.math_worksheet.builder import MathProblem, MathWorksheetResult
 from services.math_worksheet.pdf_fonts import ascii_pdf_text, ensure_math_fonts
+from services.math_worksheet.themes import MathWorksheetTheme, resolve_math_worksheet_theme
 
 _MARGIN = 0.5 * 72.0  # 0.5 inch
 _HEADER_H = 60  # space for title block
@@ -125,14 +126,16 @@ def _draw_header(
     difficulty: str,
     page_num: int,
     total_pages: int,
+    theme: MathWorksheetTheme | None = None,
 ) -> float:
     """Draw worksheet header once and return the y position below it."""
     page_w, page_h = letter
-    font, font_bold, font_italic = _fonts()
+    theme = theme or resolve_math_worksheet_theme("classic_classroom")
+    font, font_bold, font_italic = theme.regular_font, theme.bold_font, theme.italic_font
 
     _draw_text(
         pdf, page_w / 2.0, page_h - _MARGIN - 18, title[:80],
-        font_name=font_bold, font_size=16, align="center",
+        font_name=font_bold, font_size=theme.heading_font_size, align="center",
     )
 
     meta_parts = []
@@ -147,25 +150,29 @@ def _draw_header(
     _draw_text(
         pdf, page_w / 2.0, page_h - _MARGIN - 32, meta,
         font_name=font, font_size=9, align="center",
-        fill=colors.HexColor("#4B5563"),
+        fill=colors.HexColor(theme.muted),
     )
 
-    pdf.setStrokeColor(colors.HexColor("#D1D5DB"))
-    pdf.setLineWidth(0.5)
+    pdf.setStrokeColor(colors.HexColor(theme.rule))
+    pdf.setLineWidth(0.75 if theme.key != "classic_classroom" else 0.5)
     y_line = page_h - _MARGIN - 42
     pdf.line(_MARGIN, y_line, page_w - _MARGIN, y_line)
+    if theme.key != "classic_classroom":
+        pdf.setStrokeColor(colors.HexColor(theme.accent))
+        pdf.setLineWidth(2.0)
+        pdf.line(_MARGIN, y_line, _MARGIN + 46, y_line)
 
     _draw_page_counter(
         pdf, page_w, page_h, f"Page {page_num} of {total_pages}",
         font_bold=font_bold, heading=title[:80], heading_font=font_bold,
-        heading_size=16, heading_baseline=page_h - _MARGIN - 18,
+        heading_size=theme.heading_font_size, heading_baseline=page_h - _MARGIN - 18,
     )
 
     # Single instruction line — never redrawn elsewhere on this page.
     _draw_text(
         pdf, _MARGIN, y_line - 14, _INSTRUCTION,
         font_name=font_italic, font_size=9,
-        fill=colors.HexColor("#374151"),
+        fill=colors.HexColor(theme.ink),
     )
 
     return y_line - 30
@@ -179,11 +186,13 @@ def _draw_problem_grid(
     right_x: float,
     top_y: float,
     bottom_y: float,
+    theme: MathWorksheetTheme | None = None,
 ) -> float:
     """Draw problems in two columns. Returns the y after the last problem."""
-    font, font_bold, _font_italic = _fonts()
+    theme = theme or resolve_math_worksheet_theme("classic_classroom")
+    font, font_bold = theme.regular_font, theme.bold_font
     col_width = (right_x - left_x) / _COLS
-    row_h = _PROBLEM_H
+    row_h = theme.problem_row_height
 
     y = top_y
     for i, problem in enumerate(problems):
@@ -196,20 +205,20 @@ def _draw_problem_grid(
             break
 
         if row % 2 == 0:
-            pdf.setFillColor(colors.HexColor("#F9FAFB"))
+            pdf.setFillColor(colors.HexColor(theme.row_fill))
             pdf.rect(x, y - row_h + 2, col_width - 4, row_h - 4, fill=1, stroke=0)
 
         _draw_text(
             pdf, x + 2, y - 12, f"{problem.number}.",
-            font_name=font_bold, font_size=9,
-            fill=colors.HexColor("#374151"),
+            font_name=font_bold, font_size=theme.problem_font_size - 2,
+            fill=colors.HexColor(theme.ink),
         )
         _draw_text(
             pdf, x + 22, y - 12, problem.expression[:30],
-            font_name=font, font_size=11,
+            font_name=font, font_size=theme.problem_font_size,
         )
 
-        pdf.setStrokeColor(colors.HexColor("#9CA3AF"))
+        pdf.setStrokeColor(colors.HexColor(theme.rule if theme.key != "classic_classroom" else "#9CA3AF"))
         pdf.setLineWidth(0.5)
         pdf.line(x + 22, y - 16, x + col_width - 8, y - 16)
 
@@ -224,10 +233,12 @@ def _draw_answer_key_page(
     page_num: int = 1,
     total_pages: int = 1,
     section_label: str = "Main",
+    theme: MathWorksheetTheme | None = None,
 ) -> None:
     """Draw one answer key page with two clearly separated columns."""
     page_w, page_h = letter
-    font, font_bold, _font_italic = _fonts()
+    theme = theme or resolve_math_worksheet_theme("classic_classroom")
+    font, font_bold = theme.regular_font, theme.bold_font
 
     _paint_white(pdf)
 
@@ -238,8 +249,8 @@ def _draw_answer_key_page(
         font_name=font_bold, font_size=14, align="center",
     )
 
-    pdf.setStrokeColor(colors.HexColor("#D1D5DB"))
-    pdf.setLineWidth(0.5)
+    pdf.setStrokeColor(colors.HexColor(theme.rule))
+    pdf.setLineWidth(0.75 if theme.key != "classic_classroom" else 0.5)
     pdf.line(_MARGIN, page_h - _MARGIN - 26, page_w - _MARGIN, page_h - _MARGIN - 26)
 
     _draw_page_counter(
@@ -264,20 +275,20 @@ def _draw_answer_key_page(
         _draw_text(
             pdf, x0, top_y, "#",
             font_name=font_bold, font_size=9,
-            fill=colors.HexColor("#374151"),
+            fill=colors.HexColor(theme.accent),
         )
         _draw_text(
             pdf, x0 + expr_x_off, top_y, "Problem",
             font_name=font_bold, font_size=9,
-            fill=colors.HexColor("#374151"),
+            fill=colors.HexColor(theme.ink),
         )
         _draw_text(
             pdf, x0 + ans_x_off, top_y, "Answer",
             font_name=font_bold, font_size=9,
-            fill=colors.HexColor("#374151"),
+            fill=colors.HexColor(theme.accent),
         )
 
-    pdf.setStrokeColor(colors.HexColor("#D1D5DB"))
+    pdf.setStrokeColor(colors.HexColor(theme.rule))
     pdf.line(_MARGIN, top_y - 4, page_w - _MARGIN, top_y - 4)
 
     y_base = top_y - 18
@@ -302,7 +313,7 @@ def _draw_answer_key_page(
         _draw_text(
             pdf, x0 + ans_x_off, y, str(problem.answer)[:12],
             font_name=font_bold, font_size=8,
-            fill=colors.HexColor("#059669"),
+            fill=colors.HexColor(theme.secondary),
         )
 
 
@@ -318,6 +329,7 @@ def build_math_worksheet_pdf_bytes(
     include_answer_key: bool = True,
     include_cover: bool = False,
     cover_image_path: str = "",
+    design_theme: str = "classic_classroom",
 ) -> tuple[bytes, MathWorksheetLayoutInfo]:
     """Render a math worksheet PDF from MathWorksheetResult.
 
@@ -338,6 +350,8 @@ def build_math_worksheet_pdf_bytes(
     layout = MathWorksheetLayoutInfo()
     page_w, page_h = letter
     font, font_bold, _font_italic = _fonts()
+    theme = resolve_math_worksheet_theme(design_theme)
+    font, font_bold, _font_italic = theme.regular_font, theme.bold_font, theme.italic_font
 
     # Cover page
     if include_cover:
@@ -352,6 +366,11 @@ def build_math_worksheet_pdf_bytes(
                 )
         else:
             _paint_white(pdf)
+            if theme.key != "classic_classroom":
+                pdf.setFillColor(colors.HexColor(theme.cover_fill))
+                pdf.rect(0, page_h * 0.52, page_w, page_h * 0.20, fill=1, stroke=0)
+                pdf.setFillColor(colors.HexColor(theme.accent))
+                pdf.rect(0, page_h * 0.52, 8, page_h * 0.20, fill=1, stroke=0)
             _draw_text(
                 pdf, page_w / 2.0, page_h / 2.0 + 20, result.title[:80],
                 font_name=font_bold, font_size=20, align="center",
@@ -399,6 +418,7 @@ def build_math_worksheet_pdf_bytes(
             result.difficulty,
             page_num,
             total_pages,
+            theme,
         )
 
         left_x = _MARGIN
@@ -413,6 +433,7 @@ def build_math_worksheet_pdf_bytes(
             pdf, page_problems,
             left_x=left_x, right_x=right_x,
             top_y=top_y, bottom_y=bottom_y,
+            theme=theme,
         )
 
         layout.worksheet_pages += 1
@@ -426,11 +447,13 @@ def build_math_worksheet_pdf_bytes(
             "Bonus problems for advanced learners",
             result.grade, result.math_topic, result.difficulty,
             ws_page_count + 1, total_pages,
+            theme,
         )
         _draw_problem_grid(
             pdf, result.challenge_problems,
             left_x=_MARGIN, right_x=page_w - _MARGIN,
             top_y=top_y, bottom_y=_MARGIN + 30,
+            theme=theme,
         )
         layout.worksheet_pages += 1
         pdf.showPage()
@@ -448,6 +471,7 @@ def build_math_worksheet_pdf_bytes(
                 page_num=page_num,
                 total_pages=total_pages,
                 section_label="Main",
+                theme=theme,
             )
             layout.answer_key_pages += 1
             pdf.showPage()
@@ -461,6 +485,7 @@ def build_math_worksheet_pdf_bytes(
                 page_num=page_num,
                 total_pages=total_pages,
                 section_label="Challenge",
+                theme=theme,
             )
             layout.answer_key_pages += 1
             pdf.showPage()
@@ -473,8 +498,10 @@ def save_math_worksheet_pdf(
     result: MathWorksheetResult,
     output_dir: str,
     filename: str = "math_worksheet.pdf",
+    *,
+    design_theme: str = "classic_classroom",
 ) -> tuple[bytes, MathWorksheetLayoutInfo]:
-    pdf_bytes, layout = build_math_worksheet_pdf_bytes(result)
+    pdf_bytes, layout = build_math_worksheet_pdf_bytes(result, design_theme=design_theme)
     path = os.path.join(output_dir, filename)
     os.makedirs(os.path.dirname(path) or output_dir, exist_ok=True)
     with open(path, "wb") as fh:

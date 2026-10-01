@@ -5,6 +5,104 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.19 — 2026-09-30
+
+### What changed
+
+- Coloring Book sample pages now run local image-quality checks before a preview PDF is created.
+- Planet and solar-system prompts require a large, centered planet illustration and clearly defined Saturn rings, and forbid box-like marks and stray lines.
+
+### What was fixed
+
+- A malformed or undersized sample is blocked before it can be presented for approval. The error identifies the failed page check.
+- Missing sample-stage QA now fails closed. Sample checks use deterministic local image analysis and do not make a paid vision call; a passing sample still requires the customer to inspect and approve it.
+
+### Steps change
+
+The customer can review a sample only after it passes the local line-art checks. If the check fails, the sample PDF is withheld and the message names the page and issue.
+
+### Validation
+
+- Regression tests recreate an undersized Saturn sample and a missing-QA result; both are blocked without producing a PDF. A well-sized planet sample still renders.
+- Coloring Book protected suites, lock checks, paid-call guards, and version tests: 89 passed.
+- Full release gate: 2,971 passed, 0 failed, 0 errors, 1 approved conditional skip; exit code 0. The approved skip is the Project 351 local-export preservation check. The final missing-QA regression test was added afterward and passed in the focused 89-test run; no product code changed after the full gate.
+- Browser suites: 13 passed after installing the matching local Playwright Chromium.
+- Fast Stability Gate after relocking: 729 passed. Lock registry integrity and enforcement: 9 passed.
+- No paid provider calls, live customer builds, pushes, merges, or deploys.
+
+### Release gate
+
+PASS locally. External network and paid API calls were blocked by the test harness.
+
+## 1.9.18 — 2026-09-30
+
+### What changed
+
+- Math Worksheet now offers Classic Classroom, Calm Focus, and Bright Practice interior styles. The selected style is saved with the project and carried through the PDF saved on disk, direct download, and ZIP package.
+- Budget Planner now offers Ledger, Calm Cashflow, and Warm Envelope styles. Ledger remains the default; the alternatives change type, page furniture, colors, and cover art while preserving the financial worksheets and page count.
+- Classic Classroom remains the default for existing and new worksheets that do not specify a style. The worksheet content, page size, problem count, answer key, and page numbering do not change when a style is selected.
+- Word Search answer keys now use higher-contrast colored outlines with a matching legend, making each solution easier to follow.
+
+### What was fixed
+
+- Math Worksheet now preserves the pre-1.9.18 appearance unless a customer chooses another style; saved and reopened projects retain the selected style through every PDF export path.
+- Budget Planner keeps Ledger as the default, including for existing projects, while making the two additional style families selectable.
+
+### Steps change
+
+In the Math Worksheet and Budget Planner forms, select an interior style before building. Existing records without a saved selection continue to use the legacy default.
+
+### Validation
+
+- New Math Worksheet theme tests cover measurable PDF typography and appearance, unchanged content/page geometry, selection persistence through save/reopen/export, and PDF identity inside the ZIP.
+- Classic Classroom was compared with the pre-theme renderer: a 3-page fixture produced identical extracted text, page dimensions, and rendered pixels.
+- Math Worksheet, Word Search, Crossword, and Coloring Book protected suites passed after the shared form change. Full release and fast gate results are recorded in the session handoff.
+- No paid provider calls, live customer builds, pushes, merges, or deploys were made.
+
+### Release gate
+
+Final full release gate on the local 1.9.18 tree: **2,969 passed, 0 failed, 0 errors, 1 approved conditional skip**, 1,592 subtests; the gate reported 4,562 total cases and exited 0. The skip is the Project 351 local-export preservation check, which runs when those customer files are present. The fast gate last passed 726 checks with 1,033 subtests before the changelog-only correction. No paid provider calls, live customer builds, pushes, merges, or deploys were made.
+
+## 1.9.17 — 2026-09-29
+
+### What changed
+
+- The release gate now recognizes the one Project 351 preservation test's documented conditional skip when its real customer export files are absent from a checkout.
+
+### What was fixed
+
+- The gate no longer reports a false release failure for that exact absent-file condition. A different skipped test or a changed skip reason still fails the gate.
+
+### Steps change
+
+The release gate reports the accepted Project 351 skip by name and keeps running the rest of the acceptance suite. The Project 351 preservation test itself remains in place and still verifies the recorded file hashes whenever those files are present.
+
+### Release gate
+
+Four policy tests verify the exact test ID and reason are required; all other skips remain blocking. The full 1.9.17 gate passed: 2,961 passed, 0 failed, 0 errors, 1 approved conditional skip, and 1,563 subtests; the gate reported 4,525 total cases and exited 0. The approved skip is the Project 351 local-export check described above. No live products were changed and no paid calls were made.
+
+## 1.9.16 — 2026-09-29
+
+### What changed
+
+- Puzzle topics try curated packs first, then a free Datamuse vocabulary lookup. Only the topic is sent; no paid AI call is made.
+- Removed partial-token matching that could route a topic to an unrelated word pack.
+- Crossword free-source answers are accepted only when the Factory can provide specific, non-repeated local clues; otherwise the build asks for a custom list.
+- Added deterministic tests for source filtering, caching, failure handling, and both puzzle paths.
+
+### What was fixed
+
+- Topics such as "Beekeeping" no longer select an unrelated pack just because a short keyword appears inside a longer word.
+- Unsupported or low-quality results fail safely instead of adding generic filler or unrelated answers.
+
+### Steps change
+
+The puzzle workflow is now curated vocabulary, then a free topic lookup, then a clear request for a custom word list if there are not enough suitable entries. Crossword clues still come from the Factory's own clue rules.
+
+### Release gate
+
+The fast gate passed (721 tests, 992 subchecks). The full gate ran 4,480 tests with 0 failures and 0 errors; its strict wrapper returned code 1 for one intentionally conditional skip: the Project 351 preservation test requires that customer's local export files, which are not part of this checkout. A later, focused run of all 14 v1.9.16 topic tests also passed, including PDF generation and the Crossword fail-closed clue check. Tests use fake source responses, so no external request or paid call was made. This change is local and is not released.
+
 ## 1.9.15 — 2026-09-28
 
 **Plant puzzles use plant words, and the Editor-in-Chief review never gets stuck.**

@@ -62,6 +62,7 @@ from services.planner.themes import normalize_cover_style  # noqa: E402
 
 FAITH_THEME_KEYS = ("warm_grace", "modern_minimal", "floral_devotion",
                     "family_heritage", "joyful_light")
+BUDGET_THEME_KEYS = ("ledger", "calm_cashflow", "warm_envelope")
 
 
 def _render(exports_dir: str, **kw) -> tuple[object, list[str], dict]:
@@ -99,6 +100,19 @@ class ThemeRegistryTests(unittest.TestCase):
             self.assertIn(key, offered, key)
         self.assertEqual(theme_choices(FAITH)[0][0], DEFAULT_THEME[FAITH])
         self.assertNotIn("ledger", offered, "the budget house style is not a faith theme")
+
+    def test_budget_offers_three_styles_and_keeps_ledger_as_the_default(self):
+        choices = theme_choices(BUDGET)
+        self.assertEqual(tuple(key for key, _label in choices), BUDGET_THEME_KEYS)
+        self.assertEqual(choices[0][0], DEFAULT_THEME[BUDGET])
+        source = (ROOT / "static/js/app.js").read_text(encoding="utf-8")
+        start = source.index('id: "budget_planner"')
+        end = source.index('id: "planner"', start)
+        block = source[start:end]
+        self.assertIn('name: "design_theme"', block)
+        self.assertIn('default: "ledger"', block)
+        for key in BUDGET_THEME_KEYS:
+            self.assertIn(f'value: "{key}"', block)
 
     def test_every_theme_defines_the_full_token_set(self):
         for key, t in THEMES.items():
@@ -233,7 +247,11 @@ class ThemedPlannerRenderTests(unittest.TestCase):
         for key in FAITH_THEME_KEYS:
             cls.rendered[key] = _render(cls.tmp, design_theme=key, package_id=f"theme_{key}",
                                         title="Family Faith Planner", audience="For busy households")
-        cls.rendered["ledger"] = _render(cls.tmp, planner_type=BUDGET, package_id="theme_ledger")
+        for key in BUDGET_THEME_KEYS:
+            cls.rendered[key] = _render(
+                cls.tmp, planner_type=BUDGET, design_theme=key,
+                package_id=f"theme_{key}", title="Budget Planner",
+                audience="For households")
 
     @classmethod
     def tearDownClass(cls):
@@ -317,6 +335,27 @@ class ThemedPlannerRenderTests(unittest.TestCase):
                 px_dist = sum(sum(abs(p[c] - q[c]) for c in range(3))
                               for p, q in zip(means[keys[a]], means[keys[b]])) / 64.0
                 self.assertGreater(px_dist, 12, f"{keys[a]} vs {keys[b]}: rendered covers too alike")
+
+    def test_the_three_budget_themes_look_different_from_each_other(self):
+        from PIL import Image
+
+        from services.planner.themes import hex_to_rgb255
+
+        means = {}
+        for key in BUDGET_THEME_KEYS:
+            _result, images, _candidate = self.rendered[key]
+            with Image.open(images[0]) as im:
+                means[key] = list(im.convert("RGB").resize((8, 8)).getdata())
+        for a in range(len(BUDGET_THEME_KEYS)):
+            for b in range(a + 1, len(BUDGET_THEME_KEYS)):
+                ka, kb = BUDGET_THEME_KEYS[a], BUDGET_THEME_KEYS[b]
+                ta, tb = THEMES[ka], THEMES[kb]
+                token_dist = sum(abs(x - y) for x, y in zip(hex_to_rgb255(ta.primary), hex_to_rgb255(tb.primary)))
+                token_dist += sum(abs(x - y) for x, y in zip(hex_to_rgb255(ta.cover_bg), hex_to_rgb255(tb.cover_bg)))
+                self.assertGreater(token_dist, 60, f"{ka} vs {kb}: theme tokens too alike")
+                px_dist = sum(sum(abs(p[c] - q[c]) for c in range(3))
+                              for p, q in zip(means[ka], means[kb])) / 64.0
+                self.assertGreater(px_dist, 12, f"{ka} vs {kb}: rendered covers too alike")
 
 
 class DesignGateTests(unittest.TestCase):

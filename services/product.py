@@ -2005,6 +2005,7 @@ def _math_worksheet_pdf_payload(fields: dict, *, package_id: str = "") -> dict:
         determine_cover_eligibility,
         apply_cover_eligibility_to_fields,
     )
+    from services.math_worksheet.themes import resolve_math_worksheet_theme
 
     plan = _math_worksheet_plan(fields)
     fixed_fields, fixes = safe_fix_plan("math_worksheet", fields, plan)
@@ -2016,6 +2017,10 @@ def _math_worksheet_pdf_payload(fields: dict, *, package_id: str = "") -> dict:
     grade = _f(fixed_fields, "grade") or "3"
     math_topic = _f(fixed_fields, "math_topic") or ""
     difficulty = _f(fixed_fields, "difficulty") or "Medium"
+    # Legacy saved projects have no design_theme; keep their historical
+    # renderer unchanged by resolving that missing value to Classic Classroom.
+    worksheet_theme = resolve_math_worksheet_theme(fixed_fields.get("design_theme"))
+    fixed_fields["design_theme"] = worksheet_theme.key
     # problem_count: problems per worksheet — use explicit field or default
     problem_count = int(
         fixed_fields.get("problems") or
@@ -2055,6 +2060,7 @@ def _math_worksheet_pdf_payload(fields: dict, *, package_id: str = "") -> dict:
         output_type=plan.get("output_type", "book"),
         include_cover=cover_allowed,
         package_id=pkg,
+        design_theme=worksheet_theme.key,
     )
     result = build_math_worksheet_pdf(request)
     if result.errors or not result.pdf_bytes:

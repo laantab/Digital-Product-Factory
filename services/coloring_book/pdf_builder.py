@@ -215,23 +215,47 @@ def build_coloring_book_pdf(request: ColoringBookPdfRequest) -> ColoringBookPdfR
 
     # Extract QA result (already run inside build_coloring_book)
     qa_result = book.quality_result
-    qa_passed = qa_result is None or qa_result.get("all_passed", False) if qa_result else True
+    qa_required = (
+        request.quality_mode == "ai_image_coloring_page"
+        and stage in {"sample_interior", "full"}
+    )
+    qa_passed = bool(qa_result and qa_result.get("all_passed", False))
 
-    # A full product that fails QA must never become a downloadable artifact.
-    # Preview stages may still render so the user can inspect and revise them.
+    if qa_required and not qa_result:
+        artifact_label = "sample" if stage == "sample_interior" else "book"
+        return ColoringBookPdfResult(
+            pdf_bytes=b"",
+            pages=[p.as_dict() for p in book.pages],
+            warnings=list(book.warnings or []),
+            errors=[
+                f"Quality review did not run; this {artifact_label} PDF was not created. "
+                "Retry the quality review before continuing."
+            ],
+            filename=filename,
+            generation_stage=stage,
+            character_bible=book.character_bible,
+            cover_prompt=book.cover_prompt or "",
+            consistency_notes=list(book.consistency_notes or []),
+        )
+
+    # Neither a full product nor an approval sample that fails QA may be shown
+    # as a PDF. A failed sample must be corrected before the user can approve it.
     warnings = list(book.warnings or [])
-    if qa_result and qa_result.get("blocked_export"):
+    if qa_result and (qa_result.get("blocked_export") or not qa_passed):
         failed = qa_result.get("total_failed", 0)
-        failed_pages = [
-            f"P{p['page_number']} ({p.get('topic', '')})"
-            for p in qa_result.get("pages", [])
-            if not p.get("quality_pass")
-        ]
+        failed_pages = []
+        for page in qa_result.get("pages", []):
+            if page.get("quality_pass"):
+                continue
+            detail = next(iter(page.get("issues") or []), "failed the coloring-page checks")
+            failed_pages.append(
+                f"P{page['page_number']} ({page.get('topic', '')}): {detail}"
+            )
         qa_message = (
             f"QA blocked: {failed} page(s) with quality issues — {', '.join(failed_pages[:3])}"
             + (" ..." if len(failed_pages) > 3 else "")
         )
-        if stage == "full":
+        if stage in {"sample_interior", "full"}:
             return ColoringBookPdfResult(
                 pdf_bytes=b"",
                 pages=[p.as_dict() for p in book.pages],

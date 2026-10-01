@@ -11,6 +11,8 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
+from release_gate_skip_policy import classify_junit_skips
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tests" / "acceptance_manifest.json"
@@ -112,13 +114,20 @@ def main() -> int:
         key: sum(int(s.attrib.get(key, 0)) for s in suites)
         for key in ("tests", "failures", "errors", "skipped")
     }
-    if totals["skipped"]:
-        return fail(f"{totals['skipped']} acceptance test(s) were skipped")
     if totals["failures"] or totals["errors"]:
         return fail("JUnit report contains failures or errors")
+    approved_skips, unexpected_skips = classify_junit_skips(root)
+    if unexpected_skips:
+        return fail("Unapproved acceptance test skip(s): " + ", ".join(unexpected_skips))
 
     print("\nPASS: release gate completed")
-    print(f"Tests: {totals['tests']}  Failures: 0  Errors: 0  Skipped: 0")
+    print(
+        f"Tests: {totals['tests']}  Failures: 0  Errors: 0  "
+        f"Approved conditional skips: {len(approved_skips)}  "
+        f"Unexpected skips: {len(unexpected_skips)}"
+    )
+    for label in approved_skips:
+        print(f"Known conditional skip: {label}")
     print("Paid API calls permitted: 0")
     return 0
 

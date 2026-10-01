@@ -243,6 +243,11 @@ const PRODUCT_TYPES = [
       { name: "worksheets", label: "Number of worksheets", type: "number", value: "5" },
       { name: "problems", label: "Problems per worksheet", type: "number", value: "10" },
       { name: "difficulty", label: "Difficulty level", type: "select", options: ["Easy", "Medium", "Hard"] },
+      { name: "design_theme", label: "Interior style", type: "select", options: [
+        { value: "classic_classroom", label: "Classic Classroom" },
+        { value: "calm_focus", label: "Calm Focus" },
+        { value: "bright_practice", label: "Bright Practice" },
+      ], default: "classic_classroom", hint: "Changes the typeface, colors, and worksheet accents. Your problems and page size stay the same." },
       { name: "include_answer_key", label: "Include answer key", type: "select", options: YN, default: "Yes" },
       { name: "include_challenge", label: "Include challenge problems", type: "select", options: YN, default: "No" },
       { name: "include_cover", label: "Include cover page", type: "select", options: YN, default: "Yes" },
@@ -313,6 +318,11 @@ const PRODUCT_TYPES = [
     fields: [
       { name: "planner_title", label: "Planner title", type: "text", placeholder: "Leave blank for 'Budget Planner'" },
       { name: "theme", label: "Theme / niche", type: "text", placeholder: "e.g. Family, Student, Freelancer" },
+      { name: "design_theme", label: "Interior style", type: "select", options: [
+        { value: "ledger", label: "Ledger" },
+        { value: "calm_cashflow", label: "Calm Cashflow" },
+        { value: "warm_envelope", label: "Warm Envelope" },
+      ], default: "ledger", hint: "Changes the type, colors, and page accents. Your budget worksheets and page count stay the same." },
       { name: "audience", label: "Target audience", type: "text", placeholder: "Printed on the cover as a small label" },
       { name: "author", label: "Author / brand name", type: "text" },
       { name: "pages", label: "Number of pages", type: "number", value: "60", hint: "12-200. Rounded to keep whole monthly units intact." },

@@ -45,6 +45,7 @@ class MathWorksheetPdfRequest:
     cover_design: dict | None = None
     package_id: str = ""
     seed: int | None = None
+    design_theme: str = "classic_classroom"
 
 
 @dataclass
@@ -94,6 +95,7 @@ def build_math_worksheet_pdf(request: MathWorksheetPdfRequest) -> MathWorksheetP
         include_answer_key=request.include_answer_key,
         include_cover=request.include_cover,
         cover_image_path=cover_img,
+        design_theme=request.design_theme,
     )
 
     if not pdf_bytes:
@@ -102,7 +104,9 @@ def build_math_worksheet_pdf(request: MathWorksheetPdfRequest) -> MathWorksheetP
     # Save to disk
     try:
         from services.math_worksheet.renderer import save_math_worksheet_pdf
-        save_math_worksheet_pdf(worksheet, output_dir, filename)
+        save_math_worksheet_pdf(
+            worksheet, output_dir, filename, design_theme=request.design_theme
+        )
     except Exception:  # noqa: BLE001
         pass
 
