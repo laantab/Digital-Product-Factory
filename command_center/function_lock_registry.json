@@ -43,7 +43,7 @@
       "status": "LOCKED",
       "unlocked_by": null,
       "unlocked_reason": null,
-      "last_known_good_commit": "7fff7d6bac74e76adebffbfbe9a69fb1b3ebef74",
+      "last_known_good_commit": "6570bb5f3dfe4bc7bb485b5d05a3e952351dbba9",
       "factory_version": "1.9.19",
       "protected_test_files": [
         "tests/test_coloring_book_interior_no_text_contract.py",
