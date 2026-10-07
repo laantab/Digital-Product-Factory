@@ -112,6 +112,8 @@ ROUTES: tuple[dict, ...] = (
 
     _h("/generate-ebook", "legacy non-workspace path: writes a whole ebook",
        DEFERRED, _R_LEGACY),
+    _l("/ebook/build/<int:project_id>/generate-project", "records an automatic ebook build request"),
+    _l("/ebook/build/<int:project_id>/cover-choice", "records a title or cover choice for the builder"),
     _l("/ebook-workspace", "creates the workspace row"),
     _l("/ebook-workspace/<int:project_id>/research", "records research input"),
     _h("/ebook-workspace/<int:project_id>/run-research",

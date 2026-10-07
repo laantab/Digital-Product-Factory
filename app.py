@@ -4538,6 +4538,40 @@ def ebook_build_start_route():
         return _customer_error(exc, 500, log="ebook build start failed")
 
 
+@app.post("/ebook/build/<int:project_id>/generate-project")
+def ebook_generate_project_route(project_id: int):
+    return _ebook_guided_request(project_id, choose=False)
+
+
+@app.post("/ebook/build/<int:project_id>/cover-choice")
+def ebook_cover_choice_route(project_id: int):
+    return _ebook_guided_request(project_id, choose=True)
+
+
+def _ebook_guided_request(project_id: int, *, choose: bool):
+    try:
+        from services.ebook_guided_build import start, record_choice
+        from services.ebook_build_orchestrator import status_payload
+        from services.jobs.dispatch import hand_off
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err
+        data = dict(project.get("data") or {})
+        data["_project_id"] = project_id
+        if choose:
+            data = record_choice(data, request.get_json(silent=True) or {})
+        else:
+            data = start(data)
+        database.update_project(project_id, None, data)
+        if not data.get("ebook_build", {}).get("awaiting_cover_choice"):
+            hand_off(project_id)
+        return jsonify(status_payload(data, project_id))
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:
+        return _customer_error(exc, 500, log="guided ebook request failed")
+
+
 @app.post("/ebook/build/<int:project_id>/advance")
 def ebook_build_advance_route(project_id: int):
     """Run the next incomplete stage. One checkpoint per call.
@@ -4580,7 +4614,7 @@ def ebook_build_advance_route(project_id: int):
             # customer's approval (a light action on this service) ends the
             # wait; the next poll then hands the rest of the book off.
             _waiting = status_payload(dict(project.get("data") or {}), project_id)
-            if _waiting.get("awaiting_picture_approval"):
+            if _waiting.get("awaiting_picture_approval") or _waiting.get("awaiting_cover_choice"):
                 _waiting["advanced"] = False
                 _waiting["execution_mode"] = _execution_mode.WORKFLOW
                 return jsonify(_waiting)

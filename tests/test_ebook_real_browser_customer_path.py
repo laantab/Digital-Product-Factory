@@ -286,6 +286,52 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
             "fetch('/projects?admin=1').then(r => r.json())"
         )
 
+    def test_25_generate_project_runs_to_one_title_and_cover_choice(self):
+        from playwright.sync_api import expect
+        context = self._new_context(accept_downloads=True)
+        page = context.new_page()
+        try:
+            page.goto(self.base + "/", wait_until="domcontentloaded")
+            created = page.request.post(self.base + "/ebook-workspace", data={
+                "topic": "container gardening", "author": "Guided Fixture Author",
+                "name": "Guided Cover Choice Browser Test",
+            }).json()
+            pid = int(created["project"]["id"])
+            page.evaluate("pid => openEbookWorkspace(pid)", pid)
+            page.locator("[data-ws-generate-project]").click()
+            page.wait_for_selector("[data-ebook-cover-choice]", timeout=180000)
+            self.assertEqual(page.locator("[data-ebook-picture-review]").count(), 0)
+            options = page.locator("[data-cover-title] option")
+            self.assertGreaterEqual(options.count(), 2)
+            selected_id = options.nth(1).get_attribute("value")
+            selected_title = options.nth(1).inner_text()
+            page.locator("[data-cover-title]").select_option(selected_id)
+            page.locator("[data-cover-update-title]").click()
+            expect(page.locator("[data-cover-preview-title]")).to_have_text(selected_title, timeout=120000)
+            covers = page.locator("[data-cover-layout]")
+            self.assertGreater(covers.count(), 0)
+            for img in page.locator("[data-ebook-cover-choice] img").all():
+                expect(img).to_be_visible()
+                self.assertTrue(img.evaluate("el => el.complete && el.naturalWidth > 0"))
+            covers.last.check()
+            page.locator("[data-cover-finish]").click()
+            page.wait_for_selector("[data-ebook-build-done]", timeout=180000)
+            expect(page.locator("[data-ebook-dl-pdf]")).to_be_visible()
+            expect(page.locator("[data-ebook-dl-zip]")).to_be_visible()
+            self.assertIn(selected_title, self._screen(page))
+            with page.expect_download() as downloaded:
+                page.locator("[data-ebook-dl-pdf]").click()
+            pdf = Path(downloaded.value.path()).read_bytes()
+            self.assertTrue(pdf.startswith(b"%PDF"))
+            with page.expect_download() as downloaded:
+                page.locator("[data-ebook-dl-zip]").click()
+            self.assertTrue(Path(downloaded.value.path()).read_bytes().startswith(b"PK"))
+            calls = json.loads(self.call_log.read_text(encoding="utf-8"))
+            self.assertEqual(calls.get("paid", 0), 0)
+            self.assertEqual(calls.get("pexels_http", 0), 0)
+        finally:
+            context.close()
+
     def test_21_step_container_gardening_customer_path(self):
         from playwright.sync_api import expect
 

@@ -121,6 +121,10 @@ def _drive(job: dict, owner: str, *, units: int | None = None) -> dict:
                 store.finish(job["id"], owner, status=store.FAILED,
                              error=str(status.get("message") or "")[:500])
                 return result
+            if status.get("awaiting_cover_choice"):
+                result["paused"] = True
+                store.release(job["id"], owner)
+                return result
             if status.get("awaiting_picture_approval"):
                 # v1.9.6: waiting for the customer's Approve All Visuals.
                 # Not a failure; the builder stops and spends nothing more.

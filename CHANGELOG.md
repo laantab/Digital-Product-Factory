@@ -5,6 +5,16 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.16 — 2026-10-07
+
+**Generate Project prepares the ebook automatically, with one title-and-cover choice.**
+
+- Generate Project continues an existing draft through research, title, outline, chapters and checked visuals without stage-by-stage clicks.
+- Refused photos get bounded free replacement attempts; the existing quality gate still blocks unsuitable pictures.
+- Choose the title and a readable full-bleed cover on one screen. A title change redraws the cover previews using the same photo, preserving the manuscript.
+- Use This Title and Cover continues through design, preview, preflight and PDF/ZIP export. Finished and protected products are not regenerated.
+- Research polling stops when the user moves on, ignores late responses and reports a timeout clearly. Failed or cancelled background work no longer produces a success message.
+
 ## 1.9.15 — 2026-09-28
 
 **Plant puzzles use plant words, and the Editor-in-Chief review never gets stuck.**

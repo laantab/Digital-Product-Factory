@@ -206,6 +206,8 @@
     "tests/test_page_numbers_print_standard_v1_9_13.py",
     "tests/test_continue_does_not_replay_old_attempts_v1_9_14.py",
     "tests/test_plant_puzzle_topics_v1_9_15.py",
-    "tests/test_release_review_never_hangs_v1_9_15.py"
+    "tests/test_release_review_never_hangs_v1_9_15.py",
+    "tests/test_workspace_poll_lifecycle.py",
+    "tests/test_guided_cover_choice.py"
   ]
 }
