@@ -526,6 +526,7 @@ function buildNav() {
 }
 
 function go(view) {
+  _wsPollRun += 1;
   // Stale lineage must never bleed across navigations; runNextAction/sendToBuilder
   // re-set this AFTER calling go() for the step that needs it.
   pendingProductProjectId = null;
@@ -7320,6 +7321,11 @@ function renderEbookBuild(status) {
     return;
   }
 
+  if (s.awaiting_cover_choice && s.cover_choice) {
+    _renderEbookCoverChoice(root, s, pid, bookTitle);
+    return;
+  }
+
   if (s.awaiting_picture_approval && s.picture_review) {
     _renderEbookPictureReview(root, s, pid, bookTitle);
     return;
@@ -7515,6 +7521,7 @@ async function _ebookBuildLoop(projectId, runToken, opts) {
         // been produced. Reporting continues; nothing more is run.
         return;
       }
+      if (status.awaiting_cover_choice) return;
       if (status.awaiting_picture_approval) {
         // v1.9.6: waiting for Approve All Visuals. Stop asking; the sheet
         // on screen restarts the build after the customer approves.
@@ -7643,6 +7650,72 @@ async function approveEbookProduct(projectId, btn) {
   }
 }
 
+async function generateEbookProject(projectId, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const status = await api(`/ebook/build/${projectId}/generate-project`, { method: "POST", body: "{}" });
+    _ebookBuildRemember(projectId);
+    go("ebook-build");
+    _ebookBuildRun += 1;
+    renderEbookBuild(status);
+    if (!status.finished && !status.awaiting_cover_choice) await _ebookBuildLoop(projectId, _ebookBuildRun);
+  } catch (e) {
+    toast(e.message || "Your project is saved. Please try Generate Project again.", "error");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function _renderEbookCoverChoice(root, status, projectId, bookTitle) {
+  const choice = status.cover_choice || {};
+  const titles = choice.title_options || [];
+  const variants = choice.variants || [];
+  const selectedTitle = String(choice.selected_title_id || "");
+  root.innerHTML = card(`<div data-ebook-cover-choice>
+    <h2 class="text-xl font-bold text-slate-900">Choose your title and cover</h2>
+    <p class="text-sm text-slate-600 mt-2">Your chapters and pictures are ready. After your choice, the Factory finishes the design, quality checks, PDF and ZIP.</p>
+    <label class="block font-semibold text-sm mt-4" for="ebookChoiceTitle">Title</label>
+    <select id="ebookChoiceTitle" class="w-full rounded-lg border border-slate-300 px-3 py-2 mt-1" data-cover-title>
+      ${titles.map(t => `<option value="${escapeHtml(t.id)}" ${String(t.id) === selectedTitle ? "selected" : ""}>${escapeHtml(t.title)}</option>`).join("")}
+    </select>
+    <button type="button" class="btn-secondary mt-2" data-cover-update-title>Update cover previews with this title</button>
+    <p class="text-sm font-semibold mt-5" data-cover-preview-title>${escapeHtml(bookTitle)}</p>
+    <div class="grid sm:grid-cols-3 gap-4 mt-3">
+      ${variants.map(v => `<label class="block rounded-xl border border-slate-200 p-3 cursor-pointer">
+        <img src="${escapeHtml(v.thumb_url)}" alt="${escapeHtml(v.label)} cover" class="w-full h-72 object-contain bg-slate-50 rounded-lg" />
+        <span class="block text-sm mt-2"><input type="radio" name="ebookCoverChoice" value="${escapeHtml(v.layout_id)}" data-cover-layout data-digest="${escapeHtml(v.digest)}" /> ${escapeHtml(v.label)}</span>
+      </label>`).join("")}
+    </div>
+    <p class="text-sm text-rose-700 mt-3 hidden" data-cover-error></p>
+    <button type="button" class="btn-primary mt-4" data-cover-finish>Use This Title and Cover — Finish My Ebook</button>
+  </div>`);
+  const select = root.querySelector("[data-cover-title]");
+  const error = root.querySelector("[data-cover-error]");
+  const showError = msg => { error.textContent = msg; error.classList.remove("hidden"); };
+  const submit = async body => {
+    root.querySelectorAll("button, select, input").forEach(el => { el.disabled = true; });
+    try {
+      const next = await api(`/ebook/build/${projectId}/cover-choice`, { method: "POST", body: JSON.stringify(body) });
+      renderEbookBuild(next);
+      _ebookBuildRun += 1;
+      await _ebookBuildLoop(projectId, _ebookBuildRun);
+    } catch (e) {
+      showError(e.message || "Please try that choice again.");
+      root.querySelectorAll("button, select, input").forEach(el => { el.disabled = false; });
+    }
+  };
+  root.querySelector("[data-cover-update-title]").onclick = () => {
+    if (select.value === selectedTitle) return;
+    return submit({ action: "title", title_id: select.value });
+  };
+  root.querySelector("[data-cover-finish]").onclick = () => {
+    if (select.value !== selectedTitle) return showError("Update the cover previews with your chosen title first.");
+    const selected = root.querySelector("[data-cover-layout]:checked");
+    if (!selected) return showError("Choose a cover to continue.");
+    return submit({ action: "finish", title_id: selectedTitle, layout_id: selected.value, digest: selected.dataset.digest });
+  };
+}
+
 async function startEbookWorkspaceFromBuilder() {
   const topic = (document.getElementById("ebookInput").value || "").trim();
   const author = (document.getElementById("ebookAuthor").value || "").trim();
@@ -7714,6 +7787,10 @@ function renderEbookWorkspace(ws) {
             · Rev ${escapeHtml(String(ws.artifact_revision || 1))}</p>
         </div>
       </div>
+      ${ws.artifact_state === "DRAFT" ? `<div class="rounded-xl bg-brand-50 border border-brand-200 p-4">
+        <button type="button" class="btn-primary" data-ws-generate-project>Generate Project</button>
+        <p class="text-sm text-slate-600 mt-2">The Factory prepares your ebook automatically. Choose your title and cover, then it finishes your PDF and ZIP.</p>
+      </div>` : ""}
       <div class="flex gap-2 overflow-x-auto pb-1" data-ebook-rail>${railHtml}</div>
       <div class="flex flex-wrap items-center gap-2">
         <span class="text-sm text-slate-600">Next production action:</span>
@@ -7742,6 +7819,8 @@ function renderEbookWorkspace(ws) {
   root.querySelectorAll("[data-ws-stage]").forEach((btn) => {
     btn.onclick = () => showEbookWorkspaceStage(btn.getAttribute("data-ws-stage"));
   });
+  const generateProjectBtn = root.querySelector("[data-ws-generate-project]");
+  if (generateProjectBtn) generateProjectBtn.onclick = () => generateEbookProject(ws.project_id, generateProjectBtn);
   const runResearchBtn = root.querySelector("[data-ws-run-research]");
   if (runResearchBtn) {
     runResearchBtn.onclick = () => estimateResearchInWorkspace(ws.project_id);
@@ -8629,11 +8708,13 @@ async function _wsPollUntilStepLands(projectId, runToken, okMessage) {
 
     // The builder stops after the stage the customer asked for and waits.
     // That hold IS the step landing.
-    if (status && (status.held_after || status.awaiting_picture_approval || status.finished || status.failed)) {
+    if (status && (status.held_after || status.awaiting_picture_approval || status.awaiting_cover_choice || status.finished || status.failed)) {
       try {
         const ws = await api(`/ebook-workspace/${projectId}`);
+        if (runToken !== _wsPollRun) return;
         if (ws && ws.workspace) renderEbookWorkspace(ws.workspace);
       } catch (e) { /* the next render picks it up */ }
+      if (runToken !== _wsPollRun) return;
       if (status.failed) {
         toast("We couldn't finish that step. Your work is saved.", "error");
       } else if (okMessage) {
@@ -8641,6 +8722,9 @@ async function _wsPollUntilStepLands(projectId, runToken, okMessage) {
       }
       return;
     }
+  }
+  if (runToken === _wsPollRun) {
+    toast("Progress updates stopped. Your work is saved. Use Continue to check this project again.", "error");
   }
 }
 
@@ -8655,6 +8739,7 @@ async function _wsPollUntilStepLands(projectId, runToken, okMessage) {
 //: off and this has already polled it to completion -- in which case the
 //: caller's remaining rendering has nothing left to do.
 async function _wsConfirmedCall(url, projectId, confirmEl, okMessage, opts) {
+  _wsPollRun += 1;
   const res = await api(url, opts);
   if (res && res.handed_off) {
     if (confirmEl) {
@@ -8674,6 +8759,7 @@ async function _wsHandedOff(res, projectId, okMessage) {
 }
 
 async function postEbookWorkspaceAction(url, body, okMessage) {
+  _wsPollRun += 1;
   try {
     const res = await api(url, { method: "POST", body: JSON.stringify(body || {}) });
 
@@ -8764,6 +8850,7 @@ async function estimateCorrectionInWorkspace(projectId) {
           method: "POST",
           body: JSON.stringify(body),
         });
+        if (gen.handed_off) return;
         if (gen.workspace) {
           renderEbookWorkspace(gen.workspace);
         }
@@ -8836,6 +8923,7 @@ async function estimateResearchInWorkspace(projectId) {
           method: "POST",
           body: JSON.stringify(body),
         });
+        if (run.handed_off) return;
         if (run.workspace) {
           renderEbookWorkspace(run.workspace);
         }
@@ -8928,6 +9016,7 @@ async function estimateOptionGenerationInWorkspace(projectId, kind) {
           method: "POST",
           body: JSON.stringify(body),
         });
+        if (run.handed_off) return;
         if (run.workspace) {
           _ebookWorkspaceReturnOpts = _ebookWorkspaceReturnOpts || {};
           _ebookWorkspaceReturnOpts.stage = cfg.returnStage;

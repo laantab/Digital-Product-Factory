@@ -659,6 +659,12 @@ def _run_visuals(data: dict, pid: int) -> dict:
     from services.ebook_design_workspace import prepare_visuals_local
 
     data = prepare_visuals_local(data)
+    from services.ebook_guided_build import enabled
+    if enabled(data):
+        from services.ebook_guided_build import approve_visuals
+        data = approve_visuals(data)
+        build_state(data)["awaiting_picture_approval"] = False
+        return data
     # v1.9.6: never approve here. Hold for the customer's one approval.
     state = build_state(data)
     state["awaiting_picture_approval"] = True
@@ -668,6 +674,13 @@ def _run_visuals(data: dict, pid: int) -> dict:
 
 
 def _run_cover(data: dict, pid: int) -> dict:
+    from services.ebook_guided_build import enabled, run_cover
+    if enabled(data):
+        return run_cover(data, pid, _prepare_cover)
+    return _prepare_cover(data, pid)
+
+
+def _prepare_cover(data: dict, pid: int) -> dict:
     from services.ebook_customer_path import _first_passing_layout, _fixture_jpeg
     from services.ebook_design_workspace import stage_photo_cover
     from services.ebook_photo_cover import (
@@ -1110,6 +1123,9 @@ def advance_build(project_id: int) -> dict:
         # Approved: the wait is over. Clear the flag and carry on.
         state["awaiting_picture_approval"] = False
 
+    if state.get("awaiting_cover_choice"):
+        return status_payload(data, project_id)
+
     rec = _stage_record(state, stage)
     if int(rec.get("attempts") or 0) >= _max_attempts(stage) and rec.get("status") != COMPLETE:
         _release_stage(state, stage, FAILED_FINAL, rec.get("error") or "attempt ceiling reached")
@@ -1147,15 +1163,21 @@ def advance_build(project_id: int) -> dict:
         still_working = bool(new_state.pop("_no_retry_message", False))
         still_working_message = str(new_state.get("customer_message") or "")
         runner_awaits = bool(new_state.get("awaiting_picture_approval"))
+        cover_awaits = bool(new_state.get("awaiting_cover_choice"))
         new_state.update({k: v for k, v in state.items() if k not in ("stages",)})
         if runner_awaits:
             # Set by _run_visuals just now; the claim-time copy must not erase it.
             new_state["awaiting_picture_approval"] = True
+        new_state["awaiting_cover_choice"] = cover_awaits
         new_state["stages"] = state["stages"]
 
         if stage_is_validated(updated, stage):
             _release_stage(new_state, stage, COMPLETE)
             new_state["customer_message"] = STAGE_MESSAGES.get(stage, MSG_WORKING)
+        elif stage == "cover" and new_state.get("awaiting_cover_choice"):
+            _release_stage(new_state, stage, PENDING_CUSTOMER)
+            _stage_record(new_state, stage)["attempts"] = 0
+            new_state["customer_message"] = still_working_message
         elif stage == "visuals" and awaiting_picture_approval(updated, new_state):
             # Prepared and waiting for the customer: not a failure, and it
             # must not count against the stage's attempts.
@@ -1400,9 +1422,12 @@ def status_payload(data: dict, project_id: int) -> dict:
             retrying = str(rec.get("status") or "") == FAILED_RECOVERABLE
             attempts_left = max(0, _max_attempts(stage) - int(rec.get("attempts") or 0))
 
+    from services.ebook_guided_build import public_choice
     return {
         "ok": True,
         "project_id": project_id,
+        "awaiting_cover_choice": bool(state.get("awaiting_cover_choice")),
+        "cover_choice": public_choice(data, project_id) if state.get("awaiting_cover_choice") else None,
         "finished": bool(finished),
         "failed": bool(state.get("failed")),
         "retrying": bool(retrying),
