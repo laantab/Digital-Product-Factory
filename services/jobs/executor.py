@@ -131,7 +131,10 @@ def _drive(job: dict, owner: str, *, units: int | None = None) -> dict:
                 result["paused"] = True
                 store.release(job["id"], owner)
                 return result
-            if status.get("paused_after"):
+            if status.get("held_after"):
+                # paused_after is the requested FUTURE review point, set
+                # before chapter writing starts. held_after becomes nonempty
+                # only when that stage is approved and ready for review.
                 # A deliberate hold for the customer to read something.
                 # Not a failure, and not ours to push past.
                 result["paused"] = True

@@ -119,7 +119,8 @@ class _Orchestrator:
         if self.fail_at and n == self.fail_at:
             return {"finished": False, "failed": True, "message": "provider refused"}
         if self.paused_at and n == self.paused_at:
-            return {"finished": False, "failed": False, "paused_after": "preview"}
+            return {"finished": False, "failed": False, "paused_after": "preview",
+                    "held_after": "preview"}
         if n >= self.units_to_finish:
             self.exports += 1
             return {"finished": True, "failed": False, "percent": 100}
