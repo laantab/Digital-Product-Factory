@@ -24,7 +24,7 @@ No. Continue uses the saved project. Completed chapters are preserved, and pictu
 
 ### Release gate
 
-Release verification is in progress. No deployment or production-book completion is claimed until verified. Tests use isolated databases and local chapter fixtures without paid API calls.
+The complete enforced release gate passed: 2,960 tests, zero failures, zero errors and zero skips across all 209 acceptance files. Paid API calls were blocked. This verifies the repair; deployment and the current stopped book are checked separately.
 
 ## 1.9.16 — 2026-10-07
 

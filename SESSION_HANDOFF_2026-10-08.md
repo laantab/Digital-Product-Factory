@@ -43,11 +43,16 @@ The guided Generate Project flow clears review holds at startup, so this test
 does not prove that every guided-build stall has this cause.
 
 The owner authorized whatever is needed to complete the Factory on October 8.
-VERSION and changelog are prepared as 1.9.17. The full enforced release gate is
-running with restored checksum-verified original reference exports.
-Shell git push has no credentials; use the connected GitHub tools for the
-review branch and PR. Deploy both website and builder only after the gate
-passes and verify their actual versions and the resumed project.
+VERSION and changelog are prepared as 1.9.17. The full enforced release gate
+passed: 2,960 tests, zero failures, zero errors and zero skips in 1,389.72
+seconds. All 209 acceptance files ran, with paid APIs blocked.
+Original reference exports were restored and their checksums verified.
+The tested code tree is 7b0e767b3d83f10b7a0e240ecef3178ab631c4c8,
+published as commit 1fb24429b9b0920edb36b5deb5f17ae9d91be35a.
+The following release-result edits change documentation only.
+Shell git push has no credentials; the connected GitHub tools published
+the branch and PR #34. Merge is authorized. Verify both website and builder
+deployments and the resumed project after merging.
 Render dashboard sign-in is awaiting the owner-selected Google passkey method.
 The Factory cloud-browser Saved Projects screen did not expose Document It Once.
 No hosted paid generation has been started during this repair.
