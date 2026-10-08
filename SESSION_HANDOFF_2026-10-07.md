@@ -1,9 +1,10 @@
-# Factory 1.9.16 repair — awaiting release verification
+# Factory 1.9.16 repair — release verification passed
 
 ## Current state
 
-The repair is on `fix/v1.9.16-guided-ebook-generation`, PR #33. Main and the
-live website remain at 1.9.15. Do not describe this change as deployed.
+The repair is on `fix/v1.9.16-guided-ebook-generation`, PR #33. The final release
+gate passed. Consult PR #33 and the live website for the subsequent merge and
+deployment state; a passing local gate alone is not a deployment claim.
 Implementation commit: `157dc7f610377a802012f5c55164aff3b35d4004`.
 
 ## Customer behavior
@@ -36,7 +37,18 @@ No paid API calls were made. Tests use isolated databases and local fixtures.
 - Python compilation, JavaScript syntax and acceptance-manifest validation
   completed in the release-gate run.
 
-## Release blocker and next action
+## Final release verification
+
+The final full gate completed at verified code-and-release-note commit
+`380446bd5236d063095b55ef8f46ffb4fd6cacce`: **2,954 passed**, zero failures,
+zero errors, zero skipped, in 1,324.91 seconds. The enforced script reported
+`PASS: release gate completed`. No paid API calls were permitted or made.
+All 209 acceptance files ran, including the real browser customer paths,
+polling regressions, guided title-and-cover flow, quality gates and original
+reference-file preservation test. This handoff update changes documentation
+only after that passing run.
+
+## Verification history
 
 ### Update after the owner's reference upload
 
@@ -49,9 +61,10 @@ The complete full gate ran all 209 acceptance files: 2,953 passed, one failed,
 zero skipped, in 1,303.46 seconds. Its only failure was the missing required
 customer-facing section headings in the new 1.9.16 changelog entry. That
 documentation has been corrected; all 31 version-management tests now pass.
-The final full gate is running with the corrected notes. No production code
+The final full gate was then run with the corrected notes. No production code
 was changed after the completed 2,953-test passing portion of the first run.
-Main remains unchanged and PR #33 remains a draft until the final gate passes.
+Main was unchanged and PR #33 remained a draft during those checks. The final
+passing result above supersedes the earlier blocker.
 
 ### Earlier blocker, retained as history
 
