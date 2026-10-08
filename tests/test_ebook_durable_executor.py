@@ -61,7 +61,8 @@ class _Orchestrator:
         if self.fail_at and n == self.fail_at:
             return {"finished": False, "failed": True, "message": "provider refused"}
         if self.paused_at and n == self.paused_at:
-            return {"finished": False, "failed": False, "paused_after": "preview"}
+            return {"finished": False, "failed": False, "paused_after": "preview",
+                    "held_after": "preview"}
         if n >= self.units_to_finish:
             self.exports += 1
             return {"finished": True, "failed": False, "percent": 100}
@@ -434,3 +435,77 @@ def test_a_failing_tick_never_takes_the_web_service_down(monkeypatch):
     monkeypatch.setattr("services.jobs.executor.drain",
                         lambda **k: (_ for _ in ()).throw(RuntimeError("boom")))
     runner._tick_once()          # must not raise
+
+
+@pytest.mark.parametrize("driver", ["executor", "workflow"])
+def test_planned_manuscript_hold_keeps_writing_until_review_ready(monkeypatch, driver):
+    """30% is still writing, even when review is planned after manuscript QA."""
+    import services.ebook_build_orchestrator as real
+    from services.jobs import workflow_runner
+
+    calls = []
+
+    def advance(project_id):
+        calls.append(project_id)
+        ready = len(calls) == executor.UNITS_PER_CLAIM + 2
+        return {"finished": False, "failed": False,
+                "percent": 40 if ready else 30,
+                "paused_after": "manuscript",
+                "held_after": "manuscript" if ready else ""}
+
+    monkeypatch.setattr(real, "advance_build", advance)
+    project = _project()
+    store.enqueue(project["id"])
+
+    if driver == "workflow":
+        result = workflow_runner.run_build(project["id"], budget_seconds=600,
+                                           sleep=lambda _: None)
+        assert result["claims"] == 2
+    else:
+        first = executor.run_project(project["id"], "writer")
+        assert first["units"] == executor.UNITS_PER_CLAIM
+        assert not first.get("paused"), "a planned hold must not stop chapter writing"
+        result = executor.run_project(project["id"], "writer")
+
+    assert len(calls) == executor.UNITS_PER_CLAIM + 2
+    assert result["paused"] is True, "stop once the manuscript is ready for review"
+    assert result["percent"] == 40
+    assert result["failed"] is False
+    assert store.get_for_project(project["id"])["status"] == store.QUEUED
+
+
+def test_real_manuscript_pipeline_reaches_review_without_rewriting_chapters(monkeypatch):
+    """Exercise real checkpoints, validation and status through the background worker."""
+    from collections import Counter
+    from services import ebook_build_orchestrator as orch
+    from services.ebook_project_workspace import upsert_acceptance_project
+    from services.ebook_manuscript_engine import chapter_fn_from_full_manuscript
+    from services.ebook_manuscript_fixtures import build_event_photo_strong_manuscript
+    from services.jobs import workflow_runner
+
+    project = upsert_acceptance_project(database, preserve_live_manuscript=False)
+    pid = project["id"]
+    data = orch.pause_after(dict(project["data"]), "manuscript")
+    database.update_project(pid, None, data)
+    assert orch.status_payload(data, pid)["percent"] == 30
+    assert orch.status_payload(data, pid)["held_after"] == ""
+
+    good_chapter = chapter_fn_from_full_manuscript(build_event_photo_strong_manuscript())
+    calls = []
+
+    def write_chapter(book, chapter):
+        calls.append(chapter.order)
+        return good_chapter(book, chapter)
+
+    monkeypatch.setattr("services.ebook.generate_one_chapter", write_chapter)
+    store.enqueue(pid)
+    result = workflow_runner.run_build(pid, budget_seconds=600, sleep=lambda _: None)
+
+    saved = dict(database.get_project(pid)["data"])
+    status = orch.status_payload(saved, pid)
+    assert result["failed"] is False
+    assert result["paused"] is True
+    assert status["percent"] == 40
+    assert status["held_after"] == "manuscript"
+    assert Counter(calls) == Counter(range(1, 11)), "accepted chapters are written once"
+    assert not result["finished"], "review must precede the remaining stages"

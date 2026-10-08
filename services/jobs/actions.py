@@ -175,6 +175,29 @@ def record_action(project_id: int, action: dict) -> bool:
         return False
 
 
+def _resume_failed_build(project_id: int) -> None:
+    """Explicit Continue must reopen the stage, not only the job counter.
+
+    A live worker owns its state. Ordinary polling and healthy stages never
+    call resume_build, which would reset their stage claim and retry keys.
+    """
+    from datetime import datetime, timezone
+    import database
+    from services.ebook_build_orchestrator import resume_build
+    from services.jobs import store
+
+    store.init_jobs_table()
+    job = store.get_for_project(project_id) or {}
+    if (job.get("status") == store.RUNNING
+            and str(job.get("lease_expires_at") or "")
+            > datetime.now(timezone.utc).isoformat()):
+        return
+    project = database.get_project(project_id)
+    state = ((project or {}).get("data") or {}).get("ebook_build") or {}
+    if state.get("failed"):
+        resume_build(project_id)
+
+
 def hand_off_if_workflow(project_id: int, *, route: str, action: str = "",
                          payload: dict | None = None,
                          reset_attempts: bool = False) -> dict | None:
@@ -194,6 +217,12 @@ def hand_off_if_workflow(project_id: int, *, route: str, action: str = "",
         return None
 
     pid = int(project_id)
+
+    if route == "advance" and reset_attempts:
+        try:
+            _resume_failed_build(pid)
+        except Exception:                              # noqa: BLE001
+            log.exception("could not resume the failed build for project %s", pid)
 
     # Say where to stop BEFORE asking for a task, so a task that starts at
     # once already sees the hold. A step-by-step click means "do this step",

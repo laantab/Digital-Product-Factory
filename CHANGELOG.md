@@ -5,6 +5,27 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.17 — 2026-10-08
+
+**Chapter writing continues until the manuscript is ready, and Continue reopens failed stages.**
+
+### What changed
+
+- The background ebook worker honors a requested review pause only once the stage is complete. Incomplete chapters continue across worker claims.
+
+### What was fixed
+
+- A planned manuscript review could stop the worker after one chapter-writing unit, leaving the build at 30%.
+- Continue reset the job retry counter but left a failed manuscript stage exhausted. It now resets that failed stage too, retaining completed work. Automatic polling and active workers do not reset stages.
+
+### Do your steps change?
+
+No. Continue uses the saved project. Completed chapters are preserved, and picture, cover and manuscript review choices remain in place.
+
+### Release gate
+
+The complete enforced release gate passed: 2,960 tests, zero failures, zero errors and zero skips across all 209 acceptance files. Paid API calls were blocked. This verifies the repair; deployment and the current stopped book are checked separately.
+
 ## 1.9.16 — 2026-10-07
 
 **Generate Project prepares the ebook automatically, with one title-and-cover choice.**

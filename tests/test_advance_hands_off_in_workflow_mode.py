@@ -134,6 +134,64 @@ class AdvanceHandsOffTests(unittest.TestCase):
             f"{len(self.started)} tasks were started for one book; the "
             f"duplicate guard in the job row did not hold")
 
+    def _exhaust_manuscript(self):
+        from services.ebook_project_workspace import upsert_acceptance_project
+        from services.ebook_build_orchestrator import build_state, FAILED_FINAL
+
+        project = upsert_acceptance_project(database, preserve_live_manuscript=False)
+        self.pid = int(project["id"])
+        data = dict(project["data"])
+        state = build_state(data)
+        state["failed"] = True
+        state["current_stage"] = "manuscript"
+        state["stages"]["manuscript"] = {
+            "status": FAILED_FINAL, "attempts": 60,
+            "running_since": 0, "error": "provider timed out"}
+        database.update_project(self.pid, None, data)
+        return data
+
+    def test_continue_resets_the_failed_stage_as_well_as_the_job(self):
+        before = self._exhaust_manuscript()
+        job = store.enqueue(self.pid)
+        owner = "failed-worker"
+        store.claim_for_project(owner, self.pid)
+        store.finish(job["id"], owner, status=store.FAILED)
+
+        with _workflow_env():
+            resp = self.client.post("/ebook/build/%s/advance" % self.pid,
+                                    json={"continue": True})
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.get_json()["failed"],
+                         "Continue must reset the manuscript, not only its job")
+        after = database.get_project(self.pid)["data"]
+        stage = after["ebook_build"]["stages"]["manuscript"]
+        self.assertEqual(stage["attempts"], 0)
+        self.assertEqual(after["ebook_build"]["resume_generation"], 1)
+        self.assertEqual(after["ebook_workspace"], before["ebook_workspace"])
+        self.assertEqual(len(self.started), 1)
+
+    def test_polling_does_not_reset_a_failed_stage(self):
+        self._exhaust_manuscript()
+        with _workflow_env():
+            resp = self._advance()
+        self.assertTrue(resp.get_json()["failed"])
+        after = database.get_project(self.pid)["data"]["ebook_build"]
+        self.assertEqual(after["stages"]["manuscript"]["attempts"], 60)
+        self.assertNotIn("resume_generation", after)
+
+    def test_continue_does_not_reset_a_stage_owned_by_a_live_worker(self):
+        before = self._exhaust_manuscript()
+        store.enqueue(self.pid)
+        claimed = store.claim_for_project("active-worker", self.pid)
+        with _workflow_env():
+            resp = self.client.post("/ebook/build/%s/advance" % self.pid,
+                                    json={"continue": True})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(database.get_project(self.pid)["data"], before)
+        self.assertEqual(store.get_for_project(self.pid)["lease_owner"],
+                         claimed["lease_owner"])
+        self.assertEqual(self.started, [])
+
     def test_an_unknown_project_is_still_refused(self):
         """The 404 guard must survive the patch."""
         with _workflow_env():
