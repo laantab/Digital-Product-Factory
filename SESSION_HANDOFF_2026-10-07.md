@@ -38,6 +38,23 @@ No paid API calls were made. Tests use isolated databases and local fixtures.
 
 ## Release blocker and next action
 
+### Update after the owner's reference upload
+
+The owner supplied `Factory_Reference_Files_20261007-132004_3d857a.zip`.
+Both original exports matched the hashes below and were restored without
+altering their bytes. The preservation test now passes (1 passed, 27 deselected).
+The fresh Fast Stability Gate passed 710 tests in 163.15 seconds.
+
+The complete full gate ran all 209 acceptance files: 2,953 passed, one failed,
+zero skipped, in 1,303.46 seconds. Its only failure was the missing required
+customer-facing section headings in the new 1.9.16 changelog entry. That
+documentation has been corrected; all 31 version-management tests now pass.
+The final full gate is running with the corrected notes. No production code
+was changed after the completed 2,953-test passing portion of the first run.
+Main remains unchanged and PR #33 remains a draft until the final gate passes.
+
+### Earlier blocker, retained as history
+
 The full release gate was started with all 209 acceptance files. It reached
 33% before being stopped after a confirmed environment blocker. It was not a
 completed passing run. The independently reproduced blocker is:
