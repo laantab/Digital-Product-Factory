@@ -191,5 +191,15 @@
     }
   ],
   "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly — it is what the Command Center reads every time it opens.",
-  "factory_version": "1.8.0"
+  "factory_version": "1.8.0",
+  "ebook_reliability_2026_10_08": {
+    "live_release": "1.9.17",
+    "live_commit": "61b2759ee195a68b6e44c9a047ec27724e044b24",
+    "website_verification": "Live footer observed after PR #34 merge",
+    "builder_verification": "Owner Render screenshot: Deploy ready, startup VERSION 1.9.17",
+    "current_book": "Project 18 observed in previous 1.9.16 workflow run; completion and exit reason unverified",
+    "next_repair": "1.9.18: renew ebook lease during long chapter provider calls",
+    "release_validation": "103 focused tests passed; full release gate in progress",
+    "paid_calls_this_repair": 0
+  }
 }

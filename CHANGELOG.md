@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.18 — 2026-10-08
+
+**Slow chapters keep their background worker until writing finishes.**
+
+### What changed
+
+- The ebook worker renews its job lease during chapter writing, rather than only between chapters. The short crash-recovery lease remains in place.
+
+### What was fixed
+
+- A chapter taking longer than three minutes could let another worker claim the book while the first worker was still writing. Lease renewal now continues during the provider call. If renewal fails, the worker stops after that call and does not mark the job finished.
+
+### Do your steps change?
+
+No. Saved chapters and existing review choices are preserved.
+
+### Release gate
+
+The slow-provider regression failed before the repair and passes afterward. Full release validation is pending; no paid provider calls are used in testing.
+
 ## 1.9.17 — 2026-10-08
 
 **Chapter writing continues until the manuscript is ready, and Continue reopens failed stages.**
