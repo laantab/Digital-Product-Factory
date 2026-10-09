@@ -199,7 +199,8 @@
     "builder_verification": "Owner Render screenshot: Deploy ready, startup VERSION 1.9.17",
     "current_book": "Project 18 observed in previous 1.9.16 workflow run; completion and exit reason unverified",
     "next_repair": "1.9.18: renew ebook lease during long chapter provider calls",
-    "release_validation": "103 focused tests passed; full release gate in progress",
-    "paid_calls_this_repair": 0
+    "release_validation": "Full enforced release gate: 2963 passed, zero failures/errors/skips; 209 acceptance files; paid calls blocked",
+    "paid_calls_this_repair": 0,
+    "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/35"
   }
 }

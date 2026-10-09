@@ -23,7 +23,7 @@ No. Saved chapters and existing review choices are preserved.
 
 ### Release gate
 
-The slow-provider regression failed before the repair and passes afterward. Full release validation is pending; no paid provider calls are used in testing.
+The slow-provider regression failed before the repair and passes afterward. The complete enforced release gate passed: 2,963 tests, zero failures, zero errors and zero skips across all 209 acceptance files. Paid API calls were blocked. The five real-browser customer-path checks also passed after restoring Chromium in the test environment.
 
 ## 1.9.17 — 2026-10-08
 

@@ -28,7 +28,9 @@ ownership it can no longer establish. Crash recovery still uses the original
 short lease. No generation, QA, stage, storage or payment logic is changed.
 
 Focused executor, workflow, Continue and registry suites: 103 passed.
-Full 1.9.18 release validation is running; do not deploy before it passes.
+Full enforced 1.9.18 release gate: 2,963 passed, zero failures, errors or skips in 1,302.46 seconds, all 209 acceptance files. The first attempt reported missing test-browser errors and was interrupted; Chromium was restored, all five browser checks passed, and the complete gate was then restarted and passed. Install Playwright Chromium when recreating the test environment.
+
+The tested implementation is in PR #35. Merge and deployment are authorized. Verify the new website footer after merging; do not claim project 18 is finished without reading its actual state.
 No paid calls or real product generation were made.
 
 The owner asked us to stop the manual Render navigation loop and continue
