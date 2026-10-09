@@ -125,6 +125,8 @@ ROUTES: tuple[dict, ...] = (
     _l("/ebook-workspace/<int:project_id>/approve", "records an approval"),
     _l("/ebook-workspace/<int:project_id>/title", "stores the chosen title"),
     _l("/ebook-workspace/<int:project_id>/outline", "stores the chosen outline"),
+    _l("/ebook-workspace/<int:project_id>/edit-manuscript",
+       "checks and stores customer-authored text or offline rule edits; no provider calls, image work or PDF rendering"),
     _l("/ebook-workspace/<int:project_id>/estimate-cost", "arithmetic on the outline"),
     _l("/ebook-workspace/<int:project_id>/cancel-estimate", "clears a stored estimate"),
     _l("/ebook-workspace/<int:project_id>/authorize-budget",
