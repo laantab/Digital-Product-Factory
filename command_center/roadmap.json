@@ -269,5 +269,16 @@
       "acceptance_plan": "V1_8_0_WORKFLOWS_DEPLOYMENT.md",
       "tests": "tests/test_ebook_workflow_execution.py - 50 checks, zero paid API calls"
     }
+  },
+  "ebook_reliability_2026_10_08": {
+    "live_release": "1.9.17",
+    "live_commit": "61b2759ee195a68b6e44c9a047ec27724e044b24",
+    "website_verification": "Live footer observed after PR #34 merge",
+    "builder_verification": "Owner Render screenshot: Deploy ready, startup VERSION 1.9.17",
+    "current_book": "Project 18 observed in previous 1.9.16 workflow run; completion and exit reason unverified",
+    "next_repair": "1.9.18: renew ebook lease during long chapter provider calls",
+    "release_validation": "Full enforced release gate: 2963 passed, zero failures/errors/skips; 209 acceptance files; paid calls blocked",
+    "paid_calls_this_repair": 0,
+    "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/35"
   }
 }

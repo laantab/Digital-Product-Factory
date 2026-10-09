@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import database
 import pytest
+from threading import Event
+from datetime import datetime, timedelta, timezone
 
 from services.jobs import executor, store
 
@@ -43,6 +45,68 @@ def jobs_table():
 
 def _project(name="Container Gardening for Beginners"):
     return database.create_project(name, "ebook", {"product_type": "ebook"})
+
+
+def test_lease_is_renewed_while_a_chapter_provider_is_blocked(monkeypatch):
+    """A slow chapter must not let another workflow reclaim the same book."""
+    import services.ebook_build_orchestrator as real
+
+    clock = [datetime.now(timezone.utc)]
+    monkeypatch.setattr(store, "_now", lambda: clock[0].isoformat())
+    monkeypatch.setattr(store, "_future", lambda seconds:
+                        (clock[0] + timedelta(seconds=seconds)).isoformat())
+    monkeypatch.setattr(executor, "HEARTBEAT_INTERVAL_SECONDS", 0.01,
+                        raising=False)
+    renewed = Event()
+    heartbeat = store.heartbeat
+
+    def observe_renewal(job_id, owner):
+        ok = heartbeat(job_id, owner)
+        renewed.set()
+        return ok
+
+    monkeypatch.setattr(store, "heartbeat", observe_renewal)
+    project = _project()
+    store.enqueue(project["id"])
+
+    def slow_chapter(project_id):
+        clock[0] += timedelta(seconds=store.LEASE_SECONDS + 1)
+        assert renewed.wait(1), "No lease renewal while chapter is running"
+        assert store.claim_for_project("rival", project_id) is None
+        return {"finished": True, "percent": 100}
+
+    monkeypatch.setattr(real, "advance_build", slow_chapter)
+    result = executor.run_project(project["id"], "original")
+    assert result["finished"] is True
+    assert store.get_for_project(project["id"])["status"] == store.SUCCEEDED
+
+
+@pytest.mark.parametrize("renewal_error", [False, True])
+def test_lost_lease_during_provider_call_does_not_finish_job(monkeypatch, renewal_error):
+    import services.ebook_build_orchestrator as real
+
+    monkeypatch.setattr(executor, "HEARTBEAT_INTERVAL_SECONDS", 0.01)
+    lost = Event()
+    project = _project()
+    store.enqueue(project["id"])
+
+    def lose_lease(job_id, owner):
+        lost.set()
+        if renewal_error:
+            raise RuntimeError("database temporarily unavailable")
+        return False
+
+    monkeypatch.setattr(store, "heartbeat", lose_lease)
+
+    def slow_chapter(project_id):
+        assert lost.wait(1)
+        return {"finished": True, "percent": 100}
+
+    monkeypatch.setattr(real, "advance_build", slow_chapter)
+    result = executor.run_project(project["id"], "original")
+    assert result["lease_lost"] is True
+    assert result["finished"] is False
+    assert store.get_for_project(project["id"])["status"] == store.RUNNING
 
 
 class _Orchestrator:

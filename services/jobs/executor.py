@@ -26,7 +26,7 @@ because nothing here decides what to generate.
 CRASH SAFETY
 ------------
 Work is checkpointed by the orchestrator after every bounded unit, and
-the lease is extended between units. Kill the process mid-chapter and the
+the lease is extended during provider calls as well as between units. Kill the process mid-chapter and the
 lease expires; the next executor claims the job and asks the orchestrator
 to advance, which resumes from the last checkpoint. At most one chapter
 is repeated, and repeating a chapter is safe because the orchestrator
@@ -35,6 +35,7 @@ claims a stage before working on it.
 from __future__ import annotations
 
 import logging
+from threading import Event, Thread
 
 from services.jobs import store
 
@@ -44,6 +45,37 @@ log = logging.getLogger(__name__)
 #: this many, so one book can never monopolise an executor and a long
 #: book still makes steady progress across ticks.
 UNITS_PER_CLAIM = 12
+
+# Renew even while the provider is writing a chapter, well before the
+# three-minute lease expires. A crashed process still loses its lease.
+HEARTBEAT_INTERVAL_SECONDS = store.LEASE_SECONDS / 3
+
+
+def _advance_under_lease(job: dict, owner: str, advance, project_id: int):
+    """Keep ownership throughout one potentially slow orchestrator unit."""
+    stopped, lost = Event(), Event()
+
+    def renew():
+        while not stopped.wait(HEARTBEAT_INTERVAL_SECONDS):
+            try:
+                if not store.heartbeat(job["id"], owner):
+                    lost.set()
+                    return
+            except Exception:
+                log.exception("ebook lease renewal failed for project %s", project_id)
+                lost.set()
+                return
+
+    keeper = Thread(target=renew, name="ebook-lease-renewal", daemon=True)
+    keeper.start()
+    try:
+        status = advance(project_id)
+    finally:
+        stopped.set()
+        keeper.join(timeout=5)
+        if keeper.is_alive():
+            lost.set()
+    return status, lost.is_set()
 
 
 def run_one_job(owner: str | None = None) -> dict:
@@ -108,9 +140,14 @@ def _drive(job: dict, owner: str, *, units: int | None = None) -> dict:
         from services.ebook_build_orchestrator import advance_build
 
         for _ in range(budget):
-            status = advance_build(project_id)
+            status, lease_lost = _advance_under_lease(
+                job, owner, advance_build, project_id)
             result["units"] += 1
             result["percent"] = status.get("percent")
+
+            if lease_lost:
+                result["lease_lost"] = True
+                return result
 
             if status.get("finished"):
                 result["finished"] = True
