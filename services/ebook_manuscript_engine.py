@@ -178,6 +178,7 @@ class ParsedChapter:
     #: the quality gate. The Factory does NOT escalate to a paid provider on its
     #: own -- this flags the chapter for the customer to decide about.
     needs_premium_enhancement: bool = False
+    editorial_report: dict[str, Any] = field(default_factory=dict)
 
 
 #: Bounded local repair: initial generation, then at most two repair passes.
@@ -1234,6 +1235,14 @@ def chapter_contract_prompt(book: BookContract, chapter: ChapterContract) -> str
             "chapter of substance is better than a longer chapter of padding."
         )
     lines.append("Do not pad with repeated hedges. Do not add Conclusion/Disclaimer/Sources as H2.")
+    lines.append(
+        "COPY EDIT BEFORE RETURNING: correct spelling, grammar, punctuation, "
+        "subject-verb agreement and unclear pronoun references. Use plain "
+        "language near grade 8 (grade 6 for nontechnical beginner material). "
+        "Remove redundant wording without removing useful examples or required "
+        "deliverables. Preserve facts, numbers, units, citations and quoted "
+        "source wording; do not invent evidence or strengthen uncertain claims."
+    )
     if book.editorial_rules:
         lines.append("LOCKED EDITORIAL RULES:")
         for r in book.editorial_rules:
@@ -2109,6 +2118,29 @@ def run_chapter_pipeline(
             parsed = parse_chapter_response(raw, contract)
             parsed.order = contract.order
             parsed.title = contract.title
+            # A distinct offline copy editor runs before structural acceptance.
+            # Revalidate the edited chapter; roll back if an edit introduces a
+            # new contract finding. No additional provider call is made.
+            from services.ebook_copy_editor import edit_text
+            before_findings = validate_chapter(parsed, contract, book=book)
+            report = edit_text(parsed.body)
+            if report["changes"]:
+                original_parsed = copy.deepcopy(parsed)
+                parsed.body = report["edited"]
+                feats = _chapter_features(parsed.body)
+                for name in ("tables", "checklists", "workflows", "examples", "citations"):
+                    setattr(parsed, name, feats[name])
+                before_codes = {(f.code, f.message) for f in before_findings}
+                after_codes = {(f.code, f.message) for f in validate_chapter(parsed, contract, book=book)}
+                if after_codes - before_codes:
+                    parsed = original_parsed
+                    report["applied"] = False
+                    report["rollback_reason"] = "Edit introduced a chapter contract finding."
+                else:
+                    report["applied"] = True
+            else:
+                report["applied"] = False
+            parsed.editorial_report = report
             findings = validate_chapter(parsed, contract, book=book)
             chapter_pass = not findings
 
