@@ -26,6 +26,20 @@ from services.ebook_workflow import STAGE_LABELS as FINE_STAGE_LABELS
 from services.ebook_workflow import set_workflow_stage
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _save_editorial_revisions(ws: dict, chapters) -> None:
+    """Keep reversible chapter edits with the same durable project checkpoint."""
+    revisions = ws.setdefault("editorial_revisions", {})
+    for chapter in chapters:
+        report = getattr(chapter, "editorial_report", None)
+        if not report:
+            continue
+        history = revisions.setdefault(str(chapter.order), [])
+        if not any(r.get("original_sha256") == report.get("original_sha256")
+                   and r.get("edited_sha256") == report.get("edited_sha256") for r in history):
+            history.append(copy.deepcopy(report))
+
 ACCEPTANCE_EXPORT_DIR = (
     Path(os.environ.get("FACTORY_EXPORTS_DIR") or (ROOT / "exports"))
     / "ebook_live_acceptance_lonnie_event_photo"
@@ -1150,6 +1164,7 @@ def workspace_public_view(project: dict) -> dict[str, Any]:
         "title": data.get("title") or "",
         "subtitle": data.get("subtitle") or "",
         "editorial_rules_locked": list(ws.get("editorial_rules_locked") or []),
+        "editorial_revisions": copy.deepcopy(ws.get("editorial_revisions") or {}),
         "rail": rail,
         "current_stage": ws.get("current_stage"),
         "next_action": ws.get("next_action"),
@@ -2671,6 +2686,7 @@ def execute_generate_manuscript(
 
         Writes through the existing project store. No second persistence system.
         """
+        _save_editorial_revisions(ws, accepted_now)
         ws["accepted_chapters"] = [
             {"order": c.order, "title": c.title, "body": c.body} for c in accepted_now
         ]
@@ -2690,6 +2706,7 @@ def execute_generate_manuscript(
         max_chapter_calls=max_calls,
         on_chapter_accepted=_persist_accepted,
     )
+    _save_editorial_revisions(ws, pipeline.get("chapters") or [])
     manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
     ws["accepted_chapters"] = [
         {"order": c.order, "title": c.title, "body": c.body}
@@ -3154,6 +3171,7 @@ def execute_correct_manuscript(
         chapter the repair had already fixed, exactly as an interrupted first
         generation would without the equivalent guard there.
         """
+        _save_editorial_revisions(ws, accepted_now)
         ws["accepted_chapters"] = [
             {"order": c.order, "title": c.title, "body": c.body} for c in accepted_now
         ]
@@ -3174,6 +3192,7 @@ def execute_correct_manuscript(
         findings_by_order=findings_map,
         on_chapter_accepted=_persist_repaired,
     )
+    _save_editorial_revisions(ws, pipeline.get("chapters") or [])
     manuscript_md = str(pipeline.get("manuscript_md") or "").strip()
     ws["accepted_chapters"] = [
         {"order": c.order, "title": c.title, "body": c.body}

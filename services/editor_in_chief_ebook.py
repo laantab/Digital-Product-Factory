@@ -164,6 +164,22 @@ def review_ebook(
     from services.ebook_book_layout import numbered_chapters
     chapters = numbered_chapters(manuscript)
 
+    # Independently check the final manuscript, not only generation-time edits.
+    # Suggestions are informational; they must not create another endless
+    # manuscript approval loop. Explicit residual spelling/grammar defects are
+    # reported once per rule, rather than penalizing every occurrence.
+    from services.ebook_copy_editor import edit_text
+    language = edit_text(manuscript)
+    rep.checks_run.append("English_rule_based_copy_review")
+    rep.checks_skipped["comprehensive_grammar"] = "Rule-based coverage only; no comprehensive language engine ran."
+    for code in sorted({change["code"] for change in language["changes"]}):
+        first = next(change for change in language["changes"] if change["code"] == code)
+        f.append(Finding(code="COPY_" + code, category="editorial_quality",
+                         severity=SEV_MINOR, kind=KIND_OBJECTIVE,
+                         summary=f"Copy edit suggested: {first['before']} → {first['after']}",
+                         location=f"manuscript line {first['line']}"))
+    rep.checks_run.append("reading_level_estimate_and_sentence_length")
+
     # -- originality -------------------------------------------------------
     rep.checks_run.append("self_duplication")
     f += check_self_duplication(manuscript)
