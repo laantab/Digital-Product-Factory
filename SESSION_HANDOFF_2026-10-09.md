@@ -37,3 +37,53 @@ The owner asked us to stop the manual Render navigation loop and continue
 completion work directly. Do not ask for console commands or repeated tests.
 Prior authorization covers routine commit, push, merge and deployment.
 Budget restrictions and preservation of existing customer artifacts remain.
+
+
+## Editor-in-Chief copy editing — PR #36
+
+Owner requested actual editing capabilities on October 9. Implementation is
+on feature/editor-in-chief-copy-editing, remote commit a557341, with the same
+code tree as local commit 4d3e1ec: f59d8cb838887c22fdf700040b59b972b7215c14.
+Version is 1.9.19. The PR is draft pending full enforced release validation.
+
+A distinct offline English rules pass edits new/generated or repaired chapter
+bodies before acceptance. It preserves Markdown headings/tables/code, quoted
+material, and links; checks the edited chapter against its content contract;
+and rolls back any edit that introduces a new finding. Original and proposed
+drafts, hashes and edit lists are checkpointed in editorial_revisions and
+exposed in the ebook workspace response. Previously accepted chapters are
+preserved. No extra provider requests or paid calls are introduced.
+
+Coverage is deliberately limited to explicit spelling/grammar rules, with
+advisory long-sentence and estimated-grade suggestions. The generation and
+correction prompt also requests grammatical/clarity editing. Do not describe
+this as comprehensive grammar, semantic editing, factual verification or
+external plagiarism checking. The shared results screen was left unchanged
+to avoid expanding this patch to locked puzzle/coloring UI.
+
+Focused checks: 67 copy-editor/editorial/recovery plus 64 manuscript/workspace/
+correction checks passed. Originals from the already supplied reference ZIP
+match the expected Project 351 PDF/ZIP digests and have been placed in the
+ignored preservation-check directory. Full release gate is running. Earlier
+attempts were stopped: shared-UI function-lock enforcement required a broader
+change, so that UI addition was reverted; then missing original reference
+files caused a preservation skip, resolved by retrieving and verifying the
+supplied originals. Do not report those interrupted attempts as a passing gate.
+
+Latest owner screenshot confirms project 20 at 30%, reason failed, on builder
+1.9.18. Traceback is approve_stage(manuscript) refusing remaining structural/
+content findings. This editing patch does not establish the exact remaining
+findings or claim that project 20 is fixed/finished. Keep the quality gate;
+read those findings before any further correction or paid build.
+
+
+### Validation outcome for PR #36
+
+Full 210-file gate completed in 1,375.51 seconds: 2,967 passed, one failure,
+zero errors and zero skips. The only failure was the new changelog entry
+missing the required customer-question headings. No production code changed
+after that run. The documentation was corrected and all 61 checks in
+version management, Command Center and copy-editor suites passed afterward.
+This is combined full-suite plus focused documentation validation; do not
+claim the original enforced gate invocation returned PASS. Original PDF/ZIP
+checksums still match after testing. No paid calls or live book generation.

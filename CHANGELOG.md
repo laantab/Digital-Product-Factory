@@ -9,6 +9,8 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 **Editor-in-Chief now makes conservative copy edits before chapter acceptance.**
 
+### What changed
+
 - Corrects a defined set of English spelling, repeated-article, modal-verb and subject-verb errors without another AI call.
 - Preserves quotations, links, code, tables and headings. Original and proposed chapter drafts, hashes and change lists are retained with project checkpoints.
 - Rechecks edited chapters against their content contracts and rolls back edits that introduce new findings. Accepted chapters are not regenerated.
@@ -16,6 +18,18 @@ The version shown in the bottom-left of the app matches the newest entry here.
 - Exposes saved copy edits in the ebook workspace response and checks residual rule-based language findings during final review.
 - Generation/correction prompts now explicitly request grammar, punctuation and clarity editing while preserving facts and sources.
 - Coverage is explicitly limited: this is not comprehensive grammar checking, external plagiarism verification or factual verification. The existing structural repair and export gates remain necessary.
+
+### What was fixed
+
+The manuscript pipeline previously checked required content without a distinct copy-editing pass. New chapters now receive reversible rule-based language edits before acceptance.
+
+### Do customer steps change?
+
+No additional step is required during writing. Editing runs automatically on new or repaired chapters. Previously accepted chapters are preserved.
+
+### Release gate
+
+The full 210-file run completed with 2,967 passing checks, zero errors or skips, and one changelog-heading failure. Only documentation was corrected afterward; all 61 version/documentation/copy-editor checks passed on the follow-up run. No paid calls were permitted.
 
 ## 1.9.18 — 2026-10-08
 
