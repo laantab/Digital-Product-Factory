@@ -131,3 +131,21 @@ def test_repair_clears_real_findings_and_undo_restores_gate(draft):
     assert stage_status(restored['ebook_workspace'], 'manuscript') == 'needs_correction'
     assert restored['ebook_workspace']['manuscript_qa']
     assert not restored['export_ready']
+
+
+def test_incomplete_chapter_can_be_improved_in_several_edits(draft):
+    import re
+    from services.ebook_manuscript_engine import validate_manuscript_quality
+    text = current_text(draft)
+    heading = re.search(r'^## .+\n', text, re.M)
+    next_heading = re.search(r'^## .+\n', text[heading.end():], re.M)
+    start, end = heading.end(), heading.end() + next_heading.start()
+    thin = text[:start] + '\nEvent photography needs careful planning before guests arrive.\n\n' + text[end:]
+    improved = thin.replace('before guests arrive.', 'before guests arrive. Check the camera and printer backup kit before traveling to the venue.')
+    draft['content'] = draft['ebook'] = thin
+    assert validate_manuscript_quality(draft).status != 'PASS'
+    report = preview(draft, improved)
+    assert report['can_apply'] and not report['new_findings']
+    saved = apply_edit(draft, improved, digest(thin))
+    assert current_text(saved) == improved
+    assert stage_status(saved['ebook_workspace'], 'manuscript') == 'needs_correction'

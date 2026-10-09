@@ -29,9 +29,17 @@ def preview(data: dict, proposed: str | None = None) -> dict:
         raise ValueError('The edited manuscript is too large.')
     before = validate_manuscript_quality(data, manuscript_md=original)
     after = validate_manuscript_quality(data, manuscript_md=edited)
+    # Depth messages contain changing word counts. Compare rule identities,
+    # so improving an incomplete chapter can be saved in several edits.
     def findings(quality):
-        return Counter(quality.finding_messages)
-    new_findings = list((findings(after) - findings(before)).elements())
+        return Counter((f.order, f.code, f.severity) for f in quality.findings)
+    added = findings(after) - findings(before)
+    new_findings = list((Counter(after.book_findings) - Counter(before.book_findings)).elements())
+    for finding in after.findings:
+        key = (finding.order, finding.code, finding.severity)
+        if added[key]:
+            new_findings.append(finding.message)
+            added[key] -= 1
     return {
         'original': original, 'edited': edited,
         'original_sha256': digest(original), 'edited_sha256': digest(edited),
