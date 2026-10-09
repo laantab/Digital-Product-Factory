@@ -1,13 +1,13 @@
 {
-  "updated_at": "2026-09-17T14:00:00-07:00",
-  "current_task": "v1.8.0 WORKFLOWS -- CODE AND TESTS COMPLETE, PAID INFRASTRUCTURE NOT CREATED. A live Resume Build for 'Container Gardening for Beginners' pushed the Render web service past its memory limit because the book was being written inside the process that serves pages. v1.8.0 moves the build to a Render Workflows task: its own instance, up to 1 CPU and 4 GB, started on demand and billed only while running. The always-on Background Worker plan was abandoned in favour of Workflows (bursty product generation; an always-on 4 GB worker is $85/mo, Workflows flex is $0.20/CPU-hour + $0.05/GB-hour with nothing paid while idle).",
+  "updated_at": "2026-10-09T22:24:37.511331+00:00",
+  "current_task": "v1.9.20 existing-manuscript editor complete; full acceptance gate green. Live project 20 recovery remains unverified.",
   "stopped_at": "Branch feature/v1.8.0-workflows, off production commit 47393a0 (v1.7.29). Added services/jobs/mode.py (FACTORY_EXECUTION_MODE inline|workflow), services/jobs/dispatch.py (the single decision point app.py calls), services/jobs/workflow_trigger.py (durable job first, then Render start_task, never raises into a request), services/jobs/workflow_runner.py (SDK-free task behaviour), workflow_task.py (the Render entrypoint), two columns on the jobs table (workflow_run_id, workflow_triggered_at) with a conditional-UPDATE duplicate guard, executor.run_project (claims only the named book), a workflow-mode guard on runner.executor_enabled() and on POST /advance, and a read-only GET /ebook/execution-mode. 50 new checks in tests/test_ebook_workflow_execution.py, all green, zero paid API calls. render.yaml, .env.example, V1_8_0_WORKFLOWS_DEPLOYMENT.md and Verify_v1.8.0_Workflows.bat written. NOTE: the earlier unpushed feature/v1.8.0-background-worker branch on the PC is superseded and must not be merged.",
-  "next_step": "OWNER ACTION, COSTS MONEY: create the Render Workflows service from this repo (runtime python, region ohio, build 'pip install -r requirements.txt', start 'python workflow_task.py'), set its env vars, create a RENDER_API_KEY, then set FACTORY_WORKFLOW_TASK and finally FACTORY_EXECUTION_MODE=workflow on the web service. Full steps, acceptance plan and rollback in V1_8_0_WORKFLOWS_DEPLOYMENT.md. Until FACTORY_EXECUTION_MODE is set, this release behaves exactly like v1.7.29 in production and on the PC.",
+  "next_step": "Verify v1.9.20 on the website and builder, then inspect project 20’s actual remaining manuscript findings before correcting or resuming it. The available browser could open the public website but could not open project 20’s saved-data page. Do not claim this book is repaired and do not initiate paid calls without session authorization.",
   "next_claude": "code",
   "open_issues": [
     {
-      "title": "Render Workflows infrastructure not created",
-      "detail": "v1.8.0 code and tests are ready. Creating the workflow service is a new recurring charge and is the owner's decision.",
+      "title": "Builder deployment version verification pending",
+      "detail": "The historical 2026-09-17 infrastructure-not-created record is superseded by later customer logs showing Render Workflows executing the builder. This editor release did not inspect its current deployed commit or change production configuration.",
       "owner": "owner"
     },
     {
@@ -188,6 +188,15 @@
     {
       "date": "2026-09-17",
       "entry": "v1.8.0 prepared on feature/v1.8.0-workflows: builds move off the web service onto Render Workflows, behind one environment variable, with the job row still the durable handover. 50 new checks green."
+    },
+    {
+      "date": "2026-10-09 (v1.9.20 existing manuscript editor)",
+      "items": [
+        "PR #37 adds free, reversible editing of existing drafts with diff and quality review.",
+        "Full 211-file acceptance gate passed: 2976 tests, zero failures/errors/skips. Initial missing route classification was fixed and the whole gate rerun.",
+        "Original reference PDF and ZIP checksums unchanged. No paid provider calls or production build performed.",
+        "Automatic proofreading remains conservative English rules; comprehensive grammar, external plagiarism and factual verification are not claimed."
+      ]
     }
   ],
   "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly — it is what the Command Center reads every time it opens.",
@@ -202,5 +211,6 @@
     "release_validation": "Full enforced release gate: 2963 passed, zero failures/errors/skips; 209 acceptance files; paid calls blocked",
     "paid_calls_this_repair": 0,
     "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/35"
-  }
+  },
+  "last_completed": "Free preview/apply/undo manuscript editor, current quality revalidation, stale-write and active-build guards, preserved source revisions and exports, and explicit light route classification. Full 211-file gate: 2976 passed, 0 failures/errors/skips; no paid calls permitted. PR #37."
 }

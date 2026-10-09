@@ -87,3 +87,19 @@ version management, Command Center and copy-editor suites passed afterward.
 This is combined full-suite plus focused documentation validation; do not
 claim the original enforced gate invocation returned PASS. Original PDF/ZIP
 checksums still match after testing. No paid calls or live book generation.
+
+
+## v1.9.20 — existing-manuscript editing completed
+
+PR: https://github.com/laantab/Digital-Product-Factory/pull/37
+Published production code: `96029eefbbb4c8e28ad134f443cd233b29cb110e`; tested source tree: `b43ccf45bac0b2104d38795496e8237903b508ad`.
+
+The manuscript reader now links to a dedicated editor. It offers conservative copy-edit suggestions or customer-authored rewrites, a diff and current quality findings, apply, and undo. Saves preserve exact source bytes and original revisions, reject stale writes and active/queued builds, refresh accepted chapters from current validation, cancel stale pending estimates, and require fresh manuscript approval and export validation. Original exported files are preserved. Incomplete chapters can be improved in several saves without changing word-count messages being mistaken for new defects. Remaining findings still block approval.
+
+Validation: the complete 211-file release gate passed with **2,976 tests, 0 failures, 0 errors, 0 skips**, in 1,318.81 seconds. No external or paid calls were permitted. The first complete run had 2,975 passes and one route-classification failure; the editor route was classified as light, 32 routing/editor/lock checks passed, and the entire gate was rerun to the clean result. Browser tests exercise real Review, Apply, and Undo controls. Eight new editor tests are in the acceptance manifest. Invite-protection lock is closed; its hook and exemptions are unchanged.
+
+Preservation: reference PDF SHA-256 `6202e3a559db9313b61ec2d54ff689f6236a3b037308820bc77cfedf4d01f5bd`; ZIP `5044f086b7335e139bcec94e1b743c4f7effd4fe9eb7738973140176ef6d5c1f` remain unchanged.
+
+Coverage: this completes a usable editing workflow, not comprehensive automated grammar or factual verification. Automatic proofreading remains explicit English rules. No Java server, paid service, production configuration, or new provider call was added.
+
+Live follow-up: the public website displayed v1.9.19 before this merge. Project 20’s saved-data navigation returned `net::ERR_BLOCKED_BY_CLIENT`; no workaround was attempted to read that blocked data. Its actual remaining findings and the builder’s current deployed commit were not obtained. Do not claim project 20 is repaired. Check deployed versions after merge, obtain its actual findings, and respect the no-additional-spending constraint.

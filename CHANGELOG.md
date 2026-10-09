@@ -23,7 +23,7 @@ Editing is optional. After saving, review and approve the manuscript again, then
 
 ### Release gate
 
-Pending the complete acceptance run; targeted editor service, route, and browser checks run with external and paid calls blocked.
+Complete 211-file acceptance run passed: 2,976 tests, zero failures, errors or skips, with external and paid calls blocked. The first complete attempt had 2,975 passes and one missing-route-classification failure; that classification was fixed, all 32 routing/editor/lock checks passed, and the entire gate was rerun successfully. The reference PDF and ZIP checksums remain unchanged.
 
 ## 1.9.19 — 2026-10-09
 
