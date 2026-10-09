@@ -209,6 +209,7 @@
     "tests/test_release_review_never_hangs_v1_9_15.py",
     "tests/test_workspace_poll_lifecycle.py",
     "tests/test_guided_cover_choice.py",
-    "tests/test_ebook_copy_editor.py"
+    "tests/test_ebook_copy_editor.py",
+    "tests/test_ebook_manuscript_editor.py"
   ]
 }

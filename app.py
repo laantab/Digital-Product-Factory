@@ -4701,6 +4701,44 @@ def ebook_build_status_route(project_id: int):
         return _customer_error(exc, 500, log="ebook build status failed")
 
 
+@app.route("/ebook-workspace/<int:project_id>/edit-manuscript", methods=["GET", "POST"])
+def ebook_manuscript_editor_route(project_id: int):
+    """Preview, apply, or undo free edits to the preserved manuscript."""
+    from flask import render_template
+    from services.ebook_manuscript_editor import apply_edit, current_text, digest, preview
+    try:
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err
+        data = dict(project.get("data") or {})
+        if request.method == "GET":
+            if not current_text(data).strip():
+                return _error("This project has no manuscript to edit.", 404)
+            return render_template("ebook_manuscript_editor.html", project_id=project_id,
+                                   manuscript=current_text(data), manuscript_digest=digest(current_text(data)))
+        body = request.get_json(silent=True) or {}
+        action = body.get("action")
+        if action == "preview":
+            return jsonify(ok=True, review=preview(data, body.get("manuscript")))
+        if action not in {"apply", "undo"}:
+            return _error("Choose preview, apply, or undo.", 400)
+        from services.jobs.store import get_for_project
+        job = get_for_project(project_id)
+        if job and job.get("status") in {"QUEUED", "RUNNING"}:
+            return _error("Wait for the queued or running build to finish before editing.", 409)
+        edited = apply_edit(data, body.get("manuscript"), str(body.get("expected_digest") or ""),
+                            undo=action == "undo")
+        database.update_project(project_id, None, edited)
+        return jsonify(ok=True, manuscript=current_text(edited), manuscript_digest=digest(current_text(edited)))
+    except database.StaleProjectWrite:
+        return _error("The project changed. Reload before saving your edits.", 409)
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:
+        app.logger.exception("manuscript edit failed")
+        return _error(str(exc), 500)
+
+
 @app.get("/ebook-workspace/<int:project_id>/manuscript")
 def ebook_workspace_manuscript_route(project_id: int):
     """Read the finished manuscript. Read-only; generates nothing.
@@ -4829,6 +4867,7 @@ def ebook_workspace_manuscript_route(project_id: int):
 {f'<p class="sub">{_html.escape(subtitle)}</p>' if subtitle else ''}
 {f'<p class="by">{_html.escape(author)}</p>' if author else ''}
 <p class="meta">{chapters} chapters &middot; {words:,} words</p>
+<p><a href="/ebook-workspace/{project_id}/edit-manuscript">Edit manuscript</a></p>
 </header>{body}</div></body></html>"""
         return Response(page, mimetype="text/html")
     except Exception as exc:  # noqa: BLE001

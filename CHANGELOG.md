@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.20 — 2026-10-09
+
+**Existing manuscripts now have a free, reversible editor.**
+
+### What changed
+
+Open “Edit manuscript” from the manuscript reader. Suggest conservative copy edits or rewrite the Markdown, review a diff and quality findings, then apply the reviewed draft. The previous text is saved for undo. No paid provider calls are made.
+
+### What was fixed
+
+The earlier copy editor ran only during chapter generation. Existing drafts can now be edited without regenerating chapters. Saves reject stale drafts, active builds, empty text, and newly introduced quality findings. Every save or undo rechecks quality, invalidates final approval, and preserves old exported files. Structural findings are shown rather than bypassed.
+
+### Do customer steps change?
+
+Editing is optional. After saving, review and approve the manuscript again, then rebuild and check final files. Automated proofreading remains limited English rules; comprehensive grammar and factual accuracy require human review.
+
+### Release gate
+
+Pending the complete acceptance run; targeted editor service, route, and browser checks run with external and paid calls blocked.
+
 ## 1.9.19 — 2026-10-09
 
 **Editor-in-Chief now makes conservative copy edits before chapter acceptance.**

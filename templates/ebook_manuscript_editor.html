@@ -1,0 +1,29 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Edit manuscript</title><style>body{font:16px/1.5 system-ui;background:#f8fafc;color:#0f172a;margin:2rem auto;max-width:70rem;padding:1rem}textarea{box-sizing:border-box;width:100%;min-height:28rem;padding:1rem;font:15px/1.6 monospace}button,a{padding:.6rem;margin:.3rem}pre{white-space:pre-wrap;background:white;padding:1rem}button{cursor:pointer}#message{font-weight:600}</style>
+<h1>Edit manuscript</h1><p>Review spelling and grammar suggestions, rewrite passages, and save a validated revision. This editor makes no paid calls. Automated proofreading uses a limited set of English rules; facts and comprehensive grammar still need human review.</p>
+<p><a href="/ebook-workspace/{{ project_id }}/manuscript">Read manuscript</a><a href="/">Factory</a></p>
+<label for="draft">Manuscript (Markdown)</label><textarea id="draft">{{ manuscript }}</textarea>
+<p><button id="suggest">Suggest copy edits</button><button id="review">Review my edits</button><button id="apply" disabled>Apply reviewed edits</button><button id="undo">Undo last saved edit</button></p>
+<p id="message" role="status"></p><h2>Changes and findings</h2><pre id="findings">Review your edits before applying them.</pre>
+<script>
+const draft=document.getElementById('draft'), message=document.getElementById('message'), findings=document.getElementById('findings'), save=document.getElementById('apply');
+let originalDigest={{ manuscript_digest|tojson }}, reviewed=null;
+async function action(name,body={}) {
+ save.disabled=true; message.textContent='Checking manuscript…';
+ try {
+ const response=await fetch('/ebook-workspace/{{ project_id }}/edit-manuscript',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:name,expected_digest:originalDigest,...body})});
+ const out=await response.json(); if(!response.ok) throw new Error(out.error||'The editor could not save this change.');
+ if(name==='preview') {
+ reviewed=out.review; draft.value=reviewed.edited;
+ findings.textContent=(reviewed.diff||'No text changes.')+'\n\nRemaining findings:\n'+(reviewed.quality.book_findings||[]).concat((reviewed.quality.findings||[]).map(f=>f.message)).join('\n')+'\n\nCopy review suggestions:\n'+reviewed.copy_review.suggestions.map(f=>f.suggestion).join('\n');
+ save.disabled=!reviewed.can_apply || reviewed.original_sha256===reviewed.edited_sha256;
+ message.textContent=reviewed.can_apply?'Reviewed. Apply saves a revision and requires a fresh manuscript approval.':'These edits introduce new findings. Adjust the draft and review again.';
+ } else { draft.value=out.manuscript; originalDigest=out.manuscript_digest; reviewed=null; message.textContent='Saved. Review and approve this manuscript before rebuilding final files.'; findings.textContent='Original text is saved for undo. Old exported files are preserved.'; }
+ } catch(error) {message.textContent=error.message;}
+}
+draft.addEventListener('input',()=>{reviewed=null;save.disabled=true;});
+document.getElementById('suggest').onclick=()=>action('preview');
+document.getElementById('review').onclick=()=>action('preview',{manuscript:draft.value});
+save.onclick=()=>reviewed&&action('apply',{manuscript:reviewed.edited});
+document.getElementById('undo').onclick=()=>action('undo');
+</script></html>
