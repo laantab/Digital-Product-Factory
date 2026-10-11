@@ -26,6 +26,10 @@ class VisualRetryLocalFallback(unittest.TestCase):
     def test_automatic_retry_materializes_real_graphic_without_paid_call(self):
         from services import ebook_factory_pipeline as fp
         stock = dict(self.aid, status='missing', error='Wrong scene')
+        kept = {'type': 'checklist', 'visual_id': 'v_ch8', 'chapter_index': 8,
+                'chapter': 'Storage', 'items': ['Keep equipment access clear.']}
+        self.data['visual_plan']['chapters'].append(
+            {'chapter': 'Storage', 'chapter_index': 8, 'aids': [copy.deepcopy(kept)]})
         with patch.object(vp, 'EXPORTS_DIR', self.tmp.name), \
              patch.object(fp, 'fill_photo_aid_from_pexels', return_value=stock), \
              patch.object(fp, 'fill_photo_aid_with_ai') as paid:
@@ -39,6 +43,7 @@ class VisualRetryLocalFallback(unittest.TestCase):
         self.assertTrue(aid['items'])
         self.assertFalse(aid['approved'])
         self.assertEqual(result['content'], 'Original manuscript')
+        self.assertEqual(result['visual_plan']['chapters'][1]['aids'][0], kept)
         self.assertEqual(result['ebook_visual_manifest_digest'], result['ebook_visual_manifest']['digest'])
 
     def test_explicit_stock_source_stays_stock_only(self):
@@ -48,6 +53,18 @@ class VisualRetryLocalFallback(unittest.TestCase):
             vp.replace_photo_aid(self.data, 'v_ch7', mode='pixabay')
         automatic.assert_not_called()
         self.assertEqual(stock.call_args.kwargs['providers'], ('pixabay',))
+
+    def test_uncertain_stock_is_replaced_with_a_genuine_chapter_graphic(self):
+        from services import ebook_factory_pipeline as fp
+        stock = dict(self.aid, match_status='needs_user_review')
+        with patch.object(vp, 'EXPORTS_DIR', self.tmp.name), \
+             patch.object(fp, 'fill_photo_aid_automatic', return_value=stock) as automatic:
+            result = vp.replace_photo_aid(self.data, 'v_ch7')
+        self.assertFalse(automatic.call_args.kwargs['allow_ai'])
+        aid = result['visual_plan']['chapters'][0]['aids'][0]
+        self.assertFalse(vp.is_photo_aid(aid))
+        self.assertTrue(Path(aid['asset_path']).is_file())
+        self.assertFalse(aid['approved'])
 
     def test_no_suitable_prose_does_not_approve_or_spend(self):
         from services import ebook_factory_pipeline as fp

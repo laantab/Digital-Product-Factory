@@ -3476,7 +3476,9 @@ def replace_photo_aid(
     mode: str = "",
 ) -> dict:
     """Replace one photograph. Does not approve Visuals or rebuild the customer PDF."""
-    from services.ebook_factory_pipeline import fill_photo_aid_automatic, fill_photo_aid_from_pexels
+    from services.ebook_factory_pipeline import (
+        _local_visual_for_aid, fill_photo_aid_automatic, fill_photo_aid_from_pexels,
+    )
 
     _assert_mutable(data, "replace photograph")
     aid = _find_aid(data, visual_id)
@@ -3534,6 +3536,13 @@ def replace_photo_aid(
                 fields=fields,
                 allow_ai=allow_ai,
             )
+            if not mode_l and is_photo_aid(filled) and filled.get("match_status") != MATCH_PASS:
+                # A guided retry cannot approve an uncertain stock scene.
+                # Prefer a genuine chapter graphic if the prose supports one;
+                # otherwise leave the photograph subject to the existing gate.
+                local = _local_visual_for_aid(aid, chapter=str(aid.get("chapter") or ""))
+                if local is not None:
+                    filled = local
             # Automatic retries use the same stock -> manuscript graphic
             # fallback as initial acquisition. A free retry never authorizes AI.
             if not is_photo_aid(filled):
