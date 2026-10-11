@@ -3522,7 +3522,7 @@ def replace_photo_aid(
         aid.pop("content_labels", None)
         aid.pop("inspected_labels", None)
         allow_ai = mode_l in {"ai", "generate-ai", "ai-alternative"}
-        if allow_ai:
+        if allow_ai or not mode_l:
             filled = fill_photo_aid_automatic(
                 aid,
                 package_id=pkg,
@@ -3532,8 +3532,17 @@ def replace_photo_aid(
                 chapter=str(aid.get("chapter") or ""),
                 data=data,
                 fields=fields,
-                allow_ai=True,
+                allow_ai=allow_ai,
             )
+            # Automatic retries use the same stock -> manuscript graphic
+            # fallback as initial acquisition. A free retry never authorizes AI.
+            if not is_photo_aid(filled):
+                local_plan = materialize_visual_plan(
+                    {"chapters": [{"chapter": filled.get("chapter"),
+                                   "chapter_index": filled.get("chapter_index"),
+                                   "aids": [filled]}]}, package_id=pkg,
+                )
+                filled = local_plan["chapters"][0]["aids"][0]
         else:
             # v1.9.6: "Try Pexels / Unsplash / Pixabay" searches only that
             # free source; any other replace tries all of them, Pexels first.
