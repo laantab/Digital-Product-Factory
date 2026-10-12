@@ -752,7 +752,7 @@ def _local_visual_for_aid(aid: dict[str, Any], *, chapter: str = "") -> dict[str
     if not body.strip():
         return None
     try:
-        from services.ebook_visual_pipeline import derive_local_aid_from_prose
+        from services.ebook_visual_pipeline import derive_local_aid_from_prose, _choose_aid
     except Exception:  # noqa: BLE001
         return None
     title = str(chapter or aid.get("chapter") or "")
@@ -760,7 +760,9 @@ def _local_visual_for_aid(aid: dict[str, Any], *, chapter: str = "") -> dict[str
         index = int(aid.get("chapter_index") or 0) or 1
     except (TypeError, ValueError):
         index = 1
-    local = derive_local_aid_from_prose(index, title, body)
+    # A chapter can carry a genuine list/table even when it has no short
+    # prose sentences. Reuse the existing structured planner as well.
+    local = derive_local_aid_from_prose(index, title, body) or _choose_aid(index, title, body)
     if not local:
         return None
     # Keep the slot's identity so the plan, manifest and preview still line up.
@@ -957,7 +959,10 @@ def fill_photo_aid_automatic(
         audience=audience,
         chapter=chapter,
     )
-    if _photo_already_stored(stock) and str(stock.get("match_status") or "") != MATCH_REJECT:
+    # A file that still needs review cannot satisfy automatic approval.
+    # Use the chapter-based fallback rather than returning the same blocked
+    # photo on every retry. Manual photo editing still keeps review candidates.
+    if _photo_already_stored(stock) and str(stock.get("match_status") or "") == MATCH_PASS:
         return stock
 
     # FREE LOCAL VISUAL FIRST.
@@ -971,8 +976,13 @@ def fill_photo_aid_automatic(
     local = _local_visual_for_aid(out, chapter=chapter)
     if local is not None:
         local["acquisition_outcome"] = str(stock.get("acquisition_outcome") or SEMANTIC_REJECTION)
-        local["replaced_stock_reason"] = str(stock.get("error") or "")
+        local["replaced_stock_reason"] = str(stock.get("rejection_reason") or stock.get("error") or "")
         return local
+    # Uncertainty is a review decision, never permission to buy an image.
+    # If this chapter has no honest local fallback, keep its candidate and
+    # let the unchanged quality gate require review instead of spending.
+    if _photo_already_stored(stock) and str(stock.get("match_status") or "") != MATCH_REJECT:
+        return stock
     stock["acquisition_outcome"] = LOCAL_VISUAL_UNSUITABLE
 
     # Only now may a paid image be considered, and only with explicit

@@ -656,13 +656,19 @@ def awaiting_picture_approval(data: dict, state: dict | None = None) -> bool:
 
 
 def _run_visuals(data: dict, pid: int) -> dict:
+    import database
     from services.ebook_design_workspace import prepare_visuals_local
 
     data = prepare_visuals_local(data)
+    # Asset preparation is real progress even when final approval fails.
+    # The exception handler reloads this checkpoint instead of discarding
+    # completed pictures and retry history from the current attempt.
+    database.update_project(pid, None, data)
     from services.ebook_guided_build import enabled
     if enabled(data):
         from services.ebook_guided_build import approve_visuals
-        data = approve_visuals(data)
+        data = approve_visuals(
+            data, persist_progress=lambda partial: database.update_project(pid, None, partial))
         build_state(data)["awaiting_picture_approval"] = False
         return data
     # v1.9.6: never approve here. Hold for the customer's one approval.
