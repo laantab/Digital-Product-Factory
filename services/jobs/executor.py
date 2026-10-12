@@ -106,7 +106,7 @@ def drain(max_jobs: int = 25, owner: str | None = None) -> dict:
 
 
 def run_project(project_id: int, owner: str | None = None, *,
-                units: int | None = None) -> dict:
+                units: int | None = None, before_advance=None) -> dict:
     """Advance ONE named book, claiming only that book's job.
 
     This is what a Render Workflow task calls. A task is started for one
@@ -126,10 +126,11 @@ def run_project(project_id: int, owner: str | None = None, *,
     if not job:
         return {"claimed": False, "reason": "not runnable",
                 "project_id": int(project_id)}
-    return _drive(job, owner, units=units)
+    return _drive(job, owner, units=units, before_advance=before_advance)
 
 
-def _drive(job: dict, owner: str, *, units: int | None = None) -> dict:
+def _drive(job: dict, owner: str, *, units: int | None = None,
+           before_advance=None) -> dict:
     """Advance an already-claimed job. Shared by run_one_job and run_project."""
     project_id = int(job["project_id"])
     budget = int(units) if units and int(units) > 0 else UNITS_PER_CLAIM
@@ -138,6 +139,16 @@ def _drive(job: dict, owner: str, *, units: int | None = None) -> dict:
 
     try:
         from services.ebook_build_orchestrator import advance_build
+
+        if before_advance is not None:
+            # Apply the customer's correction while we own the lease, before
+            # the orchestrator can reject the state it was meant to repair.
+            action, lease_lost = _advance_under_lease(
+                job, owner, lambda pid: before_advance(job), project_id)
+            result["requested_action"] = action
+            if lease_lost:
+                result["lease_lost"] = True
+                return result
 
         for _ in range(budget):
             status, lease_lost = _advance_under_lease(

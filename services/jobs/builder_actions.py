@@ -74,6 +74,13 @@ def perform_pending(project_id: int, job_id: int) -> dict:
         data, message = wsa.perform(data, project_id=int(project_id),
                                     route=route, action=action, payload=payload)
         database.update_project(int(project_id), None, data)
+        # A successful customer correction is a new attempt, not a repeat of
+        # the exhausted state. Reset only when the saved build is failed;
+        # automatic task retries without an action retain their ceilings.
+        state = data.get("ebook_build") or {}
+        if state.get("failed"):
+            from services.ebook_build_orchestrator import resume_build
+            resume_build(int(project_id))
         out["performed"] = True
         out["message"] = message
         log.info("performed %s (%s) for project %s", route, action, project_id)
