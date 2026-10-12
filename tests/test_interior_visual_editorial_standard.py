@@ -376,7 +376,7 @@ class APoorPlanIsNotReusedTests(unittest.TestCase):
     def _reuse_block(self):
         src = (ROOT / "services" / "ebook_visual_pipeline.py").read_text(encoding="utf-8")
         start = src.index("def prepare_visuals_for_review")
-        return src[start:start + 4000]
+        return src[start:src.index("\ndef approve_visual_plan", start)]
 
     def test_reuse_is_conditional_on_the_editorial_verdict(self):
         body = self._reuse_block()

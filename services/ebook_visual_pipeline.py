@@ -3300,6 +3300,19 @@ def prepare_visuals_for_review(data: dict, *, preserve_downstream: bool = False)
         )
         if not verdict.ok:
             reuse = False
+            # A photo fallback can leave a useful, varied set below its photo
+            # floor. Keep those assets and supplement the missing photographs.
+            supplementary_verdict = review_visual_set(
+                existing, chapter_count=len(existing.get("chapters") or []),
+                photography_supported=False,
+            )
+            # New photographs also increase the illustrative count. Any other
+            # editorial finding still requires replanning and the full gate.
+            if supplementary_verdict.ok or all(
+                f.startswith("Only ") and "visuals show something prose" in f
+                for f in supplementary_verdict.findings
+            ):
+                reuse = True
 
     if reuse:
         plan = existing
@@ -3339,6 +3352,10 @@ def prepare_visuals_for_review(data: dict, *, preserve_downstream: bool = False)
             allow_ai=visual_ai_authorized(data, fields),
         )
     set_visual_progress(data, PROGRESS_LOCAL)
+    if automatic or photographic:
+        from services.ebook_factory_pipeline import fill_missing_photograph_quota
+        plan = fill_missing_photograph_quota(
+            plan, package_id=pkg, title=title, topic=topic, data=data)
     plan = materialize_visual_plan(plan, package_id=pkg)
     plan = stamp_plan_photo_matches(plan)
     set_visual_progress(data, PROGRESS_REVIEW)
