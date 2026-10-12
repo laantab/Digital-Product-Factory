@@ -1618,6 +1618,41 @@ def approve_stage(
     )
 
 
+def edit_author(data: dict, *, author: str) -> dict:
+    """Change the cover credit without rewriting approved book content."""
+    from services.quality.artifact_state import assert_content_mutable
+    assert_content_mutable(data)
+    data = copy.deepcopy(data)
+    author = author.strip()
+    if not author:
+        raise ValueError("Enter an author name for the finished ebook.")
+    data = ensure_workspace(data)
+    ws = data["ebook_workspace"]
+    if author == str(ws.get("author") or data.get("author_brand") or data.get("author") or "").strip():
+        return data
+    ws["author"] = author
+    data["author_brand"] = data["author"] = author
+    fields = data.get("fields") if isinstance(data.get("fields"), dict) else {}
+    fields["author_brand"] = author
+    data["fields"] = fields
+    for stage in RAIL_STAGES[RAIL_STAGES.index("cover"):]:
+        set_stage_status(ws, stage, STATUS_NOT_STARTED, note="Author credit updated")
+        state = data.get("ebook_build")
+        if isinstance(state, dict):
+            state.setdefault("stages", {}).pop(stage, None)
+            state["finished"] = False
+            state["failed"] = False
+            state["awaiting_cover_choice"] = False
+    for key in ("cover_design", "ebook_design", "ebook_export_identity", "ebook_design_preflight", "release_certificate"):
+        data[key] = None
+    for key in ("ebook_cover_digest", "ebook_design_digest", "ebook_preview_html", "release_status"):
+        data[key] = ""
+    data["export_ready"] = False
+    _append_history(ws, "edit_author", author=author)
+    _recompute_next_action(ws)
+    return sync_document_from_workspace(data, sync_manuscript=False)
+
+
 def edit_title(data: dict, *, title: str, subtitle: str, options: list | None = None) -> dict:
     data = ensure_workspace(data)
     ws = data["ebook_workspace"]
