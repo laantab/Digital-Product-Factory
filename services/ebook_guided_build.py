@@ -53,6 +53,12 @@ def record_choice(data, body):
         if not choice or not any(str(o.get('id')) == choice for o in ws.get('title_options', [])):
             raise ValueError('Choose one of the suggested titles.')
         state['pending_title_id'] = choice
+    elif body.get('action') == 'refresh':
+        if str(body.get('title_id') or '') != str(ws.get('approved_title_id') or ''):
+            raise ValueError('Update the title first so the cover preview matches your choice.')
+        if not (data.get('cover_design') or {}).get('source'):
+            raise ValueError('The cover photograph is missing. Resume this project to recover it.')
+        state['pending_cover_refresh'] = True
     elif body.get('action') == 'finish':
         if str(body.get('title_id') or '') != str(ws.get('approved_title_id') or ''):
             raise ValueError('Update the title first so the cover preview matches your choice.')
@@ -80,6 +86,7 @@ def run_cover(data, pid, prepare):
     title_id = state.pop('pending_title_id', '')
     layout = state.pop('pending_cover_layout', '')
     digest = state.pop('pending_cover_digest', '')
+    refresh = state.pop('pending_cover_refresh', False)
     if layout:
         variant = ((data.get('cover_design') or {}).get('variants') or {}).get(layout) or {}
         if str(variant.get('digest') or '') != digest:
@@ -105,6 +112,15 @@ def run_cover(data, pid, prepare):
         if not source:
             raise ValueError('The cover photograph is missing. Resume this project to recover it.')
         data = _activate_source(data, source, project_id=pid)
+    elif refresh:
+        from services.ebook_photo_cover import render_photo_variants, _publish_cover_files, verify_source
+        source = (data.get('cover_design') or {}).get('source') or {}
+        verify_source(source, project_id=pid, data=data)
+        # Republish the same registered photo and its local renders; do not
+        # replace it, search for another photo, or rebuild the manuscript.
+        data['_project_id'] = pid
+        _publish_cover_files(data, source['path'], project_id=pid)
+        data = render_photo_variants(data, project_id=pid)
     else:
         data = prepare(data, pid)
     variants = (data.get('cover_design') or {}).get('variants') or {}

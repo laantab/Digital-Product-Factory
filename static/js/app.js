@@ -7687,11 +7687,27 @@ function _renderEbookCoverChoice(root, status, projectId, bookTitle) {
       </label>`).join("")}
     </div>
     <p class="text-sm text-rose-700 mt-3 hidden" data-cover-error></p>
-    <button type="button" class="btn-primary mt-4" data-cover-finish>Use This Title and Cover — Finish My Ebook</button>
+    <button type="button" class="btn-primary mt-4" data-cover-finish disabled>Use This Title and Cover — Finish My Ebook</button>
   </div>`);
   const select = root.querySelector("[data-cover-title]");
   const error = root.querySelector("[data-cover-error]");
   const showError = msg => { error.textContent = msg; error.classList.remove("hidden"); };
+  const finish = root.querySelector("[data-cover-finish]");
+  const updateFinish = () => {
+    const selected = root.querySelector("[data-cover-layout]:checked");
+    const image = selected && selected.closest("label").querySelector("img");
+    finish.disabled = !image || !image.complete || image.naturalWidth === 0;
+  };
+  root.querySelectorAll("[data-cover-layout]").forEach(input => { input.onchange = updateFinish; });
+  root.querySelectorAll("[data-cover-layout]").forEach(input => {
+    const image = input.closest("label").querySelector("img");
+    image.onload = updateFinish;
+    image.onerror = () => {
+      updateFinish();
+      showError("The cover preview could not load. Click Update cover previews with this title to recover it.");
+    };
+    if (image.complete && image.naturalWidth === 0) image.onerror();
+  });
   const submit = async body => {
     root.querySelectorAll("button, select, input").forEach(el => { el.disabled = true; });
     try {
@@ -7702,16 +7718,18 @@ function _renderEbookCoverChoice(root, status, projectId, bookTitle) {
     } catch (e) {
       showError(e.message || "Please try that choice again.");
       root.querySelectorAll("button, select, input").forEach(el => { el.disabled = false; });
+      updateFinish();
     }
   };
   root.querySelector("[data-cover-update-title]").onclick = () => {
-    if (select.value === selectedTitle) return;
-    return submit({ action: "title", title_id: select.value });
+    return submit({ action: select.value === selectedTitle ? "refresh" : "title", title_id: select.value });
   };
   root.querySelector("[data-cover-finish]").onclick = () => {
     if (select.value !== selectedTitle) return showError("Update the cover previews with your chosen title first.");
     const selected = root.querySelector("[data-cover-layout]:checked");
     if (!selected) return showError("Choose a cover to continue.");
+    const image = selected.closest("label").querySelector("img");
+    if (!image.complete || !image.naturalWidth) return showError("Wait for the cover preview to load before finishing your ebook.");
     return submit({ action: "finish", title_id: selectedTitle, layout_id: selected.value, digest: selected.dataset.digest });
   };
 }

@@ -1988,6 +1988,33 @@ def inspect_variant(
     }
 
 
+def _cover_path_on_this_machine(path: str, package_id: str) -> str:
+    """Rebase a registered cover path without carrying a worker's disk root."""
+    if not path or not re.fullmatch(r"[A-Za-z0-9_-]+", package_id or ""):
+        return path
+    normalized = str(path).replace("\\", "/")
+    parts = normalized.split("/")
+    if any(part in {".", ".."} for part in parts):
+        return path
+    marker = f"/{package_id}/cover_photo/"
+    if normalized.count(marker) != 1:
+        return path
+    suffix = normalized.split(marker, 1)[1]
+    if not suffix or suffix.startswith("/"):
+        return path
+    return os.path.join(EXPORTS_DIR, package_id, "cover_photo", *suffix.split("/"))
+
+
+def _localize_cover_paths(cover: dict, package_id: str) -> None:
+    for field in ("image_path", "local_cover_pdf"):
+        if cover.get(field):
+            cover[field] = _cover_path_on_this_machine(str(cover[field]), package_id)
+    for row in (cover.get("variants") or {}).values():
+        for field in ("png_path", "pdf_path", "thumb_path"):
+            if row.get(field):
+                row[field] = _cover_path_on_this_machine(str(row[field]), package_id)
+
+
 def recover_source_photo_file(source: dict, *, project_id: int | None, data: dict) -> bool:
     """Put the registered photograph back on THIS machine. True when it is here.
 
@@ -2047,8 +2074,10 @@ def recover_source_photo_file(source: dict, *, project_id: int | None, data: dic
 def verify_source(source: dict | None, *, project_id: int | None, data: dict) -> dict[str, Any]:
     if not isinstance(source, dict) or not source:
         raise PhotoCoverError("No cover photograph is registered.")
-    path = str(source.get("path") or "")
     pkg = str(data.get("package_id") or data.get("artifact_id") or "")
+    path = _cover_path_on_this_machine(str(source.get("path") or ""), pkg)
+    source["path"] = path
+    _localize_cover_paths(data.get("cover_design") or {}, pkg)
     if path and not os.path.isfile(path):
         recover_source_photo_file(source, project_id=project_id, data=data)
     if not path or not os.path.isfile(path):
@@ -2587,6 +2616,7 @@ def recover_variant_files(cover: dict, *, project_id: int | None) -> int:
     """
     recovered = 0
     try:
+        _localize_cover_paths(cover, str(cover.get("package_id") or ""))
         variants = cover.get("variants") if isinstance(cover.get("variants"), dict) else {}
         for layout_id in LAYOUT_IDS:
             row = variants.get(layout_id) if isinstance(variants.get(layout_id), dict) else None

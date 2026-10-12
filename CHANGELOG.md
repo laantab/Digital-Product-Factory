@@ -5,6 +5,18 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.25 — 2026-10-12
+
+**Recover missing ebook cover previews.**
+
+**What changed:** Cover photograph and variant paths follow the project when the builder and website use different export folders. The preview update button can refresh the existing cover even when its title has not changed.
+
+**What was fixed:** A registered photo could appear missing on a different machine. Updating previews with the same title did nothing. Finishing now stays blocked until the selected preview loads. The author-credit route is also recorded as a lightweight update.
+
+**Do steps change?** The existing title and cover choice remains. Refreshing retains the manuscript, pictures, title, and photo; no paid image generation is added.
+
+**Release gate:** Stability, cover recovery, real-browser checks, and the full acceptance suite are checked before publication. No failing or skipped check is treated as a pass.
+
 ## 1.9.24 — 2026-10-12
 
 **Correct a missing author without rebuilding the book.**
