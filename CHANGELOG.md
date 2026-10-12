@@ -5,6 +5,14 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.22 — 2026-10-12
+
+**Apply requested corrections before advancing the book.**
+
+The workflow builder previously advanced the book before applying a pending picture or cover action. An exhausted visual stage could therefore fail first, then save the replacement after the job had already stopped. Requested actions now run first, under the same renewable worker lease. A successful correction resumes a saved failed stage; failed corrections and automatic retries retain the existing attempt limits. Completed work and quality checks remain intact.
+
+Verification: two new regressions fail on the original code. The repaired worker, workflow, and action suites pass with external and paid calls blocked. Live PDF/ZIP completion remains unverified.
+
 ## 1.9.21 — 2026-10-12
 
 **Automatic picture recovery now uses the existing free fallback and saves progress.**

@@ -102,6 +102,67 @@ class RequestedActionRoundTripTests(unittest.TestCase):
         self.assertEqual(out["message"], "handled by the build loop")
 
 
+class WorkflowActionOrderingTests(unittest.TestCase):
+    def setUp(self):
+        store.init_jobs_table()
+        self.pid = _project("Apply replacement before validation")
+        self.job_id = int(store.enqueue(self.pid)["id"])
+        store.set_requested_action(self.job_id, {
+            "route": VISUALS, "action": "replace-photo",
+            "payload": {"visual_id": "v_ch1"}})
+
+    def test_replacement_runs_under_lease_before_first_validation(self):
+        from services.jobs import workflow_runner
+
+        def replacement(data, *args, **kwargs):
+            job = store.get_for_project(self.pid)
+            self.assertEqual(job["status"], store.RUNNING)
+            self.assertIsNone(store.claim_for_project("rival", self.pid))
+            data["replacement_saved"] = True
+            return data
+
+        def advance(pid):
+            saved = database.get_project(pid)["data"]
+            return {"finished": bool(saved.get("replacement_saved")),
+                    "failed": not saved.get("replacement_saved"), "percent": 40}
+
+        with mock.patch("services.ebook_visual_pipeline.replace_photo_aid", replacement), \
+             mock.patch("services.ebook_build_orchestrator.advance_build", advance):
+            result = workflow_runner.run_build(self.pid)
+        self.assertTrue(result["finished"], result)
+        self.assertFalse(result["failed"])
+        self.assertEqual(result["actions"], 1)
+        self.assertEqual(store.get_for_project(self.pid)["status"], store.SUCCEEDED)
+        self.assertFalse(builder_actions.perform_pending(self.pid, self.job_id)["performed"])
+
+    def test_another_worker_cannot_consume_the_requested_action(self):
+        from services.jobs import workflow_runner
+        store.claim_for_project("original-owner", self.pid)
+        result = workflow_runner.run_build(self.pid, sleep=lambda s: None)
+        self.assertEqual(result["reason"], "another task holds this book")
+        self.assertEqual(store.take_requested_action(self.job_id)["action"], "replace-photo")
+
+    def test_successful_correction_resumes_exhausted_stage(self):
+        project = database.get_project(self.pid)
+        data = project["data"]
+        data["ebook_build"] = {"failed": True}
+        database.update_project(self.pid, None, data)
+        with mock.patch("services.ebook_visual_pipeline.replace_photo_aid",
+                        side_effect=lambda d, *a, **k: d), \
+             mock.patch("services.ebook_build_orchestrator.resume_build") as resume:
+            result = builder_actions.perform_pending(self.pid, self.job_id)
+        self.assertTrue(result["performed"])
+        resume.assert_called_once_with(self.pid)
+
+    def test_failed_replacement_does_not_reset_attempts(self):
+        with mock.patch("services.ebook_visual_pipeline.replace_photo_aid",
+                        side_effect=RuntimeError("photo unavailable")), \
+             mock.patch("services.ebook_build_orchestrator.resume_build") as resume:
+            result = builder_actions.perform_pending(self.pid, self.job_id)
+        self.assertFalse(result["performed"])
+        resume.assert_not_called()
+
+
 class UploadedCoverTravelsThroughStorageTests(unittest.TestCase):
     """The website and the builder share no disk.
 
