@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.21 — 2026-10-12
+
+**Automatic picture recovery now uses the existing free fallback and saves progress.**
+
+### What changed
+
+When a stock photograph needs review, the automatic build tries an honest graphic derived from that chapter's approved text. Guided retries use this same free path and render the replacement before approval. Already passing pictures are retained.
+
+### What was fixed
+
+An uncertain photo previously stopped acquisition but could not pass approval. Guided retries called only the stock-photo editor path, bypassing the free fallback. Visual work is now checkpointed before approval and after each replacement, so a later failure does not erase completed assets or retry history.
+
+### Do customer steps change?
+
+No extra step is added. Photo matching, editorial variety, readability, attribution, and export checks remain required. If no honest free fallback exists, the photo still requires review; uncertainty never authorizes a paid image.
+
+### Release gate
+
+Validation in progress. New regression checks reproduced the recovery failures on the previous code. No paid calls are permitted during verification. Live completion is not yet verified.
+
 ## 1.9.20 — 2026-10-09
 
 **Existing manuscripts now have a free, reversible editor.**

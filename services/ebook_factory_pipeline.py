@@ -957,7 +957,10 @@ def fill_photo_aid_automatic(
         audience=audience,
         chapter=chapter,
     )
-    if _photo_already_stored(stock) and str(stock.get("match_status") or "") != MATCH_REJECT:
+    # A file that still needs review cannot satisfy automatic approval.
+    # Use the chapter-based fallback rather than returning the same blocked
+    # photo on every retry. Manual photo editing still keeps review candidates.
+    if _photo_already_stored(stock) and str(stock.get("match_status") or "") == MATCH_PASS:
         return stock
 
     # FREE LOCAL VISUAL FIRST.
@@ -971,8 +974,13 @@ def fill_photo_aid_automatic(
     local = _local_visual_for_aid(out, chapter=chapter)
     if local is not None:
         local["acquisition_outcome"] = str(stock.get("acquisition_outcome") or SEMANTIC_REJECTION)
-        local["replaced_stock_reason"] = str(stock.get("error") or "")
+        local["replaced_stock_reason"] = str(stock.get("rejection_reason") or stock.get("error") or "")
         return local
+    # Uncertainty is a review decision, never permission to buy an image.
+    # If this chapter has no honest local fallback, keep its candidate and
+    # let the unchanged quality gate require review instead of spending.
+    if _photo_already_stored(stock) and str(stock.get("match_status") or "") != MATCH_REJECT:
+        return stock
     stock["acquisition_outcome"] = LOCAL_VISUAL_UNSUITABLE
 
     # Only now may a paid image be considered, and only with explicit

@@ -92,3 +92,39 @@ def test_a_bad_visual_plan_is_never_approved_automatically():
          mock.patch('services.ebook_design_workspace.approve_visuals_local', side_effect=ValueError('quality failed')):
         with pytest.raises(ValueError, match='quality failed'):
             orch._run_visuals(data, 1)
+
+
+def test_automatic_visual_recovery_uses_the_free_fallback_and_keeps_good_slots():
+    data = {'fields': {'guided_cover_choice': True}, 'content': 'accepted manuscript'}
+    bad = {'visual_id': 'v_ch1', 'replace_enabled': True,
+           'has_file': True, 'match_status': 'needs_review'}
+    good = {'visual_id': 'v_ch2', 'replace_enabled': True,
+            'has_file': True, 'match_status': 'pass'}
+    reviews = [{'approvable': False, 'assets': [bad, good]},
+               {'approvable': True, 'assets': [good]}]
+    with mock.patch('services.ebook_visual_pipeline.visual_review_payload', side_effect=reviews), \
+         mock.patch('services.ebook_visual_pipeline.replace_photo_aid', return_value=data) as replace, \
+         mock.patch('services.ebook_design_workspace.approve_visuals_local', return_value=data) as approve:
+        result = guided.approve_visuals(data)
+    replace.assert_called_once_with(data, 'v_ch1', mode='automatic-free')
+    approve.assert_called_once_with(data)
+    assert result['content'] == 'accepted manuscript'
+
+
+def test_replacement_progress_survives_a_later_quality_failure():
+    data = {'fields': {'guided_cover_choice': True}, 'content': 'accepted manuscript'}
+    repaired = {**data, 'visual_plan': {'replacement': 'saved'}}
+    bad = {'visual_id': 'v_ch1', 'replace_enabled': True,
+           'has_file': True, 'match_status': 'needs_review'}
+    saved = []
+    with mock.patch('services.ebook_design_workspace.prepare_visuals_local', return_value=data), \
+         mock.patch('services.ebook_visual_pipeline.visual_review_payload', side_effect=[
+             {'approvable': False, 'assets': [bad]}, {'approvable': False, 'assets': []}]), \
+         mock.patch('services.ebook_visual_pipeline.replace_photo_aid', return_value=repaired), \
+         mock.patch('services.ebook_design_workspace.approve_visuals_local', side_effect=ValueError('quality failed')), \
+         mock.patch('database.update_project', side_effect=lambda pid, name, value: saved.append(copy.deepcopy(value))):
+        with pytest.raises(ValueError, match='quality failed'):
+            orch._run_visuals(data, 20)
+    assert len(saved) == 2
+    assert saved[-1]['visual_plan'] == {'replacement': 'saved'}
+    assert all(s['content'] == 'accepted manuscript' for s in saved)

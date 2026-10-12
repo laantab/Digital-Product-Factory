@@ -3522,7 +3522,7 @@ def replace_photo_aid(
         aid.pop("content_labels", None)
         aid.pop("inspected_labels", None)
         allow_ai = mode_l in {"ai", "generate-ai", "ai-alternative"}
-        if allow_ai:
+        if allow_ai or mode_l == "automatic-free":
             filled = fill_photo_aid_automatic(
                 aid,
                 package_id=pkg,
@@ -3532,7 +3532,7 @@ def replace_photo_aid(
                 chapter=str(aid.get("chapter") or ""),
                 data=data,
                 fields=fields,
-                allow_ai=True,
+                allow_ai=allow_ai,
             )
         else:
             # v1.9.6: "Try Pexels / Unsplash / Pixabay" searches only that
@@ -3551,6 +3551,16 @@ def replace_photo_aid(
         filled["user_accepted"] = False
         filled.pop("content_labels", None)
         filled.pop("inspected_labels", None)
+        if not is_photo_aid(filled):
+            # The automatic fallback is a graphic specification, not yet a
+            # file. Render just this slot before running the real asset gate;
+            # the remaining approved pictures must keep their original bytes.
+            rendered = materialize_visual_plan({"chapters": [{
+                "chapter": filled.get("chapter"),
+                "chapter_index": filled.get("chapter_index"),
+                "aids": [filled],
+            }]}, package_id=pkg)
+            filled = rendered["chapters"][0]["aids"][0]
         aid.clear()
         aid.update(filled)
     stamp_plan_photo_matches(data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else {})

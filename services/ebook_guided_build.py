@@ -118,7 +118,7 @@ def run_cover(data, pid, prepare):
     return data
 
 
-def approve_visuals(data):
+def approve_visuals(data, *, persist_progress=None):
     """Try free replacements for refused photos, then require the real gate."""
     from services.ebook_visual_pipeline import replace_photo_aid, visual_review_payload, MATCH_PASS
     from services.ebook_design_workspace import approve_visuals_local
@@ -131,5 +131,9 @@ def approve_visuals(data):
         if not refused:
             break
         for visual in refused:
-            data = replace_photo_aid(data, str(visual['visual_id']), mode='')
+            # The stock-only editor action cannot resolve an uncertain photo.
+            # Use the same free chapter-graphic fallback as initial planning.
+            data = replace_photo_aid(data, str(visual['visual_id']), mode='automatic-free')
+            if persist_progress:
+                persist_progress(data)
     return approve_visuals_local(data)

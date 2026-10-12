@@ -144,9 +144,15 @@ def test_a_successful_local_visual_returns_before_the_paid_branch():
 
 
 def test_an_accepted_photograph_short_circuits_everything():
-    body = _routing_source()
-    accepted_at = body.index('!= MATCH_REJECT')
-    assert accepted_at < body.index("_local_visual_for_aid")
+    from unittest.mock import patch
+    from services import ebook_factory_pipeline as pipeline
+    accepted = _aid(match_status='pass')
+    with patch.object(pipeline, 'fill_photo_aid_from_pexels', return_value=accepted), \
+         patch.object(pipeline, '_photo_already_stored', return_value=True), \
+         patch.object(pipeline, '_local_visual_for_aid', side_effect=AssertionError('unnecessary fallback')), \
+         patch.object(pipeline, 'fill_photo_aid_with_ai', side_effect=AssertionError('paid call')):
+        result = pipeline.fill_photo_aid_automatic(_aid(), package_id='accepted-test', allow_ai=False)
+    assert result is accepted
 
 
 def test_the_paid_safeguards_were_not_deleted():
@@ -169,3 +175,37 @@ def test_acquisition_stamps_an_outcome_on_every_path():
     )
     assert "TECHNICAL_FAILURE" in body
     assert "STOCK_ACCEPTED" in body
+
+
+def test_uncertain_stock_uses_the_free_chapter_graphic_without_a_paid_call():
+    from unittest.mock import patch
+    from services import ebook_factory_pipeline as pipeline
+    uncertain = _aid(chapter_body=INSTRUCTIONAL_BODY, match_status='needs_review',
+                     acquisition_outcome=SEMANTIC_REJECTION)
+    with patch.object(pipeline, 'fill_photo_aid_from_pexels', return_value=uncertain), \
+         patch.object(pipeline, '_photo_already_stored', return_value=True), \
+         patch.object(pipeline, 'fill_photo_aid_with_ai', side_effect=AssertionError('paid call')):
+        result = pipeline.fill_photo_aid_automatic(
+            _aid(chapter_body=INSTRUCTIONAL_BODY), package_id='uncertain-test',
+            chapter='Your First Practices', allow_ai=False)
+    assert result['type'] in {'workflow', 'checklist'}
+    assert result['visual_id'] == 'v_ch3'
+
+
+def test_guided_free_replacement_cannot_reach_paid_generation(tmp_path):
+    from unittest.mock import patch
+    from services import ebook_factory_pipeline as pipeline
+    from services.ebook_visual_pipeline import replace_photo_aid
+    data = {'visual_plan': {'chapters': [{'chapter': 'Your First Practices',
+             'aids': [_aid(chapter_body=INSTRUCTIONAL_BODY)]}]}}
+    local = _local_visual_for_aid(data['visual_plan']['chapters'][0]['aids'][0])
+    with patch.object(pipeline, 'fill_photo_aid_automatic', return_value=local) as fill, \
+         patch('services.ebook_visual_pipeline.EXPORTS_DIR', str(tmp_path)), \
+         patch('services.ebook_visual_pipeline.write_visual_contact_sheet'):
+        replace_photo_aid(data, 'v_ch3', mode='automatic-free')
+    assert fill.call_args.kwargs['allow_ai'] is False
+    assert data['visual_plan']['chapters'][0]['aids'][0]['type'] == local['type']
+    replaced = data['visual_plan']['chapters'][0]['aids'][0]
+    assert Path(replaced['asset_path']).is_file()
+    import hashlib
+    assert hashlib.sha256(Path(replaced['asset_path']).read_bytes()).hexdigest() == replaced['sha256']
