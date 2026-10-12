@@ -23,7 +23,7 @@ No extra step is added. Photo matching, editorial variety, readability, attribut
 
 ### Release gate
 
-Validation in progress. New regression checks reproduced the recovery failures on the previous code. No paid calls are permitted during verification. Live completion is not yet verified.
+The complete 211-file release gate passed: 2,981 tests, zero failures, errors, or skips. Focused regressions reproduced the earlier recovery failures before the repair. Original reference PDF/ZIP checksums match. All verification blocked external and paid calls. Live book completion remains unverified.
 
 ## 1.9.20 — 2026-10-09
 

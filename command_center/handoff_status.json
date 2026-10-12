@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-09T22:24:37.511331+00:00",
-  "current_task": "v1.9.20 existing-manuscript editor complete; full acceptance gate green. Live project 20 recovery remains unverified.",
+  "updated_at": "2026-10-12T04:05:57.600561+00:00",
+  "current_task": "v1.9.21 free visual recovery validated; PR #39 ready for deployment and live Project 20 verification.",
   "stopped_at": "Branch feature/v1.8.0-workflows, off production commit 47393a0 (v1.7.29). Added services/jobs/mode.py (FACTORY_EXECUTION_MODE inline|workflow), services/jobs/dispatch.py (the single decision point app.py calls), services/jobs/workflow_trigger.py (durable job first, then Render start_task, never raises into a request), services/jobs/workflow_runner.py (SDK-free task behaviour), workflow_task.py (the Render entrypoint), two columns on the jobs table (workflow_run_id, workflow_triggered_at) with a conditional-UPDATE duplicate guard, executor.run_project (claims only the named book), a workflow-mode guard on runner.executor_enabled() and on POST /advance, and a read-only GET /ebook/execution-mode. 50 new checks in tests/test_ebook_workflow_execution.py, all green, zero paid API calls. render.yaml, .env.example, V1_8_0_WORKFLOWS_DEPLOYMENT.md and Verify_v1.8.0_Workflows.bat written. NOTE: the earlier unpushed feature/v1.8.0-background-worker branch on the PC is superseded and must not be merged.",
-  "next_step": "Verify v1.9.20 on the website and builder, then inspect project 20’s actual remaining manuscript findings before correcting or resuming it. The available browser could open the public website but could not open project 20’s saved-data page. Do not claim this book is repaired and do not initiate paid calls without session authorization.",
+  "next_step": "Deploy PR #39, verify website and builder, resume Project 20, inspect remaining visual findings, then verify real PDF and ZIP. No extra paid calls; preserve original manuscript and passing pictures.",
   "next_claude": "code",
   "open_issues": [
     {
