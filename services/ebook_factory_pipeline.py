@@ -752,7 +752,7 @@ def _local_visual_for_aid(aid: dict[str, Any], *, chapter: str = "") -> dict[str
     if not body.strip():
         return None
     try:
-        from services.ebook_visual_pipeline import derive_local_aid_from_prose
+        from services.ebook_visual_pipeline import derive_local_aid_from_prose, _choose_aid
     except Exception:  # noqa: BLE001
         return None
     title = str(chapter or aid.get("chapter") or "")
@@ -760,7 +760,9 @@ def _local_visual_for_aid(aid: dict[str, Any], *, chapter: str = "") -> dict[str
         index = int(aid.get("chapter_index") or 0) or 1
     except (TypeError, ValueError):
         index = 1
-    local = derive_local_aid_from_prose(index, title, body)
+    # A chapter can carry a genuine list/table even when it has no short
+    # prose sentences. Reuse the existing structured planner as well.
+    local = derive_local_aid_from_prose(index, title, body) or _choose_aid(index, title, body)
     if not local:
         return None
     # Keep the slot's identity so the plan, manifest and preview still line up.

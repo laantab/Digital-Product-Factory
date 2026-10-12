@@ -15,7 +15,7 @@ When a stock photograph needs review, the automatic build tries an honest graphi
 
 ### What was fixed
 
-An uncertain photo previously stopped acquisition but could not pass approval. Guided retries called only the stock-photo editor path, bypassing the free fallback. Visual work is now checkpointed before approval and after each replacement, so a later failure does not erase completed assets or retry history.
+An uncertain photo previously stopped acquisition but could not pass approval. Guided retries called only the stock-photo editor path, bypassing the free fallback. That fallback also missed structured chapter lists and tables when no short prose sentences were available; it now uses the existing structured planner too. Visual work is checkpointed before approval and after each replacement, so a later failure does not erase completed assets or retry history.
 
 ### Do customer steps change?
 

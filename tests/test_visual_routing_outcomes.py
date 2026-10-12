@@ -108,6 +108,18 @@ def test_a_chapter_with_no_usable_text_is_local_visual_unsuitable():
     assert _local_visual_for_aid(_aid(chapter_body="Hello."), chapter="Tiny") is None
 
 
+def test_a_structured_chapter_can_fall_back_without_short_prose_sentences():
+    body = ('Group the findings into these categories before buying finishes.\n\n'
+            '1. Building shell: roof, walls, insulation, windows and doors\n'
+            '2. Mechanical systems: heating, cooling, ventilation and filters\n'
+            '3. Water use: leaks, showerheads, faucets and toilet performance\n')
+    local = _local_visual_for_aid(_aid(chapter_body=body), chapter='Whole-Home Eco Plan')
+    assert local is not None
+    assert local['type'] == 'workflow'
+    assert len(local['items']) == 3
+    assert all(item.split(':')[0] in body for item in local['items'])
+
+
 # ------------------------------------------------------- routing policy -----
 
 
