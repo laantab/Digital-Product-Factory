@@ -7787,6 +7787,13 @@ function renderEbookWorkspace(ws) {
             · Rev ${escapeHtml(String(ws.artifact_revision || 1))}</p>
         </div>
       </div>
+      <form data-ws-author-form class="flex flex-wrap items-end gap-2">
+        <label class="text-sm text-slate-700">Author name
+          <input name="author" value="${escapeHtml(ws.author || "")}" required
+            class="block rounded-lg border border-slate-300 px-3 py-2" />
+        </label>
+        <button type="submit" class="btn-secondary text-sm">Save Author</button>
+      </form>
       ${ws.artifact_state === "DRAFT" ? `<div class="rounded-xl bg-brand-50 border border-brand-200 p-4">
         <button type="button" class="btn-primary" data-ws-generate-project>Generate Project</button>
         <p class="text-sm text-slate-600 mt-2">The Factory prepares your ebook automatically. Choose your title and cover, then it finishes your PDF and ZIP.</p>
@@ -7819,6 +7826,24 @@ function renderEbookWorkspace(ws) {
   root.querySelectorAll("[data-ws-stage]").forEach((btn) => {
     btn.onclick = () => showEbookWorkspaceStage(btn.getAttribute("data-ws-stage"));
   });
+  const authorForm = root.querySelector("[data-ws-author-form]");
+  authorForm.onsubmit = async (event) => {
+    event.preventDefault();
+    const author = authorForm.elements.author.value.trim();
+    if (!author) return toast("Enter an author name.", "error");
+    const btn = authorForm.querySelector("button");
+    setBusyEl(btn, true);
+    try {
+      const res = await api(`/ebook-workspace/${ws.project_id}/author`, {
+        method: "POST", body: JSON.stringify({ author }),
+      });
+      renderEbookWorkspace(res.workspace);
+      toast("Author saved. Generate Project continues from your approved visuals.");
+    } catch (e) {
+      toast(e.message || String(e), "error");
+      setBusyEl(btn, false);
+    }
+  };
   const generateProjectBtn = root.querySelector("[data-ws-generate-project]");
   if (generateProjectBtn) generateProjectBtn.onclick = () => generateEbookProject(ws.project_id, generateProjectBtn);
   const runResearchBtn = root.querySelector("[data-ws-run-research]");

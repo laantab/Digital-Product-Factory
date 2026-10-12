@@ -1207,6 +1207,25 @@ def approve_ebook_workspace_stage_route(project_id: int):
         return _error(str(exc), 500)
 
 
+@app.post("/ebook-workspace/<int:project_id>/author")
+def edit_ebook_workspace_author_route(project_id: int):
+    body = request.get_json(silent=True) or {}
+    try:
+        from services.ebook_project_workspace import edit_author, workspace_public_view
+
+        project, err = _ebook_workspace_project_or_404(project_id)
+        if err:
+            return err
+        data = edit_author(dict(project.get("data") or {}), author=str(body.get("author") or ""))
+        project = database.update_project(project_id, None, data) or project
+        return jsonify({"ok": True, "workspace": workspace_public_view(project)})
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("edit ebook author failed")
+        return _error(str(exc), 500)
+
+
 @app.post("/ebook-workspace/<int:project_id>/title")
 def edit_ebook_workspace_title_route(project_id: int):
     body = request.get_json(silent=True) or {}

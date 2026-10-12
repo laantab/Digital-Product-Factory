@@ -5,6 +5,12 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.24 — 2026-10-12
+
+**Correct a missing author without rebuilding the book.**
+
+The ebook workspace now lets you save the author credit. Updating it preserves approved research, titles, chapters, and visuals while invalidating covers and later packaging that contain the old credit. Cover preparation refuses a missing author before any stock search or rendering, with a specific recovery message instead of exhausting every photograph and layout.
+
 ## 1.9.23 — 2026-10-12
 
 **Restore the photograph minimum after free graphic fallbacks.**

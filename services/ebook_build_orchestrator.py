@@ -698,6 +698,8 @@ def _prepare_cover(data: dict, pid: int) -> dict:
     from services.ebook_project_workspace import approve_stage
     from services.external_calls import ebook_fixture_mode
 
+    if not str(data.get("author_brand") or data.get("author") or "").strip():
+        raise PhotoCoverError("Enter an author name in the ebook workspace before creating a cover.")
     data.setdefault("_project_id", pid)
     if ebook_fixture_mode():
         raw = _fixture_jpeg((36, 92, 48), seed=f"cover-{pid}")
