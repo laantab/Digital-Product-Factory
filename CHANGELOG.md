@@ -5,6 +5,12 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.23 — 2026-10-12
+
+**Restore the photograph minimum after free graphic fallbacks.**
+
+Visual preparation now checks the photograph count after acquisition. If free local fallbacks leave too few photographs, it adds matched free stock photos beside existing chapter graphics. Each pass tries at most four chapters, retains unsuccessful search history, excludes already-used photos, and stops once the minimum is met. Uncertain, missing, or duplicate candidates never enter the plan; no paid image path is used. Useful existing graphics are kept when additional photographs can resolve the remaining media-count findings. The final editorial, relevance, resolution, attribution, and export gates remain required.
+
 ## 1.9.22 — 2026-10-12
 
 **Apply requested corrections before advancing the book.**

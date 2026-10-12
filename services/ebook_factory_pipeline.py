@@ -1094,6 +1094,83 @@ def fill_plan_photos_automatic(
     return plan
 
 
+def fill_missing_photograph_quota(
+    visual_plan: dict[str, Any], *, package_id: str, title: str = "",
+    topic: str = "", data: dict | None = None,
+) -> dict[str, Any]:
+    """Add matched free photographs after local fallbacks reduced the mix.
+
+    A useful chapter graphic must not be thrown away to satisfy a photograph
+    floor. Supplement it instead, and never add an unresolved slot or call AI.
+    Failed candidates retain their search history so bounded retries can move
+    on to other chapters rather than commissioning the same failed mix again.
+    """
+    from services.ebook_visual_editorial import media_requirements
+    from services.ebook_visual_match import photography_supported_subject, is_photo_led_subject
+    from services.ebook_visual_pipeline import numbered_chapters
+    from services.image_sources import configured_providers
+
+    payload = data if isinstance(data, dict) else {}
+    chapters = [c for c in visual_plan.get("chapters", []) if isinstance(c, dict)]
+    md = str(payload.get("content") or payload.get("ebook") or "")
+    if not chapters or not configured_providers() or not photography_supported_subject(
+        title=title, topic=topic, content=md[:6000]
+    ):
+        return visual_plan
+    existing = [a for c in chapters for a in c.get("aids", [])
+                if isinstance(a, dict) and is_photo_aid(a)]
+    ready = [a for a in existing if _photo_already_stored(a)
+             and a.get("match_status") == MATCH_PASS]
+    shortfall = media_requirements(len(chapters), photography_supported=True)["photographs"] - len(ready)
+    if shortfall <= 0:
+        return visual_plan
+
+    used_ids = {str(a.get("photo_id") or (a.get("pexels") or {}).get("photo_id") or "")
+                for a in existing}
+    used_hashes = {str(a.get("sha256") or "") for a in existing}
+    used_ids.discard("")
+    used_hashes.discard("")
+    bodies = {i: body for i, (_, body) in enumerate(numbered_chapters(md), 1)}
+    attempts = visual_plan.setdefault("photograph_supplement_attempts", {})
+    candidates = []
+    for position, chapter in enumerate(chapters):
+        if any(is_photo_aid(a) for a in chapter.get("aids", []) if isinstance(a, dict)):
+            continue
+        index = int(chapter.get("chapter_index") or position + 1)
+        body = str(chapter.get("chapter_body") or bodies.get(index) or "")
+        if not body.strip():
+            continue
+        previous = attempts.get(str(index)) or {}
+        concrete = is_photo_led_subject(title=str(chapter.get("chapter") or ""), content=body)
+        candidates.append((int(previous.get("tries") or 0), not concrete, position, index, body))
+    for _, _, position, index, body in sorted(candidates)[:4]:
+        chapter = chapters[position]
+        ctitle = str(chapter.get("chapter") or "")
+        previous = attempts.get(str(index)) or {}
+        aid = dict(previous.get("aid") or {})
+        aid.update({"type": "photo", "visual_id": f"v_ch{index}_photo",
+                    "chapter": ctitle, "chapter_index": index,
+                    "title": ctitle, "caption": ctitle, "chapter_body": body,
+                    "placement": "after_opening", "required": True,
+                    "source": "pexels", "commissioned": "photograph_minimum"})
+        aid["rejected_photo_ids"] = sorted(set(aid.get("rejected_photo_ids") or []) | used_ids)
+        filled = fill_photo_aid_from_pexels(aid, package_id=package_id,
+            title=title, topic=topic, chapter=ctitle)
+        attempts[str(index)] = {"tries": int(previous.get("tries") or 0) + 1, "aid": filled}
+        if not (_photo_already_stored(filled) and filled.get("match_status") == MATCH_PASS):
+            continue
+        photo_id, sha = str(filled.get("photo_id") or ""), str(filled.get("sha256") or "")
+        if (photo_id and photo_id in used_ids) or (sha and sha in used_hashes):
+            continue
+        chapter.setdefault("aids", []).append(filled)
+        used_ids.add(photo_id)
+        used_hashes.add(sha)
+        shortfall -= 1
+        if shortfall <= 0:
+            break
+    return visual_plan
+
+
 def fill_plan_photos_from_pexels(
     visual_plan: dict[str, Any],
     *,
