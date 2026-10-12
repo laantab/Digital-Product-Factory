@@ -124,6 +124,7 @@ ROUTES: tuple[dict, ...] = (
        "paid provider call inside the request"),
     _l("/ebook-workspace/<int:project_id>/approve", "records an approval"),
     _l("/ebook-workspace/<int:project_id>/title", "stores the chosen title"),
+    _l("/ebook-workspace/<int:project_id>/author", "stores author credit and invalidates stale cover state; no generation or rendering"),
     _l("/ebook-workspace/<int:project_id>/outline", "stores the chosen outline"),
     _l("/ebook-workspace/<int:project_id>/edit-manuscript",
        "checks and stores customer-authored text or offline rule edits; no provider calls, image work or PDF rendering"),
