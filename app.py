@@ -2281,6 +2281,9 @@ main{max-width:1100px;margin:0 auto;padding:16px}.status{font-size:22px;font-wei
 .sheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
 .card{background:#fff;border:2px solid #e5e7eb;border-radius:8px;padding:6px;font-size:13px}
 .card img{width:100%;display:block;border-radius:4px}.card.rejected{border-color:#dc2626}
+.visual-viewer{width:min(1200px,94vw);max-height:94vh;border:0;border-radius:10px;padding:16px}
+.visual-viewer::backdrop{background:rgba(0,0,0,.75)}
+.visual-viewer img{display:block;width:100%;height:auto}.visual-viewer h2{font-size:20px}
 .card.not_verified,.card.needs_human_review{border-color:#d97706}.card.accepted_by_owner{border-color:#2563eb}.group{background:#fff;border-radius:8px;padding:12px;margin:10px 0}
 .group h3{margin:0 0 6px;font-size:16px}.f{margin:6px 0 0 0;font-size:14px}.lvl{font-weight:700}
 button,a.btn{background:#111827;color:#fff;border:0;border-radius:6px;padding:10px 14px;font-size:14px;
@@ -2288,9 +2291,11 @@ margin:6px 6px 0 0;cursor:pointer;text-decoration:none;display:inline-block}butt
 </style></head><body><header><h1>Editor-in-Chief review: __TITLE__</h1></header><main>
 <div id=status class=status>Reviewing the PDF and ZIP...</div><div id=actions></div>
 <h2>Every visual in the PDF</h2><div id=sheet class=sheet></div><h2>What to correct</h2><div id=groups></div>
-</main><script>
+</main><dialog id=visualViewer class=visual-viewer aria-label="Enlarged visual"><h2 id=visualViewerTitle></h2>
+<button type=button onclick="document.getElementById('visualViewer').close()">Close enlarged view</button>
+<img id=visualViewerImage alt=""></dialog><script>
 const PID=__PID__;const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let busy=false;
+let busy=false;let reviewVisuals=[];
 function setBusy(b){busy=b;document.querySelectorAll('#actions button,#sheet button').forEach(x=>{if(b)x.disabled=true;});}
 async function call(url,opts,ms){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||180000);
 try{const r=await fetch(url,{...(opts||{}),signal:c.signal});let d=null;try{d=await r.json();}catch(e){d=null;}
@@ -2310,11 +2315,14 @@ async function post(url,body,what){if(busy)return;setBusy(true);
 const res=await call(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})},60000);
 busy=false;if(!res.ok||!res.d)return failed(res,what);if(res.d.needs_run)return run(0);if(res.d.status)return show(res.d);run(0);}
 async function show(d){const st=document.getElementById('status');
+reviewVisuals=d.visuals||[];
 st.textContent=d.status;st.className='status '+(d.ready?'ready':d.status==='Changes required'?'changes':'unverified');
 const label={ok:'Measured checks passed',rejected:'Rejected - replace',not_verified:'Not verified',
 needs_human_review:'Needs your review',accepted_by_owner:'Accepted by you'};
 document.getElementById('sheet').innerHTML=(d.visuals||[]).map(v=>`<div class="card ${esc(v.status)}">
 <img src="${v.thumb||''}" alt=""><b>PDF page ${v.page}</b> &middot; ${esc(v.kind)}<br>${esc(v.chapter||'Cover')}<br>
+<button type=button onclick="enlargeVisual(${v.page})">View clearly</button><br>
+${v.kind==='photo'?`<button type=button onclick="qualityAction('replace',${v.page})">Restore original resolution</button><br>`:''}
 ${label[v.status]||esc(v.status)}${v.status==='needs_human_review'?`<br><button onclick="decide(${v.page},'accept')">Accept</button><button onclick="decide(${v.page},'reject')">Reject</button>`:''}
 ${v.status==='accepted_by_owner'?`<br><button onclick="decide(${v.page},'undo')">Undo</button>`:''}</div>`).join('');
 document.getElementById('groups').innerHTML=(d.groups||[]).map(g=>`<div class=group><h3>${esc(g.correction)}</h3>
@@ -2325,11 +2333,22 @@ let est=null;try{const e=await call(`/ebook-workspace/${PID}/release-review/esti
 const rejected=(d.visuals||[]).filter(v=>v.status==='rejected').length;
 const editorial=(d.groups||[]).some(g=>g.findings.some(f=>f.level==='editorial'));
 document.getElementById('actions').innerHTML=
+`<button type=button onclick="qualityAction('improve-print',0)">Use clearer type and redraw charts</button>`+
 `<a class=btn href="/?view=ebook-workspace&project_id=${PID}&stage=visuals">Approve all acceptable visuals${rejected?' and replace '+rejected+' rejected':''}</a>`+
 (d.ai&&d.ai.ran||!est?'':`<button onclick="if(confirm('Run the AI review for about $${est.estimated_usd.toFixed(2)}? It is charged to this book.'))run(${est.estimated_usd})">Run AI review (about $${est.estimated_usd.toFixed(2)})</button>`)+
 (editorial?`<button onclick="post('/ebook-workspace/${PID}/release-review/acknowledge',{},'Saving your answer')">I have read the editorial notes</button>`:'')+
 `<button ${d.ready?'':'disabled'} onclick="fetch('/ebook-workspace/${PID}/approve-product',{method:'POST'}).then(r=>r.json()).then(x=>alert(x.ok?'Approved.':x.error))">Approve Product</button>`;}
 function decide(page,decision){post(`/ebook-workspace/${PID}/release-review/decision`,{page,decision},'Saving your decision');}
+function enlargeVisual(page){const v=reviewVisuals.find(x=>x.page===page);if(!v)return;
+document.getElementById('visualViewerTitle').textContent=`PDF page ${v.page}: ${v.chapter||'Cover'}`;
+const image=document.getElementById('visualViewerImage');image.src=v.thumb||'';image.alt=v.chapter||'Cover';
+document.getElementById('visualViewer').showModal();}
+async function qualityAction(action,page){if(busy)return;setBusy(true);
+const visual=reviewVisuals.find(v=>v.page===page);
+const body={action,visual_id:visual?visual.visual_id:'',mode:'higher-resolution'};
+const res=await call(`/ebook-workspace/${PID}/visuals`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},120000);
+busy=false;if(!res.ok)return failed(res,'The quality update');
+location.href=action==='improve-print'?`/?view=ebook-build&project_id=${PID}`:`/?view=ebook-workspace&project_id=${PID}&stage=visuals`;}
 load();
 </script></body></html>"""
 

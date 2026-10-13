@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.28 — 2026-10-13
+
+**Larger, clearer ebook type, sharp chart files and readable visual previews.**
+
+### What changed
+
+List-shaped chapter graphics use larger sans-serif labels (about 13.4 points at the narrowest normal column), full wrapping and lossless double-resolution PNGs in the ZIP as well as the PDF. A book-specific clearer-print update selects a clean sans-serif design with 13-point body text and 11-point captions. The review offers an enlarged visual viewer backed by previews up to 1200 pixels wide.
+
+### What was fixed
+
+Small chart lettering, 260-pixel review thumbnails and unnecessarily reduced interior photos. Photographs can restore the same verified licensed Pexels original at up to 2400 pixels, keeping a checksum-verified copy of the former file. Photo identity, credit, manuscript and cover are preserved. PDF photo embedding keeps up to 2400 pixels with higher JPEG quality; chart fallbacks use PNG.
+
+### Do customer steps change?
+
+Use View clearly to inspect a visual, Restore original resolution for the same stock photograph, or Use clearer type and redraw charts to rebuild the layout and exports. Approval remains a separate decision. No paid image generation is added.
+
+### Release gate
+
+Fast Gate: 710 passed. Full acceptance: 3,016 unique required cases verified across four isolated partitions, with no missing cases or unresolved failures, errors or skips. Initial browser setup errors and three failing cases were corrected and all eight affected cases passed a recorded rerun. Image/browser checks passed 50; chapter/clarity/design checks passed 31; invite/lock checks passed 25. Resolution expectations now require 2800-pixel charts and 2400-pixel photo embedding; the 8-point refusal threshold remains unchanged. Live book export verification follows deployment.
+
 ## 1.9.27 — 2026-10-12
 
 **Finish the exported-book review without retaining every decoded photograph.**

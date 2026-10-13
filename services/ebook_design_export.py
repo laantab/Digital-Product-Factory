@@ -108,6 +108,11 @@ def select_theme(data: dict, theme_id: str) -> dict:
         },
         revision=revision,
     )
+    if (data.get("fields") or {}).get("readability_profile") == "clear_large":
+        design.typography.body_pt = 13.0
+        design.typography.caption_pt = 11.0
+        design.styles["readability_profile"] = "clear_large"
+        design.recompute_digest()
     data["ebook_design"] = design.to_dict()
     data["ebook_design_digest"] = design.digest
     data["design_theme"] = design.theme_id

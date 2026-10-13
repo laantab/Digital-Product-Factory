@@ -191,7 +191,7 @@ def test_the_owner_rejecting_a_photo_requires_its_replacement():
 
 
 def test_accepting_visuals_never_overrides_a_measured_failure():
-    data, pdf, z = _book(chart_width_pt=280)
+    data, pdf, z = _book(chart_width_pt=210)
     rev = rr.review_release(data, pdf, z, ai_reviewer=None,
                             decisions={str(p): "accept" for p in range(1, 8)})
     assert rev.status == rr.STATUS_CHANGES
@@ -200,7 +200,7 @@ def test_accepting_visuals_never_overrides_a_measured_failure():
 
 # ---------------------------------------------------------------- 6 pt chart
 def test_a_6pt_chart_is_refused_and_a_full_width_chart_passes():
-    data, pdf, z = _book(chart_width_pt=280)            # 30 px * 280 / 1400 = 6.0 pt
+    data, pdf, z = _book(chart_width_pt=210)            # 40 px * 210 / 1400 = 6.0 pt
     rev = rr.review_release(data, pdf, z, ai_reviewer=_no_ai)
     small = [f for f in rev.findings if f.code == "CHART_TEXT_TOO_SMALL"]
     assert rev.status == rr.STATUS_CHANGES

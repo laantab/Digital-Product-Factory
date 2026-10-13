@@ -82,6 +82,28 @@ def visuals(data: dict, payload: dict) -> tuple[dict, str]:
     if action == "edit-chart":
         return edit_chart_text(data, payload)
 
+    if action == "improve-print":
+        from services.ebook_visual_pipeline import (
+            _assert_mutable, materialize_visual_plan, manifest_from_plan, _package_id,
+        )
+        _assert_mutable(data, "improve print clarity")
+        if not isinstance(data.get("ebook_workspace"), dict):
+            raise ValueError("Open the ebook workspace before changing its print style.")
+        data["visual_plan"] = materialize_visual_plan(data.get("visual_plan") or {}, package_id=_package_id(data))
+        data["ebook_visual_manifest"] = manifest_from_plan(data["visual_plan"])
+        data["ebook_visual_manifest_digest"] = data["ebook_visual_manifest"]["digest"]
+        data.setdefault("fields", {}).update(theme_id="modern_practical", readability_profile="clear_large")
+        data["export_ready"] = False
+        build = data.setdefault("ebook_build", {})
+        build.update(finished=False, failed=False, current_stage="design")
+        from services.ebook_project_workspace import set_stage_status, STATUS_NOT_STARTED
+        for stage in ("design", "preview", "preflight", "export"):
+            build.setdefault("stages", {})[stage] = {"status": "NOT_STARTED", "attempts": 0}
+            if stage != "export":
+                set_stage_status(data["ebook_workspace"], stage, STATUS_NOT_STARTED,
+                                 note="Print clarity changed; validate the revised layout.")
+        return data, "Clearer typography and charts are ready. Continue to build the revised PDF and ZIP."
+
     if action == "approve":
         return approve_visuals_local(data), "Visuals approved."
 
@@ -336,7 +358,9 @@ def cover_image(data: dict, payload: dict, *, project_id: int) -> tuple[dict, st
 def design(data: dict, payload: dict) -> tuple[dict, str]:
     from services.ebook_design_workspace import select_and_stage_theme
 
-    return select_and_stage_theme(data, str(payload.get("theme_id") or "").strip()), "Design ready."
+    data = select_and_stage_theme(data, str(payload.get("theme_id") or "").strip())
+    data.setdefault("fields", {})["theme_id"] = data["ebook_design"]["theme_id"]
+    return data, "Design ready."
 
 
 def preview(data: dict, payload: dict) -> tuple[dict, str]:

@@ -1,3 +1,9 @@
+## Live acceptance completed
+
+PR #45 merged at e273dfc5739c1e16bd9c670ba158a087263652fc. Render website deployment dep-db6qteu7bikc73fgv34g went live at 2026-10-13T04:09:32.449643Z. Footer v1.9.27 observed. Actual Project 20 release-review POST returned 200 at 04:10:04 UTC; its saved review contains all 13 visuals, zero hard/editorial/not-verified findings, and only human content judgments. The owner's prior cover approval was recorded as page 1 accept; 12 interior visuals remain for the owner. Final Approve Product is correctly disabled while those judgments remain pending. No server_failed events were reported since the new deployment. Book remains saved/DRAFT; no new paid calls (Project 20 spent_usd still 2.35).
+
+Exports unchanged: PDF 6056494 bytes, SHA-256 848cffaf26fc7c3429d9f588d06a9fdb7392b601fcd5a23b34d8e57cccac2528; ZIP 13885200 bytes, SHA-256 19be284c38ec615fbc285d77db1ec8fc9ded9bf4b4fc01d05f519c8519d6883f. Database asset fingerprints match the verified downloaded bytes. Metadata/version suites passed 56 after recording gate completion. Final human review is the remaining current-book decision; do not run the paid AI review without specific spending authorization. Historical pending/deployment sections below are preserved as the work record, not current instructions.
+
 # Factory completion: release review and final customer path
 
 The owner authorized independent completion on October 12 at 11:49 p.m. EDT. No further routine permission requests are needed. Preserve the no-additional-spending rule, accepted manuscript and photographs, original exports and rollback paths. Final human visual/editorial judgments remain the owner's decision; never mark them accepted merely to clear a gate.

@@ -867,6 +867,12 @@ def render_designed_ebook_html(
     chapters = numbered_chapters(original)
     theme = get_theme(design.theme_id)
     css = theme_css(design.theme_id)
+    if (getattr(design, "styles", None) or {}).get("readability_profile") == "clear_large":
+        css += """
+body, p, li, td {font-family: LiberationSans; font-size:13pt; color:#111111; line-height:1.6;}
+h1, h2, h3, h4, .chapter-title, .section-heading {font-family: LiberationSans; font-weight:bold; color:#111111;}
+figcaption, .va-caption {font-family:LiberationSans; font-size:11pt; font-style:normal; color:#222222; line-height:1.4;}
+"""
     css = re.sub(r"letter-spacing\s*:\s*[^;\"']+;?", "", css, flags=re.I)
 
     parts: list[str] = [
