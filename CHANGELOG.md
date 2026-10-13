@@ -23,7 +23,7 @@ No. One clearer-print click performs the update and continues the build. Existin
 
 ### Release gate
 
-Queue and builder checks passed before the repair (35 cases). A regression exercises 20 actual progress requests and verifies that the builder applies the pending correction exactly once. Post-repair checks and full acceptance are pending.
+Queue and builder checks passed before the repair (35 cases), and 45 focused checks passed after it. Fast Gate: 710 passed. All 3,017 unique required acceptance checks passed in four isolated partitions (873 + 732 + 731 + 681), with zero failures, errors, skips or missing cases. The regression exercises 20 actual progress requests and verifies that the builder applies the pending correction exactly once. Live export verification follows deployment.
 
 ## 1.9.28 — 2026-10-13
 
