@@ -884,6 +884,23 @@ def save_factory_ebook(
     payload["product_type"] = "ebook"
     payload["user_confirmed_save"] = bool(user_confirmed)
     payload["stage"] = payload.get("stage") or "product_generated"
+    if project_id:
+        # Builder disk paths do not exist on the website. Judge the same
+        # stored originals used by preview/review before stamping readiness.
+        from services.ebook_visual_pipeline import localize_visual_plan
+
+        localize_visual_plan(payload, project_id=int(project_id))
+        from services.ebook_build_orchestrator import _export_files_on_disk
+        from services.packaging import EXPORTS_DIR as local_exports
+
+        if _export_files_on_disk({**payload, "_project_id": int(project_id)}):
+            pkg = str(payload.get("export_package_id") or payload.get("package_id") or "").strip()
+            files = dict(payload.get("export_files") or {})
+            for filename in ("ebook.pdf", "package.zip"):
+                files[filename] = os.path.join(local_exports, pkg, filename)
+            payload["export_files"] = files
+            payload["pdf_path"] = files["ebook.pdf"]
+            payload["_pdf_path"] = files["ebook.pdf"]
     if payload.get("ebook_ready"):
         payload["status"] = "export_ready"
         payload["quality_blocking"] = False

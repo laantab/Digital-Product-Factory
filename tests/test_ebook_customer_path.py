@@ -339,6 +339,96 @@ class EbookCustomerPathTests(unittest.TestCase):
             str((prior or {}).get("selected_layout") or ""),
         )
 
+    def _book_with_remote_photo_paths(self):
+        data = self._customer_ebook_payload()
+        originals = {}
+        for chapter in data["visual_plan"]["chapters"]:
+            for aid in chapter.get("aids") or []:
+                if aid.get("type") not in {"photo", "stock photo"}:
+                    continue
+                source = Path(aid["asset_path"])
+                relative = "/".join(source.parts[-3:])
+                originals[relative] = source.read_bytes()
+                aid["asset_path"] = "/retired-builder/" + relative
+        self.assertTrue(originals)
+        for filename in ("ebook.pdf", "package.zip"):
+            relative = f"{data['package_id']}/{filename}"
+            originals[relative] = Path(data["export_files"][filename]).read_bytes()
+            data["export_files"][filename] = "/retired-builder/" + relative
+        data["pdf_path"] = data["export_files"]["ebook.pdf"]
+        data["_pdf_path"] = data["pdf_path"]
+        row = database.create_project(data["title"], "ebook", data)
+        pid = int(row["id"])
+        self._created_ids.append(pid)
+        return data, pid, originals
+
+    def test_save_restores_existing_builder_photos_before_readiness(self):
+        import tempfile
+        import services.ebook_visual_pipeline as visuals
+        import services.ebook_factory_pipeline as factory
+
+        data, pid, originals = self._book_with_remote_photo_paths()
+        content_before = data["content"]
+        pdf_before = originals[f"{data['package_id']}/ebook.pdf"]
+        zip_before = originals[f"{data['package_id']}/package.zip"]
+        reads = []
+
+        def read(project_id, relative_path, legacy_path=None):
+            reads.append(int(project_id))
+            return originals.get(str(relative_path))
+
+        with tempfile.TemporaryDirectory() as website, \
+             patch.object(visuals, "EXPORTS_DIR", website), \
+             patch.object(factory, "EXPORTS_DIR", website), \
+             patch("services.packaging.EXPORTS_DIR", website), \
+             patch("services.storage.compat.read_export_or_legacy", read):
+            saved = save_factory_ebook(data, name=data["title"], project_id=pid)
+            self.assertTrue(saved["ok"])
+            stored = database.get_project(pid)["data"]
+            self.assertTrue(stored["ebook_ready"], stored.get("completion_blockers"))
+            self.assertEqual(stored["content"], content_before)
+            self.assertEqual(Path(stored["pdf_path"]).read_bytes(), pdf_before)
+            self.assertEqual(Path(stored["export_files"]["package.zip"]).read_bytes(), zip_before)
+            for chapter in stored["visual_plan"]["chapters"]:
+                for aid in chapter.get("aids") or []:
+                    if aid.get("type") in {"photo", "stock photo"}:
+                        path = Path(aid["asset_path"])
+                        self.assertTrue(str(path).startswith(website))
+                        self.assertEqual(path.read_bytes(), originals["/".join(path.parts[-3:])])
+            self.assertTrue(reads)
+            self.assertEqual(set(reads), {pid})
+
+    def test_save_still_blocks_when_storage_cannot_supply_a_photo(self):
+        import tempfile
+        import services.ebook_visual_pipeline as visuals
+        import services.ebook_factory_pipeline as factory
+
+        data, pid, originals = self._book_with_remote_photo_paths()
+        with tempfile.TemporaryDirectory() as website, \
+             patch.object(visuals, "EXPORTS_DIR", website), \
+             patch.object(factory, "EXPORTS_DIR", website), \
+             patch("services.packaging.EXPORTS_DIR", website), \
+             patch("services.storage.compat.read_export_or_legacy", return_value=None):
+            with self.assertRaisesRegex(ValueError, "Retry missing image"):
+                save_factory_ebook(data, name=data["title"], project_id=pid)
+
+    def test_save_still_blocks_when_the_stored_zip_is_missing(self):
+        import tempfile
+        import services.ebook_visual_pipeline as visuals
+        import services.ebook_factory_pipeline as factory
+
+        data, pid, originals = self._book_with_remote_photo_paths()
+        def read(project_id, relative_path, legacy_path=None):
+            return None if str(relative_path).endswith("package.zip") else originals.get(str(relative_path))
+        with tempfile.TemporaryDirectory() as website, \
+             patch.object(visuals, "EXPORTS_DIR", website), \
+             patch.object(factory, "EXPORTS_DIR", website), \
+             patch("services.packaging.EXPORTS_DIR", website), \
+             patch("services.storage.compat.read_export_or_legacy", read), \
+             patch("services.ebook_build_orchestrator._verified_export_by_path", return_value=None):
+            with self.assertRaises(ValueError):
+                save_factory_ebook(data, name=data["title"], project_id=pid)
+
     def test_container_fixture_has_author_and_real_chapters(self):
         md = container_gardening_manuscript()
         self.assertIn("Lonnie Brown", CONTAINER_AUTHOR := "Lonnie Brown")
