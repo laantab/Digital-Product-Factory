@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.27 — 2026-10-12
+
+**Finish the exported-book review without retaining every decoded photograph.**
+
+### What changed
+
+Editor-in-Chief text checks extract only text, image checks release MuPDF caches between pages, and PDF/ZIP resources close after each review. Complete-book scans run one at a time within the website process so simultaneous review requests cannot multiply image buffers.
+
+### What was fixed
+
+Project 20's release review caused a confirmed 512 MiB out-of-memory restart. The same saved PDF/ZIP review peaked at 289 MiB before and 204 MiB after in a standalone reproduction. The duplicate-point check also preserves distinct numeric milestones, such as 30-day and 90-day timeline entries, while still rejecting repeated identical points.
+
+### Do customer steps change?
+
+No. Open Editor-in-Chief review, inspect its findings, and make the final product decision. The manuscript, pictures and PDF/ZIP are not regenerated. Human judgments remain required; no paid reviewer call is added.
+
+### Release gate
+
+Baseline Fast Stability Gate: 710 passed; baseline review suites: 33 passed. All 3,010 required checks across 214 acceptance files subsequently passed in four isolated manifest partitions. One reference-preservation check initially skipped because its isolated checkout lacked the real preserved files; after supplying the already-verified originals, that check passed through the release runner. XML reconciliation against the full collected manifest proves no missing checks and no unresolved failures, errors or skips. No tests were weakened and no paid calls were permitted. The earlier incomplete run is not counted as a pass.
+
 ## 1.9.26 — 2026-10-12
 
 **Open high-resolution ebook cover previews without exhausting website memory.**

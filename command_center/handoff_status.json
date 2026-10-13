@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-12T04:05:57.600561+00:00",
-  "current_task": "v1.9.21 free visual recovery validated; PR #39 ready for deployment and live Project 20 verification.",
+  "updated_at": "2026-10-13T03:25:00Z",
+  "current_task": "Complete the PDF/ZIP Factory customer path; v1.9.27 release-review memory repair under validation.",
   "stopped_at": "Branch feature/v1.8.0-workflows, off production commit 47393a0 (v1.7.29). Added services/jobs/mode.py (FACTORY_EXECUTION_MODE inline|workflow), services/jobs/dispatch.py (the single decision point app.py calls), services/jobs/workflow_trigger.py (durable job first, then Render start_task, never raises into a request), services/jobs/workflow_runner.py (SDK-free task behaviour), workflow_task.py (the Render entrypoint), two columns on the jobs table (workflow_run_id, workflow_triggered_at) with a conditional-UPDATE duplicate guard, executor.run_project (claims only the named book), a workflow-mode guard on runner.executor_enabled() and on POST /advance, and a read-only GET /ebook/execution-mode. 50 new checks in tests/test_ebook_workflow_execution.py, all green, zero paid API calls. render.yaml, .env.example, V1_8_0_WORKFLOWS_DEPLOYMENT.md and Verify_v1.8.0_Workflows.bat written. NOTE: the earlier unpushed feature/v1.8.0-background-worker branch on the PC is superseded and must not be merged.",
-  "next_step": "Deploy PR #39, verify website and builder, resume Project 20, inspect remaining visual findings, then verify real PDF and ZIP. No extra paid calls; preserve original manuscript and passing pictures.",
+  "next_step": "Finish release gate, publish/deploy v1.9.27 website repair, verify Project 20 release review, then final human visual decisions and saved-product reopen. Preserve existing downloads; no paid calls.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -172,7 +172,7 @@
         "10 GB persistent disk mounted at /var/data on Render.",
         "Render env vars set: FACTORY_DB_PATH=/var/data/projects.db, FACTORY_EXPORTS_DIR=/var/data/exports, FLASK_EXPORTS_DIR=/var/data/exports.",
         "Production redeployed successfully with persistent storage; the live domain loads.",
-        "Word Search regression root-caused (three stacked defects, all in services/product.py) — read-only, no code changed.",
+        "Word Search regression root-caused (three stacked defects, all in services/product.py) \u2014 read-only, no code changed.",
         "Version-recovery audit complete: nothing was lost, reverted, or overwritten; the shared engine is byte-identical since commit e81298e.",
         "Built the standalone Factory Command Center (command_center/), committed as e35654a.",
         "Diagnosed why a live Flower Parts test still showed the old words: no local server was running; the public site (v1.7.0, origin/main 1c86c05) was the one tested, and the fix had never been pushed.",
@@ -199,7 +199,7 @@
       ]
     }
   ],
-  "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly — it is what the Command Center reads every time it opens.",
+  "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly \u2014 it is what the Command Center reads every time it opens.",
   "factory_version": "1.8.0",
   "ebook_reliability_2026_10_08": {
     "live_release": "1.9.17",
@@ -212,5 +212,14 @@
     "paid_calls_this_repair": 0,
     "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/35"
   },
-  "last_completed": "Free preview/apply/undo manuscript editor, current quality revalidation, stale-write and active-build guards, preserved source revisions and exports, and explicit light route classification. Full 211-file gate: 2976 passed, 0 failures/errors/skips; no paid calls permitted. PR #37."
+  "last_completed": "Free preview/apply/undo manuscript editor, current quality revalidation, stale-write and active-build guards, preserved source revisions and exports, and explicit light route classification. Full 211-file gate: 2976 passed, 0 failures/errors/skips; no paid calls permitted. PR #37.",
+  "ebook_completion_2026_10_13": {
+    "website_live_version": "1.9.26",
+    "website_live_commit": "0d5f1ad4eb164dab32a14744c183fe2f458d1a3c",
+    "project_id": 20,
+    "exports": "Verified actual downloaded 56-page PDF and ZIP; ZIP integrity passed and embedded PDF byte-identical. User-approved title/cover; saved product present.",
+    "final_approval": "Pending release review and human judgments; DRAFT is preserved.",
+    "review_blocker": "Render 512Mi OOM event at 03:17:27 UTC; localized v1.9.27 repair pending full gate and live deployment.",
+    "scope": "PDF/ZIP core workflow; EPUB/Kindle/Flipbook and marketing are separate unfinished extensions."
+  }
 }

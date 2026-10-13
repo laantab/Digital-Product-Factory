@@ -50,8 +50,8 @@
       "name": "Designrr-Quality Interior Themes and Templates",
       "objective": "A professional, reusable interior theme/template system controlling typography, headings/subheadings, colors, chapter openers, section breaks, callout boxes, quote blocks, checklists, tables, margins, spacing, image placement, TOC styling, and page furniture -- so a customer gets a professionally designed product by picking a theme, not by manually designing every page.",
       "why_it_matters_competitively": "Designrr's core strength is templated interior design. Matching or exceeding that with automated, theme-driven layout (rather than one-size-fits-all output) is required for the Factory to be perceived as equally or more professional, without asking beginners to make design decisions.",
-      "current_foundation": "services/planner/themes.py + services/planner/cover.py already implement a working theme-driven design system for Planners (palette, typography, cover art recipe per theme) -- the closest existing precedent. Ebook has ebook_design_workspace.py/ebook_visual_pipeline.py for layout, but no equivalent named theme-family system across Business/Wellness/Faith/Education/etc.",
-      "gap_remaining": "No cross-product theme-family system exists yet for Ebook/Word Search/Crossword/Coloring Book interiors matching the planner precedent's depth (only Planners have real theme families today). Target theme families (Business/Professional, Wellness, Faith, Education, Children's, Personal Development, Finance, Minimal/Modern, Luxury/Premium, Feminine, Masculine, Vintage, Bold/Contemporary) do not exist for Ebook interiors.",
+      "current_foundation": "Six professional ebook themes exist in services/ebook_design_system.py, with customer theme staging and real designed PDF export. Project 20 exported with a named theme. Planner themes also exist.",
+      "gap_remaining": "Cross-product theme-family coverage and all-family live acceptance remain unverified; do not claim COMPLETE_LOCKED.",
       "dependencies": [
         "upgrade_1_cover_system"
       ],
@@ -72,17 +72,17 @@
       "fast_gate_requirement": true,
       "full_gate_requirement": true,
       "live_verification_required": true,
-      "status": "NOT_STARTED",
+      "status": "IMPLEMENTED_EBOOK_ACCEPTANCE_PENDING",
       "status_detail": "Not started. Upgrade 1 must finish first per roadmap order.",
-      "next_step": "Do not begin until the owner approves starting Upgrade 2. When approved, start with a read-only Phase A audit of existing theme-like systems (services/planner/themes.py, ebook_design_workspace.py) before any implementation."
+      "next_step": "Verify current ebook templates and release approval before expanding cross-product themes; do not repeat the already-implemented ebook theme work."
     },
     "upgrade_3_visual_editing": {
       "number": 3,
       "name": "Easy Visual Editing",
       "objective": "Lightweight, beginner-friendly editing for cover, images, fonts, colors, theme, title/subtitle, author, safe layout choices, and spacing -- an Edit -> Preview -> Approve loop, not desktop-publishing software.",
       "why_it_matters_competitively": "Automation-first is the Factory's advantage, but customers still need a simple way to make it their own. Over-exposing technical controls would make the Factory feel harder than Designrr, which is explicitly the opposite of the goal.",
-      "current_foundation": "The Cover Editor (/cover/*) already provides limited editing (style, palette, font, image regeneration, text position) for Ebook/Word Search/Crossword/Coloring Book, gated by the existing artifact DRAFT/APPROVED/LOCKED lifecycle (services/quality/artifact_state.py) so an edit cannot silently bypass export QA.",
-      "gap_remaining": "No unified, beginner-simple editing surface exists across products yet; today's Cover Editor is the only real editing capability, and it predates the theme system Upgrade 2 will introduce.",
+      "current_foundation": "Ebook workspace includes guided cover/title/author changes, picture review/replacement, chart-text editing, design themes, preview and preflight. Legacy Cover Editor also exists.",
+      "gap_remaining": "A unified editing surface across all products and every font/spacing acceptance criterion remains unverified.",
       "dependencies": [
         "upgrade_1_cover_system",
         "upgrade_2_interior_themes"
@@ -106,9 +106,9 @@
       "fast_gate_requirement": true,
       "full_gate_requirement": true,
       "live_verification_required": true,
-      "status": "NOT_STARTED",
+      "status": "IMPLEMENTED_EBOOK_ACCEPTANCE_PENDING",
       "status_detail": "Not started. Depends on Upgrades 1 and 2.",
-      "next_step": "Do not begin until Upgrades 1 and 2 are COMPLETE_LOCKED and the owner approves starting Upgrade 3."
+      "next_step": "Finish live ebook edit/review/approve/reopen acceptance; preserve accepted content and no-cost operation."
     },
     "upgrade_4_multi_format_publishing": {
       "number": 4,
@@ -170,8 +170,8 @@
       "name": "One-Click Customer Experience",
       "objective": "Orchestrate Research -> Opportunity -> Title -> Outline -> Content -> Visuals -> Cover -> Interior Design -> QA -> Preview -> Preflight -> Export -> Package behind a minimal customer path: choose what to build, answer a few simple questions, click Create Product, review, approve, download -- with customer-friendly failure messages and safe automatic correction, never exposing technical internals.",
       "why_it_matters_competitively": "This is the ultimate expression of 'easier than Designrr' -- the governing design philosophy for every other upgrade, not just a final feature.",
-      "current_foundation": "Factory Market Advantage already helps customers decide what to build before creation. Individual product generators, cover policy (Upgrade 1), and QA agents already exist as the pieces to orchestrate.",
-      "gap_remaining": "No single orchestrated one-click flow exists yet spanning research through packaging with unified customer-friendly error handling across all product types.",
+      "current_foundation": "services/ebook_build_orchestrator.py and Render workflow dispatch implement automatic ebook stages with resume and customer title/cover pause. Actual Project 20 reached 100% and downloaded PDF/ZIP.",
+      "gap_remaining": "Final release review/approval live acceptance and equivalent orchestration across every product type remain unverified.",
       "dependencies": [
         "upgrade_1_cover_system",
         "upgrade_2_interior_themes",
@@ -202,9 +202,9 @@
       "fast_gate_requirement": true,
       "full_gate_requirement": true,
       "live_verification_required": true,
-      "status": "NOT_STARTED",
+      "status": "IMPLEMENTED_EBOOK_ACCEPTANCE_PENDING",
       "status_detail": "Not started. This is also the governing design philosophy for Upgrades 1-5, not only a final feature.",
-      "next_step": "Do not begin until Upgrades 1-5 are COMPLETE_LOCKED (or the owner explicitly approves reordering) and Upgrade 6 is explicitly approved to start."
+      "next_step": "Repair the current release-review OOM and verify final saved-product acceptance; do not rebuild the completed manuscript."
     }
   },
   "marketing_factory_track": {
