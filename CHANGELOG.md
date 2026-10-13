@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.31 — 2026-10-13
+
+**Save large ebook previews without duplicate HTML.**
+
+### What changed
+
+Identical ebook-workspace preview HTML is stored once in the existing project record. Reads restore both expected preview fields, keeping the exact legacy HTML available. Older records, different previews, other products, manuscripts and PDF backups are unchanged.
+
+### What was fixed
+
+After the release-review memory repair passed live, the final layout rebuild repeatedly exhausted PostgreSQL memory during large project UPDATEs. The saved record had grown to 19,870,300 bytes. Duplicating the same inline full-resolution preview increased every save unnecessarily.
+
+### Do customer steps change?
+
+No. Preview and export resolution stay intact. No database schema, hosting plan, production configuration or secrets change. No customer originals are deleted.
+
+### Release gate
+
+16 focused storage, legacy preservation and Saved Projects checks passed. Stability gate710 passed. All3,024 unique full-release cases passed (873+733+733+685), zero failures/errors/skips/missing cases. Actual book preview serialization13,843,809->6,921,961bytes with exact HTML roundtrip. Production recovery verification follows deployment.
+
 ## 1.9.30 — 2026-10-13
 
 **Keep picture captions with their images and open the visual you clicked.**
