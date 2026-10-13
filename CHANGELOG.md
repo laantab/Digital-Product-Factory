@@ -11,11 +11,11 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ### What changed
 
-The print renderer keeps each image with its caption across page breaks. Enlarged review and photo restoration controls target the exact selected card even when two visuals share one PDF page.
+The release review bounds image-analysis buffers while measuring photo resolution from the original embedded pixels. The print renderer keeps each image with its caption across page breaks. Enlarged review and photo restoration controls target the exact selected card even when two visuals share one PDF page.
 
 ### What was fixed
 
-A photograph's caption could fall onto the next page in the larger-type layout. The second visual on a shared page could open the first visual or send the first visual's identity to photo restoration.
+Large images could exhaust the website's memory during final review. A photograph's caption could fall onto the next page in the larger-type layout. The second visual on a shared page could open the first visual or send the first visual's identity to photo restoration.
 
 ### Do customer steps change?
 

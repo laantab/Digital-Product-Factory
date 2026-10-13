@@ -8,6 +8,42 @@ from services import ebook_release_review as rr
 from tests.test_release_review_container_gardening import _book
 
 
+def test_large_photo_analysis_is_bounded_but_resolution_uses_native_pixels(monkeypatch):
+    import hashlib
+    import io
+    import zipfile
+    from PIL import Image
+
+    with Image.new("RGB", (2400, 1600), "#38694c") as image:
+        buffer = io.BytesIO()
+        image.save(buffer, "PNG")
+    raw = buffer.getvalue()
+    with fitz.open() as document:
+        document.new_page()
+        page = document.new_page()
+        page.insert_image(fitz.Rect(54, 100, 558, 436), stream=raw)
+        pdf = document.tobytes()
+    aid = {"visual_id": "native-photo", "type": "photo", "source": "pexels",
+           "sha256": hashlib.sha256(raw).hexdigest(), "chapter": "Test"}
+    bundle_buffer = io.BytesIO()
+    with zipfile.ZipFile(bundle_buffer, "w") as bundle:
+        bundle.writestr("ebook.pdf", pdf)
+        bundle.writestr("visuals/native-photo.png", raw)
+    real_check = rr._check_photo
+    checked = []
+
+    def check(review, planned, visual, image, placed_width, zip_raw):
+        checked.append((visual.width, visual.height, image.width, image.height))
+        return real_check(review, planned, visual, image, placed_width, zip_raw)
+
+    monkeypatch.setattr(rr, "_check_photo", check)
+    review = rr.review_release({"visual_plan": {"chapters": [
+        {"chapter": "Test", "aids": [aid]}]}}, pdf, bundle_buffer.getvalue())
+    assert checked == [(2400, 1600, 1200, 800)]
+    assert not any(f.code in {"PHOTO_LOW_RESOLUTION", "PHOTO_NOT_APPROVED_FILE"}
+                   for f in review.findings)
+
+
 def test_real_review_extracts_spans_without_copying_embedded_photos(monkeypatch):
     data, pdf, bundle = _book()
     real = fitz.Page.get_text
