@@ -212,6 +212,7 @@
     "tests/test_ebook_copy_editor.py",
     "tests/test_ebook_manuscript_editor.py",
     "tests/test_cover_preview_recovery.py",
-    "tests/test_cover_preview_memory.py"
+    "tests/test_cover_preview_memory.py",
+    "tests/test_release_review_memory.py"
   ]
 }

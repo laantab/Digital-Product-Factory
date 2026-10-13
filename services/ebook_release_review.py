@@ -32,6 +32,8 @@ import io
 import json
 import re
 import zipfile
+import threading
+from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -60,6 +62,7 @@ _FRAGMENT_OPENERS = ("this ", "it ", "its ", "these ", "those ", "that ", "they 
 _STOP = set("a an the and or of to in on for with your you is are be it this that as at by "
             "from into than then so do does not no only just more most very can will".split())
 _SERIF_THEMES = {"studio_clean", "editorial_professional"}
+_REVIEW_LOCK = threading.Lock()
 
 
 @dataclass
@@ -279,6 +282,10 @@ def chart_wording_findings(aid: dict, *, page: int | None, chapter: str) -> list
     for it in items:
         cw = _content_words(it)
         for prev, pw in seen:
+            # Timelines and comparisons deliberately share wording while
+            # their numeric milestones distinguish the actual points.
+            if set(re.findall(r"\d+(?:\.\d+)?", it)) != set(re.findall(r"\d+(?:\.\d+)?", prev)):
+                continue
             if cw and pw and len(cw & pw) / len(cw | pw) >= 0.5:
                 repeats.append((prev, it))
         seen.append((it, cw))
@@ -307,7 +314,38 @@ def review_release(
     data: dict,
     pdf_bytes: bytes | None,
     zip_bytes: bytes | None,
+    **kwargs,
+) -> Review:
+    """Inspect one book at a time and release all native PDF resources.
+
+    Web requests share a small process. Simultaneous complete-book scans
+    must not multiply its image buffers; decisions still reuse saved scans.
+    """
+    import fitz
+
+    with _REVIEW_LOCK, ExitStack() as resources:
+        try:
+            return _review_release(data, pdf_bytes, zip_bytes, resources=resources, **kwargs)
+        finally:
+            fitz.TOOLS.store_shrink(100)
+
+
+def _page_images(page, *, xrefs=False):
+    import fitz
+
+    try:
+        return page.get_image_info(xrefs=xrefs)
+    finally:
+        # MuPDF otherwise retains decoded photographs across every page.
+        fitz.TOOLS.store_shrink(100)
+
+
+def _review_release(
+    data: dict,
+    pdf_bytes: bytes | None,
+    zip_bytes: bytes | None,
     *,
+    resources: ExitStack,
     ai_reviewer: Callable[[dict], list[dict]] | None = None,
     ai_note: str = "",
     decisions: dict | None = None,
@@ -327,7 +365,7 @@ def review_release(
 
         if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
             raise ValueError("not a PDF")
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        doc = resources.enter_context(fitz.open(stream=pdf_bytes, filetype="pdf"))
         if doc.page_count < 1:
             raise ValueError("no pages")
     except Exception as exc:  # noqa: BLE001
@@ -335,7 +373,7 @@ def review_release(
                   "Export the book again and review the new PDF.", "Re-export the PDF"))
     zf = None
     try:
-        zf = zipfile.ZipFile(io.BytesIO(zip_bytes or b""))
+        zf = resources.enter_context(zipfile.ZipFile(io.BytesIO(zip_bytes or b"")))
         bad = zf.testzip()
         if bad:
             raise ValueError(f"damaged member {bad}")
@@ -414,8 +452,10 @@ def review_release(
     for i in range(doc.page_count):
         page = doc[i]
         rect = page.rect
-        d = page.get_text("dict")
-        img_boxes = [im["bbox"] for im in page.get_image_info()]
+        # Only spans are used here. Default DICT extraction also copies all
+        # embedded image bytes, needlessly decoding photographs twice.
+        d = page.get_text("dict", flags=fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_IMAGES)
+        img_boxes = [im["bbox"] for im in _page_images(page)]
         for block in d.get("blocks", []):
             for line in block.get("lines", []):
                 for span in line.get("spans", []):
@@ -441,7 +481,8 @@ def review_release(
     zip_hashes: dict[str, int] = {}
     for vid, raw in zip_visuals.items():
         try:
-            zip_hashes[vid] = dhash(Image.open(io.BytesIO(raw)))
+            with Image.open(io.BytesIO(raw)) as zip_image:
+                zip_hashes[vid] = dhash(zip_image)
         except Exception:  # noqa: BLE001
             pass
     aid_by_id = {str(a.get("visual_id")): a for a in aids}
@@ -449,7 +490,7 @@ def review_release(
     photos_seen: list[tuple[Visual, int, list[float]]] = []
     for i in range(doc.page_count):
         page = doc[i]
-        for info in page.get_image_info(xrefs=True):
+        for info in _page_images(page, xrefs=True):
             xref = info.get("xref") or 0
             try:
                 raw = doc.extract_image(xref)["image"] if xref else b""
@@ -484,8 +525,10 @@ def review_release(
                           "This image is not one of the book's approved visuals.",
                           "Replace it with the approved visual for this chapter, or approve this one.",
                           f"Replace the image on page {i + 1}"))
+                img.close()
                 continue
             if kind == "cover":
+                img.close()
                 continue
             matched[vid] = v
             aid = aid_by_id[vid]
@@ -494,6 +537,7 @@ def review_release(
             else:
                 _check_photo(rev, aid, v, img, placed_w, zip_visuals.get(vid))
                 photos_seen.append((v, h, _colour_signature(img)))
+            img.close()
 
     # 6. planned visuals that never reached the PDF ----------------------------
     rev.checks_run.append("planned_visuals_present")
