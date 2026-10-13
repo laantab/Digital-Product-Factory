@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-13T03:25:00Z",
-  "current_task": "Complete the PDF/ZIP Factory customer path; v1.9.27 release-review memory repair under validation.",
+  "updated_at": "2026-10-13T04:12:00Z",
+  "current_task": "v1.9.27 review repair live and verified; actual ebook exports complete; owner final visual review pending.",
   "stopped_at": "Branch feature/v1.8.0-workflows, off production commit 47393a0 (v1.7.29). Added services/jobs/mode.py (FACTORY_EXECUTION_MODE inline|workflow), services/jobs/dispatch.py (the single decision point app.py calls), services/jobs/workflow_trigger.py (durable job first, then Render start_task, never raises into a request), services/jobs/workflow_runner.py (SDK-free task behaviour), workflow_task.py (the Render entrypoint), two columns on the jobs table (workflow_run_id, workflow_triggered_at) with a conditional-UPDATE duplicate guard, executor.run_project (claims only the named book), a workflow-mode guard on runner.executor_enabled() and on POST /advance, and a read-only GET /ebook/execution-mode. 50 new checks in tests/test_ebook_workflow_execution.py, all green, zero paid API calls. render.yaml, .env.example, V1_8_0_WORKFLOWS_DEPLOYMENT.md and Verify_v1.8.0_Workflows.bat written. NOTE: the earlier unpushed feature/v1.8.0-background-worker branch on the PC is superseded and must not be merged.",
-  "next_step": "Finish release gate, publish/deploy v1.9.27 website repair, verify Project 20 release review, then final human visual decisions and saved-product reopen. Preserve existing downloads; no paid calls.",
+  "next_step": "Owner reviews the 12 remaining interior visuals and makes final product approval. Preserve exports and zero new spending. Broader unfinished extensions remain listed separately in roadmap.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -214,12 +214,13 @@
   },
   "last_completed": "Free preview/apply/undo manuscript editor, current quality revalidation, stale-write and active-build guards, preserved source revisions and exports, and explicit light route classification. Full 211-file gate: 2976 passed, 0 failures/errors/skips; no paid calls permitted. PR #37.",
   "ebook_completion_2026_10_13": {
-    "website_live_version": "1.9.26",
-    "website_live_commit": "0d5f1ad4eb164dab32a14744c183fe2f458d1a3c",
+    "website_live_version": "1.9.27",
+    "website_live_commit": "e273dfc5739c1e16bd9c670ba158a087263652fc",
     "project_id": 20,
     "exports": "Verified actual downloaded 56-page PDF and ZIP; ZIP integrity passed and embedded PDF byte-identical. User-approved title/cover; saved product present.",
-    "final_approval": "Pending release review and human judgments; DRAFT is preserved.",
-    "review_blocker": "Render 512Mi OOM event at 03:17:27 UTC; localized v1.9.27 repair pending full gate and live deployment.",
-    "scope": "PDF/ZIP core workflow; EPUB/Kindle/Flipbook and marketing are separate unfinished extensions."
+    "final_approval": "Pending owner review of 12 interior visuals; prior cover approval carried forward; DRAFT preserved.",
+    "review_blocker": "RESOLVED: live review POST 200, all 13 visuals present, zero technical findings, no subsequent server_failed event.",
+    "scope": "PDF/ZIP core workflow; EPUB/Kindle/Flipbook and marketing are separate unfinished extensions.",
+    "release_validation": "3010 unique required checks passed after one isolated reference fixture skip was corrected; 56 metadata/version checks passed."
   }
 }
