@@ -33,6 +33,7 @@ import json
 import re
 import zipfile
 import threading
+import gc
 from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -199,10 +200,24 @@ def _luminance(rgb: tuple[float, float, float]) -> float:
 def text_contrast(img: Image.Image) -> float:
     """Contrast between the darkest ink (text) and the typical background."""
     g = img.convert("RGB").resize((min(700, img.width), max(1, int(img.height * min(700, img.width) / img.width))))
-    px = sorted(g.getdata(), key=lambda p: _luminance(p))
-    n = len(px)
-    ink = px[max(0, int(n * 0.01))]
-    bg = px[int(n * 0.6)]
+    try:
+        # Exact weighted quantiles: avoid allocating and sorting a Python
+        # tuple for every pixel in a full-size chart analysis image.
+        colours = sorted(g.getcolors(maxcolors=g.width * g.height),
+                         key=lambda item: _luminance(item[1]))
+        n = g.width * g.height
+        ink_rank, bg_rank = max(0, int(n * 0.01)), int(n * 0.6)
+        total = 0
+        ink = bg = None
+        for count, colour in colours:
+            total += count
+            if ink is None and total > ink_rank:
+                ink = colour
+            if total > bg_rank:
+                bg = colour
+                break
+    finally:
+        g.close()
     l1, l2 = _luminance(bg), _luminance(ink)
     hi, lo = max(l1, l2), min(l1, l2)
     return (hi + 0.05) / (lo + 0.05)
@@ -320,6 +335,20 @@ def chart_wording_findings(aid: dict, *, page: int | None, chapter: str) -> list
 
 
 # ---------------------------------------------------------------------- the review
+def _release_review_memory() -> None:
+    """Return freed request/image buffers before another large book scan."""
+    gc.collect()
+    try:
+        import ctypes
+        trim = ctypes.CDLL(None).malloc_trim
+        trim.argtypes = [ctypes.c_size_t]
+        trim.restype = ctypes.c_int
+        trim(0)
+    except (AttributeError, OSError):
+        # Windows and non-glibc runtimes have no malloc_trim.
+        pass
+
+
 def review_release(
     data: dict,
     pdf_bytes: bytes | None,
@@ -333,11 +362,14 @@ def review_release(
     """
     import fitz
 
-    with _REVIEW_LOCK, ExitStack() as resources:
+    with _REVIEW_LOCK:
+        _release_review_memory()
         try:
-            return _review_release(data, pdf_bytes, zip_bytes, resources=resources, **kwargs)
+            with ExitStack() as resources:
+                return _review_release(data, pdf_bytes, zip_bytes, resources=resources, **kwargs)
         finally:
             fitz.TOOLS.store_shrink(100)
+            _release_review_memory()
 
 
 def _page_images(page, *, xrefs=False):

@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.32 — 2026-10-13
+
+**Keep repeated full-book reviews within memory limits.**
+
+### What changed
+
+Chart contrast uses exact weighted colour quantiles instead of a Python tuple for every pixel. Freed request/image buffers are collected before and after serialized scans, after PDF resources close; glibc returns unused native heap pages where available. Non-glibc platforms retain portable garbage collection.
+
+### What was fixed
+
+The final revised book exported successfully on1.9.31, but another review after the longer session exceeded the512MiB website limit. The earlier successful cold review had not established repeated-request stability.
+
+### Do customer steps change?
+
+No. No rebuild, paid provider call, hosting/config change or quality-threshold change. Native image resolution, accepted source identities, chart contrast values and printed label checks are preserved.
+
+### Release gate
+
+Three actual-book scans recognized13 visuals with zero hard failures. With app loaded, peak RSS252.2->258.7->264.0MiB; after repeated scans current RSS177.8/177.9MiB. Exact contrast equivalence and cleanup-after-error regressions added. 31 focused checks and710 stability checks passed. All3,026 unique full-release cases passed (873+735+733+685), zero failures/errors/skips/missing cases. Production repeated-review verification follows deployment.
+
 ## 1.9.31 — 2026-10-13
 
 **Save large ebook previews without duplicate HTML.**

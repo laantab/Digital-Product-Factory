@@ -75,6 +75,10 @@ def test_pdf_is_closed_even_when_a_check_raises(monkeypatch):
     data, pdf, bundle = _book()
     real = fitz.open
     documents = []
+    memory_releases = []
+
+    def release_memory():
+        memory_releases.append([doc.is_closed for doc in documents])
 
     def opened(*args, **kwargs):
         doc = real(*args, **kwargs)
@@ -85,11 +89,37 @@ def test_pdf_is_closed_even_when_a_check_raises(monkeypatch):
         raise RuntimeError("interrupted check")
 
     monkeypatch.setattr(fitz, "open", opened)
+    monkeypatch.setattr(rr, "_release_review_memory", release_memory)
     monkeypatch.setattr(rr, "_page_images", fail)
     import pytest
     with pytest.raises(RuntimeError, match="interrupted check"):
         rr.review_release(data, pdf, bundle)
     assert len(documents) == 1 and documents[0].is_closed
+    assert memory_releases == [[], [True]]
+
+
+def test_weighted_contrast_matches_exact_pixel_sort():
+    from PIL import Image
+
+    with Image.new('RGB', (80, 60)) as image:
+        image.putdata([(i % 256, (i * 13) % 256, (i * 31) % 256)
+                       for i in range(80 * 60)])
+        pixels = sorted(image.getdata(), key=rr._luminance)
+        ink, bg = pixels[int(len(pixels) * .01)], pixels[int(len(pixels) * .6)]
+        hi, lo = sorted([rr._luminance(ink), rr._luminance(bg)], reverse=True)
+        assert rr.text_contrast(image) == (hi + .05) / (lo + .05)
+
+
+def test_contrast_analysis_uses_weighted_colours_not_per_pixel_python_list(monkeypatch):
+    from PIL import Image
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Full pixel list allocation is not needed for exact contrast.')
+
+    monkeypatch.setattr(Image.Image, 'getdata', forbidden)
+    with Image.new('RGB', (2800, 1800), 'white') as image:
+        image.paste('black', (0, 0, 2800, 100))
+        assert rr.text_contrast(image) > rr.MIN_CONTRAST
 
 
 def test_parallel_requests_do_not_overlap_native_book_scans(monkeypatch):
