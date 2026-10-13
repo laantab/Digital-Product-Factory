@@ -446,8 +446,30 @@ def ownership_counts() -> dict:
     return {"projects": t, "unowned": u, "owned": t - u}
 
 
+def _encode_project_data(data: dict) -> str:
+    """Persist identical large ebook previews once, retaining the legacy HTML."""
+    stored = dict(data)
+    html = stored.get("preview_html")
+    if (isinstance(stored.get("ebook_workspace"), dict)
+            and isinstance(html, str) and len(html) >= 1_000_000
+            and stored.get("ebook_preview_html") == html):
+        stored.pop("ebook_preview_html")
+        stored["_factory_ebook_preview_alias"] = "preview_html"
+    return json.dumps(stored)
+
+
+def _decode_project_data(raw: str) -> dict:
+    data = json.loads(raw or "{}")
+    if (isinstance(data, dict)
+            and data.get("_factory_ebook_preview_alias") == "preview_html"
+            and isinstance(data.get("preview_html"), str)):
+        data["ebook_preview_html"] = data["preview_html"]
+        data.pop("_factory_ebook_preview_alias", None)
+    return data
+
+
 def _row_to_dict(row: sqlite3.Row) -> dict:
-    data = json.loads(row["data"] or "{}")
+    data = _decode_project_data(row["data"] or "{}")
     if not isinstance(data, dict):
         data = {}
     # Stamp the row version the caller just read, so that when this dict is
@@ -1241,7 +1263,7 @@ def find_project_by_package(
     for row in rows or []:
         raw = row_field(row, "data", 3)
         try:
-            data = json.loads(raw or "{}")
+            data = _decode_project_data(raw or "{}")
         except (TypeError, ValueError):
             # Never silent: a row we cannot parse is a real problem, and
             # swallowing it is what hid this defect for an entire release.
@@ -1309,7 +1331,7 @@ def create_project(
         (
             name,
             type_,
-            json.dumps(payload),
+            _encode_project_data(payload),
             int(resolved_user),
             int(resolved_sys),
             int(resolved_temp),
@@ -1412,7 +1434,7 @@ def update_project(
     params = [
         new_name,
         new_type,
-        json.dumps(new_data),
+        _encode_project_data(new_data),
         int(new_user_saved),
         int(new_system_test),
         int(new_temporary),
@@ -2052,7 +2074,7 @@ def hide_internal_records_from_customers() -> dict:
         if is_protected_customer_product(pid, name):
             skipped_protected.append(pid)
             continue
-        data = json.loads(row["data"] or "{}")
+        data = _decode_project_data(row["data"] or "{}")
         if not isinstance(data, dict):
             data = {}
         vis = classify_customer_visibility(name, row["type"], data, project_id=pid)
@@ -2097,7 +2119,7 @@ def hide_internal_records_from_customers() -> dict:
                 "WHERE id=?",
                 (
                     int(bool(vis.get("system_test")) or bool(row["system_test"])),
-                    json.dumps(stamped),
+                    _encode_project_data(stamped),
                     pid,
                 ),
             )
@@ -2107,7 +2129,7 @@ def hide_internal_records_from_customers() -> dict:
                 "version=version+1 WHERE id=? AND version=?",
                 (
                     int(bool(vis.get("system_test")) or bool(row["system_test"])),
-                    json.dumps(stamped),
+                    _encode_project_data(stamped),
                     pid,
                     row_version,
                 ),

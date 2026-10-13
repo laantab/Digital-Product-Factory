@@ -15,3 +15,8 @@ Pass full gate; publish LOCKED invite registry (last-known-good app source 7decd
 
 ## Spending
 Last verified Project20 ledger: 14 paid calls, $2.35. No paid provider calls authorized for repair. No hosting upgrade, configuration changes, marketing implementation, or deletion of originals.
+
+## Live 1.9.30 result and storage follow-up
+PR48 merged a6abb410e9bfd7b2b465c2ff1602876d2b2f86a6. Website deployment dep-db74o13m8hqs73fbh640 live 15:20:52UTC. Actual release review completed on the original 64-page higher-resolution export, 13 visuals, human approval only; no website crash. Builder1.9.30 confirmed by existing Modern Business reapply action. Final caption reflow reached preview/preflight but PostgreSQL backend was killed while UPDATE projects saved a roughly19.87MB project record (15:29:56UTC and another interruption during resumed quality checking). This is a production write, not our read-only diagnostics. Do not keep retrying the build until storage fix is deployed.
+
+Version1.9.31 follows with transparent duplicate-preview serialization. For large ebook-workspace records with identical preview_html and ebook_preview_html, retain exact legacy preview_html once and a private alias flag; reads restore both string fields. Older records, unequal previews, other products, legacy PDF bytes and stale-write protection remain intact. No schema/config/service changes or migration; no original content removed. Actual book preview payload13,843,809->6,921,961bytes with exact roundtrip.16focused checks passed; full gate pending. Resume existing Project20 only after website+builder1.9.31 verified.
