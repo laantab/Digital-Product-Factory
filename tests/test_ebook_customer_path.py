@@ -205,6 +205,30 @@ class EbookCustomerPathTests(unittest.TestCase):
         self.assertIn("factory_brand", codes)
         self.assertIn("provider_url", codes)
 
+    def test_reader_identity_headings_pass_all_content_surfaces(self):
+        reader_text = "If you are a renter\nPrioritize reversible swaps.\nIf you are a homeowner\nCheck insulation first."
+        self.assertEqual(gate_ebook_output(
+            title="Eco Home Checklist", author="Lonnie Brown",
+            manuscript=reader_text,
+            html="<h4>If you are a renter</h4><p>Prioritize reversible swaps.</p>"
+                 "<h4>If you are a homeowner</h4><p>Check insulation first.</p>",
+            pdf_text=reader_text,
+        ), [])
+
+    def test_actual_model_roles_and_production_instructions_still_block(self):
+        for leaked in (
+            "You are a helpful assistant.", "You are an AI assistant.",
+            "You are a professional language model.",
+            "You are an expert nonfiction author.", "You are a professional editor.",
+            "Return only JSON", "Mandatory deliverable", "System prompt",
+            "Do not invent unrelated facts",
+        ):
+            with self.subTest(leaked=leaked):
+                for surface in ("manuscript", "html", "pdf_text"):
+                    args = dict(title="Eco Home Checklist", author="Lonnie Brown", manuscript="Clean text.")
+                    args[surface] = f"<p>{leaked}</p>" if surface == "html" else leaked
+                    self.assertIn("raw_prompt", {row["code"] for row in gate_ebook_output(**args)})
+
     def _customer_ebook_payload(self) -> dict:
         """The finished customer payload.
 
@@ -270,6 +294,12 @@ class EbookCustomerPathTests(unittest.TestCase):
 
     def test_save_is_idempotent_and_reopen_does_not_generate(self):
         data = self._customer_ebook_payload()
+        # Normal reader guidance must survive the real save/reopen path,
+        # which runs a separate contamination check after the release review.
+        reader_guidance = "\n\n### If you are a renter\nChoose reversible changes.\n\n### If you are a homeowner\nCheck what you control.\n"
+        data["content"] += reader_guidance
+        data["ebook"] = data["content"]
+        data["preview_html"] += "<h4>If you are a renter</h4><p>Choose reversible changes.</p><h4>If you are a homeowner</h4><p>Check what you control.</p>"
         first = self.client.post("/ebook/save", json={"name": data["title"], "data": data})
         self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
         body = first.get_json()
@@ -285,6 +315,8 @@ class EbookCustomerPathTests(unittest.TestCase):
         stored = opened.get_json()
         self.assertEqual(stored.get("type"), "ebook")
         self.assertEqual((stored.get("data") or {}).get("title"), TEEN_TITLE)
+        self.assertIn("If you are a renter", stored["data"]["content"])
+        self.assertIn("If you are a homeowner", stored["data"]["preview_html"])
         row = database.get_project(int(pid))
         self.assertTrue(
             database.is_customer_saved_product(row),

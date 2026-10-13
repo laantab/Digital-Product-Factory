@@ -37,7 +37,13 @@ _INTERFACE_RE = re.compile(
     re.I,
 )
 _PROMPT_RE = re.compile(
-    r"\b(you are a|return only json|mandatory deliverable|system prompt|"
+    # Reader-facing headings such as "If you are a renter" are ordinary prose.
+    # Detect model/production roles, rather than every use of "you are a".
+    r"\b(you are an?\s+(?:helpful\b|"
+    r"(?:(?:expert|professional|experienced|friendly|knowledgeable)\s+)*"
+    r"(?:ai|assistant|language model|llm)\b|"
+    r"(?:expert|professional|experienced)\s+(?:nonfiction\s+)?(?:writer|author|editor)\b)|"
+    r"return only json|mandatory deliverable|system prompt|"
     r"do not invent unrelated facts)\b",
     re.I,
 )
