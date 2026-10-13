@@ -23,7 +23,7 @@ No. Preview and export resolution stay intact. No database schema, hosting plan,
 
 ### Release gate
 
-16 focused storage, legacy preservation and Saved Projects checks passed. Full release gate pending.
+16 focused storage, legacy preservation and Saved Projects checks passed. Stability gate710 passed. All3,024 unique full-release cases passed (873+733+733+685), zero failures/errors/skips/missing cases. Actual book preview serialization13,843,809->6,921,961bytes with exact HTML roundtrip. Production recovery verification follows deployment.
 
 ## 1.9.30 — 2026-10-13
 
