@@ -96,6 +96,8 @@ def visuals(data: dict, payload: dict) -> tuple[dict, str]:
         data["export_ready"] = False
         build = data.setdefault("ebook_build", {})
         build.update(finished=False, failed=False, current_stage="design")
+        from services.ebook_build_orchestrator import clear_pause
+        clear_pause(data)
         from services.ebook_project_workspace import set_stage_status, STATUS_NOT_STARTED
         for stage in ("design", "preview", "preflight", "export"):
             build.setdefault("stages", {})[stage] = {"status": "NOT_STARTED", "attempts": 0}

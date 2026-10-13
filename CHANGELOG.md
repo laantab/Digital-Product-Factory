@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.29 — 2026-10-13
+
+**Keep the requested ebook correction ahead of progress polling.**
+
+### What changed
+
+Automatic build-progress requests preserve a pending workspace correction until the builder takes it. A newer explicit customer choice can still supersede an unrun choice.
+
+### What was fixed
+
+The clearer-print button queued its update, then opened the build screen. That screen could replace the queued update with an ordinary advance before the builder applied it. The print update also now releases the completed-visuals hold so the design, preview, quality checks and export can continue.
+
+### Do customer steps change?
+
+No. One clearer-print click performs the update and continues the build. Existing photos, manuscript, cover and original exports are preserved; no paid generation is added.
+
+### Release gate
+
+Queue and builder checks passed before the repair (35 cases), and 45 focused checks passed after it. Fast Gate: 710 passed. All 3,017 unique required acceptance checks passed in four isolated partitions (873 + 732 + 731 + 681), with zero failures, errors, skips or missing cases. The regression exercises 20 actual progress requests and verifies that the builder applies the pending correction exactly once. Live export verification follows deployment.
+
 ## 1.9.28 — 2026-10-13
 
 **Larger, clearer ebook type, sharp chart files and readable visual previews.**
