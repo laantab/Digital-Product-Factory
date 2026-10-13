@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.34 — 2026-10-13
+
+**Use the saved original pictures during final ebook approval.**
+
+### What changed
+
+Before final save checks readiness, restore this project's existing pictures and PDF/ZIP from storage using the same recovery helpers used by preview, review and finished-book status. Rebase export pointers onto the website's copies only after both export files verify.
+
+### What was fixed
+
+The website treated a builder's retired disk paths as missing pictures and exports, even when the finished book and stored originals were available. Approval now checks the original files on the website's disk.
+
+### Do customer steps change?
+
+No. The approved manuscript, images, PDF and ZIP are preserved. No regeneration or paid image call is involved. A picture that storage cannot supply still blocks save.
+
+### Release gate
+
+Cross-machine save/reopen checks cover restored original bytes, unchanged manuscript/PDF/ZIP bytes, the correct project identity, and rejection when an original picture or ZIP is unavailable. Full release validation is required before deployment.
+
 ## 1.9.33 — 2026-10-13
 
 **Allow ordinary reader guidance through final ebook approval.**
