@@ -867,7 +867,7 @@ def render_designed_ebook_html(
     chapters = numbered_chapters(original)
     theme = get_theme(design.theme_id)
     css = theme_css(design.theme_id)
-    if design.styles.get("readability_profile") == "clear_large":
+    if (getattr(design, "styles", None) or {}).get("readability_profile") == "clear_large":
         css += """
 body, p, li, td {font-family: LiberationSans; font-size:13pt; color:#111111; line-height:1.6;}
 h1, h2, h3, h4, .chapter-title, .section-heading {font-family: LiberationSans; font-weight:bold; color:#111111;}

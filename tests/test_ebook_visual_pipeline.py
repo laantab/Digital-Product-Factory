@@ -518,7 +518,7 @@ class EbookVisualPipelineTests(unittest.TestCase):
         self.assertEqual(aid["layout"], "station_map")
         self.assertEqual(aid["items"], stages)
         self.assertTrue(os.path.isfile(aid["asset_path"]))
-        self.assertEqual(int(aid["width"]), 1400)
+        self.assertEqual(int(aid["width"]), 2800)
         # v1.9.10: seven readable rows, not a fixed 900 px station picture.
         self.assertGreater(int(aid["height"]), 7 * 84)
         # No book-level editorial assertion here (review_visual_set, v1.5.0):

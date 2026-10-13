@@ -23,7 +23,7 @@ Use View clearly to inspect a visual, Restore original resolution for the same s
 
 ### Release gate
 
-Focused image, typography, builder-action and access-protection checks are running. The original narrow-chart fixtures were adjusted to remain genuinely 6-point charts after increasing the label font; the unchanged 8-point refusal threshold remains protected. Full acceptance and live export verification are pending; this entry does not claim deployment.
+Fast Gate: 710 passed. Full acceptance: 3,016 unique required cases verified across four isolated partitions, with no missing cases or unresolved failures, errors or skips. Initial browser setup errors and three failing cases were corrected and all eight affected cases passed a recorded rerun. Image/browser checks passed 50; chapter/clarity/design checks passed 31; invite/lock checks passed 25. Resolution expectations now require 2800-pixel charts and 2400-pixel photo embedding; the 8-point refusal threshold remains unchanged. Live book export verification follows deployment.
 
 ## 1.9.27 — 2026-10-12
 

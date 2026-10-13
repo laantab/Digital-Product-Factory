@@ -347,13 +347,12 @@ class ImageResolution(unittest.TestCase):
                 img = render_aid_png(aid, scale=2.0)
                 self.assertGreaterEqual(img.size[0], 1400)
 
-    def test_embed_default_targets_the_1400_1800_range(self):
+    def test_embed_default_preserves_2400px_print_photos(self):
         from services.ebook_visual_pipeline import _embed_preview_image
         import inspect
 
         default_max_w = inspect.signature(_embed_preview_image).parameters["max_w"].default
-        self.assertGreaterEqual(default_max_w, 1400)
-        self.assertLessEqual(default_max_w, 1800)
+        self.assertEqual(default_max_w, 2400)
 
 
 class TimelineAndCalendarLayout(unittest.TestCase):
