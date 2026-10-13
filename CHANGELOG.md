@@ -23,7 +23,7 @@ No. No rebuild, paid provider call, hosting/config change or quality-threshold c
 
 ### Release gate
 
-Three actual-book scans recognized13 visuals with zero hard failures. With app loaded, peak RSS252.2->258.7->264.0MiB; after repeated scans current RSS177.8/177.9MiB. Exact contrast equivalence and cleanup-after-error regressions added. Full gate pending.
+Three actual-book scans recognized13 visuals with zero hard failures. With app loaded, peak RSS252.2->258.7->264.0MiB; after repeated scans current RSS177.8/177.9MiB. Exact contrast equivalence and cleanup-after-error regressions added. 31 focused checks and710 stability checks passed. All3,026 unique full-release cases passed (873+735+733+685), zero failures/errors/skips/missing cases. Production repeated-review verification follows deployment.
 
 ## 1.9.31 — 2026-10-13
 
