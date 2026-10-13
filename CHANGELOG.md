@@ -23,7 +23,7 @@ No. Open Editor-in-Chief review, inspect its findings, and make the final produc
 
 ### Release gate
 
-Baseline Fast Stability Gate: 710 passed. Baseline release-review checks: 33 passed. New memory/resource and numeric-milestone checks are included in the required acceptance manifest. Full release verification is pending; this entry does not claim deployment.
+Baseline Fast Stability Gate: 710 passed; baseline review suites: 33 passed. All 3,010 required checks across 214 acceptance files subsequently passed in four isolated manifest partitions. One reference-preservation check initially skipped because its isolated checkout lacked the real preserved files; after supplying the already-verified originals, that check passed through the release runner. XML reconciliation against the full collected manifest proves no missing checks and no unresolved failures, errors or skips. No tests were weakened and no paid calls were permitted. The earlier incomplete run is not counted as a pass.
 
 ## 1.9.26 — 2026-10-12
 
