@@ -2071,7 +2071,15 @@ def recover_source_photo_file(source: dict, *, project_id: int | None, data: dic
         return False
 
 
-def verify_source(source: dict | None, *, project_id: int | None, data: dict) -> dict[str, Any]:
+def verify_source(
+    source: dict | None, *, project_id: int | None, data: dict, load_pixels: bool = False
+) -> dict[str, Any]:
+    """Verify registered bytes and provenance; decode pixels only for rendering.
+
+    Status and the three simultaneous preview requests must not each allocate
+    full-resolution RGB/EXIF copies of the same original photograph. The hash
+    still binds the file to the previously accepted photo on every request.
+    """
     if not isinstance(source, dict) or not source:
         raise PhotoCoverError("No cover photograph is registered.")
     pkg = str(data.get("package_id") or data.get("artifact_id") or "")
@@ -2106,8 +2114,13 @@ def verify_source(source: dict | None, *, project_id: int | None, data: dict) ->
     expected_digest = str(source.get("local_asset_sha256") or source.get("sha256") or "")
     if digest != expected_digest:
         raise PhotoCoverError("Cover photograph is stale or has been replaced.")
-    img = _open_rgb(path)
-    w, h = img.size
+    with Image.open(path) as header:
+        w, h = header.size
+        # PNG's getexif override can call load() to scan trailing chunks.
+        # Only inspect header metadata here; the renderer handles orientation.
+        if Image.Image.getexif(header).get(274) in {5, 6, 7, 8}:
+            w, h = h, w
+        header.verify()
     if min(w, h) < MIN_SHORT_SIDE:
         raise PhotoCoverError("Cover photograph is below the 800px minimum.")
     if str(source.get("source_type") or "") not in {"upload", "pexels", "local_licensed", "ai_generated"}:
@@ -2136,7 +2149,8 @@ def verify_source(source: dict | None, *, project_id: int | None, data: dict) ->
         art = str(data.get("artifact_id") or data.get("package_id") or "")
         if rec.get("artifact_id") and art and str(rec.get("artifact_id")) != art:
             raise PhotoCoverError("Pexels cover record does not match this artifact.")
-    return {"image": img, "digest": digest, "width": w, "height": h}
+    return {"image": _open_rgb(path) if load_pixels else None,
+            "digest": digest, "width": w, "height": h}
 
 
 def _sniff_image(image_bytes: bytes) -> str:
@@ -2380,7 +2394,7 @@ def render_photo_variants(data: dict, *, project_id: int | None = None) -> dict:
     cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
     incoming = copy.deepcopy(cover) if cover else {}
     source = cover.get("source") if isinstance(cover.get("source"), dict) else None
-    verified = verify_source(source, project_id=project_id, data=data)
+    verified = verify_source(source, project_id=project_id, data=data, load_pixels=True)
     ident = _approved_identity(data)
     editor = _clamp_editor(cover.get("editor"))
     source_sha = str(source.get("sha256") or verified["digest"])

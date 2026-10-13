@@ -5,6 +5,12 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.26 — 2026-10-12
+
+**Open high-resolution ebook cover previews without exhausting website memory.**
+
+Registered cover sources are verified by file hash, image headers, project ownership, resolution and provenance without decoding full-resolution pixels during progress, preview, selection and preflight requests. Only cover rendering explicitly loads the original pixels. This addresses the repeated 512 MB out-of-memory restarts observed while opening Project 20's 4000 × 6000 photograph. Existing image files, cover identity and quality checks are preserved; no paid provider calls are added.
+
 ## 1.9.25 — 2026-10-12
 
 **Recover missing ebook cover previews.**
