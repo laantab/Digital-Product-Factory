@@ -280,6 +280,7 @@ def validate_visual_plan_typed(
     content_md: str = "",
     title: str = "",
     topic: str = "",
+    declared_requirements: dict[str, dict] | None = None,
 ) -> dict[str, Any]:
     """Typed, honest visual-completion assessment for an ebook's visual_plan.
 
@@ -327,7 +328,9 @@ def validate_visual_plan_typed(
         if _FRONT_BACK_MATTER_RE.match(name.strip()):
             continue
         body = body_by_title.get(_norm(name), "")
-        req = derive_chapter_requirement(name, body, book_demonstration_led=book_demo_led)
+        declared = {_norm(k): v for k, v in (declared_requirements or {}).items()}
+        req = declared.get(_norm(name)) or derive_chapter_requirement(
+            name, body, book_demonstration_led=book_demo_led)
         aids = list(ch.get("aids") or [])
         categories = [classify_aid_category(a) for a in aids]
 

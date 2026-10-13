@@ -1485,6 +1485,69 @@ def replace_visual_aid(visual_plan: dict | None, visual_id: str, filled: dict) -
     return plan
 
 
+def _reviewed_workspace_requirements(data: dict, pdf_path: str) -> tuple[dict | None, str]:
+    """Use the workspace's chosen plan only after this exact export passes review.
+
+    The older topic inference is still used for every unreviewed/legacy book.
+    A reviewed workspace also rechecks its actual assets; owner decisions
+    never turn a missing, corrupt or changed original into a valid picture.
+    """
+    if data.get("ebook_project_workspace") is not True:
+        return None, ""
+    document = data.get("ebook_document") or {}
+    preflight = data.get("ebook_design_preflight") or {}
+    if not isinstance(document, dict) or not document.get("chapters"):
+        return None, ""
+    if len(str(data.get("content") or data.get("ebook") or "").split()) < 500:
+        return None, ""
+    if str(data.get("release_status") or "").upper() != "PASS" or preflight.get("status") != "PASS":
+        return None, ""
+    from services.ebook_project_workspace import is_approved
+
+    ws = data.get("ebook_workspace") or {}
+    if not all(is_approved(ws, stage) for stage in ("visuals", "cover", "design", "preview", "preflight")):
+        return None, ""
+    review = data.get("release_review") or {}
+    if review.get("status") != "Ready for approval":
+        return None, ""
+    if any((review.get("counts") or {}).get(key) for key in
+           ("hard", "not_verified", "needs_human_review", "editorial")):
+        return None, ""
+    import hashlib
+
+    def file_sha(path):
+        try:
+            digest = hashlib.sha256()
+            with open(path, "rb") as stream:
+                for block in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(block)
+            return digest.hexdigest()
+        except (OSError, TypeError):
+            return ""
+
+    zip_path = str((data.get("export_files") or {}).get("package.zip") or "")
+    if not review.get("pdf_sha256") or review["pdf_sha256"] != file_sha(pdf_path):
+        return None, ""
+    if not review.get("zip_sha256") or review["zip_sha256"] != file_sha(zip_path):
+        return None, ""
+    from services.ebook_visual_pipeline import validate_visual_readiness
+    from services.ebook_visual_requirements import classify_aid_category, CATEGORY_PLACEHOLDER
+
+    report = validate_visual_readiness(data, html=str(data.get("ebook_preview_html") or data.get("preview_html") or ""))
+    if not report.ok:
+        return None, report.summary
+    declarations = {}
+    for chapter in (data.get("visual_plan") or {}).get("chapters") or []:
+        categories = sorted({classify_aid_category(aid) for aid in chapter.get("aids") or []}
+                            - {CATEGORY_PLACEHOLDER})
+        if categories:
+            name = str(chapter.get("chapter") or "")
+            declarations[name] = {"chapter": name, "requirement_kind": "approved_workspace_plan",
+                                  "allowed_categories": categories, "required": True,
+                                  "reason": "Current workspace plan and export passed the final review."}
+    return declarations, ""
+
+
 def ebook_project_readiness(data: dict | None) -> dict[str, Any]:
     """Authoritative factory-ebook status. Used by every label, download, and export control."""
     data = data if isinstance(data, dict) else {}
@@ -1509,14 +1572,18 @@ def ebook_project_readiness(data: dict | None) -> dict[str, Any]:
     from services.ebook_visual_requirements import validate_visual_plan_typed
 
     fields = data.get("fields") if isinstance(data.get("fields"), dict) else {}
+    declarations, workspace_asset_error = _reviewed_workspace_requirements(data, pdf_path)
     typed = validate_visual_plan_typed(
         plan,
         content_md=str(data.get("content") or data.get("ebook") or ""),
         title=str(data.get("title") or ""),
         topic=str(fields.get("topic") or data.get("title") or ""),
+        declared_requirements=declarations,
     )
 
     blockers: list[str] = []
+    if workspace_asset_error:
+        blockers.append(workspace_asset_error)
     source = cover.get("source") if isinstance(cover.get("source"), dict) else {}
     selected = str(cover.get("selected_layout") or "").strip()
     cover_file = str(cover.get("image_path") or cover.get("local_cover_pdf") or "")

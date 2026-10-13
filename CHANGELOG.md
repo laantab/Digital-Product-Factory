@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.35 — 2026-10-13
+
+**Keep the completed workspace's approved visual plan through final save.**
+
+### What changed
+
+For a structured workspace with approved visual/cover/design/preview/preflight stages, passing preflight, and a passing final review of the exact current PDF and ZIP, final readiness uses the chosen visual types. Actual assets still undergo their existing hash, dimension, source, caption, matching and legibility checks.
+
+### What was fixed
+
+The legacy topic inference demanded new demonstration photos for chapters deliberately planned and approved as charts, after the workspace's own preflight and final review had passed.
+
+### Do customer steps change?
+
+No. No content, approved visual, export, or paid generation changes. Unreviewed and legacy books retain inferred requirements. Stale exports, failed reviews and changed/missing originals never qualify for the reviewed-workspace contract.
+
+### Release gate
+
+Regression checks cover the approved plan, stale PDF/ZIP reviews, failed or incomplete review, unapproved visuals, failed preflight, legacy behavior, and changed asset refusal. Full release validation is required before deployment.
+
 ## 1.9.34 — 2026-10-13
 
 **Use the saved original pictures during final ebook approval.**
