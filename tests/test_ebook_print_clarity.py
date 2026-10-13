@@ -107,3 +107,69 @@ def test_print_update_invalidates_the_real_design_rail_without_rewriting_content
     assert result["ebook_build"]["paused_after"] == ""
     assert stage_status(result["ebook_workspace"], "design") == "not_started"
     assert stage_status(result["ebook_workspace"], "preview") == "not_started"
+
+
+def test_a_photo_caption_stays_on_the_photographs_pdf_page(tmp_path):
+    import fitz
+    from services.ebook_design_system import theme_css
+    from services.pdf_export import _html_to_pdf_xhtml2pdf
+    path = tmp_path / "photo.png"
+    Image.new("RGB", (600, 300), "#aabbcc").save(path)
+    caption = "Fixture caption stays with its photograph."
+    figure = visuals.figure_html({"visual_id": "photo", "type": "photo",
+                                  "asset_path": str(path), "caption": caption})
+    css = theme_css("modern_practical") + "body,p{font-size:13pt;line-height:1.6;}figcaption{font-size:11pt;line-height:1.4;}"
+    html = f'<html><head><style>{css}</style></head><body><pdf:spacer height="420pt"/>{figure}</body></html>'
+    with fitz.open(stream=_html_to_pdf_xhtml2pdf(html), filetype="pdf") as doc:
+        image_pages = [i for i, page in enumerate(doc) if page.get_image_info()]
+        caption_pages = [i for i, page in enumerate(doc) if caption in " ".join(page.get_text().split())]
+    assert len(image_pages) == 1
+    assert caption_pages == image_pages
+
+
+def test_review_controls_target_the_clicked_visual_when_two_share_a_page():
+    import base64
+    import io
+    import json
+    from urllib.parse import urlparse
+    from playwright.sync_api import sync_playwright, expect
+    from app import RELEASE_REVIEW_PAGE
+    def thumbnail(color):
+        buf = io.BytesIO()
+        Image.new("RGB", (48, 32), color).save(buf, "PNG")
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    photo_thumb = thumbnail("blue")
+    review = {"status": "Needs human review", "ready": False, "groups": [], "visuals": [
+        {"page": 7, "kind": "chart", "visual_id": "chart-a", "chapter": "Chart", "thumb": thumbnail("red"), "status": "needs_human_review"},
+        {"page": 7, "kind": "photo", "visual_id": "photo-b", "chapter": "Photo", "thumb": photo_thumb, "status": "needs_human_review"},
+    ]}
+    html = RELEASE_REVIEW_PAGE.replace("__PID__", "20").replace("__TITLE__", "Fixture")
+    posted = []
+    def respond(route):
+        path = urlparse(route.request.url).path
+        if path == "/review":
+            route.fulfill(status=200, content_type="text/html", body=html)
+        elif path.endswith("/release-review/current"):
+            route.fulfill(status=200, content_type="application/json", body=json.dumps(review))
+        elif path.endswith("/release-review/estimate"):
+            route.fulfill(status=200, content_type="application/json", body="{}")
+        elif path.endswith("/visuals"):
+            posted.append(json.loads(route.request.post_data))
+            route.fulfill(status=400, content_type="application/json", body='{"error":"fixture complete"}')
+        else:
+            raise AssertionError(path)
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.route("**/*", respond)
+            page.goto("http://factory.test/review")
+            expect(page.get_by_role("button", name="View clearly", exact=True)).to_have_count(2)
+            page.get_by_role("button", name="View clearly", exact=True).nth(1).click()
+            expect(page.locator("#visualViewerImage")).to_have_attribute("src", photo_thumb)
+            page.get_by_role("button", name="Close enlarged view", exact=True).click()
+            with page.expect_response("**/visuals"):
+                page.get_by_role("button", name="Restore original resolution", exact=True).click()
+            assert posted[0]["visual_id"] == "photo-b"
+        finally:
+            browser.close()

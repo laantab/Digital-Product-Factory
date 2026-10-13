@@ -2319,10 +2319,10 @@ reviewVisuals=d.visuals||[];
 st.textContent=d.status;st.className='status '+(d.ready?'ready':d.status==='Changes required'?'changes':'unverified');
 const label={ok:'Measured checks passed',rejected:'Rejected - replace',not_verified:'Not verified',
 needs_human_review:'Needs your review',accepted_by_owner:'Accepted by you'};
-document.getElementById('sheet').innerHTML=(d.visuals||[]).map(v=>`<div class="card ${esc(v.status)}">
+document.getElementById('sheet').innerHTML=(d.visuals||[]).map((v,index)=>`<div class="card ${esc(v.status)}">
 <img src="${v.thumb||''}" alt=""><b>PDF page ${v.page}</b> &middot; ${esc(v.kind)}<br>${esc(v.chapter||'Cover')}<br>
-<button type=button onclick="enlargeVisual(${v.page})">View clearly</button><br>
-${v.kind==='photo'?`<button type=button onclick="qualityAction('replace',${v.page})">Restore original resolution</button><br>`:''}
+<button type=button onclick="enlargeVisual(${index})">View clearly</button><br>
+${v.kind==='photo'?`<button type=button onclick="qualityAction('replace',${index})">Restore original resolution</button><br>`:''}
 ${label[v.status]||esc(v.status)}${v.status==='needs_human_review'?`<br><button onclick="decide(${v.page},'accept')">Accept</button><button onclick="decide(${v.page},'reject')">Reject</button>`:''}
 ${v.status==='accepted_by_owner'?`<br><button onclick="decide(${v.page},'undo')">Undo</button>`:''}</div>`).join('');
 document.getElementById('groups').innerHTML=(d.groups||[]).map(g=>`<div class=group><h3>${esc(g.correction)}</h3>
@@ -2333,18 +2333,18 @@ let est=null;try{const e=await call(`/ebook-workspace/${PID}/release-review/esti
 const rejected=(d.visuals||[]).filter(v=>v.status==='rejected').length;
 const editorial=(d.groups||[]).some(g=>g.findings.some(f=>f.level==='editorial'));
 document.getElementById('actions').innerHTML=
-`<button type=button onclick="qualityAction('improve-print',0)">Use clearer type and redraw charts</button>`+
+`<button type=button onclick="qualityAction('improve-print',-1)">Use clearer type and redraw charts</button>`+
 `<a class=btn href="/?view=ebook-workspace&project_id=${PID}&stage=visuals">Approve all acceptable visuals${rejected?' and replace '+rejected+' rejected':''}</a>`+
 (d.ai&&d.ai.ran||!est?'':`<button onclick="if(confirm('Run the AI review for about $${est.estimated_usd.toFixed(2)}? It is charged to this book.'))run(${est.estimated_usd})">Run AI review (about $${est.estimated_usd.toFixed(2)})</button>`)+
 (editorial?`<button onclick="post('/ebook-workspace/${PID}/release-review/acknowledge',{},'Saving your answer')">I have read the editorial notes</button>`:'')+
 `<button ${d.ready?'':'disabled'} onclick="fetch('/ebook-workspace/${PID}/approve-product',{method:'POST'}).then(r=>r.json()).then(x=>alert(x.ok?'Approved.':x.error))">Approve Product</button>`;}
 function decide(page,decision){post(`/ebook-workspace/${PID}/release-review/decision`,{page,decision},'Saving your decision');}
-function enlargeVisual(page){const v=reviewVisuals.find(x=>x.page===page);if(!v)return;
+function enlargeVisual(index){const v=reviewVisuals[index];if(!v)return;
 document.getElementById('visualViewerTitle').textContent=`PDF page ${v.page}: ${v.chapter||'Cover'}`;
 const image=document.getElementById('visualViewerImage');image.src=v.thumb||'';image.alt=v.chapter||'Cover';
 document.getElementById('visualViewer').showModal();}
-async function qualityAction(action,page){if(busy)return;setBusy(true);
-const visual=reviewVisuals.find(v=>v.page===page);
+async function qualityAction(action,index){if(busy)return;setBusy(true);
+const visual=reviewVisuals[index];
 const body={action,visual_id:visual?visual.visual_id:'',mode:'higher-resolution'};
 const res=await call(`/ebook-workspace/${PID}/visuals`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},120000);
 busy=false;if(!res.ok)return failed(res,'The quality update');

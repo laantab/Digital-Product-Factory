@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.30 — 2026-10-13
+
+**Keep picture captions with their images and open the visual you clicked.**
+
+### What changed
+
+The release review bounds image-analysis buffers while measuring photo resolution from the original embedded pixels. The print renderer keeps each image with its caption across page breaks. Enlarged review and photo restoration controls target the exact selected card even when two visuals share one PDF page.
+
+### What was fixed
+
+Large images could exhaust the website's memory during final review. A photograph's caption could fall onto the next page in the larger-type layout. The second visual on a shared page could open the first visual or send the first visual's identity to photo restoration.
+
+### Do customer steps change?
+
+No. Existing manuscript, photographs and cover choices stay the same. No additional paid generation is added.
+
+### Release gate
+
+Both regressions were reproduced in actual PDF rendering and a real browser before the fixes. Invite-protection checks passed 16 before changes. 37 focused checks, 710 stability checks and all 3,020 unique full-release cases passed without failures, errors or skips. Actual 64-page review recognized 13 visuals with zero hard failures; peak RSS fell from 291.9 to 261.9 MiB (286.3 MiB including app import). Production verification follows deployment.
+
 ## 1.9.29 — 2026-10-13
 
 **Keep the requested ebook correction ahead of progress polling.**

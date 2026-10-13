@@ -2801,7 +2801,8 @@ def figure_html(aid: dict[str, Any], *, palette: dict[str, tuple[int, int, int]]
     photo_cls = " ebook-figure-photo" if is_photo else ""
     return (
         f'<figure class="ebook-figure{photo_cls}" id="{vid}" data-visual-id="{vid}" data-sha="{sha}">'
-        f'<img src="{uri}" alt="{cap}" width="{w}" height="{h}"/>'
+        f'<p class="ebook-figure-image" style="margin:0;line-height:1;-pdf-keep-with-next:true;">'
+        f'<img src="{uri}" alt="{cap}" width="{w}" height="{h}"/></p>'
         f"<figcaption>{cap}</figcaption></figure>"
     )
 

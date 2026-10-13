@@ -217,6 +217,14 @@ def _thumb(img: Image.Image, width: int = 1200) -> bytes:
     return buf.getvalue()
 
 
+def _review_pixels(img: Image.Image) -> None:
+    """Bound analysis buffers; exported files and native dimensions stay intact."""
+    width = min(1200, img.width)
+    height = max(1, round(img.height * width / max(1, img.width)))
+    img.draft("RGB", (width, height))
+    img.thumbnail((width, height), Image.Resampling.LANCZOS)
+
+
 def plan_aids(data: dict) -> list[dict]:
     plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else {}
     out = []
@@ -484,6 +492,7 @@ def _review_release(
     for vid, raw in zip_visuals.items():
         try:
             with Image.open(io.BytesIO(raw)) as zip_image:
+                _review_pixels(zip_image)
                 zip_hashes[vid] = dhash(zip_image)
         except Exception:  # noqa: BLE001
             pass
@@ -497,7 +506,8 @@ def _review_release(
             try:
                 raw = doc.extract_image(xref)["image"] if xref else b""
                 img = Image.open(io.BytesIO(raw))
-                img.load()
+                native_width, native_height = img.size
+                _review_pixels(img)
             except Exception:  # noqa: BLE001
                 F(Finding("IMAGE_UNREADABLE", NOT_VERIFIED, i + 1, chapter_for_page(i + 1), f"image on page {i + 1}",
                           "This image could not be read from the PDF.", "Export again.", "Re-export the PDF"))
@@ -518,8 +528,8 @@ def _review_release(
             else:
                 vid, kind = f"page{i + 1}", "unknown"
             chapter = chapter_for_page(i + 1)
-            v = Visual(page=i + 1, chapter=chapter, kind=kind, visual_id=vid, width=img.width,
-                       height=img.height, placed_width_pt=round(placed_w, 1), thumb_jpeg=_thumb(img))
+            v = Visual(page=i + 1, chapter=chapter, kind=kind, visual_id=vid, width=native_width,
+                       height=native_height, placed_width_pt=round(placed_w, 1), thumb_jpeg=_thumb(img))
             rev.visuals.append(v)
             if kind == "unknown":
                 v.status = "rejected"
@@ -710,7 +720,8 @@ def _check_chart(rev: Review, aid: dict, v: Visual, img: Image.Image, placed_w: 
     title = _plain(aid.get("title") or v.visual_id)
     group = f"Redraw the chart on page {v.page}"
     try:
-        size = label_min_pt(render_aid_png(aid), column_pt=placed_w)
+        with render_aid_png(aid) as rendered:
+            size = label_min_pt(rendered, column_pt=placed_w)
     except Exception:  # noqa: BLE001
         size = 0.0
     if size <= 0:
@@ -746,7 +757,7 @@ def _check_photo(rev: Review, aid: dict, v: Visual, img: Image.Image, placed_w: 
         F(Finding("PHOTO_IS_A_TEXT_CARD", HARD, v.page, v.chapter, v.visual_id,
                   "The chapter photo is a drawn text card or placeholder, not a photograph.",
                   "Choose a real photograph for this chapter.", group))
-    dpi = img.width / max(0.01, placed_w / 72.0)
+    dpi = v.width / max(0.01, placed_w / 72.0)
     if dpi < MIN_PHOTO_DPI:
         v.status = "rejected"
         F(Finding("PHOTO_LOW_RESOLUTION", HARD, v.page, v.chapter, v.visual_id,
