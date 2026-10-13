@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.33 — 2026-10-13
+
+**Allow ordinary reader guidance through final ebook approval.**
+
+### What changed
+
+Recognize model and production roles instead of blocking every occurrence of “you are a.” Actual AI role assignments and production instructions remain blocked in manuscript, HTML, and PDF text.
+
+### What was fixed
+
+Final save incorrectly treated headings such as “If you are a renter” and “If you are a homeowner” as leaked AI instructions, stopping final approval of an otherwise reviewed book.
+
+### Do customer steps change?
+
+No. Existing approved content and exports remain intact. No rebuild or paid generation is needed.
+
+### Release gate
+
+23 focused approval and save/reopen checks passed. Reader headings pass on all content surfaces; real model roles and production instructions still fail. The save/reopen regression retains both reader headings. Full release validation is required before deployment.
+
 ## 1.9.32 — 2026-10-13
 
 **Keep repeated full-book reviews within memory limits.**
