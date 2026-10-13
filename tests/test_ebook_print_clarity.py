@@ -96,6 +96,7 @@ def test_print_update_invalidates_the_real_design_rail_without_rewriting_content
                              "title": "Keep this title", "cover_design": {"cover_digest": "approved-cover"},
                              "package_id": "test", "visual_plan": {"chapters": []}})
     monkeypatch.setattr(visuals, "materialize_visual_plan", lambda plan, **kwargs: copy.deepcopy(plan))
+    data["ebook_build"] = {"paused_after": "visuals"}
     result, _ = action(data, {"action": "improve-print"})
     assert result["content"] == "Unchanged manuscript."
     assert result["title"] == "Keep this title"
@@ -103,5 +104,6 @@ def test_print_update_invalidates_the_real_design_rail_without_rewriting_content
     assert result["fields"]["readability_profile"] == "clear_large"
     assert result["fields"]["theme_id"] == "modern_practical"
     assert result["export_ready"] is False
+    assert result["ebook_build"]["paused_after"] == ""
     assert stage_status(result["ebook_workspace"], "design") == "not_started"
     assert stage_status(result["ebook_workspace"], "preview") == "not_started"

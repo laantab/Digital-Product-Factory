@@ -120,6 +120,26 @@ class AdvanceHandsOffTests(unittest.TestCase):
         self.assertIsNotNone(job, "no durable job row was written")
         self.assertIn(job["status"], (store.QUEUED, store.RUNNING))
 
+    def test_progress_polling_preserves_and_executes_the_print_update_once(self):
+        from services.jobs import actions, builder_actions
+        route = "/ebook-workspace/<int:project_id>/visuals"
+        command = {"route": route, "action": "improve-print", "payload": {}}
+        with _workflow_env():
+            self.assertTrue(actions.record_action(self.pid, command))
+            for _ in range(20):
+                self.assertEqual(self._advance().status_code, 200)
+        self.assertEqual(store.peek_requested_action(self.pid), command)
+        job = store.get_for_project(self.pid)
+        def apply(data, **kwargs):
+            self.assertEqual(kwargs["action"], "improve-print")
+            data.setdefault("fields", {})["readability_profile"] = "clear_large"
+            return data, "Print update applied"
+        with mock.patch("services.ebook_workspace_actions.perform", side_effect=apply) as perform:
+            self.assertTrue(builder_actions.perform_pending(self.pid, job["id"])["performed"])
+            self.assertFalse(builder_actions.perform_pending(self.pid, job["id"])["performed"])
+        self.assertEqual(perform.call_count, 1)
+        self.assertEqual(database.get_project(self.pid)["data"]["fields"]["readability_profile"], "clear_large")
+
     def test_the_polling_loop_starts_exactly_one_task(self):
         """The screen polls /advance in a loop. Twenty polls is one book.
 

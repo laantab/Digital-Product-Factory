@@ -545,12 +545,14 @@ def claim_for_project(owner: str, project_id: int,
 
 
 def set_requested_action(job_id: int, action: dict) -> bool:
-    """Record what the customer actually asked for. Overwrites any pending one.
+    """Record a customer choice without letting progress polling erase it.
 
     Overwriting is correct: a customer who clicks "AI alternative" and then
     "replace photo" before the first has run wants the second. Only the most
     recent request is meaningful, and keeping a queue of superseded image
     requests would spend money on choices the customer has already changed.
+    An automatic advance is not a changed choice: preserve pending work
+    atomically until the builder takes it.
     """
     import json
 
@@ -558,13 +560,18 @@ def set_requested_action(job_id: int, action: dict) -> bool:
 
     conn = database.get_conn()
     try:
+        only_if_empty = str((action or {}).get("route") or "") == "advance"
         cur = conn.execute(
             "UPDATE jobs SET requested_action=?, requested_action_at=?,"
-            " updated_at=? WHERE id=?",
+            " updated_at=? WHERE id=?" +
+            (" AND (requested_action IS NULL OR requested_action='')" if only_if_empty else ""),
             (json.dumps(action or {}, separators=(",", ":"))[:8000],
              _now(), _now(), int(job_id)),
         )
         conn.commit()
+        if only_if_empty and not int(getattr(cur, "rowcount", 0) or 0):
+            # Existing pending work already satisfies the progress request.
+            return conn.execute("SELECT id FROM jobs WHERE id=?", (int(job_id),)).fetchone() is not None
         return int(getattr(cur, "rowcount", 0) or 0) == 1
     except Exception:                                  # noqa: BLE001
         # A missing column means ensure_trigger_columns has not run. Refuse

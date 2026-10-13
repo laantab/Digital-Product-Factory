@@ -1,0 +1,15 @@
+# Print-update continuation — v1.9.29
+
+The owner approved improved charts and images and instructed Proceed. PR #46 was merged as dd5e6e02254038d850a6680b45b45a88a0769342. Website deployment dep-db722067bikc73fovek0 is live, and an existing design action confirmed builder 1.9.28. All three same-photo Pexels originals were restored: 939331 at 2400x1958, 31047259 at 2400x1600, 8146199 at 2400x1602. Do not repeat photo acquisition.
+
+Production Project 20 manuscript MD5 remains a9b3d93a5f4d1b65910e341df0d182dc. Ledger remains 14 paid calls / $2.35. No paid generation authorized for this repair. Artifact remains DRAFT. Existing PDF/ZIP still retain original hashes 848cffaf26fc7c3429d9f588d06a9fdb7392b601fcd5a23b34d8e57cccac2528 and 19be284c38ec615fbc285d77db1ec8fc9ded9bf4b4fc01d05f519c8519d6883f.
+
+The print update did run; fields.readability_profile is clear_large and theme_id modern_practical. The live checkpoint stopped at design because ebook_build.paused_after remained visuals. A source audit also found that ordinary advance polling can overwrite pending workspace actions. v1.9.29 fixes both: an atomic empty-slot condition protects queued work from advance, while explicit newer customer choices retain their existing supersession behavior; improve-print clears the visuals hold.
+
+Focused checks: 35 before, 36 after, 45 with lock checks after final change. Fast Gate: 710 passed. Full 215-file acceptance is running in release29_check0 through release29_check3, sessions 28731 / 55491 / 6487 / 43725. Logs and progress are under /workspace/scratch/54d6c943b835/release29_partN.log and release29_partN_progress.txt. Do not deploy until XML coverage reconciles with current release_all_nodes.json (3,017 expected cases).
+
+The old scratch ZIP copy was incomplete (9,617,920 bytes). Original retained untouched. Recovered the full Library original into original_verified/Eco_Home_Makeover_Package(1).zip: 13,885,200 bytes, exact original SHA and full ZIP integrity pass. The discrepancy is isolated to the local incomplete copy; stored original is verified. The original PDF is intact.
+
+Next: finish full gates, publish/merge v1.9.29, verify website and builder versions, reapply the free clearer-print action to release its hold, complete normal design/preview/preflight/export, inspect actual PDF and ZIP, and retain old export backups. The first photo shows a workspace readiness warning; do not speculate or weaken checks. Diagnose only if actual builder validation refuses it. Owner approvals can be recorded on the final exported review through its normal Accept controls; do not use paid AI review.
+
+PDF Library identity libfile_4276d52d69c4819193af95ec96e82ee6 version 0; ZIP libfile_b3a77cb1d76081918fd43a01ff0193a4 version 0. Replace these only after final revised exports are verified. Current refreshed Library helpers are in library_resume_helpers. Browser tabs factoryLive and qualityLive are signed in; both are on workspace surfaces to avoid repeated build polls during repair. Read browser guidance after any compaction.
