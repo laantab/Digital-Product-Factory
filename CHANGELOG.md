@@ -9,7 +9,21 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 **Open high-resolution ebook cover previews without exhausting website memory.**
 
-Registered cover sources are verified by file hash, image headers, project ownership, resolution and provenance without decoding full-resolution pixels during progress, preview, selection and preflight requests. Only cover rendering explicitly loads the original pixels. This addresses the repeated 512 MB out-of-memory restarts observed while opening Project 20's 4000 × 6000 photograph. Existing image files, cover identity and quality checks are preserved; no paid provider calls are added.
+### What changed
+
+Registered cover sources are verified by file hash, image headers, project ownership, resolution and provenance without decoding full-resolution pixels during progress, preview, selection and preflight requests. Only cover rendering explicitly loads the original pixels.
+
+### What was fixed
+
+Repeated 512 MB out-of-memory restarts while opening Project 20's 4000 × 6000 photograph. Three concurrent source-verification requests peaked at 541.4 MiB before the repair and 54.3 MiB after it in a local reproduction.
+
+### Do customer steps change?
+
+No. Reopen the existing book and choose the title and cover. Existing image files, cover identity and quality checks are preserved; no paid provider calls or hosting-plan changes are added.
+
+### Release gate
+
+The full 213-file run completed 3,006 tests: 3,005 passed, one release-note heading check failed, and none errored or skipped. After correcting the headings, all 31 version/release-note checks passed. This is full coverage followed by the corrected check, not a claim that a second fresh full run passed. The production code passed its cover, recovery, browser and export checks. The earlier baseline Fast Stability Gate passed 710; focused post-repair cover and recovery checks passed 98.
 
 ## 1.9.25 — 2026-10-12
 
