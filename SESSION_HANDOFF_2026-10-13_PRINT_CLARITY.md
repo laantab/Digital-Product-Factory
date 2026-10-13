@@ -1,0 +1,13 @@
+# v1.9.28 print clarity — execution workspace disconnected
+
+The owner rejected chart and photograph clarity and asked for clearer fonts. Draft PR #46 contains the code changes and six new regression cases. Production remains v1.9.27; do not merge or deploy until remaining verification completes.
+
+Implemented: larger wrapped chart labels (nominal 13.4 pt at a 468 pt column), double-resolution lossless chart PNGs, 1200 px enlarged review images, an opt-in clean sans-serif profile with 13 pt body and 11 pt captions, same-photo Pexels original restoration up to 2400 px with verified old-file backups. The existing manuscript and accepted cover are preserved. No paid generation is added. Design changes invalidate actual design/preview/preflight rail stages, not only build flags.
+
+A real existing-chapter sample was rendered and inspected: Clearer_Print_Sample.pdf (8 pages), with body fonts verified as embedded LiberationSans at 13 pt. The chart source is 2800 x 1872 pixels. PDF sample and PNG page were saved before workspace disconnection.
+
+Source commit bd9e0a01b7217de193538a5df5c47b5b0f5cab26; source tree 7d0c6df5b5b164af316e872b4b4a653a489eb3b7 matched local source tree. Invite protection: 16 protected tests before and after; local relock plus version/lock checks passed 40. Focused new clarity/builder checks passed 25; corrected release-review plus invite checks passed 37; other focused suites passed 31 and 50. Two existing narrow-chart fixtures were changed to remain real 6-point charts after label enlargement, preserving the unchanged 8-point refusal gate; those corrected checks passed. A later broader run was still in progress when the workspace disconnected; do not count it as passing.
+
+Full acceptance was not verified. The workspace disconnected while starting required checks: exec_command returns 409 environment_offline. A retry also failed. GitHub commit and saved sample are verified durable. Do not claim revised photos or the full-book export have been applied to production.
+
+Next: reconnect an execution workspace, fetch PR #46 including the relock record, verify full acceptance (manifest now 215 files), and inspect both website and builder versions after authorized deployment. Last observed builder job for Project 20 was v1.9.26; verify v1.9.28 before issuing the new higher-resolution/print actions. Then restore the same three licensed photo IDs, apply clearer print, rebuild actual PDF/ZIP through normal validators, inspect output and retain original export backups. Current Project 20 ledger is $2.35 and must not incur paid AI calls. Final human visual approval remains the owner's decision.
