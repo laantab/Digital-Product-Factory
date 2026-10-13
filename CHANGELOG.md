@@ -23,7 +23,7 @@ No. Existing manuscript, photographs and cover choices stay the same. No additio
 
 ### Release gate
 
-Both regressions were reproduced in actual PDF rendering and a real browser before the fixes. Invite-protection checks passed 16 before changes. Post-fix checks and full acceptance are pending.
+Both regressions were reproduced in actual PDF rendering and a real browser before the fixes. Invite-protection checks passed 16 before changes. 37 focused checks, 710 stability checks and all 3,020 unique full-release cases passed without failures, errors or skips. Actual 64-page review recognized 13 visuals with zero hard failures; peak RSS fell from 291.9 to 261.9 MiB (286.3 MiB including app import). Production verification follows deployment.
 
 ## 1.9.29 — 2026-10-13
 
