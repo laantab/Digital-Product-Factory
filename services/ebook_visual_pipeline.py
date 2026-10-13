@@ -1885,17 +1885,21 @@ def _render_steps(aid: dict[str, Any], *, kind: str) -> Image.Image:
         if text:
             items.append(text)
     probe_img, probe = _new_canvas(1400, 200)
-    body = _font(30)
-    # The whole item is printed -- wrapped, never cut short (up to 4 lines).
-    wrapped = [_wrap(probe, item, body, 1130)[:4] or [""] for item in items] or [[""]]
-    line_h = 40
-    rows = [max(92, 28 + len(lines) * line_h) for lines in wrapped]
-    height = 140 + sum(r + 12 for r in rows) + 20
+    body = _font(40)
+    # Wrap the entire item at its actual larger font size; do not truncate.
+    wrapped = [_wrap(probe, item, body, 1130) or [""] for item in items] or [[""]]
+    line_h = 52
+    rows = [max(104, 32 + len(lines) * line_h) for lines in wrapped]
+    title_font = _font(42, bold=True)
+    title_lines = _wrap(probe, str(aid.get("title") or kind.title()), title_font, 1320)
+    header_h = 48 + 54 * max(1, len(title_lines))
+    height = header_h + sum(r + 12 for r in rows) + 20
     img, draw = _new_canvas(1400, height)
-    _draw_title(draw, str(aid.get("title") or kind.title()), 1400)
-    body = _font(30)
-    num_font = _font(30, bold=True)
-    y = 130
+    for index, line in enumerate(title_lines):
+        draw.text((40, 26 + index * 54), line, font=title_font, fill=_CHART_INK)
+    body = _font(40)
+    num_font = _font(40, bold=True)
+    y = header_h
     accent = _pal("secondary") if kind == "timeline" else _pal("primary")
     for i, (lines, row_h) in enumerate(zip(wrapped, rows), start=1):
         draw.rounded_rectangle((40, y, 1360, y + row_h), 10, fill=(255, 255, 255), outline=accent, width=2)
@@ -2386,7 +2390,7 @@ def prepare_interior_photo(image_bytes: bytes) -> Image.Image:
         img = img.convert("RGB")
     elif img.mode == "L":
         img = img.convert("RGB")
-    img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+    img.thumbnail((2400, 2400), Image.Resampling.LANCZOS)
     if min(img.size) < 64:
         raise ValueError("Photograph is too small for an interior visual.")
     return img
@@ -2458,7 +2462,7 @@ def materialize_visual_plan(visual_plan: dict, *, package_id: str) -> dict[str, 
                 _stamp_aid_from_file(aid, path, ctitle=ctitle, cidx=cidx)
                 aid["source"] = str(aid.get("source") or "pexels")
                 continue
-            img = render_aid_png(aid)
+            img = render_aid_png(aid, scale=2.0)
             buf = io.BytesIO()
             img.save(buf, format="PNG", optimize=True)
             payload = buf.getvalue()
@@ -2718,7 +2722,7 @@ def visuals_are_ready(data: dict, *, html: str | None = None) -> bool:
     return validate_visual_readiness(data, html=html).ok
 
 
-def _embed_preview_image(path: str, max_w: int = 1600) -> tuple[str, int, int]:
+def _embed_preview_image(path: str, max_w: int = 2400, *, lossless: bool = False) -> tuple[str, int, int]:
     """JPEG data-URI for PDF/HTML. Stored PNG files and SHAs stay unchanged.
 
     max_w was 720 -- every interior visual and photograph was being
@@ -2736,8 +2740,12 @@ def _embed_preview_image(path: str, max_w: int = 1600) -> tuple[str, int, int]:
                 resample = getattr(Image, "Resampling", Image).LANCZOS
                 img = img.resize((w, h), resample)
             buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=82, optimize=True)
-        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii"), w, h
+            if lossless:
+                img.save(buf, format="PNG", optimize=True)
+            else:
+                img.save(buf, format="JPEG", quality=95, subsampling=0, optimize=True)
+        mime = "png" if lossless else "jpeg"
+        return f"data:image/{mime};base64," + base64.b64encode(buf.getvalue()).decode("ascii"), w, h
     except Exception:
         return "", 0, 0
 
@@ -2787,7 +2795,7 @@ def figure_html(aid: dict[str, Any], *, palette: dict[str, tuple[int, int, int]]
         path = str(aid.get("asset_path") or "")
         if not path or not os.path.isfile(path):
             return ""
-        uri, w, h = _embed_preview_image(path)
+        uri, w, h = _embed_preview_image(path, lossless=not is_photo)
         if not uri:
             return ""
     photo_cls = " ebook-figure-photo" if is_photo else ""
@@ -3524,6 +3532,38 @@ def replace_photo_aid(
         filled["approved"] = False
         filled.pop("content_labels", None)
         filled.pop("inspected_labels", None)
+        aid.clear()
+        aid.update(filled)
+    elif mode_l == "higher-resolution":
+        from services.ebook_pexels import fetch_pexels_photo, download_pexels_original
+
+        photo_id = str(aid.get("photo_id") or "")
+        if str(aid.get("source") or "").lower() != "pexels" or not photo_id.isdigit():
+            raise ValueError("This photograph has no verified Pexels original to restore.")
+        photo = fetch_pexels_photo(photo_id)
+        if str(photo.get("photo_id") or "") != photo_id:
+            raise ValueError("The photo source returned a different photograph.")
+        payload = download_pexels_original(photo)
+        with prepare_interior_photo(payload) as candidate:
+            old_w, old_h = int(aid.get("width") or 0), int(aid.get("height") or 0)
+            if candidate.width <= old_w and candidate.height <= old_h:
+                return data
+            if old_w and old_h and abs(candidate.width / candidate.height - old_w / old_h) > .02:
+                raise ValueError("The original photograph has a different crop; review it before replacement.")
+        old_path = Path(local_visual_path(aid) or "")
+        old_sha = str(aid.get("sha256") or "")
+        if not old_path.is_file() or _sha_bytes(old_path.read_bytes()) != old_sha:
+            raise ValueError("The existing photograph could not be verified for backup.")
+        backup = old_path.parent / "previous" / f"{old_path.stem}-{old_sha}.png"
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        if not backup.exists():
+            backup.write_bytes(old_path.read_bytes())
+        if _sha_bytes(backup.read_bytes()) != old_sha:
+            raise ValueError("The photograph backup could not be verified.")
+        filled = store_interior_photo(aid, payload, package_id=pkg)
+        filled.setdefault("resolution_history", []).append({
+            "path": str(backup), "sha256": old_sha, "width": old_w, "height": old_h,
+        })
         aid.clear()
         aid.update(filled)
     elif mode_l in {"keep", "keep-current"}:

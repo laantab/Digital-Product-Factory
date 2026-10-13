@@ -208,10 +208,12 @@ def text_contrast(img: Image.Image) -> float:
     return (hi + 0.05) / (lo + 0.05)
 
 
-def _thumb(img: Image.Image, width: int = 260) -> bytes:
+def _thumb(img: Image.Image, width: int = 1200) -> bytes:
+    width = min(width, img.width)
     h = max(1, int(img.height * width / max(1, img.width)))
     buf = io.BytesIO()
-    img.convert("RGB").resize((width, h)).save(buf, "JPEG", quality=80)
+    img.convert("RGB").resize((width, h), Image.Resampling.LANCZOS).save(
+        buf, "JPEG", quality=95, subsampling=0)
     return buf.getvalue()
 
 

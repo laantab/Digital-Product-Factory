@@ -66,7 +66,10 @@ def test_the_editor_in_chief_rejects_undersized_labels():
 def test_a_chart_that_passes_at_a_wide_column_is_rejected_at_a_narrow_one():
     aid = CONTAINER_GARDENING[0]
     assert check_diagram_label_size([aid], column_pt=468) == []
-    assert [f.code for f in check_diagram_label_size([aid], column_pt=300)] == ["CHART_TEXT_TOO_SMALL"]
+    # Larger labels now remain readable at 300 pt; a genuinely undersized
+    # placement must still be refused by the unchanged 8 pt floor.
+    assert check_diagram_label_size([aid], column_pt=300) == []
+    assert [f.code for f in check_diagram_label_size([aid], column_pt=260)] == ["CHART_TEXT_TOO_SMALL"]
 
 
 def test_every_step_is_printed_and_no_checkbox_text_leaks():
