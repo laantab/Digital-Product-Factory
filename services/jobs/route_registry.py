@@ -178,8 +178,10 @@ ROUTES: tuple[dict, ...] = (
     _l("/generate-launch-package", "assembles copy from stored fields"),
     _l("/market-research", "a bounded research call, returns promptly"),
 
+    _l("/coloring/build/<int:project_id>/resume", "records recovery and dispatches the existing builder; never generates artwork"),
     _h("/generate-product", "builds a coloring book or puzzle book, including "
-       "its images and its PDF", DEFERRED),
+       "its images and its PDF; coloring requests are dispatched in workflow mode, puzzles remain deferred", DEFERRED,
+       "Coloring requests use the existing leased Workflow builder. Puzzle generators still run inline and remain deferred until their own durable build is implemented."),
     _h("/enhance-ebook", "legacy path: completes an ebook and runs the quality "
        "pipeline over it", DEFERRED, _R_LEGACY),
 

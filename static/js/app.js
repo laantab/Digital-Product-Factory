@@ -554,7 +554,7 @@ function go(view) {
   buildNav();
   if (view === "dashboard") loadDashboard();
   if (view === "saved") { savedListOffset = 0; loadProjects(); }
-  if (view === "factory") buildFactoryTypes();
+  if (view === "factory") { buildFactoryTypes(); restoreColoringBuild(); }
   if (view === "market") initMarket();
   if (view === "planning") { planLineageId = null; initPlanTypes(); loadPlanSources(); }
   if (view === "visual") initVisual();
@@ -4374,9 +4374,62 @@ function _coloringBookPreservedPreviewHtml(d) {
   return `${_coloringBookFullCoverPreviewHtml(d)}${_coloringBookSamplePreviewHtml(d)}`;
 }
 
+let coloringPollActive = false;
+async function restoreColoringBuild() {
+  const pid = localStorage.getItem("factoryColoringBuild");
+  if (!pid || coloringPollActive) return;
+  coloringPollActive = true;
+  try {
+    const state = await api(`/coloring/build/${Number(pid)}/status`);
+    renderProduct(await followColoringBuild(state));
+  } catch (e) {
+    if (!e.coloringBuild) toast("Could not check the saved coloring build. Please reopen Product Factory.", "error");
+  } finally { coloringPollActive = false; }
+}
+
+async function followColoringBuild(state) {
+  const pid = state.project_id;
+  localStorage.setItem("factoryColoringBuild", String(pid));
+  const out = document.getElementById("factoryOutput");
+  while (!state.finished && !state.failed) {
+    out.innerHTML = card(`${spinner(escapeHtml(state.message || "Creating your coloring book…"))}
+      <p class="text-sm mt-3">${Number(state.completed_images || 0)} artwork images saved. You can leave this page and return.</p>`);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    try { state = await api(`/coloring/build/${pid}/status`); }
+    catch (e) {
+      out.innerHTML = card(`<p class="text-sm">Connection interrupted. Your build is saved.</p><button class="btn-primary mt-3" data-coloring-check>Check saved build</button>`);
+      out.querySelector("[data-coloring-check]").onclick = () => restoreColoringBuild();
+      const error = new Error("Connection interrupted");
+      error.coloringBuild = true;
+      throw error;
+    }
+  }
+  if (state.failed) {
+    out.innerHTML = card(`<p class="text-rose-600">${escapeHtml(state.message)}</p>
+      <p class="text-sm mt-3">Your settings and completed artwork are saved.</p>
+      <button class="btn-primary mt-3" data-coloring-resume>Continue saved build</button>`);
+    out.querySelector("[data-coloring-resume]").onclick = async () => {
+      try {
+        const next = await api(`/coloring/build/${pid}/resume`, {method: "POST", body: "{}"});
+        renderProduct(await followColoringBuild(next));
+      } catch (e) { toast(e.message || "Could not check the saved build", "error"); }
+    };
+    const error = new Error(state.message);
+    error.coloringBuild = true;
+    throw error;
+  }
+  localStorage.removeItem("factoryColoringBuild");
+  const result = state.result;
+  selectFactoryType("coloring_book");
+  _restoreEbookFactoryFields(result);
+  _coloringBookSetupForm();
+  return result;
+}
+
 async function _runColoringBookStage(d, nextStage, approvals) {
   const fields = collectFactoryFields();
   fields.package_id = d.package_id || (d.fields && d.fields.package_id) || "";
+  if (d._project_id != null) fields._coloring_source_project_id = d._project_id;
   fields.generation_stage = nextStage;
   fields.character_approved = approvals.character_approved ? "true" : "false";
   fields.sample_approved = approvals.sample_approved ? "true" : "false";
@@ -4398,18 +4451,20 @@ async function _runColoringBookStage(d, nextStage, approvals) {
   );
   setBusy("factoryBtn", true);
   try {
-    const data = await api("/generate-product", {
+    let data = await api("/generate-product", {
       method: "POST",
       body: JSON.stringify({ product_type: "coloring_book", fields }),
     });
+    if (data.coloring_build) data = await followColoringBuild(data);
     data.stage = "product_generated";
-    if (d._project_id != null) data._project_id = d._project_id;
+    if (d._project_id != null && data._project_id == null) data._project_id = d._project_id;
     renderProduct(data);
     scrollNextStepsPanelIntoView(data);
     if (_coloringBookCustomerReady(data)) {
       _showWorkflowSaveDialog(data, () => _doWorkflowSave(data));
     }
   } catch (e) {
+    if (e.coloringBuild) return;
     out.innerHTML = card(
       `<p class="text-rose-600 text-sm font-medium mb-2">${escapeHtml(e.message)}</p>
        <p class="text-sm text-slate-600 mb-2">What failed: ${escapeHtml(nextStage === "full" ? "finishing interior pages" : nextStage === "sample_interior" ? "creating the sample page" : "creating the cover preview")}.</p>
@@ -6264,13 +6319,14 @@ async function runProduct() {
   out.innerHTML = spinner(waitNote);
   setBusy("factoryBtn", true);
   try {
-    const data = await api("/generate-product", {
+    let data = await api("/generate-product", {
       method: "POST",
       body: JSON.stringify({ product_type: factoryType, fields }),
     });
+    if (data.coloring_build) data = await followColoringBuild(data);
     data.stage = "product_generated";
     if (wasWorkflow) {
-      data._project_id = pendingProductProjectId; // advance the plan record into a product
+      if (data._project_id == null) data._project_id = pendingProductProjectId; // retain the durable coloring project
       pendingProductProjectId = null;
       // Plan id is already present; keep Next Steps on pre-save until consent.
       if (data._project_id != null) data._workflow_save_pending = true;
@@ -6287,6 +6343,7 @@ async function runProduct() {
       _showWorkflowSaveDialog(data, () => _doWorkflowSave(data));
     }
   } catch (e) {
+    if (e.coloringBuild) return;
     // GENERATE-ERROR MESSAGE REPAIR (2026-09-12): this subtext used to always
     // say "Fix any missing fields above" -- correct for a genuine validation
     // error, but wrong and misleading for a post-generation QA/regeneration
@@ -6294,9 +6351,9 @@ async function runProduct() {
     // where nothing above is missing at all. Pick the wording that matches
     // what actually failed instead of assuming every failure is a field.
     const msg = String(e.message || "");
-    const isQaOrRegenerationFailure = /QA (failed|blocked)|violates contract|auto-correction/i.test(msg);
+    const isQaOrRegenerationFailure = /QA (failed|blocked)|violates contract|auto-correction|50[0234]|interrupted|artwork|saved|background/i.test(msg);
     const guidance = isQaOrRegenerationFailure
-      ? "This wasn't a problem with the fields above — generation itself needs another attempt."
+      ? "The build was interrupted. Completed artwork is preserved. Check the saved build before starting another request."
       : "Fix any missing fields above, then try Generate again.";
     out.innerHTML = card(
       `<p class="text-rose-600 text-sm font-medium mb-2">${escapeHtml(e.message)}</p>

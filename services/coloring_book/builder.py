@@ -749,7 +749,17 @@ def _get_generic_topics(
     return base[:page_count] if len(base) >= page_count else (base * ((page_count // len(base)) + 1))[:page_count]
 
 
-def _generate_line_art_image(
+def _generate_line_art_image(prompt, out_path, **kwargs):
+    from services.coloring_book.background import image_call
+    return image_call(out_path, lambda: _generate_line_art_image_inline(prompt, out_path, **kwargs))
+
+
+def _generate_cover_image(prompt, out_path, **kwargs):
+    from services.coloring_book.background import image_call
+    return image_call(out_path, lambda: _generate_cover_image_inline(prompt, out_path, **kwargs))
+
+
+def _generate_line_art_image_inline(
     prompt: str,
     out_path: str,
     *,
@@ -862,7 +872,7 @@ def _prepare_interior_print_assets(img_dir: str, pages: list) -> list[str]:
     return prepared
 
 
-def _generate_cover_image(prompt: str, out_path: str, *, force: bool = False) -> bool:
+def _generate_cover_image_inline(prompt: str, out_path: str, *, force: bool = False) -> bool:
     """Generate a full-color cover image (not line art)."""
     prompt = str(prompt or "").strip()
     if force and os.path.isfile(out_path):
@@ -1142,10 +1152,16 @@ def build_coloring_book(
     else:
         # Try AI planner first; fall back to local deterministic planner
         try:
-            raw = chat_json(system=system, user=user, max_completion_tokens=4000)
+            from services.coloring_book.background import planner, ColoringCheckpointError
+            raw = planner()
+            if raw is None:
+                raw = chat_json(system=system, user=user, max_completion_tokens=4000)
+                planner(raw)
             pages_raw = _parse_coloring_book_response(raw, page_count)
             if isinstance(raw, dict) and raw.get("cover_prompt"):
                 cover_prompt_final = str(raw.get("cover_prompt") or cover_prompt_final)
+        except ColoringCheckpointError:
+            raise
         except Exception as exc:
             ai_failed = True
             if "AI is not configured" in str(exc) or "not configured" in str(exc):
