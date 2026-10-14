@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.39 — 2026-10-14
+
+**Build coloring books on the background builder and preserve finished artwork.**
+
+### What changed
+
+In Workflow mode, coloring generation records a durable request and returns promptly. The existing builder creates the artwork, checks quality, and prepares PDF/ZIP downloads. Progress survives closing and reopening Product Factory. Concurrent repeat requests attach to the same recorded build.
+
+### What was fixed
+
+A live coloring request exhausted the website's 512 MiB memory limit. Heavy generation and packaging now run on the existing builder. Each source image is verified in shared storage before the next artwork request. Saved prompts and artwork are reused on recovery; uncertain interrupted image calls stop for review instead of automatically charging again. Local print-layout measurements use exact pixel histograms with explicitly released image buffers. Downloading a completed background package reuses its exports rather than rendering on the website again.
+
+### Do the steps change?
+
+Click Generate Product and watch the saved progress. Existing cover/sample approval stages are retained. Completed products still offer PDF and ZIP. The website rejects a count that would silently be expanded beyond the customer's entered page count before starting paid artwork. Local inline mode and legacy saved products remain supported.
+
+### Release gate
+
+Provider fixtures exercise real generated PDF/ZIP files, verified storage reads after a simulated container replacement, Save/reopen preservation, concurrent duplicate protection, interrupted-call refusal, and print-processing memory limits. No paid provider calls or new production books are used for verification.
+
 ## 1.9.38 — 2026-10-14
 
 **Build a recommended ebook from one button, or choose a style for your own.**

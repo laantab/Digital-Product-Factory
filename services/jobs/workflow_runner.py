@@ -84,6 +84,11 @@ def run_build(project_id: int, *, budget_seconds: int | None = None,
     book or duplicates an export.
     """
     project_id = int(project_id)
+    import database
+    project = database.get_project(project_id)
+    if project and isinstance((project.get("data") or {}).get("coloring_build"), dict):
+        from services.coloring_book.background import run_build as run_coloring
+        return run_coloring(project_id)
     budget = int(budget_seconds or mode.task_timeout_seconds())
     deadline = time.monotonic() + max(1, budget - DEADLINE_MARGIN_SECONDS)
     owner = store.executor_id()

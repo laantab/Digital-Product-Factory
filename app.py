@@ -503,6 +503,7 @@ def planner_cover_photo_select_route():
 
 @app.route("/")
 def index():
+    _coloring_customer()  # establish the signed request owner before the first build click
     admin_on = os.environ.get("ADMIN_MODE", "").strip().lower() in {"1", "true", "yes"}
     # Cache-bust the browser bundle on its own modification time. Without this
     # a customer can keep running yesterday's JavaScript against today's
@@ -2887,6 +2888,37 @@ def _start_ebook_workspace_build(fields: dict):
     )
 
 
+def _coloring_customer():
+    from flask import session
+    import uuid
+    if not session.get("coloring_customer"):
+        session["coloring_customer"] = uuid.uuid4().hex
+    return str(session["coloring_customer"])
+
+
+@app.get("/coloring/build/<int:project_id>/status")
+def coloring_build_status_route(project_id):
+    from services.coloring_book.background import status
+    try:
+        return jsonify(status(project_id, _coloring_customer()))
+    except ValueError as exc:
+        return _error(str(exc), 404)
+
+
+@app.post("/coloring/build/<int:project_id>/resume")
+def coloring_build_resume_route(project_id):
+    from services.coloring_book.background import status, _change
+    from services.jobs.dispatch import hand_off
+    try:
+        current = status(project_id, _coloring_customer())
+        if not current["finished"]:
+            _change(project_id, status="queued", message="Continuing from saved artwork.")
+            hand_off(project_id, reset_attempts=True)
+        return jsonify(status(project_id, _coloring_customer()))
+    except ValueError as exc:
+        return _error(str(exc), 404)
+
+
 @app.post("/generate-product")
 def generate_product_route():
     body = request.get_json(silent=True) or {}
@@ -2929,6 +2961,16 @@ def generate_product_route():
                 )
             except ArtifactStateError as exc:
                 return _error(str(exc), 409)
+    from services.jobs import mode as job_mode
+    if _requested == "coloring_book" and job_mode.is_workflow_mode():
+        from services.coloring_book.background import start as start_coloring
+        try:
+            return jsonify(start_coloring(fields, _coloring_customer()))
+        except ValueError as exc:
+            return _error(str(exc), 400)
+        except Exception as exc:
+            return _customer_error(exc, 500, log="coloring build start failed")
+
     try:
         result = generate_product(_requested, fields)
         # Stamp canonical digests + revision so Preview/Save/Export share one artifact.
@@ -3982,6 +4024,15 @@ def export_product_route():
     try:
         project = _load_product_project(body)
         data = project.get("data") or {}
+        if isinstance(data.get("coloring_build"), dict):
+            if data["coloring_build"].get("status") != "complete" or not data.get("export_ready"):
+                raise ValueError("Your coloring book is still being built or reviewed.")
+            assert_packaging_allowed(data)
+            verify_artifact_identity(data)
+            exports = data.get("product_exports") or {}
+            if not (exports.get("files", {}).get("pdf") and exports.get("files", {}).get("zip")):
+                raise ValueError("The completed coloring package is unavailable.")
+            return jsonify({"package_id": data["package_id"], "exports": exports, "export_ready": True})
         if data.get("customer_keep") is True:
             from services.customer_keep_exports import reuse_existing_keep_export
 
@@ -5086,6 +5137,13 @@ def update_project_route(project_id: int):
                 )
             except ValueError as exc:
                 return _error(str(exc), 400)
+
+    existing_coloring = database.get_project(project_id)
+    old_coloring = (existing_coloring or {}).get("data") or {}
+    if isinstance(old_coloring.get("coloring_build"), dict) and isinstance(body.get("data"), dict):
+        for key in ("coloring_build", "pdf_bytes", "product_exports", "export_files", "export_ready", "export_package_id", "pdf_sha256"):
+            if key in old_coloring:
+                body["data"][key] = old_coloring[key]
 
     project = database.update_project(
         project_id,

@@ -5,7 +5,7 @@ import os
 import shutil
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 # US Letter coloring area ≈ 7.5" × 10" at 300 DPI
 PRINT_INTERIOR_SIZE = (2250, 3000)
@@ -14,44 +14,37 @@ PRINT_DPI = (300, 300)
 
 def ink_bounding_box(im: Image.Image, *, white_threshold: int = 240) -> tuple[int, int, int, int]:
     """Return inclusive ink bbox (min_x, min_y, max_x, max_y) for non-white pixels."""
-    rgb = im.convert("RGB")
-    w, h = rgb.size
-    px = rgb.load()
-    min_x, min_y, max_x, max_y = w, h, -1, -1
-    for y in range(h):
-        for x in range(w):
-            r, g, b = px[x, y]
-            if r <= white_threshold or g <= white_threshold or b <= white_threshold:
-                if x < min_x:
-                    min_x = x
-                if y < min_y:
-                    min_y = y
-                if x > max_x:
-                    max_x = x
-                if y > max_y:
-                    max_y = y
-    if max_x < 0:
-        return 0, 0, w - 1, h - 1
-    return min_x, min_y, max_x, max_y
+    with im.convert("RGB") as rgb:
+        channels = rgb.split()
+        try:
+            with ImageChops.darker(channels[0], channels[1]) as rg:
+                with ImageChops.darker(rg, channels[2]) as minimum:
+                    with minimum.point([255 if i <= white_threshold else 0 for i in range(256)]) as mask:
+                        box = mask.getbbox()
+            if box is None:
+                return 0, 0, rgb.width - 1, rgb.height - 1
+            return box[0], box[1], box[2] - 1, box[3] - 1
+        finally:
+            for channel in channels:
+                channel.close()
 
 
 def measure_line_art_layout(path: str, *, white_threshold: int = 240) -> dict[str, Any]:
     """Exact edge-contact / bbox / white / black / midtone measurements."""
-    im = Image.open(path).convert("RGB")
-    w, h = im.size
-    px = im.load()
-    min_x, min_y, max_x, max_y = ink_bounding_box(im, white_threshold=white_threshold)
-    total = w * h
-    white = black = mid = 0
-    for y in range(h):
-        for x in range(w):
-            r, g, b = px[x, y]
-            if r > 240 and g > 240 and b > 240:
-                white += 1
-            elif r < 40 and g < 40 and b < 40:
-                black += 1
-            else:
-                mid += 1
+    with Image.open(path) as source, source.convert("RGB") as im:
+        w, h = im.size
+        min_x, min_y, max_x, max_y = ink_bounding_box(im, white_threshold=white_threshold)
+        total = w * h
+        channels = im.split()
+        try:
+            with ImageChops.darker(channels[0], channels[1]) as rg, ImageChops.darker(rg, channels[2]) as minimum:
+                white = sum(minimum.histogram()[241:])
+            with ImageChops.lighter(channels[0], channels[1]) as rg, ImageChops.lighter(rg, channels[2]) as maximum:
+                black = sum(maximum.histogram()[:40])
+        finally:
+            for channel in channels:
+                channel.close()
+        mid = total - white - black
     bw = max(0, max_x - min_x + 1)
     bh = max(0, max_y - min_y + 1)
     margin = max(int(min(w, h) * 0.03), 8)
@@ -146,6 +139,10 @@ def fit_artwork_to_safe_margins(
     canvas.paste(resized, (x, y))
     os.makedirs(os.path.dirname(dst_path) or ".", exist_ok=True)
     canvas.save(dst_path, format="PNG")
+    src.close()
+    art.close()
+    resized.close()
+    canvas.close()
     metrics = measure_line_art_layout(dst_path)
     metrics["scale"] = round(nw / float(aw), 6)
     metrics["source"] = src_path
@@ -187,7 +184,8 @@ def prepare_print_interior_300dpi(
     else:
         fit_src = src_path
 
-    src_w = Image.open(fit_src).size[0]
+    with Image.open(fit_src) as source:
+        src_w = source.width
     # Match QA 3% safe-margin floor on the print canvas (+2px cushion).
     qa_margin = max(int(min(canvas_size) * 0.03), 8)
     margin = qa_margin + 2
@@ -201,8 +199,8 @@ def prepare_print_interior_300dpi(
         target_coverage=0.89,
     )
     # Re-save with embedded DPI metadata (Pillow).
-    im = Image.open(dst_path)
-    im.save(dst_path, format="PNG", dpi=dpi)
+    with Image.open(dst_path) as im:
+        im.save(dst_path, format="PNG", dpi=dpi)
     metrics["dpi"] = {"x": dpi[0], "y": dpi[1]}
     metrics["print_canvas"] = {"width": canvas_size[0], "height": canvas_size[1]}
     metrics["original_path"] = original_path or ""
