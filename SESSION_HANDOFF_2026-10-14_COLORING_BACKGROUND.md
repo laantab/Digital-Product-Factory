@@ -36,5 +36,21 @@ uses PeakWorkingSetSize), without raising its 256 MiB limit.
 Focused background cases: 11 passed. Existing coloring/workflow/route checks:
 88 passed. Actual browser refresh-to-PDF/ZIP fixture: passed. Provider output is
 local fixture artwork; no live paid calls or new production books were used.
-Fast/full final release gates and deployment are pending. Do not claim released
-until website deployment and builder deployment have been verified.
+Final Fast Gate: 726 passed. Full release: exactly 3077 unique cases, no missing
+or duplicate nodes, zero failures/errors/skips. The unchanged official release
+runner's compile, JS, manifest and JUnit checks passed with isolated partitions.
+Original before/after reports remain under /workspace/scratch/14eabf73e52d.
+Remote verified core: 40e15763d6163aac5740528c13e12417c1f904a9; tree
+579ba5031b1ebc8be5b6a677f4eaa83f78b4f887 matches the tested local core.
+Word Search, Coloring Book, Crossword and invite protection are relocked at this
+real verified commit. Final metadata checks and deployment remain pending.
+PR57: https://github.com/laantab/Digital-Product-Factory/pull/57.
+Both Render services are on main with On Commit auto-deploy (owner screenshots).
+Do not claim live until website/builder deployments have been verified.
+
+## Original failed production attempt
+
+No new production generation, resume, or regeneration was performed for checks.
+The earlier failed synchronous attempt did not record a durable build; recovering
+its artwork has not been proven. Do not claim the original sea-creatures book is
+finished or that its previous provider charges have been recovered.
