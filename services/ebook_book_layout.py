@@ -467,6 +467,9 @@ def _style_readable_table(
     table["width"] = "100%"
     table["cellpadding"] = padding
     table["cellspacing"] = "0"
+    # ReportLab repeats this header on continuation pages and refuses a
+    # split that leaves the header alone at the bottom of a page.
+    table["repeat"] = "1"
     table["border"] = border
     if border != "0":
         # xhtml2pdf takes the rule colour from the attribute, never from CSS

@@ -215,5 +215,29 @@ class EbookInteriorLayoutTests(unittest.TestCase):
         self.assertRegex(pdf_text, r"Chapter\s+1\s+What This Business")
 
 
+class TableContinuationTests(unittest.TestCase):
+    def test_every_page_with_table_rows_keeps_the_column_headers(self):
+        import fitz
+        from services.ebook_design_system import PROFESSIONAL_THEME_IDS
+
+        md = "## 1. Weekly Actions\n\n| Action | Schedule |\n| --- | --- |\n"
+        md += "\n".join(f"| Task {i:03d} | Week {i:03d} |" for i in range(80))
+        for theme_id in PROFESSIONAL_THEME_IDS:
+            with self.subTest(theme=theme_id):
+                html = render_designed_ebook_html(
+                    title="Weekly Actions", subtitle="", author="Template Review",
+                    manuscript_md=md,
+                    design=build_ebook_design(theme_id=theme_id, manuscript_digest="table-pages"),
+                    visual_plan=None, include_title_page=False,
+                )
+                with fitz.open(stream=_html_to_pdf_xhtml2pdf(html), filetype="pdf") as doc:
+                    pages = [p.get_text() for p in doc if "Task " in p.get_text()]
+                self.assertGreaterEqual(len(pages), 2, "fixture must cross a page boundary")
+                for text in pages:
+                    self.assertIn("Action", text)
+                    self.assertIn("Schedule", text)
+                self.assertIn("Task 079", "\n".join(pages))
+
+
 if __name__ == "__main__":
     unittest.main()

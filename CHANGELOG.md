@@ -5,6 +5,14 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.37 — 2026-10-14
+
+**Keep ebook table headings with their rows across page breaks.**
+
+All six ebook templates now repeat column headings on continuation pages. A page break cannot strand a table heading by itself at the bottom of the preceding page. The change uses the PDF renderer's native repeated-header support and preserves the manuscript, pictures, and chosen template.
+
+Validation includes a real 80-row table rendered under every ebook template, requiring column headings on every page containing table rows and preserving the final row.
+
 ## 1.9.36 — 2026-10-14
 
 **Recover the registered original when an ebook's local picture copy changed.**
