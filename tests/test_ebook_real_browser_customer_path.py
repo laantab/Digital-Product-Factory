@@ -390,42 +390,13 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         page.wait_for_selector("[data-ebook-build-bar]", timeout=30000)
         self._assert_screen_is_customer_safe(page, where="after refresh")
 
-        # 5 v1.9.6: the build stops ONCE for the pictures. One sheet shows
-        # every chosen picture with its chapter and source; the customer
-        # presses Approve All Visuals once, and the build then reaches 100%
-        # with no further production clicks.
-        page.wait_for_selector("[data-ebook-picture-review]", timeout=600000)
-        self._assert_screen_is_customer_safe(page, where="picture sheet",
-                                             allow=("Approve All Visuals",),
-                                             allow_selectors=self.PICTURE_CREDIT_SELECTORS)
-        tiles = page.locator("[data-ebook-contact-sheet] [data-pic-tile]")
-        self.assertGreater(tiles.count(), 0, "the picture sheet shows no pictures")
-        for i in range(tiles.count()):
-            self.assertIn("Chapter", tiles.nth(i).inner_text(),
-                          "a picture on the sheet does not say which chapter it is for")
-        # A picture the checker refused is replaced from the sheet, one
-        # tile at a time, exactly as a customer would. Nothing is approved
-        # until every chapter has a picture.
-        replaced = 0
-        for _ in range(40):
-            if page.locator("[data-ebook-approve-pictures]:not([disabled])").count():
-                break
-            needs = page.locator("[data-pic-tile]:has-text('still needs a picture') [data-pic-replace]").first
-            if not needs.count():
-                break
-            needs.click()
-            replaced += 1
-            page.wait_for_selector("[data-pic-replace]:not([disabled])", timeout=60000)
-        approve_btn = page.locator("[data-ebook-approve-pictures]")
-        expect(approve_btn).to_be_enabled(timeout=30000)
-        self._assert_screen_is_customer_safe(page, where="picture sheet after replacing",
-                                             allow=("Approve All Visuals",),
-                                             allow_selectors=self.PICTURE_CREDIT_SELECTORS)
-        advances_before_approval = len(advances)
-        approve_btn.click()
+        # Owner-approved custom creation now delegates production after the
+        # form's template choice. No picture or cover decision interrupts it.
+        # Legacy projects' manual review is still exercised by the dedicated
+        # one-click-picture-approval suite.
         page.wait_for_selector("[data-ebook-build-done]", timeout=600000)
-        self.assertGreater(len(advances), advances_before_approval,
-                           "the build did not carry on by itself after Approve All Visuals")
+        self.assertEqual(page.locator("[data-ebook-picture-review]").count(), 0)
+        self.assertEqual(page.locator("[data-ebook-cover-choice]").count(), 0)
         done_text = self._screen(page)
         self.assertIn("Your ebook is ready", done_text)
         self.assertIn("100%", done_text)
@@ -447,6 +418,9 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
         # 7 The finished project is a DRAFT until the customer approves it.
         opened = page.evaluate(f"fetch('/projects/{pid}').then(r => r.json())")
         self.assertEqual((opened.get("data") or {}).get("artifact_state"), "DRAFT")
+        self.assertEqual(opened["data"]["fields"]["ebook_creation_mode"], "custom")
+        self.assertEqual(opened["data"]["ebook_design"]["theme_id"], "studio_clean")
+        self.assertEqual(opened["data"]["ebook_workspace"]["rail"]["visuals"]["status"], "approved")
 
         # The five finished actions the customer needs are all present.
         for selector, label in (
