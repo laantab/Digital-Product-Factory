@@ -169,6 +169,12 @@ def _visual_relpath(path) -> str:
     return ""
 
 
+def _visual_file_matches(path: str, aid: dict | None) -> bool:
+    expected = str((aid or {}).get("sha256") or "").lower()
+    return bool(path and os.path.isfile(path) and
+                (not expected or _file_sha(path).lower() == expected))
+
+
 def local_visual_path(aid: dict | None, *, project_id: int = 0) -> str:
     """A path on THIS machine holding the picture, fetched from storage if needed.
 
@@ -179,13 +185,13 @@ def local_visual_path(aid: dict | None, *, project_id: int = 0) -> str:
     if not stored:
         return ""
     try:
-        if os.path.isfile(stored):
+        if _visual_file_matches(stored, aid):
             return stored
         rel = _visual_relpath(stored)
         if not rel:
             return stored
         local = os.path.join(EXPORTS_DIR, *rel.split("/"))
-        if os.path.isfile(local):
+        if _visual_file_matches(local, aid):
             return local
         pid = int(project_id or 0) or _publish_project_id(aid)
         if pid <= 0:
@@ -195,9 +201,14 @@ def local_visual_path(aid: dict | None, *, project_id: int = 0) -> str:
         payload = read_export_or_legacy(pid, rel)
         if not payload:
             return stored
+        expected = str((aid or {}).get("sha256") or "").lower()
+        if expected and hashlib.sha256(payload).hexdigest() != expected:
+            return stored
         os.makedirs(os.path.dirname(local), exist_ok=True)
-        with open(local, "wb") as fh:
+        temporary = local + ".recover-tmp"
+        with open(temporary, "wb") as fh:
             fh.write(payload)
+        os.replace(temporary, local)
         return local
     except Exception:                                  # noqa: BLE001
         import logging
@@ -228,10 +239,10 @@ def localize_visual_plan(data: dict, *, project_id: int = 0) -> int:
                 if not isinstance(aid, dict):
                     continue
                 stored = str(aid.get("asset_path") or "")
-                if not stored or os.path.isfile(stored):
+                if not stored or _visual_file_matches(stored, aid):
                     continue
                 local = local_visual_path(aid, project_id=pid)
-                if local and local != stored and os.path.isfile(local):
+                if local and _visual_file_matches(local, aid):
                     aid["asset_path"] = local
                     moved += 1
     except Exception:                                  # noqa: BLE001

@@ -5,6 +5,26 @@ The version shown in the bottom-left of the app matches the newest entry here.
 
 ---
 
+## 1.9.36 — 2026-10-14
+
+**Recover the registered original when an ebook's local picture copy changed.**
+
+### What changed
+
+Picture localization now checks an existing copy against the visual plan's SHA. When it differs, recovery uses verified storage bytes only if they match that same planned SHA, then replaces the local cache atomically. Final readiness reports an actual asset-validation failure before a secondary inferred chapter requirement.
+
+### What was fixed
+
+A packaged or changed chart copy on the website could be mistaken for the registered source merely because its file existed. This blocked the final save of an otherwise reviewed ebook and hid the real cache mismatch behind a missing demonstration message.
+
+### Do customer steps change?
+
+No. No generation, manuscript, PDF, ZIP, storage originals, or review decisions are changed. Unavailable or mismatched stored originals still block approval.
+
+### Release gate
+
+Regression checks cover a changed website cache, an already-local changed path, and refusal to replace a cache with bytes that differ from the planned SHA. Existing cross-machine recovery, reviewed-workspace, and customer-save checks remain required, followed by the full release gate.
+
 ## 1.9.35 — 2026-10-13
 
 **Keep the completed workspace's approved visual plan through final save.**

@@ -87,6 +87,46 @@ class _StorageCase(unittest.TestCase):
 
 class PicturesTravelThroughStorageTests(_StorageCase):
 
+    def test_changed_website_copy_is_restored_from_the_registered_original(self):
+        data = self._build_on_builder()
+        aid = required_aids(data["visual_plan"])[0]
+        original = Path(aid["asset_path"]).read_bytes()
+        registered = dict(self.driver.objects)
+        local = Path(self.website_root) / vp._visual_relpath(aid["asset_path"])
+        local.parent.mkdir(parents=True, exist_ok=True)
+        local.write_bytes(b"a packaged derivative, not the registered original")
+        shutil.rmtree(self.builder_root)
+        with self._on(self.website_root):
+            vp.localize_visual_plan(data, project_id=self.pid)
+        self.assertEqual(Path(aid["asset_path"]).read_bytes(), original)
+        self.assertEqual(self.driver.objects, registered)
+
+    def test_changed_copy_is_recovered_even_when_the_path_is_already_local(self):
+        data = self._build_on_builder()
+        aid = required_aids(data["visual_plan"])[0]
+        original = Path(aid["asset_path"]).read_bytes()
+        local = Path(self.website_root) / vp._visual_relpath(aid["asset_path"])
+        local.parent.mkdir(parents=True, exist_ok=True)
+        local.write_bytes(b"changed cache")
+        aid["asset_path"] = str(local)
+        with self._on(self.website_root):
+            vp.localize_visual_plan(data, project_id=self.pid)
+        self.assertEqual(local.read_bytes(), original)
+        self.assertEqual(aid["asset_path"], str(local))
+
+    def test_recovery_refuses_bytes_that_do_not_match_the_plan_hash(self):
+        data = self._build_on_builder()
+        aid = required_aids(data["visual_plan"])[0]
+        local = Path(self.website_root) / vp._visual_relpath(aid["asset_path"])
+        local.parent.mkdir(parents=True, exist_ok=True)
+        local.write_bytes(b"changed cache")
+        aid["asset_path"] = str(local)
+        aid["sha256"] = "0" * 64
+        with self._on(self.website_root):
+            self.assertEqual(vp.local_visual_path(aid, project_id=self.pid), str(local))
+            vp.localize_visual_plan(data, project_id=self.pid)
+        self.assertEqual(local.read_bytes(), b"changed cache")
+
     def test_pictures_made_inside_the_scope_are_published(self):
         data = self._build_on_builder()
         made = [a for a in required_aids(data["visual_plan"])

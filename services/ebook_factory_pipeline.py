@@ -1658,6 +1658,8 @@ def ebook_project_readiness(data: dict | None) -> dict[str, Any]:
         next_action = unresolved_requirement_label
     elif not approved_cover:
         next_action = NEXT_CHOOSE_COVER
+    if workspace_asset_error:
+        next_action = workspace_asset_error
     manuscript = str(data.get("content") or data.get("ebook") or "")
     failures = manuscript_quality_failures(manuscript, data.get("quality_result"))
     status_label = STATUS_EBOOK_READY if ready else STATUS_NEEDS_CORRECTION
