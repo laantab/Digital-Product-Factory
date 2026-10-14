@@ -412,12 +412,15 @@ class EbookBuildEntryPointTests(unittest.TestCase):
         for name, start, split_on, end in self.EBOOK_ENTRY_POINTS:
             with self.subTest(entry_point=name):
                 branch = self._entry_branch(start, split_on, end)
-                self.assertIn(
-                    '"/ebook-workspace"', branch,
-                    f"{name}() no longer creates an Ebook Project workspace")
-                self.assertIn(
-                    "openEbookWorkspace(", branch,
-                    f"{name}() creates a workspace but never opens it")
+                if name == "buildThisProduct":
+                    # The owner's approved recommendation path must start
+                    # production from this click, not open an unstarted draft.
+                    self.assertIn("await startEbookBuild({", branch)
+                    self.assertIn('ebook_creation_mode: "ai_recommended"', branch)
+                    self.assertNotIn("openEbookWorkspace(", branch)
+                else:
+                    self.assertIn('"/ebook-workspace"', branch)
+                    self.assertIn("openEbookWorkspace(", branch)
 
     def test_no_ebook_entry_point_uses_the_legacy_builder(self):
         """services/ebook.py: 'LEGACY ... Cannot create Export Ready ebooks.'
