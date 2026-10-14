@@ -71,3 +71,4 @@ def test_review_does_not_excuse_a_changed_or_missing_asset(reviewed_book, monkey
     result = ebook_project_readiness(reviewed_book)
     assert not result['ebook_ready']
     assert 'Original image hash changed.' in result['completion_blockers']
+    assert result['next_action'] == 'Original image hash changed.'
