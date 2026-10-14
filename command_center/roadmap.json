@@ -1,6 +1,6 @@
 {
   "schema_note": "Digital Product Factory Pro Competitive Upgrade Roadmap, established 2026-09-12. This is the durable strategic source of truth so a future Claude session cannot lose the strategic direction: quality/reliability/design/publishing/simplicity, NOT more product breadth, until these six upgrades are complete. Status values: NOT_STARTED, IN_PROGRESS, BLOCKED, VERIFYING, COMPLETE_LOCKED. Do not reorder upgrades without a real dependency reason (see each entry's `dependencies`). Do not begin an upgrade after the current one unless the owner explicitly approves skipping ahead.",
-  "updated_at": "2026-09-17T14:00:00-07:00",
+  "updated_at": "2026-10-14T16:44:00Z",
   "vision": "A beginner should go from IDEA -> MARKET OPPORTUNITY -> PRODUCT -> PROFESSIONAL DESIGN -> COVER -> VISUALS -> QA -> PREVIEW -> APPROVAL -> MULTIPLE EXPORT FORMATS -> READY-TO-SELL PACKAGE with as little technical knowledge and manual work as possible. The customer experience stays: Create -> Preview -> Approve -> Download. Digital Product Factory Pro is not a Designrr clone -- it is a complete AI-assisted digital-product production system competing on: Factory Market Advantage before creation, multiple product types, one-click production, free/local resources first with controlled paid-AI fallback, automatic QA, professional covers and interiors, protected working generators, automatic packaging, ready-to-sell outputs, and minimal technical interaction.",
   "standing_priority": "QUALITY -> RELIABILITY -> DESIGN -> PUBLISHING -> SIMPLICITY, not additional product types, until all six upgrades are COMPLETE_LOCKED. Do not add a new product generator unless the owner explicitly approves one.",
   "current_upgrade": "upgrade_1_cover_system",
@@ -51,7 +51,7 @@
       "objective": "A professional, reusable interior theme/template system controlling typography, headings/subheadings, colors, chapter openers, section breaks, callout boxes, quote blocks, checklists, tables, margins, spacing, image placement, TOC styling, and page furniture -- so a customer gets a professionally designed product by picking a theme, not by manually designing every page.",
       "why_it_matters_competitively": "Designrr's core strength is templated interior design. Matching or exceeding that with automated, theme-driven layout (rather than one-size-fits-all output) is required for the Factory to be perceived as equally or more professional, without asking beginners to make design decisions.",
       "current_foundation": "Six professional ebook themes exist in services/ebook_design_system.py, with customer theme staging and real designed PDF export. Project 20 exported with a named theme. Planner themes also exist.",
-      "gap_remaining": "Cross-product theme-family coverage and all-family live acceptance remain unverified; do not claim COMPLETE_LOCKED.",
+      "gap_remaining": "Cross-product theme-family coverage remains unverified. Ebook template rendering and the live six-template chooser are verified; do not claim the entire cross-product upgrade COMPLETE_LOCKED.",
       "dependencies": [
         "upgrade_1_cover_system"
       ],
@@ -61,7 +61,7 @@
         "faith_planner",
         "budget_planner"
       ],
-      "function_lock_impact": "Not yet started -- to be determined during Phase A (read-only audit) of this upgrade. Ebook is PROTECTED; whichever shared files a theme system introduces must be declared as dependencies for every affected function before implementation, per standing Function Lock discipline.",
+      "function_lock_impact": "Ebook remains PROTECTED. This acceptance pass changes the dedicated ebook layout service and its existing manifest-enrolled layout suite; no locked sibling generator or declared shared dependency was changed.",
       "acceptance_criteria": [
         "A customer can choose a theme and receive a professionally designed product without manual per-page design.",
         "Themes improve readability and professional presentation, not merely decoration.",
@@ -72,9 +72,9 @@
       "fast_gate_requirement": true,
       "full_gate_requirement": true,
       "live_verification_required": true,
-      "status": "IMPLEMENTED_EBOOK_ACCEPTANCE_PENDING",
-      "status_detail": "Not started. Upgrade 1 must finish first per roadmap order.",
-      "next_step": "Verify current ebook templates and release approval before expanding cross-product themes; do not repeat the already-implemented ebook theme work."
+      "status": "EBOOK_VERIFIED_CROSS_PRODUCT_PENDING",
+      "status_detail": "2026-10-14: all six ebook templates rendered with identical sample content and visually inspected for distinct chapter openers, TOC, typography, checklists, quotations and tables. 226 focused template/layout checks passed. Release acceptance reconciled 3,055 unique passing cases after correcting one release-note format failure; no failures/errors/skips remain. Live v1.9.36 chooser verified all six choices with Modern Business selected for Project 20. The v1.9.37 repeated-table-header repair does not rebuild existing approved exports.",
+      "next_step": "Preserve the verified ebook template catalog. Cross-product theme expansion is separate future work; do not repeat completed ebook template implementation."
     },
     "upgrade_3_visual_editing": {
       "number": 3,
