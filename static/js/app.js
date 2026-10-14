@@ -48,6 +48,14 @@ const PRODUCT_TYPES = [
       { name: "ebook_title", label: "Ebook title", type: "text", required: true },
       { name: "author_brand", label: "Author name", type: "text", required: true, placeholder: "e.g. Jordan Lee" },
       { name: "topic", label: "Topic / niche", type: "text", required: true },
+      { name: "theme_id", label: "Choose your ebook template", type: "select", default: "studio_clean", options: [
+        { value: "warm_wellness", label: "Warm Wellness" },
+        { value: "modern_practical", label: "Modern Business" },
+        { value: "bold_creator", label: "Bold Creator" },
+        { value: "editorial_professional", label: "Elegant Editorial" },
+        { value: "bright_workbook", label: "Bright Workbook" },
+        { value: "studio_clean", label: "Minimal Professional" },
+      ], hint: "For your own ebook, choose the style you want." },
       { name: "audience", label: "Target audience", type: "text" },
       { name: "chapters", label: "Number of chapters", type: "number", value: "6" },
       { name: "tone", label: "Tone", type: "select", options: ["Professional", "Friendly", "Motivational", "Educational", "Simple and beginner-friendly"] },
@@ -2633,7 +2641,7 @@ function explainerVideoHtml() {
         <li>Factory researches public market signals.</li>
         <li>Factory recommends the strongest opportunity.</li>
         <li>You choose whether to continue.</li>
-        <li>Build This Product opens the matching builder as a draft.</li>
+        <li>Build This Product completes recommended ebooks automatically. Other products open in their matching builder.</li>
         <li>Factory does not auto-generate a finished product.</li>
       </ol>
     </div>
@@ -2685,6 +2693,8 @@ function recommendationHeadings(summary) {
 
 function recommendationSummaryHtml(d, summary) {
   const headings = recommendationHeadings(summary);
+  const recommendedType = String((d.selected_opportunity || d.selectedOpportunity || {}).product_type || (d.recommendation || {}).best_product_type || (d.opportunities || [])[0]?.product_type || (d.inputs || {}).product_type || d.product_type || "");
+  const ebookRecommendation = /ebook|workbook/i.test(recommendedType);
   return `<div id="fmaRecommendationSummary" data-fma-view="recommendation-summary" class="rounded-2xl border-2 border-brand-500 bg-white p-6">
     <div class="text-xs font-semibold uppercase tracking-widest text-brand-600">Factory Market Advantage</div>
     <h3 class="text-lg font-bold text-slate-900 mt-1">${escapeHtml(headings.headline)}</h3>
@@ -2704,8 +2714,11 @@ function recommendationSummaryHtml(d, summary) {
         <button type="button" id="fmaScoreCalcBtn" class="mt-2 text-sm font-medium text-brand-700 hover:text-brand-900">Open complete score calculation</button>
       </div>
     </div>
+    ${ebookRecommendation ? `<label class="block mt-5 text-sm font-medium">Author name
+      <input id="fmaEbookAuthor" type="text" autocomplete="name" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" value="${escapeHtml((d.inputs || {}).author_brand || d.author_brand || "")}" placeholder="Name to print on your ebook">
+    </label><p class="mt-2 text-sm text-slate-600">The Factory chooses a template and builds your complete PDF and ZIP automatically.</p>` : ""}
     <div class="mt-5 flex flex-wrap gap-3">
-      <button id="buildThisProductBtn" class="btn-primary">Build This Product</button>
+      <button id="buildThisProductBtn" class="btn-primary">${ebookRecommendation ? "Build My Ebook" : "Build This Product"}</button>
       <button type="button" id="fmaImproveIdeaBtn" class="rounded-xl border border-brand-500 text-brand-700 hover:bg-brand-50 px-4 py-2 text-sm font-medium">Improve This Idea</button>
     </div>
     <div class="mt-3 flex flex-wrap gap-4 text-sm">
@@ -2805,7 +2818,7 @@ function renderDiscovery(d) {
         <h3 class="text-base font-bold text-slate-900">Choose Your Advantage</h3>
         ${modeBadgeHtml(d.mode)}
       </div>
-      <p class="text-sm text-slate-500">Select one opportunity if you want a different idea, then use Build This Product. Factory opens the matching builder as a draft — it does not auto-generate a finished product.</p>
+      <p class="text-sm text-slate-500">Select an opportunity, then use Build This Product. The Factory builds recommended ebooks automatically and chooses their template. Other products open in their matching builder.</p>
       <div class="space-y-4">${opportunityCardsHtml(ops, selected)}</div>
     </div>
     <div id="fmaFullResearch" class="hidden space-y-4">
@@ -3005,12 +3018,13 @@ async function chooseIdea(op) {
     if (lastDiscovery._rerender) lastDiscovery._rerender();
   }
   setFmaStep("decision");
-  toast("Advantage selected. Save Research, then Build This Product. Factory will not auto-generate.");
+  toast("Advantage selected. Use Build This Product when you are ready.");
 }
 
 async function buildThisProduct() {
   const d = lastDiscovery;
   if (!d) return toast("Run research first.", "error");
+  const ebookAuthor = String(document.getElementById("fmaEbookAuthor")?.value || "").trim();
   let op = d.selected_opportunity || d.selectedOpportunity;
   if (!op) {
     const ops = d.opportunities || [];
@@ -3022,6 +3036,12 @@ async function buildThisProduct() {
     }
   }
   if (!op) return toast("Choose Your Advantage before building.", "error");
+  const buildButton = document.getElementById("buildThisProductBtn");
+  if (buildButton?.disabled) return;
+  if (document.getElementById("fmaEbookAuthor") && !ebookAuthor) {
+    return toast("Enter the author name to print on your ebook.", "error");
+  }
+  if (buildButton) setBusyEl(buildButton, true);
   const out = selectionOutEl();
   setFmaStep("build");
   try {
@@ -3044,14 +3064,8 @@ async function buildThisProduct() {
     const plan = (result.data && result.data.plan) || {};
     const factoryId = result.factory_id || (result.builder && result.builder.factory_id);
     if (factoryId === "ebook") {
-      // Start the Ebook Project workspace, not the legacy Ebook Builder.
-      //
-      // The Builder's generate button POSTs /generate-ebook, the legacy
-      // one-shot generator that services/ebook.py documents as unable to
-      // produce Export Ready ebooks: prose only, no package, no PDF, no ZIP,
-      // and no Editor-in-Chief (that runs during /export-product, which this
-      // path never reaches). The workspace is the pipeline that ends in a
-      // reviewed, downloadable product, so Build This Product goes there.
+      // The selected recommendation starts the durable complete build now.
+      // Custom ebooks retain their own template choice in Product Factory.
       const brief = result.data || {};
       brief._project_id = result.id;
       pendingEbookBrief = brief;
@@ -3060,23 +3074,15 @@ async function buildThisProduct() {
         toast("Saved as a blueprint. Add a product title to start the Ebook Project.", "error");
         return;
       }
-      try {
-        const created = await api("/ebook-workspace", {
-          method: "POST",
-          body: JSON.stringify({
-            topic,
-            author: String(plan.author || brief.author_brand || "").trim(),
-            audience: plan.target_audience || op.target_audience || "",
-            outcome: plan.main_transformation || plan.product_promise || "",
-            name: String(topic).slice(0, 120),
-          }),
-        });
-        loadProjects();
-        toast("Ebook Project created from your research.");
-        await openEbookWorkspace(created.project.id);
-      } catch (e) {
-        toast("Could not start the Ebook Project: " + (e.message || String(e)), "error");
-      }
+      const author = ebookAuthor || String(plan.author || brief.author_brand || "").trim();
+      if (!author) return toast("Enter the author name to print on your ebook.", "error");
+      await startEbookBuild({
+        ebook_title: topic, topic, author_brand: author,
+        audience: plan.target_audience || op.target_audience || "",
+        outcome: plan.main_transformation || plan.product_promise || "",
+        include_images: "Yes", ebook_creation_mode: "ai_recommended",
+        research_notes: JSON.stringify(clean), use_research: "Yes",
+      });
       return;
     }
     go("factory");
@@ -3090,6 +3096,8 @@ async function buildThisProduct() {
       out.insertAdjacentHTML("afterbegin", card(`<p class="text-rose-600 text-sm">${escapeHtml(e.message)}</p>`));
     }
     toast(e.message, "error");
+  } finally {
+    if (buildButton) setBusyEl(buildButton, false);
   }
 }
 
@@ -6235,6 +6243,7 @@ async function runProduct() {
     // never reach renderProduct() -- that combination is what left the
     // customer looking at a blank result. Every other product type falls
     // through to the unchanged runProduct()/renderProduct() path below.
+    fields.ebook_creation_mode = "custom";
     return startEbookBuild(fields);
   }
 
@@ -7739,23 +7748,13 @@ async function startEbookWorkspaceFromBuilder() {
   const author = (document.getElementById("ebookAuthor").value || "").trim();
   if (!topic) return toast("Enter a topic to start the Ebook Project workspace.", "error");
   if (!author) return toast("Enter an author name.", "error");
-  try {
-    const created = await api("/ebook-workspace", {
-      method: "POST",
-      body: JSON.stringify({
-        topic,
-        author,
-        audience: "",
-        outcome: "",
-        name: topic.slice(0, 120),
-      }),
-    });
-    toast("Ebook Project workspace created at Research.");
-    loadProjects();
-    await openEbookWorkspace(created.project.id);
-  } catch (e) {
-    toast(e.message || String(e), "error");
-  }
+  const template = document.getElementById("ebookTemplate")?.value || "studio_clean";
+  const notes = document.getElementById("ebookResearchNotes")?.value || "";
+  await startEbookBuild({
+    ebook_title: topic, topic, author_brand: author, theme_id: template,
+    ebook_creation_mode: "custom", include_images: "Yes",
+    research_notes: notes, use_research: notes.trim() ? "Yes" : "No",
+  });
 }
 
 async function openEbookWorkspace(projectId, opts) {
@@ -10796,7 +10795,8 @@ wireFmaMoreToggle("fmaMoreOptionsBtn", "fmaMoreOptions");
 wireFmaMoreToggle("fmaDiscoverMoreBtn", "fmaDiscoverMore");
 const fmaTopic = document.getElementById("fmaTopic");
 if (fmaTopic) fmaTopic.addEventListener("keydown", (e) => { if (e.key === "Enter") runFactoryMarketAdvantage(); });
-document.getElementById("ebookBtn").onclick = runEbook;
+const legacyEbookBtn = document.getElementById("ebookBtn");
+if (legacyEbookBtn) legacyEbookBtn.onclick = runEbook;
 const ebookWsStart = document.getElementById("ebookWorkspaceStartBtn");
 if (ebookWsStart) ebookWsStart.onclick = startEbookWorkspaceFromBuilder;
 document.getElementById("adBtn").onclick = runTrafficContent;

@@ -595,7 +595,7 @@
           <div id="ebookBriefPanel" class="hidden"></div>
           <div class="rounded-2xl border border-slate-200 bg-white p-6">
             <h2 class="text-base font-bold text-slate-900 mb-1">Ebook Builder</h2>
-            <p class="text-sm text-slate-500 mb-4">Paste a topic, an article URL, or a YouTube link. We fetch the content and draft a structured ebook.</p>
+            <p class="text-sm text-slate-500 mb-4">Enter your own topic, an article URL, or a YouTube link. Choose a template and the Factory builds your complete ebook.</p>
             <textarea id="ebookInput" rows="3" placeholder="A topic, https://example.com/article, or https://youtube.com/watch?v=..."
               class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none"></textarea>
             <div class="mt-3 grid sm:grid-cols-2 gap-3">
@@ -611,8 +611,17 @@
               </div>
             </div>
             <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-              <button type="button" id="ebookWorkspaceStartBtn" class="btn-secondary text-sm">Start Ebook Project workspace</button>
-              <button id="ebookBtn" class="btn-primary">Generate Ebook</button>
+              <label class="block text-sm font-semibold text-slate-600" for="ebookTemplate">Choose your ebook template</label>
+              <select id="ebookTemplate" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                <option value="studio_clean">Minimal Professional</option>
+                <option value="warm_wellness">Warm Wellness</option>
+                <option value="modern_practical">Modern Business</option>
+                <option value="bold_creator">Bold Creator</option>
+                <option value="editorial_professional">Elegant Editorial</option>
+                <option value="bright_workbook">Bright Workbook</option>
+              </select>
+              <p class="text-sm text-slate-600">Choose a style for your own ebook. The Factory builds the complete PDF and ZIP.</p>
+              <button type="button" id="ebookWorkspaceStartBtn" class="btn-primary">Build My Ebook</button>
             </div>
           </div>
           <div id="ebookOutput"></div>

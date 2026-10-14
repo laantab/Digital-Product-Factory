@@ -227,13 +227,32 @@ def _stage_record(state: dict, stage: str) -> dict:
 
 def idempotency_key_for(fields: dict, customer: str = "local") -> str:
     """Stable key for a build request, so a repeat click attaches rather than duplicates."""
+    fields = fields or {}
     payload = {
         "customer": customer,
         "title": str((fields or {}).get("ebook_title") or "").strip().lower(),
         "topic": str((fields or {}).get("topic") or "").strip().lower(),
         "author": str((fields or {}).get("author_brand") or "").strip().lower(),
     }
+    # New creation paths must not attach to an older manual build of the
+    # same topic. Preserve the original key for legacy saved requests.
+    if fields.get("ebook_creation_mode"):
+        payload["creation_mode"] = str(fields["ebook_creation_mode"])
+        if not automatic_ebook(data={"fields": fields}):
+            payload["theme_id"] = str(fields.get("theme_id") or "")
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:32]
+
+
+def automatic_ebook(data: dict) -> bool:
+    """Only an explicitly selected AI recommendation delegates all choices."""
+    fields = data.get("fields") if isinstance(data.get("fields"), dict) else {}
+    return fields.get("ebook_creation_mode") == "ai_recommended"
+
+
+def self_running_ebook(data: dict) -> bool:
+    """New builds delegate production after choosing an idea or custom style."""
+    fields = data.get("fields") if isinstance(data.get("fields"), dict) else {}
+    return fields.get("ebook_creation_mode") in {"ai_recommended", "custom"}
 
 
 # --------------------------------------------------------------------------
@@ -665,7 +684,7 @@ def _run_visuals(data: dict, pid: int) -> dict:
     # completed pictures and retry history from the current attempt.
     database.update_project(pid, None, data)
     from services.ebook_guided_build import enabled
-    if enabled(data):
+    if enabled(data) or self_running_ebook(data):
         from services.ebook_guided_build import approve_visuals
         data = approve_visuals(
             data, persist_progress=lambda partial: database.update_project(pid, None, partial))
@@ -681,7 +700,7 @@ def _run_visuals(data: dict, pid: int) -> dict:
 
 def _run_cover(data: dict, pid: int) -> dict:
     from services.ebook_guided_build import enabled, run_cover
-    if enabled(data):
+    if enabled(data) and not self_running_ebook(data):
         return run_cover(data, pid, _prepare_cover)
     return _prepare_cover(data, pid)
 
@@ -837,7 +856,16 @@ def _run_design(data: dict, pid: int) -> dict:
     from services.ebook_design_workspace import select_and_stage_theme
     from services.ebook_project_workspace import approve_stage
 
-    theme = str((data.get("fields") or {}).get("theme_id") or "studio_clean")
+    if automatic_ebook(data):
+        from services.ebook_design_system import recommend_theme
+        fields = data.get("fields") or {}
+        theme = recommend_theme(
+            topic=str(fields.get("topic") or data.get("topic") or ""),
+            title=str(data.get("title") or ""),
+            audience=str(fields.get("audience") or data.get("audience") or ""),
+        )
+    else:
+        theme = str((data.get("fields") or {}).get("theme_id") or "studio_clean")
     data = select_and_stage_theme(data, theme)
     return approve_stage(data, "design")
 
