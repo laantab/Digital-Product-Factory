@@ -216,6 +216,7 @@
     "tests/test_release_review_memory.py",
     "tests/test_ebook_print_clarity.py",
     "tests/test_large_ebook_preview_storage.py",
-    "tests/test_reviewed_workspace_visual_contract.py"
+    "tests/test_reviewed_workspace_visual_contract.py",
+    "tests/test_builder_pictures_reach_the_website.py"
   ]
 }
