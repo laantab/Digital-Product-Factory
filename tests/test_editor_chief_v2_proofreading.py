@@ -29,3 +29,18 @@ def test_protected_quotes_do_not_trigger_new_suggestions():
     review = edit_text(original)
     assert review["edited"] == original
     assert not review["suggestions"]
+
+
+def test_clarity_suggestions_are_non_destructive():
+    original = "The text  was reviewed carefully."
+    review = edit_text(original)
+    assert review["edited"] == original
+    assert {"EXCESS_SPACING", "POSSIBLE_PASSIVE_VOICE"} <= {s["code"] for s in review["suggestions"]}
+    assert review["paid_calls"] == 0
+
+
+def test_quotes_and_code_are_excluded_from_clarity_suggestions():
+    original = '"the text  was reviewed" and `is delivered`'
+    review = edit_text(original)
+    assert review["edited"] == original
+    assert not review["suggestions"]
