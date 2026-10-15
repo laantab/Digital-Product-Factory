@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-15T16:13:39.532026+00:00",
-  "current_task": "Owner-approved consistent ebook quality: unify final manual/one-button editorial review and preserve final PDF identity. Focused checks green; complete build and protected gates running.",
-  "stopped_at": "Six defects reproduced before repair. Shared final review wired to both ebook export paths; real PDF/ZIP identity recorded; unavailable review fails closed; concrete quality findings stop automatic re-export loops. Only export_product_route changed among app.py functions; authentication and all 153 other functions are unchanged.",
-  "next_step": "Finish complete automatic/custom/guided build and protected release gates, publish verified source, restore affected locks at the actual tested commit, merge and verify published version. No paid live generation or customer-file rewriting.",
+  "updated_at": "2026-10-15T17:53:41.433722+00:00",
+  "current_task": "Consistent ebook quality v1.9.44: all release checks passed; publishing verified source.",
+  "stopped_at": "3125 unique tests passed across all 224 manifest files with zero failures/errors/skips; exact test identity match. Affected protection locks restored at tested source 403aba8ba9b298b9eebc6682ae4110e23c63b822.",
+  "next_step": "Merge PR #62 and verify website and automatic builder deployment; preserve customer outputs.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -212,7 +212,7 @@
     "paid_calls_this_repair": 0,
     "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/35"
   },
-  "last_completed": "Free preview/apply/undo manuscript editor, current quality revalidation, stale-write and active-build guards, preserved source revisions and exports, and explicit light route classification. Full 211-file gate: 2976 passed, 0 failures/errors/skips; no paid calls permitted. PR #37.",
+  "last_completed": "Consistent final ebook quality review, metadata identity and failed-quality draft preservation. Full release proof: 3125 passed, zero failures/errors/skips.",
   "ebook_completion_2026_10_13": {
     "website_live_version": "1.9.27",
     "website_live_commit": "e273dfc5739c1e16bd9c670ba158a087263652fc",

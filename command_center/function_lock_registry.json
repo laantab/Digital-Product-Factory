@@ -1,6 +1,6 @@
 {
   "schema_note": "Per-function protection status for the Factory's customer-facing generators and shared systems. Seeded 2026-09-12 from a read-only audit -- see PROTECTED_GENERATOR_RULE.md and SESSION_HANDOFF_2026-09-11.md. Status values: LOCKED (proven customer-path fix + machine-checked protected test(s) + known last_known_good_commit), UNLOCKED (an explicit, reasoned, in-progress exception -- see unlocked_by/unlocked_reason), PROTECTED (real test coverage exists but no single commit has been proven as its customer-path last-known-good), UNPROTECTED (no meaningful customer-path test coverage), REGRESSION (currently known broken). last_known_good_commit is null unless a real commit was proven -- never manufactured (Rule 9, PROTECTED_GENERATOR_RULE.md). shared_code_dependencies covers both the function's own dedicated files and any file it shares with other functions -- tests/test_function_lock_enforcement.py treats a trailing '/' as a directory-prefix match.",
-  "updated_at": "2026-10-15T16:13:39.532026+00:00",
+  "updated_at": "2026-10-15T17:53:41.433722+00:00",
   "functions": {
     "word_search": {
       "display_name": "Word Search",
@@ -107,9 +107,9 @@
     },
     "invite_protection": {
       "display_name": "Invite protection",
-      "status": "UNLOCKED",
-      "last_known_good_commit": "9c652329693e23af4a094436f660a88e10f2e581",
-      "factory_version": "1.9.42",
+      "status": "LOCKED",
+      "last_known_good_commit": "403aba8ba9b298b9eebc6682ae4110e23c63b822",
+      "factory_version": "1.9.44",
       "protected_test_files": [
         "tests/test_invite_gate.py",
         "tests/test_render_persistence_patch.py"
@@ -119,10 +119,10 @@
       ],
       "fast_gate": true,
       "full_gate": true,
-      "unlocked_by": "Codex — owner-approved consistent ebook quality repair",
-      "unlocked_reason": "Unify manual and one-button final editorial review; preserve authentication and all non-ebook generators.",
-      "relocked_by": null,
-      "relocked_after_tests": null,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Codex — owner-approved consistent ebook quality release",
+      "relocked_after_tests": "At source 403aba8ba9b298b9eebc6682ae4110e23c63b822: all 224 manifest files, 3125 unique tests, 0 failures/errors/skips across 8 isolated checkouts; exact test identities matched collection. Prior focused 59, complete-build 22 and Fast Gate 757 passed. Paid/external API calls blocked. See RELEASE_PROOF_1.9.44.json.",
       "notes": "Self-contained in app.py's single before_request hook -- no shared dependency on static/js/app.js (the gate is server-rendered, no fetch/JS involvement). 14+2 real behavioral tests: gate on/off, cookie/header/query admission, wrong-code refusal (never echoed), exemptions, admin routes gated too. Relocked at 6391ff1 (2026-09-13): unlocked only because app.py (declared as a whole shared dependency) gained a new route for the ebook build-stall fix; the invite gate hook itself is untouched. Relocked at efb1e90 (2026-09-14, v1.7.13): unlocked only because app.py (declared as a whole shared dependency) gained the Phase 0B-3B1 asset-first/legacy-fallback helpers and two call sites in the /download/<package_id>/<filename> route. The invite gate's before_request hook is byte-for-byte unchanged. Relocked at v1.7.24 (2026-09-15): unlocked because app.py (a declared whole-file shared dependency) gained the durable ebook executor wiring -- enqueue on build start and ticker start at boot -- so the browser no longer owns execution. The gate itself is unchanged. Relocked at e41b3a1 (2026-09-15, v1.7.24): unlocked because app.py (a declared whole-file shared dependency) gained the durable ebook executor wiring -- a job enqueue on build start and the executor ticker at boot -- so the browser no longer owns execution. The invite gate's before_request hook is byte-for-byte unchanged and no route joined the exemption list. Relocked at 80a1861 (2026-09-15, v1.7.26): unlocked because app.py (a declared whole-file shared dependency) gained the durable-job handoff in the /ebook/build/<id>/resume route -- Continue previously cleared the stalled stage and handed the book to nobody, so 'you can leave this page' was false on the one path that exists to rescue a stalled book. The invite gate's before_request hook is byte-for-byte unchanged and no route joined the exemption list. RELOCKED at 293f4d8 (v1.8.0): app.py changed only to hand the build off to the execution-mode dispatcher, to refuse to advance a build in workflow mode, and to add the read-only GET /ebook/execution-mode route. The invite gate itself was not touched; tests/test_invite_gate.py and tests/test_render_persistence_patch.py are green. RELOCKED at 23a6a4f (v1.8.1): unlocked only because app.py is declared as a whole-file shared dependency and gained the workflow hand-off helper (_workflow_hand_off), the uploaded-cover storage helper (_store_uploaded_cover), and hand-off calls in the heavy ebook routes. The invite gate's before_request hook is byte-for-byte unchanged - verified by diffing app.py against 293f4d8, in which no line mentioning the gate, the hook or the exemption list appears - and no route joined the exemption list. RELOCKED at 3a5c6b0 (Factory 1.8.5 part 1): unlocked because app.py gained Flask-Login setup, the /auth blueprint and five login-protected /pin-factory/* proxy routes. The invite gate's before_request hook and exemption list are byte-for-byte unchanged and still run before /auth and /pin-factory. RELOCKED at e0db754 (v1.9.0): a REAL unlock, not the usual whole-file-dependency unlock -- the gate's own before_request hook changed. It used to switch itself off whenever FACTORY_INVITE_CODE was empty; it now answers 503 on every route unless FACTORY_INVITE_CODE or FACTORY_OPEN_ACCESS is set (FACTORY_TEST_MODE off), and logs CRITICAL at boot. /static/* is exempted before the new check. The admission paths -- cookie, X-Factory-Invite header, ?invite=CODE once, /invite -- and the exemption list are otherwise unchanged. app.py also gained @admin_required on /admin/backup-db and /admin/delete-test-projects, which had no authentication at all, and a token requirement on the delete. RELOCKED at fc714bc (v1.9.0): covers ea444ba, which narrowed the fail-closed rule to hosted services only (RENDER set) so a laptop Factory and any test module that has not declared FACTORY_TEST_MODE stay open, and fc714bc, which fixed the double-wrapped error in _ebook_workspace_project_or_404 (27 routes answered 500 instead of 404 for an unknown project id; pre-existing on main). The gate's admission paths and exemption list are unchanged by both. RELOCKED at 4f3d5ac (v1.9.1): unlocked only because app.py is a declared whole-file shared dependency and the coloring preview route gained the asset-first storage fallback the download route already had. Verified by diffing app.py against f495d87: that route is the only difference, and no line mentioning the gate, its hook or its exemption list appears. RELOCKED at b7269c4 (v1.9.1): the gate's 503 refusal message was reworded so it no longer names environment variables to the public; the operator sentence stays in the CRITICAL log line. Trigger, status code and exemptions unchanged. RELOCKED at ff0e92a (2026-09-25, v1.9.6): unlocked only because app.py (declared whole-file shared dependencies) changed for the ebook's free picture sources and the one-click picture-approval pause. Diff against 32fdd1d: not one added or removed line mentions invite, login or open access. RELOCKED at ee504b0 (2026-09-25, v1.9.8): stale-export refresh in /download only. RELOCKED at 92266ba (2026-09-25, v1.9.11): release review routes only. RELOCKED at 5750954 (2026-09-25, v1.9.11): release-review decision route. RELOCKED at 94b039e (2026-09-26, v1.9.11). RELOCKED at 6423dd5 (2026-09-26, v1.9.11): previous-export routes. Relocked at 1f87bfd (2026-09-28, v1.9.15): unlocked only because app.py (declared as a whole shared dependency) changed the release review routes and page; the invite gate hook is untouched."
     },
     "factory_market_advantage": {
@@ -315,9 +315,9 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "UNLOCKED",
-      "last_known_good_commit": "7acc927ab444e7c37f4280747217865d93f2daf5",
-      "factory_version": "1.9.43",
+      "status": "LOCKED",
+      "last_known_good_commit": "403aba8ba9b298b9eebc6682ae4110e23c63b822",
+      "factory_version": "1.9.44",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
         "tests/test_guided_cover_choice.py",
@@ -340,10 +340,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": "Codex — owner-approved consistent ebook quality repair",
-      "unlocked_reason": "Unify manual and one-button final editorial review; preserve authentication and all non-ebook generators.",
-      "relocked_by": null,
-      "relocked_after_tests": null,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Codex — owner-approved consistent ebook quality release",
+      "relocked_after_tests": "At source 403aba8ba9b298b9eebc6682ae4110e23c63b822: all 224 manifest files, 3125 unique tests, 0 failures/errors/skips across 8 isolated checkouts; exact test identities matched collection. Prior focused 59, complete-build 22 and Fast Gate 757 passed. Paid/external API calls blocked. See RELEASE_PROOF_1.9.44.json.",
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     }
   }

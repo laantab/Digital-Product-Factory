@@ -1,0 +1,83 @@
+{
+  "source_sha": "403aba8ba9b298b9eebc6682ae4110e23c63b822",
+  "files": 224,
+  "unique_tests": 3125,
+  "tests": 3125,
+  "errors": 0,
+  "failures": 0,
+  "skipped": 0,
+  "exact_collection_match": true,
+  "identities_sha256": "be0b8f3f3375a39a93792395bf1cd9d886b40a1186f96c91478de60f0717bfe6",
+  "shards": [
+    {
+      "shard": 0,
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "391",
+      "time": "423.726"
+    },
+    {
+      "shard": 1,
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "327",
+      "time": "576.628"
+    },
+    {
+      "shard": 2,
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "448",
+      "time": "318.441"
+    },
+    {
+      "shard": 3,
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "495",
+      "time": "581.206"
+    },
+    {
+      "shard": 4,
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "321",
+      "time": "464.602"
+    },
+    {
+      "shard": 5,
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "396",
+      "time": "589.282"
+    },
+    {
+      "shard": 6,
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "402",
+      "time": "594.295"
+    },
+    {
+      "shard": 7,
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "345",
+      "time": "443.808"
+    }
+  ],
+  "version": "1.9.44",
+  "paid_calls_permitted": 0,
+  "verification_method": "All 224 acceptance-manifest files partitioned into 8 isolated exact-commit checkouts; exact collected test identities match all 3125 results. Python compilation and browser JavaScript syntax passed.",
+  "prior_focused_checks": 59,
+  "complete_build_checks": 22,
+  "fast_gate_checks": 757
+}
