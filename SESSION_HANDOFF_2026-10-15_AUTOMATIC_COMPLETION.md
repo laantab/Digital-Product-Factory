@@ -47,3 +47,18 @@ asset checksums and original project fields/identity remain unchanged.
 One test initially assumed its job was in the first10 rows despite earlier test
 fixtures; isolated its scan cursor and verified bounded rotation. No preservation
 assertion was weakened. Final release gates pending; do not merge until green.
+
+
+## Final release verification
+
+Verified core source at actual GitHub commit9c652329693e23af4a094436f660a88e10f2e581,
+tree d963756e9a131c04c747dca1a61d8aa4b5f1a867 (identical to local f934049).
+After Fast Gate757 passed across55 files (548.69s). Full gate3110 passed across
+223 files, failures0/errors0/skipped0, exact unique coverage missing0/duplicates0.
+Python compile, JavaScript syntax and manifest validation passed. No paid calls.
+Results ../recovery_full_release.log and ../release-1942-recovery-results/;
+Fast ../recovery_fast_after.log. Four protections relocked at that core commit.
+Read-only live preflight confirms Project21 first revision, full generation,
+qa_passed true, fields.pages2 and original content/asset digests. No live recovery
+is claimed before deployment; verify boot log, Project21 complete/export_ready,
+job SUCCEEDED, original PDF/ZIP asset hashes, and unchanged user_saved consent.
