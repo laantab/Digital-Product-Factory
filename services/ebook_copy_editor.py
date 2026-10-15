@@ -67,6 +67,15 @@ def edit_text(text: str, *, target_grade: int = 8) -> dict:
         replace(r"\b(he|she|it) (are)\b",
                 lambda m: _case(m[0], m[1].lower() + (" is" if m[2].lower() == "are" else " was")),
                 "SUBJECT_VERB_AGREEMENT")
+        # Advisory proofreading: avoid silently modifying intentional wording.
+        for repeated in re.finditer(r"\b([A-Za-z]{3,})[ \t]+\1\b", span, re.I):
+            suggestions.append({"code": "REPEATED_WORD", "line": line,
+                                "excerpt": repeated.group(0),
+                                "suggestion": "Review this repeated word."})
+        for punct in re.finditer(r"(?<=[a-z])[,;:](?=[A-Za-z])", span):
+            suggestions.append({"code": "PUNCTUATION_SPACING", "line": line,
+                                "excerpt": span[max(0, punct.start()-12):punct.end()+12],
+                                "suggestion": "Consider adding a space after punctuation."})
         for sentence in re.split(r"(?<=[.!?])\s+", span):
             if len(re.findall(r"\b[\w'-]+\b", sentence)) > 35:
                 suggestions.append({"code": "LONG_SENTENCE", "line": line,
