@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.9.45 — 2026-10-15
+
+**Reopen saved products without saving or replacing them.**
+
+### What changed
+
+Saved Open keeps the latest product selection, cancels pending reads when the customer leaves, and bounds stalled reads to 30 seconds. Failed, malformed or mismatched responses keep the current screen and allow retry. Existing PDF/ZIP links display directly without an automatic Save or Export.
+
+### What was fixed
+
+Late detail responses could open the wrong product or undo navigation. Opening a finished product also invoked Save before showing downloads, changing stored metadata and removing its saved preview PDF.
+
+### Do the steps change?
+
+No. Choose Open as before. Completed content and stored files stay unchanged; explicit Save, Export and recovery actions remain available.
+
+### Release gate
+
+Real-browser cases cover read-only reopening, overlapping selections, navigation, failed/malformed/mismatched reads and stalled-request retry. They compare the complete stored records and PDF/ZIP hashes before and after. Full protected-generator and recovery checks remain required before release.
+
 ## 1.9.44 — 2026-10-15
 
 **Use the same final ebook quality review for manual and one-button exports.**

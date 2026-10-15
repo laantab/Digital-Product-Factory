@@ -223,6 +223,7 @@
     "tests/test_coloring_background_browser.py",
     "tests/test_saved_products_bounded_loading.py",
     "tests/test_coloring_completion_recovery.py",
-    "tests/test_ebook_completion_quality.py"
+    "tests/test_ebook_completion_quality.py",
+    "tests/test_saved_product_open_recovery.py"
   ]
 }

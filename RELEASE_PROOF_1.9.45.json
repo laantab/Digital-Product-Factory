@@ -1,0 +1,26 @@
+{
+  "version": "1.9.45",
+  "source_sha": "153bc063a9cf6827474f2d2d47cb69143ceab28c",
+  "files": 225,
+  "tests": 3132,
+  "unique_tests": 3132,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "exact_collection_match": true,
+  "identities_sha256": "f3d18bd57be9a9cd7cce3fa7e1fd942a8db079e27736d1c371ba910b24afc4e6",
+  "fast_gate_coverage": {
+    "files": 56,
+    "tests": 764,
+    "method": "Exact fast-gate nodes included in the full release results"
+  },
+  "new_browser_regressions": 7,
+  "focused_contract_checks": 45,
+  "paid_calls_permitted": 0,
+  "verification_method": "All 225 manifest files partitioned across 8 isolated checkouts of the exact source commit; final unique test identities match collection. Python compilation and JavaScript syntax passed.",
+  "runtime_retry": "Two initial processes crashed importing a truncated OpenCV binary (49283072 bytes; official wheel requires 73874137). Restored pinned OpenCV 5.0.0.93 in temporary native storage, verified all wheel-file digests, and reran both full groups successfully.",
+  "timing_retry": "One unchanged backend timing test exceeded 0.6 seconds under parallel load (1.173 seconds). Its complete six-case file passed unchanged in a less contended rerun (5.81 seconds). Final reconciliation replaces all six original file results; original reports are retained. No limits or assertions were weakened.",
+  "javascript_sha256": "98a02882191353662cd1c077b85b2a796ce3928804eeebda45c01b44d8d2ec08",
+  "existing_3125_test_identities_preserved": true,
+  "preserved_reference_hashes_match": true
+}
