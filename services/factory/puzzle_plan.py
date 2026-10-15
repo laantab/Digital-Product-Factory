@@ -70,7 +70,7 @@ def _parse_count_token(raw: str, *, default: int) -> int:
 
 # Standard defaults for coloring books
 COLORING_BOOK_DEFAULT = 40
-COLORING_BOOK_MIN = 12
+COLORING_BOOK_MIN = 1
 COLORING_BOOK_MAX = 100  # safe cap without confirmation
 COLORING_BOOK_RECOMMENDED_MIN = 24
 COLORING_BOOK_RECOMMENDED_MAX = 50
@@ -84,8 +84,7 @@ def normalize_coloring_page_count(product_mode: str, requested_count: int | None
     Rules:
     - Single Sheet → always 1
     - Digital Book blank/invalid → 40
-    - Digital Book 1–11 → 12 (minimum for a sellable book)
-    - Digital Book 12–100 → user value
+    - Digital Book 1–100 → user value (small previews are supported)
     - Digital Book over 100 → 40 (safe cap; caller can add a confirmation prompt)
     """
     warnings: list[str] = []
@@ -101,13 +100,6 @@ def normalize_coloring_page_count(product_mode: str, requested_count: int | None
         )
         return COLORING_BOOK_DEFAULT, warnings
 
-    if requested_count < COLORING_BOOK_MIN:
-        warnings.append(
-            f"Page count {requested_count} is too low for a sellable coloring book — "
-            f"reset to {COLORING_BOOK_MIN}."
-        )
-        return COLORING_BOOK_MIN, warnings
-
     if requested_count > COLORING_BOOK_MAX:
         warnings.append(
             f"Page count {requested_count} exceeds the safe limit of {COLORING_BOOK_MAX}. "
@@ -116,7 +108,7 @@ def normalize_coloring_page_count(product_mode: str, requested_count: int | None
         )
         return COLORING_BOOK_DEFAULT, warnings
 
-    # 12–100: accept as-is
+    # 1–100: accept as-is, including small previews
     if requested_count < COLORING_BOOK_RECOMMENDED_MIN:
         warnings.append(
             f"{requested_count} pages is below the recommended range ({COLORING_BOOK_RECOMMENDED_MIN}–"

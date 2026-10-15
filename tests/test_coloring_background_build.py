@@ -155,11 +155,40 @@ def test_pixel_metrics_match_exact_rgb_thresholds(tmp_path):
     assert metrics['black_ink_pct'] == round(100 * sum(max(p) < 40 for p in pixels) / len(pixels), 4)
 
 
-def test_four_page_request_is_not_silently_expanded_into_paid_artwork(setup):
+@pytest.mark.parametrize('count', [2, 4])
+def test_small_preview_honors_entered_count_without_extra_artwork(setup, count):
+    fields = dict(FIELDS, pages=str(count))
+    pid = begin(setup, fields)
+    assert database.get_project(pid)['data']['fields']['pages'] == str(count)
+    with patch.object(builder, 'chat_json', side_effect=plan), patch.object(builder, 'generate_visual_image', side_effect=art) as images:
+        out = run_build(pid)
+        assert out['finished'], out['message']
+        assert images.call_count == count + 1  # interiors plus cover, never twelve
+        assert begin(setup, fields) == pid
+        assert run_build(pid)['finished']
+        assert images.call_count == count + 1
+    result = setup.get(f'/coloring/build/{pid}/status').get_json()['result']
+    assert len(result['pages']) == count
+    files = result['product_exports']['files']
+    pdf = setup.get(files['pdf']['url']).data
+    assert len(PdfReader(io.BytesIO(pdf)).pages) == count + 1
+    with zipfile.ZipFile(io.BytesIO(setup.get(files['zip']['url']).data)) as package:
+        assert any(package.read(n) == pdf for n in package.namelist() if n.endswith('.pdf'))
+
+
+@pytest.mark.parametrize('count', ['0', 0, '-1', '101', '2.5', 'abc'])
+def test_invalid_count_is_refused_before_workflow_or_paid_artwork(setup, count):
     with patch('services.jobs.workflow_trigger._start_task', side_effect=AssertionError('no workflow for invalid count')):
-        response = setup.post('/generate-product', json={'product_type': 'coloring_book', 'fields': dict(FIELDS, pages='4')})
+        response = setup.post('/generate-product', json={'product_type': 'coloring_book', 'fields': dict(FIELDS, pages=count)})
     assert response.status_code == 400
-    assert 'You entered 4' in str(response.get_json())
+    assert 'whole number from 1 to 100' in str(response.get_json())
+
+
+def test_coloring_normalization_preserves_every_supported_preview_size():
+    from services.factory.puzzle_plan import normalize_coloring_page_count, OUTPUT_SINGLE_PAGE
+    for count in range(1, 101):
+        assert normalize_coloring_page_count('book', count)[0] == count
+    assert normalize_coloring_page_count(OUTPUT_SINGLE_PAGE, 4)[0] == 1
 
 
 def test_concurrent_requests_create_only_one_durable_project(setup):

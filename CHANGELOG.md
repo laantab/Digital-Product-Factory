@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.40 — Small coloring previews
+
+- Honor entered small coloring page counts, including 2 and 4, instead of requiring 12 or silently generating extra pages. Book covers remain additional; one page retains Single Sheet behavior.
+- Explain preview counts on the form and distinguish rejected settings from interrupted saved builds.
+
+
 What changed in the Digital Product Factory, in plain language.
 The version shown in the bottom-left of the app matches the newest entry here.
 
