@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.9.44 — 2026-10-15
+
+**Use the same final ebook quality review for manual and one-button exports.**
+
+### What changed
+
+Both paths inspect the real PDF pages and ZIP before calling a book ready. Reviews record the exact PDF/ZIP hashes, retain correction findings with the draft, and clean up temporary page images. A concrete quality failure stops repeated export attempts until the customer resumes after correcting it.
+
+### What was fixed
+
+One-button completion previously skipped the final editorial review. Missing outputs or incomplete page inspection could also go unreviewed. Final PDF assembly now retains the approved title, author and chapter navigation; the reviewer reads actual document metadata, including Unicode, instead of bookmark headings.
+
+### Do the steps change?
+
+Passing books continue automatically with no additional click or paid call. A failed quality check retains the draft and explains the correction needed. Existing customer outputs and other generator workflows are preserved.
+
+### Release gate
+
+Regression coverage checks both final-review verdicts, missing files, reviewer failure, temporary-file cleanup, PDF/ZIP consistency, incomplete page inspection, Unicode metadata and stopped quality failures. Complete automatic, custom and guided build fixtures must deliver real PDF/ZIP files with a passing final review. Actual release counts are recorded in the session handoff.
+
 ## 1.9.43 — 2026-10-15
 
 **Keep ebook progress connected without another build click.**

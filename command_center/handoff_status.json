@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-15T15:48:37.377631+00:00",
-  "current_task": "v1.9.43 ebook one-button reconnection repair verified and protected; publication tracked in PR #61.",
-  "stopped_at": "Baseline Fast Gate: 757 passed across 55 files. Full Release Gate at 7acc927ab444e7c37f4280747217865d93f2daf5: 3115 unique tests across all 223 manifest files; 0 failures, 0 errors, 0 skipped (3499.846 seconds). Five focused real-browser recovery cases passed; paid API calls blocked. Original reference PDF and ZIP checksums unchanged.",
-  "next_step": "Follow PR #61 for merge and exact served app.js verification. Preserve customer projects and original outputs; no paid live generation.",
+  "updated_at": "2026-10-15T16:13:39.532026+00:00",
+  "current_task": "Owner-approved consistent ebook quality: unify final manual/one-button editorial review and preserve final PDF identity. Focused checks green; complete build and protected gates running.",
+  "stopped_at": "Six defects reproduced before repair. Shared final review wired to both ebook export paths; real PDF/ZIP identity recorded; unavailable review fails closed; concrete quality findings stop automatic re-export loops. Only export_product_route changed among app.py functions; authentication and all 153 other functions are unchanged.",
+  "next_step": "Finish complete automatic/custom/guided build and protected release gates, publish verified source, restore affected locks at the actual tested commit, merge and verify published version. No paid live generation or customer-file rewriting.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -200,7 +200,7 @@
     }
   ],
   "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly — it is what the Command Center reads every time it opens.",
-  "factory_version": "1.8.0",
+  "factory_version": "1.9.44",
   "ebook_reliability_2026_10_08": {
     "live_release": "1.9.17",
     "live_commit": "61b2759ee195a68b6e44c9a047ec27724e044b24",

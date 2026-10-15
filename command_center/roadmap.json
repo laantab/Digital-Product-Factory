@@ -1,6 +1,6 @@
 {
   "schema_note": "Digital Product Factory Pro Competitive Upgrade Roadmap, established 2026-09-12. This is the durable strategic source of truth so a future Claude session cannot lose the strategic direction: quality/reliability/design/publishing/simplicity, NOT more product breadth, until these six upgrades are complete. Status values: NOT_STARTED, IN_PROGRESS, BLOCKED, VERIFYING, COMPLETE_LOCKED. Do not reorder upgrades without a real dependency reason (see each entry's `dependencies`). Do not begin an upgrade after the current one unless the owner explicitly approves skipping ahead.",
-  "updated_at": "2026-10-15T15:48:37.377631+00:00",
+  "updated_at": "2026-10-15T16:13:39.532026+00:00",
   "vision": "A beginner should go from IDEA -> MARKET OPPORTUNITY -> PRODUCT -> PROFESSIONAL DESIGN -> COVER -> VISUALS -> QA -> PREVIEW -> APPROVAL -> MULTIPLE EXPORT FORMATS -> READY-TO-SELL PACKAGE with as little technical knowledge and manual work as possible. The customer experience stays: Create -> Preview -> Approve -> Download. Digital Product Factory Pro is not a Designrr clone -- it is a complete AI-assisted digital-product production system competing on: Factory Market Advantage before creation, multiple product types, one-click production, free/local resources first with controlled paid-AI fallback, automatic QA, professional covers and interiors, protected working generators, automatic packaging, ready-to-sell outputs, and minimal technical interaction.",
   "standing_priority": "QUALITY -> RELIABILITY -> DESIGN -> PUBLISHING -> SIMPLICITY, not additional product types, until all six upgrades are COMPLETE_LOCKED. Do not add a new product generator unless the owner explicitly approves one.",
   "current_upgrade": "upgrade_1_cover_system",
@@ -291,5 +291,13 @@
     "source_commit": "7acc927ab444e7c37f4280747217865d93f2daf5",
     "full_release_gate": "Baseline Fast Gate: 757 passed across 55 files. Full Release Gate at 7acc927ab444e7c37f4280747217865d93f2daf5: 3115 unique tests across all 223 manifest files; 0 failures, 0 errors, 0 skipped (3499.846 seconds). Five focused real-browser recovery cases passed; paid API calls blocked. Original reference PDF and ZIP checksums unchanged.",
     "publication_record": "https://github.com/laantab/Digital-Product-Factory/pull/61"
+  },
+  "consistent_ebook_quality_2026_10_15": {
+    "version": "1.9.44",
+    "scope": "Same final editorial review for manual and one-button ebook exports; final PDF identity; retain drafts on failure",
+    "status": "verifying",
+    "focused_contract_checks": "59 passed",
+    "paid_calls": 0,
+    "baseline": "10763bb4c377a8ad4d1dff6d40df254430c7ad0d; 3115-test full release gate from preceding phase. New Fast Gate: 756 passed, browser case failed because runtime browser missing; installed browser and failed case passed (1 test)."
   }
 }

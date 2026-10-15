@@ -32,24 +32,15 @@ def read_pdf_metadata(pdf_path: str) -> dict[str, str]:
     """Title/Author/Subject as actually written into the PDF."""
     out = {"Title": "", "Author": "", "Subject": "", "Creator": "", "Producer": ""}
     try:
-        raw = open(pdf_path, "rb").read()
-    except OSError:
-        return out
-    for key in out:
-        m = re.search(rb"/" + key.encode() + rb"\s*\(((?:[^()\\]|\\.)*)\)", raw)
-        if m:
-            try:
-                decoded = m.group(1).decode("latin-1")
-                # PDF literal strings escape non-ASCII bytes as \NNN octal
-                # (e.g. an apostrophe as \047). Leaving them unexpanded made a
-                # correct title read as "Beginner\047s Guide..." and raised a
-                # false META_TITLE_MISMATCH against its own product title.
-                decoded = re.sub(
-                    r"\\([0-7]{1,3})", lambda g: chr(int(g.group(1), 8)), decoded
-                )
-                out[key] = decoded.replace("\\(", "(").replace("\\)", ")")
-            except Exception:  # noqa: BLE001
-                out[key] = ""
+        import fitz
+        # PDF strings may be Unicode or indirect objects. A raw /Title search
+        # also mistakes bookmark headings for the document's actual identity.
+        with fitz.open(pdf_path) as doc:
+            metadata = doc.metadata or {}
+            for key in out:
+                out[key] = str(metadata.get(key.lower()) or "")
+    except Exception:
+        pass
     return out
 
 
@@ -231,11 +222,15 @@ def review_ebook(
         try:
             import fitz
 
-            doc = fitz.open(candidate.get("pdf_path") or "")
-            page_texts = [p.get_text() for p in doc]
+            with fitz.open(candidate.get("pdf_path") or "") as doc:
+                page_texts = [p.get_text() for p in doc]
         except Exception:
             page_texts = None
         f += check_page_quality(page_stats, page_texts=page_texts)
+        if not res.get("available") or len(page_stats) != len(candidate["page_images"]):
+            f.append(Finding(code="PAGE_ANALYSIS_INCOMPLETE", category="interior_design",
+                             severity=SEV_CRITICAL, kind=KIND_OBJECTIVE,
+                             summary="Not every rendered page could be inspected. Retry the quality check."))
         rep.checks_run.append("cover_page_composition")
         f += check_cover_page(candidate["page_images"][0])
     else:

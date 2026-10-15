@@ -64,7 +64,7 @@ def test_automatic_build_reaches_real_pdf_and_zip_without_choice_pauses(monkeypa
     try:
         for _ in range(100):
             status = orch.advance_build(pid)
-            assert not status.get('failed'), status
+            assert not status.get('failed'), (status, database.get_project(pid)['data'].get('editor_in_chief'))
             assert not status.get('awaiting_picture_approval'), status
             assert not status.get('awaiting_cover_choice'), status
             if status.get('finished'):
@@ -76,6 +76,14 @@ def test_automatic_build_reaches_real_pdf_and_zip_without_choice_pauses(monkeypa
         archive = client.get(status['downloads']['zip'])
         assert pdf.status_code == 200 and pdf.data.startswith(b'%PDF')
         assert archive.status_code == 200 and archive.data.startswith(b'PK')
+        assert data['editor_in_chief']['verdict'] == 'EDITOR-IN-CHIEF PASS'
+        assert data['editor_in_chief']['pdf_sha256'] == hashlib.sha256(pdf.data).hexdigest()
+        assert data['editor_in_chief']['zip_sha256'] == hashlib.sha256(archive.data).hexdigest()
+        import fitz
+        with fitz.open(stream=pdf.data, filetype='pdf') as document:
+            assert document.metadata['title'] == data['title']
+            assert document.metadata['author'] == 'Fixture Author'
+            assert document.get_toc()
         with patch.dict(orch.STAGE_RUNNERS, {s: lambda *_: pytest.fail('completed book rebuilt') for s in orch.STAGES}):
             assert orch.advance_build(pid)['finished']
     finally:

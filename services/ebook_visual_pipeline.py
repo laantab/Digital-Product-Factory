@@ -1075,6 +1075,7 @@ def _fixture_requirement_plan(manuscript_md: str, *, title: str = "") -> dict[st
                 "caption": f"Values discussed in {short}, shown together.",
                 "chart": {"kind": "bar", "labels": ["First", "Second", "Third"],
                           "values": [3, 5, 4]},
+                "data_source": "Synthetic acceptance-test values (3, 5, 4); not research or customer data.",
             })
         else:
             # Demonstration (and supporting-only): a real photograph. Only a

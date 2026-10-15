@@ -447,10 +447,19 @@ def _fill_photo_aid_fixture(aid: dict[str, Any], *, package_id: str, chapter: st
     out = dict(aid or {})
     if not out.get("visual_id"):
         out["visual_id"] = "v_fixture"
+    # Distinct, repeatable test assets must satisfy the same duplicate-image
+    # rule as customer assets. Previously every chapter received identical bytes.
+    import random
+
+    rng = random.Random(str(out["visual_id"]) + chapter)
     img = Image.new("RGB", (1400, 1000), (48, 110, 62))
     draw = ImageDraw.Draw(img)
     draw.rectangle((80, 80, 1320, 420), fill=(210, 180, 90))
     draw.ellipse((420, 360, 980, 900), fill=(30, 70, 40))
+    for _ in range(18):
+        x, y = rng.randrange(50, 1100), rng.randrange(50, 700)
+        draw.ellipse((x, y, x + rng.randrange(100, 300), y + rng.randrange(100, 300)),
+                     fill=tuple(rng.randrange(30, 225) for _ in range(3)))
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=90)
     filled = store_interior_photo(out, buf.getvalue(), package_id=package_id)

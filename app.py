@@ -4171,58 +4171,12 @@ def export_product_route():
             # automated editorial pass over the real rendered artifact before
             # the factory calls it ready to sell. Findings are persisted so the
             # UI can show what failed, where, why, and the next action.
-            eic_ok = True
-            try:
-                from services.editor_in_chief import VERDICT_PASS
-                from services.editor_in_chief_ebook import (
-                    collect_ebook_candidate,
-                    review_ebook,
-                )
+            from services.ebook_completion_quality import review_exported_ebook
+            from services.editor_in_chief import VERDICT_PASS
 
-                if _new_pdf and os.path.isfile(_new_pdf):
-                    import tempfile
-
-                    import fitz
-
-                    page_dir = tempfile.mkdtemp(prefix="eic_pages_")
-                    page_images: list[str] = []
-                    pdf_doc = fitz.open(_new_pdf)
-                    for _pi, _page in enumerate(pdf_doc):
-                        _img = os.path.join(page_dir, f"p{_pi + 1:03d}.png")
-                        _page.get_pixmap(dpi=72).save(_img)
-                        page_images.append(_img)
-                    candidate = collect_ebook_candidate(
-                        data, package_dir=_pkg_dir, page_images=page_images
-                    )
-                    report = review_ebook(candidate)
-                    eic_ok = report.verdict == VERDICT_PASS
-                    data["editor_in_chief"] = {
-                        "verdict": report.verdict,
-                        "overall": report.overall,
-                        "scores": report.scores,
-                        "findings": [
-                            {
-                                "code": fi.code,
-                                "severity": fi.severity,
-                                "summary": fi.summary,
-                                "location": fi.location,
-                            }
-                            for fi in report.findings
-                        ],
-                        "checks_run": report.checks_run,
-                        "checks_skipped": report.checks_skipped,
-                    }
-                    result["editor_in_chief"] = data["editor_in_chief"]
-            except Exception:
-                # The reviewer itself failing must not hide the export, but it
-                # must be visible — an unreviewed ebook is not "ready".
-                app.logger.exception("editor-in-chief review failed")
-                eic_ok = False
-                data["editor_in_chief"] = {
-                    "verdict": "EDITOR-IN-CHIEF — REVIEW ERROR",
-                    "error": "Automated review could not run; see server log.",
-                }
-                result["editor_in_chief"] = data["editor_in_chief"]
+            review = review_exported_ebook(data, package_dir=_pkg_dir)
+            eic_ok = review["verdict"] == VERDICT_PASS
+            result["editor_in_chief"] = review
             export_ready = (
                 bool(data.get("export_ready"))
                 and release_status == "PASS"

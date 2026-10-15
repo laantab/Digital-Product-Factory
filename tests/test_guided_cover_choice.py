@@ -72,8 +72,14 @@ def test_the_real_fixture_build_waits_for_a_cover_then_exports_the_selected_titl
         archive = client.get(status['downloads']['zip'])
         assert pdf.status_code == 200 and pdf.data.startswith(b'%PDF')
         assert archive.status_code == 200 and archive.data.startswith(b'PK')
+        import hashlib
+        assert data['editor_in_chief']['verdict'] == 'EDITOR-IN-CHIEF PASS'
+        assert data['editor_in_chief']['pdf_sha256'] == hashlib.sha256(pdf.data).hexdigest()
+        assert data['editor_in_chief']['zip_sha256'] == hashlib.sha256(archive.data).hexdigest()
         import fitz
         document = fitz.open(stream=pdf.data, filetype='pdf')
+        assert document.metadata['title'] == chosen['title']
+        assert document.metadata['author'] == 'Fixture Author'
         assert chosen['title'].split()[0] in document[0].get_text()
         document.close()
     finally:
