@@ -8,11 +8,12 @@ from __future__ import annotations
 import hashlib
 import re
 
-VERSION = "1"
+VERSION = "2"
 SPELLING = {
     "teh": "the", "recieve": "receive", "seperate": "separate",
     "definately": "definitely", "occured": "occurred", "untill": "until",
     "becuase": "because", "wich": "which", "thier": "their",
+    "adress": "address", "enviroment": "environment", "goverment": "government",
 }
 # Protect source material and Markdown syntax. Never edit quotations, URLs,
 # code, tables, headings, image captions, or quoted source blocks.
