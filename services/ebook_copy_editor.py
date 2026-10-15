@@ -85,6 +85,16 @@ def edit_text(text: str, *, target_grade: int = 8) -> dict:
             suggestions.append({"code": "POSSIBLE_PASSIVE_VOICE", "line": line,
                                 "excerpt": passive.group(0),
                                 "suggestion": "Consider active voice if it improves clarity; passive voice may be appropriate."})
+        # Article choice has exceptions (an hour, a university, acronyms).
+        # Offer review suggestions instead of guessing at the intended wording.
+        for article in re.finditer(r"\b(a)\s+(apple|orange|example|idea|image|option|answer)\b", span, re.I):
+            suggestions.append({"code": "ARTICLE_AGREEMENT", "line": line,
+                                "excerpt": article.group(0),
+                                "suggestion": "Consider 'an' before this word."})
+        for article in re.finditer(r"\b(an)\s+(book|chapter|garden|table|document|picture)\b", span, re.I):
+            suggestions.append({"code": "ARTICLE_AGREEMENT", "line": line,
+                                "excerpt": article.group(0),
+                                "suggestion": "Consider 'a' before this word."})
         for sentence in re.split(r"(?<=[.!?])\s+", span):
             if len(re.findall(r"\b[\w'-]+\b", sentence)) > 35:
                 suggestions.append({"code": "LONG_SENTENCE", "line": line,
