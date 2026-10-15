@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-13T04:12:00Z",
-  "current_task": "v1.9.27 review repair live and verified; actual ebook exports complete; owner final visual review pending.",
+  "updated_at": "2026-10-15T13:04:00Z",
+  "current_task": "v1.9.42 automatic coloring completion recovery implemented; release checks pending. v1.9.41 Saved Projects repair live.",
   "stopped_at": "Branch feature/v1.8.0-workflows, off production commit 47393a0 (v1.7.29). Added services/jobs/mode.py (FACTORY_EXECUTION_MODE inline|workflow), services/jobs/dispatch.py (the single decision point app.py calls), services/jobs/workflow_trigger.py (durable job first, then Render start_task, never raises into a request), services/jobs/workflow_runner.py (SDK-free task behaviour), workflow_task.py (the Render entrypoint), two columns on the jobs table (workflow_run_id, workflow_triggered_at) with a conditional-UPDATE duplicate guard, executor.run_project (claims only the named book), a workflow-mode guard on runner.executor_enabled() and on POST /advance, and a read-only GET /ebook/execution-mode. 50 new checks in tests/test_ebook_workflow_execution.py, all green, zero paid API calls. render.yaml, .env.example, V1_8_0_WORKFLOWS_DEPLOYMENT.md and Verify_v1.8.0_Workflows.bat written. NOTE: the earlier unpushed feature/v1.8.0-background-worker branch on the PC is superseded and must not be merged.",
-  "next_step": "Owner reviews the 12 remaining interior visuals and makes final product approval. Preserve exports and zero new spending. Broader unfinished extensions remain listed separately in roadmap.",
+  "next_step": "Finish release gates, relock shared protections at verified core commit, deploy and verify Project21 recovers from original stored PDF/ZIP without regeneration. Preserve Save consent and all legacy artifacts.",
   "next_claude": "code",
   "open_issues": [
     {

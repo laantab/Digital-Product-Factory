@@ -24,11 +24,14 @@ _active = ContextVar('coloring_background_project', default=None)
 
 
 def _change(pid, **changes):
-    project = database.get_project(pid)
-    data = project['data']
-    data['coloring_build'].update(changes)
-    database.update_project(pid, None, data)
-    return data
+    from services.coloring_book.completion_recovery import retry_metadata
+    def save():
+        project = database.get_project(pid)
+        data = project['data']
+        data['coloring_build'].update(changes)
+        database.update_project(pid, None, data)
+        return data
+    return retry_metadata(save)
 
 
 def start(fields, customer):
@@ -118,12 +121,25 @@ def status(pid, customer=None):
     state = data['coloring_build']
     if customer is not None and state.get('customer') != customer:
         raise ValueError('Coloring build not found.')
+    # Authorize first. A status poll can reconnect existing exports, but must
+    # never start a Workflow task, render a page or request paid artwork.
+    from services.coloring_book.completion_recovery import recover, CompletionPending
+    pending = ''
+    if state.get('status') not in ('complete', 'review'):
+        try:
+            if recover(int(pid)):
+                data = database.get_project(int(pid))['data']
+                state = data['coloring_build']
+        except CompletionPending as exc:
+            pending = str(exc)
     out = {'coloring_build': True, 'project_id': int(pid), 'status': state['status'],
            'message': state['message'], 'completed_images': len(state.get('completed_images') or []),
            'finished': state['status'] in ('complete', 'review'), 'failed': state['status'] == 'failed'}
     job = store.get_for_project(int(pid))
     if not out['finished'] and not out['failed'] and job and job['status'] == store.RUNNING and str(job.get('lease_expires_at') or '') <= store._now():
         out.update(failed=True, status='interrupted', message='The builder stopped. Continue from your saved artwork.')
+    if pending:
+        out.update(failed=True, status='interrupted', message=pending)
     if out['finished']:
         # Small response: binaries already live in verified export storage.
         result = {k: v for k, v in data.items() if k not in ('pdf_bytes', 'cover_preview_b64', 'sample_preview_b64', 'coloring_build', database.ROW_VERSION_KEY)}
@@ -200,6 +216,16 @@ def image_call(path, generate):
 
 
 def advance(pid):
+    from services.coloring_book.completion_recovery import (
+        recover, finalize, checkpoint_completion, identity, retry_metadata, transient, CompletionPending,
+    )
+    try:
+        if recover(pid, under_lease=True):
+            return status(pid)
+    except CompletionPending as exc:
+        out = status(pid)
+        out.update(failed=True, status='interrupted', message=str(exc))
+        return out
     project = database.get_project(pid)
     data = project['data']
     state = data['coloring_build']
@@ -221,27 +247,32 @@ def advance(pid):
         for path in sorted(folder.rglob('*')):
             if path.is_file() and not publish_file(pid, EXPORTS_DIR, path):
                 raise RuntimeError('Your files could not be safely saved. Completed artwork is preserved.')
-        fresh = database.get_project(pid)['data']
-        fresh.update(result)
-        database.update_project(pid, None, fresh)
+        def save_result():
+            fresh = database.get_project(pid)['data']
+            if fresh.get('package_id') != data['package_id'] or fresh.get('fields') != data.get('fields'):
+                raise ValueError('The saved coloring request changed; existing files were preserved.')
+            fresh.update(result)
+            database.update_project(pid, None, fresh)
+        retry_metadata(save_result)
         review = bool(result.get('needs_approval'))
         if not review:
             from services.packaging import build_product_export
-            exports = build_product_export(database.get_project(pid))
+            export_project = database.get_project(pid)
+            expected_identity = identity(export_project['data'])
+            exports = build_product_export(export_project)
             for path in sorted(folder.rglob('*')):
                 if path.is_file() and not publish_file(pid, EXPORTS_DIR, path):
                     raise RuntimeError('The finished package could not be safely saved.')
-            fresh = database.get_project(pid)['data']
-            fresh['product_exports'] = exports['exports']
-            fresh['export_package_id'] = exports['package_id']
-            fresh['stage'] = 'export_ready'
-            fresh['export_files'] = exports['exports']['files']
-            fresh['pdf_sha256'] = exports['exports']['files']['pdf']['sha256']
-            fresh['export_ready'] = True
-            database.update_project(pid, None, fresh)
-        _change(pid, status='review' if review else 'complete', message='Ready for your review.' if review else 'Your coloring book is ready.')
+            checkpoint_completion(pid, exports, expected_identity)
+            finalize(pid, exports, expected_identity)
+        else:
+            _change(pid, status='review', message='Ready for your review.')
         return status(pid)
     except Exception as exc:
+        if transient(exc):
+            # Let Workflow retry and the metadata-only monitor reconcile the
+            # durable exports; do not mask a lost connection with another write.
+            raise
         _change(pid, status='failed', message=str(exc)[:500])
         return status(pid)
     finally:
@@ -251,6 +282,12 @@ def advance(pid):
 def run_build(pid):
     from services.jobs.executor import _advance_under_lease
     from services.jobs.workflow_runner import builder_version
+    from services.coloring_book.completion_recovery import recover, CompletionPending
+    try:
+        if recover(pid):
+            return status(pid)
+    except CompletionPending:
+        return status(pid)
     existing = store.get_for_project(pid)
     if existing and existing['status'] == store.SUCCEEDED:
         return status(pid)

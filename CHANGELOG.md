@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.9.42 — 2026-10-15
+
+**Reconnect completed coloring-book files after an interrupted final save.**
+
+### What changed
+
+The Factory checks expired or failed coloring builds at startup and every minute. It verifies the original stored PDF and ZIP and reconnects their download records without requesting artwork or rebuilding exports. Existing Save consent stays unchanged.
+
+### What was fixed
+
+A database disconnect after publishing both files could leave a completed book marked running. Completion and download metadata now save together, with bounded fresh-connection retries. Status checks and Workflow retries also recognize existing finished packages. A missing or mismatched package is preserved and cannot silently fall back to paid generation.
+
+### Do the steps change?
+
+No extra recovery step is required for a verified finished package. Return to the Factory to review and save the completed book. Interrupted artwork requests and approval pauses still require their existing review.
+
+### Release gate
+
+Coverage includes lost commit acknowledgements, restart recovery without local files, exact PDF/ZIP downloads, active leases, concurrent edits, corrupt packages and zero provider calls during recovery.
+
 ## 1.9.41 — 2026-10-15
 
 **Open Saved Projects without loading every book into the list.**
