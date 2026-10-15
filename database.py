@@ -519,6 +519,23 @@ def _ebook_build_is_unfinished(data: dict) -> bool:
     return not bool(state.get("finished")) and not bool(state.get("failed"))
 
 
+def _iter_project_records(where: str, order: str):
+    """Read one full record at a time, rather than buffering every book blob.
+
+    Callers supply constant SQL clauses. Only small IDs are collected first;
+    the exact existing visibility/output checks still see the full record.
+    """
+    conn = get_conn()
+    try:
+        ids = conn.execute(f"SELECT id FROM projects WHERE {where} ORDER BY {order}").fetchall()
+    finally:
+        conn.close()
+    for row in ids:
+        project = get_project(row['id'])
+        if project is not None:
+            yield project
+
+
 def list_unfinished_ebook_workspaces() -> list[dict]:
     """Ebook projects still being built, newest first.
 
@@ -531,17 +548,11 @@ def list_unfinished_ebook_workspaces() -> list[dict]:
     Same visibility rules as the customer list: real user saves only, no
     system/test/temporary rows.
     """
-    conn = get_conn()
-    rows = conn.execute(
-        f"SELECT {','.join(_TABLE_COLS)} FROM projects "
-        "WHERE user_saved = 1 AND system_test = 0 AND temporary = 0 "
-        "AND type = 'ebook' ORDER BY updated_at DESC"
-    ).fetchall()
-    conn.close()
-
     out: list[dict] = []
-    for row in rows:
-        project = _row_to_dict(row)
+    for project in _iter_project_records(
+        "user_saved = 1 AND system_test = 0 AND temporary = 0 AND type = 'ebook'",
+        "updated_at DESC",
+    ):
         data = project.get("data") if isinstance(project.get("data"), dict) else {}
         has_workspace = bool(
             data.get("ebook_project_workspace") or data.get("ebook_workspace"))
@@ -1075,6 +1086,7 @@ def _dedupe_customer_projects(projects: list[dict]) -> list[dict]:
 def get_customer_saved_products(
     limit: int = 10,
     offset: int = 0,
+    *, list_item=None,
 ) -> tuple[list[dict], bool]:
     """Customer Saved Projects: only intentionally saved completed products.
 
@@ -1088,19 +1100,14 @@ def get_customer_saved_products(
         offset = max(0, int(offset))
     except (TypeError, ValueError):
         offset = 0
-    conn = get_conn()
-    rows = conn.execute(
-        f"SELECT {','.join(_TABLE_COLS)} FROM projects "
-        "WHERE user_saved = 1 AND system_test = 0 AND temporary = 0 "
-        "ORDER BY updated_at DESC, created_at DESC, id DESC"
-    ).fetchall()
-    conn.close()
     candidates = []
-    for row in rows:
-        project = _row_to_dict(row)
+    for project in _iter_project_records(
+        "user_saved = 1 AND system_test = 0 AND temporary = 0",
+        "updated_at DESC, created_at DESC, id DESC",
+    ):
         if not is_customer_saved_product(project):
             continue
-        candidates.append(project)
+        candidates.append(list_item(project) if list_item else project)
     candidates.sort(key=_customer_sort_key, reverse=True)
     unique = _dedupe_customer_projects(candidates)
     sliced = unique[offset : offset + limit] if limit else unique[offset:]

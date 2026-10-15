@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.9.41 — 2026-10-15
+
+**Open Saved Projects without loading every book into the list.**
+
+### What changed
+
+Saved Projects and the dashboard send compact product details. Open retrieves the original full record. Saved PDFs, ZIPs, artwork and approval records stay intact.
+
+### What was fixed
+
+Several concurrent list requests could exhaust the website memory limit by holding full books and checking their assets at once. Customer lists now process one record at a time and serialize these heavy reads. A loading failure offers Try again instead of falsely saying there are no saved products.
+
+### Do the steps change?
+
+Open Saved Projects, choose your product, and click Open or its download button. The product visibility and download quality rules are unchanged.
+
+### Release gate
+
+Checks cover large saved records, bounded memory, original-data preservation, fresh full-record reads on Open, and browser recovery from a failed list request. No new production books or paid artwork calls are used.
+
 ## 1.9.40 — 2026-10-14
 
 **Preview a coloring book using the number of pages you enter.**
