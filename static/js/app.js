@@ -142,7 +142,7 @@ const PRODUCT_TYPES = [
         hint: "Use Sellable AI artwork for a real product. Quick test skips AI images.",
       },
       { name: "age_group", label: "Who is this for?", type: "select", options: ["Kids", "Children ages 8–12", "Teens", "12-adult", "Adults", "All ages"], default: "Children ages 8–12" },
-      { name: "pages", label: "Number of pages", type: "number", value: "25", hint: "Thunder Volt full story books use 25 interiors (+ cover = 26 PDF pages)." },
+      { name: "pages", label: "Number of pages", type: "number", value: "25", hint: "Enter a small count, such as 2, for a preview. The book cover is additional. Choose 1 for a single sheet." },
       { name: "art_style", label: "Art style", type: "select", options: ["Cartoon comic-book", "Bold & Easy Kawaii", "Cute cartoon", "Bold KDP style", "Realistic", "Kids coloring"], default: "Cartoon comic-book" },
       { name: "include_captions", label: "Add short captions under pages?", type: "select", options: YN, default: "No" },
       { name: "page_size", label: "Page size", type: "select", options: ["US Letter", "A4", "6x9", "8.5x11"], default: "US Letter" },
@@ -393,7 +393,11 @@ async function api(path, opts) {
     );
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) {
+    const error = new Error(data.error || `Request failed (${res.status})`);
+    error.status = res.status;
+    throw error;
+  }
   return data;
 }
 
@@ -6352,7 +6356,10 @@ async function runProduct() {
     // what actually failed instead of assuming every failure is a field.
     const msg = String(e.message || "");
     const isQaOrRegenerationFailure = /QA (failed|blocked)|violates contract|auto-correction|50[0234]|interrupted|artwork|saved|background/i.test(msg);
-    const guidance = isQaOrRegenerationFailure
+    const isColoringValidation = factoryType === "coloring_book" && e.status === 400;
+    const guidance = isColoringValidation
+      ? "Check the settings above, then try again."
+      : isQaOrRegenerationFailure
       ? "The build was interrupted. Completed artwork is preserved. Check the saved build before starting another request."
       : "Fix any missing fields above, then try Generate again.";
     out.innerHTML = card(

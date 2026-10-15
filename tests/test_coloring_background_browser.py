@@ -6,6 +6,7 @@ import subprocess
 import sys
 import time
 import zipfile
+import pytest
 from pathlib import Path
 
 from pypdf import PdfReader
@@ -14,7 +15,8 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_coloring_build_survives_browser_refresh_and_downloads(tmp_path):
+@pytest.mark.parametrize('count', [2, 4, 12])
+def test_coloring_build_survives_browser_refresh_and_downloads(tmp_path, count):
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
@@ -51,7 +53,13 @@ def test_coloring_build_survives_browser_refresh_and_downloads(tmp_path):
             page.locator('[data-ft="coloring_book"]').click()
             page.locator('#factoryForm [name="coloring_title"]').fill('Deep water sea creatures')
             page.locator('#factoryForm [name="theme"]').fill('Deep water sea creatures')
-            page.locator('#factoryForm [name="pages"]').fill('12')
+            page.locator('#factoryForm [name="pages"]').fill(str(count))
+            # A field error must not claim that artwork/builds were interrupted.
+            page.route('**/generate-product', lambda route: route.fulfill(status=400, json={'error': 'Check settings before generating artwork.'}), times=1)
+            page.locator('#factoryBtn').click()
+            page.locator('#factoryOutput').get_by_text('Check the settings above, then try again.', exact=False).wait_for()
+            assert 'build was interrupted' not in page.locator('#factoryOutput').inner_text().lower()
+            assert page.locator('#factoryForm [name="pages"]').input_value() == str(count)
             page.locator('#factoryBtn').click()
             page.locator('#factoryOutput').get_by_text('You can leave this page and return.', exact=False).wait_for(timeout=15000)
             pid = page.evaluate('localStorage.getItem("factoryColoringBuild")')
@@ -59,12 +67,12 @@ def test_coloring_build_survives_browser_refresh_and_downloads(tmp_path):
             page.reload()
             page.locator('#nav [data-go="factory"]').click()
             page.locator('#factoryOutput [data-preview-dl-pdf]').wait_for(timeout=120000)
-            assert page.locator('#factoryForm [name="pages"]').input_value() == '12'
+            assert page.locator('#factoryForm [name="pages"]').input_value() == str(count)
             assert page.locator('#factoryForm [name="theme"]').input_value() == 'Deep water sea creatures'
             with page.expect_download() as event:
                 page.locator('#factoryOutput [data-preview-dl-pdf]').click()
             pdf = Path(event.value.path()).read_bytes()
-            assert len(PdfReader(io.BytesIO(pdf)).pages) == 13
+            assert len(PdfReader(io.BytesIO(pdf)).pages) == count + 1
             saved = page.request.get(f'http://127.0.0.1:{port}/coloring/build/{pid}/status').json()
             assert saved['finished']
             url = saved['result']['product_exports']['files']['zip']['url']

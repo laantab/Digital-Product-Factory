@@ -33,21 +33,19 @@ def _change(pid, **changes):
 
 def start(fields, customer):
     fields = dict(fields)
-    from services.product import _coloring_book_plan
     from services.coloring_book.prompt_engine import resolve_coloring_book_author
     from services.ebook_package import _PACKAGE_ID_OK
-    plan = _coloring_book_plan(fields)
     from services.quality.user_instruction_controller import build_coloring_book_contract
-    from services.factory.puzzle_plan import normalize_coloring_page_count
     build_coloring_book_contract(fields)
-    raw_count = str(fields.get('pages') or '').strip()
+    raw_count = str(fields.get('pages') if fields.get('pages') is not None else '').strip()
     try:
         requested = int(raw_count) if raw_count else None
     except ValueError:
         requested = None
-    normalized, warnings = normalize_coloring_page_count(plan.get('output_type', 'book'), requested)
-    if requested is not None and plan.get('output_type') != 'single_page' and normalized != requested:
-        raise ValueError(f'This book supports at least 12 and at most 100 coloring pages. You entered {requested}. Choose a supported count or Single Sheet before generating artwork.')
+    # Validate before handing off; small previews must never expand into
+    # additional paid artwork. One page retains the existing Single Sheet rule.
+    if raw_count and (requested is None or not 1 <= requested <= 100):
+        raise ValueError('Enter a whole number from 1 to 100 coloring pages. Small previews, such as 2 pages, are supported.')
     if not str(fields.get('theme') or fields.get('coloring_title') or '').strip():
         raise ValueError('Enter a theme for your coloring book.')
     if fields.get('package_id') and not _PACKAGE_ID_OK(str(fields['package_id'])):
