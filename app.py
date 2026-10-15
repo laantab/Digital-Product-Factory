@@ -34,6 +34,7 @@ import hmac
 from io import BytesIO
 
 import database
+from services.saved_project_listing import serialized_listing, compact_list_item
 from services.ad import generate_ad, generate_traffic_content, generate_seven_day_plan, generate_promotion_package, generate_launch_package, PLATFORMS, PLATFORMS_LEGACY, TRAFFIC_GOALS_LEGACY, PROMOTION_GOALS, PLATFORM_LABELS, PROMOTION_GOAL_LABELS
 from services.ebook import generate_ebook
 from services.market_research import discover_products, discover_top_opportunities, market_research
@@ -4964,6 +4965,7 @@ def ebook_workspace_manuscript_route(project_id: int):
 
 
 @app.get("/ebook-workspaces/in-progress")
+@serialized_listing
 def list_unfinished_ebook_workspaces_route():
     """Ebook projects the customer can continue. Read-only, no paid calls."""
     try:
@@ -4974,6 +4976,7 @@ def list_unfinished_ebook_workspaces_route():
 
 
 @app.get("/projects")
+@serialized_listing
 def list_projects_route():
     """List projects.
 
@@ -5001,8 +5004,11 @@ def list_projects_route():
         offset = 0
     limit = min(max(limit, 1), 10)
     offset = max(offset, 0)
-    projects, has_more = database.get_customer_saved_products(limit=limit, offset=offset)
-    resp = jsonify([_slim_workspace_list_item(_enrich_project_artifact_fields(p)) for p in projects])
+    projects, has_more = database.get_customer_saved_products(
+        limit=limit, offset=offset,
+        list_item=lambda p: compact_list_item(_enrich_project_artifact_fields(p)),
+    )
+    resp = jsonify(projects)
     resp.headers["X-Saved-Has-More"] = "1" if has_more else "0"
     return resp
 

@@ -220,6 +220,7 @@
     "tests/test_builder_pictures_reach_the_website.py",
     "tests/test_ebook_creation_modes.py",
     "tests/test_coloring_background_build.py",
-    "tests/test_coloring_background_browser.py"
+    "tests/test_coloring_background_browser.py",
+    "tests/test_saved_products_bounded_loading.py"
   ]
 }

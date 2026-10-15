@@ -525,7 +525,7 @@ function buildNav() {
     a.className = "nav-link" + (item.id === current ? " active" : "");
     a.dataset.go = item.id;
     a.innerHTML = `<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${item.icon}"/></svg>${item.label}`;
-    a.onclick = () => go(item.id);
+    // Navigation clicks are handled once by the delegated data-go listener.
     nav.appendChild(a);
 
     const opt = document.createElement("option");
@@ -864,8 +864,11 @@ async function loadDashboard() {
   let projects = [];
   try {
     projects = await api("/projects?limit=3");
+    if (!Array.isArray(projects)) throw new Error("Invalid saved-product response");
   } catch (e) {
-    /* ignore */
+    const recent = document.getElementById("recentList");
+    if (recent) recent.innerHTML = '<p class="text-sm text-rose-600">Your saved products could not load. Open Saved Projects to try again.</p>';
+    return;
   }
   const emptyMsg = `<p class="text-sm text-slate-400 py-6 text-center">No saved projects yet. Generate something and save it here.</p>`;
   const recent = document.getElementById("recentList");
@@ -1095,8 +1098,14 @@ async function loadProjects() {
       ? "/projects?admin=1"
       : `/projects?limit=10&offset=${savedListOffset || 0}`;
     projects = await api(url);
+    if (!Array.isArray(projects)) throw new Error("Invalid saved-product response");
   } catch (e) {
-    /* ignore */
+    const saved = document.getElementById("savedList");
+    if (saved) {
+      saved.innerHTML = card(`<p class="text-sm text-rose-600">Your saved products could not load. This does not mean they were deleted.</p><button data-retry-saved class="btn-primary mt-3">Try again</button>`);
+      saved.querySelector("[data-retry-saved]").onclick = () => loadProjects();
+    }
+    return;
   }
   if (!Array.isArray(projects)) projects = [];
 
@@ -1639,6 +1648,12 @@ function _focusReopenedProduct(keptForm) {
 }
 
 function openProject(p) {
+  if (p && p._list_summary) {
+    toast("Opening your saved product…");
+    return api(`/projects/${p.id}`)
+      .then((full) => openProject(full))
+      .catch((error) => toast("Could not open your saved product: " + error.message, "error"));
+  }
   const d = p.data || {};
   if (p.type === "research") {
     go("market");
