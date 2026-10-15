@@ -145,3 +145,119 @@ def test_browser_one_build_click_enters_finished_product_with_the_right_mode(bro
         assert page.get_by_role('button', name='Download ZIP', exact=True).is_visible()
     finally:
         page.close()
+
+
+def _progress(pid=901):
+    return {'ok': True, 'project_id': pid, 'percent': 40,
+            'title': f'Preserved Book {pid}', 'message': 'Preparing pictures',
+            'activity': {'state': 'working', 'label': 'Working'}}
+
+
+def _finished(pid=901):
+    return {**_progress(pid), 'finished': True, 'percent': 100,
+            'downloads': {'pdf': '/download/fixture/ebook.pdf',
+                          'zip': '/download/fixture/package.zip'}}
+
+
+@pytest.mark.parametrize('failure', ['disconnect', '503'])
+def test_browser_recovers_connection_without_another_build_click(browser_factory, failure):
+    page = browser_factory.browser.new_page()
+    calls = []
+    def advance(route):
+        calls.append(route.request.post_data_json)
+        if len(calls) == 1:
+            route.fulfill(json=_progress())
+        elif len(calls) == 2:
+            if failure == 'disconnect':
+                route.abort('failed')
+            else:
+                route.fulfill(status=503, json={'error': 'temporarily unavailable'})
+        else:
+            route.fulfill(json=_finished())
+    page.route('**/ebook/build/901/status', lambda r: r.fulfill(json=_progress()))
+    page.route('**/ebook/build/901/advance', advance)
+    try:
+        page.goto(browser_factory.base)
+        page.wait_for_load_state('networkidle')
+        page.evaluate('void openEbookBuild(901)')
+        page.locator('[data-ebook-build-reconnecting]').wait_for(timeout=10000)
+        assert page.locator('[data-ebook-build-percent]').inner_text() == '40%'
+        assert page.locator('[data-ebook-build-failed]').count() == 0
+        page.get_by_role('button', name='Download PDF', exact=True).wait_for(timeout=15000)
+        assert len(calls) == 3
+        assert all(not body.get('continue') for body in calls)
+    finally:
+        page.close()
+
+
+def test_browser_reopening_retries_status_without_restarting_the_book(browser_factory):
+    page = browser_factory.browser.new_page()
+    reads = []
+    starts = []
+    def status(route):
+        reads.append(1)
+        if len(reads) == 1:
+            route.fulfill(status=503, json={})
+        else:
+            route.fulfill(json=_finished())
+    page.route('**/ebook/build/901/status', status)
+    page.route('**/ebook/build', lambda r: (starts.append(1), r.abort()))
+    try:
+        page.goto(browser_factory.base)
+        page.wait_for_load_state('networkidle')
+        page.evaluate('void openEbookBuild(901)')
+        page.get_by_role('button', name='Download PDF', exact=True).wait_for(timeout=15000)
+        assert len(reads) == 2
+        assert not starts
+    finally:
+        page.close()
+
+
+def test_reopened_book_waits_for_old_request_and_ignores_its_late_failure(browser_factory):
+    page = browser_factory.browser.new_page()
+    pending = []
+    new_calls = []
+    page.route('**/ebook/build/901/status', lambda r: r.fulfill(json=_progress()))
+    page.route('**/ebook/build/901/advance', lambda r: pending.append(r))
+    page.route('**/ebook/build/902/status', lambda r: r.fulfill(json=_progress(902)))
+    def advance_new(route):
+        new_calls.append(1)
+        route.fulfill(json=_finished(902))
+    page.route('**/ebook/build/902/advance', advance_new)
+    try:
+        page.goto(browser_factory.base)
+        page.wait_for_load_state('networkidle')
+        page.evaluate('void openEbookBuild(901)')
+        page.wait_for_function('() => _ebookBuildBusy')
+        # Give Playwright the pending network event before opening another book.
+        page.wait_for_timeout(100)
+        assert pending
+        page.evaluate('void openEbookBuild(902)')
+        page.get_by_role('heading', name='Preserved Book 902', exact=True).wait_for()
+        assert not new_calls, 'two advance requests must never overlap'
+        pending[0].fulfill(status=503, json={})
+        page.get_by_role('button', name='Download PDF', exact=True).wait_for(timeout=15000)
+        assert new_calls == [1]
+        assert page.locator('[data-ebook-build-failed]').count() == 0
+        assert 'Preserved Book 902' in page.locator('[data-ebook-build-done]').inner_text()
+    finally:
+        page.close()
+
+
+def test_browser_does_not_retry_a_denied_build_request(browser_factory):
+    page = browser_factory.browser.new_page()
+    calls = []
+    page.route('**/ebook/build/901/status', lambda r: r.fulfill(json=_progress()))
+    def denied(route):
+        calls.append(1)
+        route.fulfill(status=403, json={'error': 'Access denied'})
+    page.route('**/ebook/build/901/advance', denied)
+    try:
+        page.goto(browser_factory.base)
+        page.wait_for_load_state('networkidle')
+        page.evaluate('void openEbookBuild(901)')
+        page.locator('[data-ebook-build-failed]').wait_for()
+        page.wait_for_timeout(2000)
+        assert calls == [1]
+    finally:
+        page.close()

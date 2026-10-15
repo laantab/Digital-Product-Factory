@@ -87,7 +87,8 @@ class EbookBuildRoutingTests(unittest.TestCase):
 
     def test_advance_requests_cannot_overlap(self):
         loop = _function_body(APP_JS, "async function _ebookBuildLoop(projectId, runToken")
-        self.assertIn("if (_ebookBuildBusy) return;", loop)
+        self.assertIn("while (_ebookBuildBusy)", loop)
+        self.assertIn("setTimeout(r, 100)", loop)
         self.assertIn("_ebookBuildBusy = true;", loop)
         self.assertIn("_ebookBuildBusy = false;", loop)
         self.assertIn("finally", loop)

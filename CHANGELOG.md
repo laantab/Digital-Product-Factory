@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.9.43 — 2026-10-15
+
+**Keep ebook progress connected without another build click.**
+
+### What changed
+
+The ebook screen reconnects after temporary connection and server failures while retaining the last reported progress. Reopening a book retries reading its status automatically. A reopened screen waits for an older progress request to finish, and late responses from the older screen cannot overwrite the current book.
+
+### What was fixed
+
+A temporary connection error previously stopped the screen and displayed zero progress. Reopening during an older request could also abandon the new screen's progress loop.
+
+### What stays protected
+
+Reconnection never starts a replacement project or resets generation attempts. Only one progress request runs at a time. Actual build failures and intentional approval pauses retain their existing controls. Coloring books, crosswords, word searches and other generators retain their existing paths.
+
+### Do the steps change?
+
+No additional click is needed after a temporary connection failure. Keep the page open and it reconnects automatically.
+
+### Release gate
+
+Real-browser regression checks cover disconnection, temporary server failures, reopening, late responses and denied requests. Existing automatic/guided ebook fixtures verify real PDF/ZIP downloads and preservation of completed content. Release verification is recorded in the session handoff.
+
 ## 1.9.42 — 2026-10-15
 
 **Reconnect completed coloring-book files after an interrupted final save.**
