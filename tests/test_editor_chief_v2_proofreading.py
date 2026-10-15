@@ -44,3 +44,18 @@ def test_quotes_and_code_are_excluded_from_clarity_suggestions():
     review = edit_text(original)
     assert review["edited"] == original
     assert not review["suggestions"]
+
+
+def test_article_agreement_is_advisory_not_silent_rewriting():
+    original = "A apple and an book are examples."
+    result = edit_text(original)
+    assert result["edited"] == original
+    assert sum(x["code"] == "ARTICLE_AGREEMENT" for x in result["suggestions"]) == 2
+    assert result["paid_calls"] == 0
+
+
+def test_protected_article_examples_remain_unmodified():
+    original = '"a apple" and `an book` are quotation examples.'
+    result = edit_text(original)
+    assert result["edited"] == original
+    assert not any(x["code"] == "ARTICLE_AGREEMENT" for x in result["suggestions"])
