@@ -136,6 +136,11 @@ with app.app_context():
         from services.jobs.store import init_jobs_table
 
         init_jobs_table()
+        # Reconnect already-published coloring exports after a lost final save.
+        # This monitor only verifies files and writes completion metadata; it
+        # never runs generators or dispatches billable Workflow tasks.
+        from services.coloring_book.completion_recovery import start as _start_completion_recovery
+        _start_completion_recovery()
         _started = _start_executor()
         app.logger.info(
             "factory execution mode: %s (in-process executor %s)",
