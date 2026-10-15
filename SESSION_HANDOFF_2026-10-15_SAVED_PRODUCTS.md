@@ -51,3 +51,27 @@ Full and Fast release gates are running. Do not merge before they pass and the
 four temporarily unlocked functions are relocked at a real verified commit.
 No paid provider calls, production config/secrets/schema changes, legacy deletion,
 or changes to the approved Project20 artifacts.
+
+
+## Completed release verification
+
+Core source tree7003c856dede4d66951ea8549d907bbe4c1d7958 verified at actual
+GitHub commit902680a391af674e2cadff0fd430c5a76d242d59.
+After Fast Gate737 passed (54 files). Full gate3090 passed, failures0, errors0,
+skips0 across222 files; exact unique-node coverage, missing0, duplicates0.
+Python compile, JS syntax, manifest checks passed. Paid API calls permitted0.
+Four shared-dependency protections relocked at that verified source commit.
+
+The first full run encountered an already truncated local reference PDF and was
+superseded. Before repair it was1971200 bytes, SHA256
+adb374ba4eb8e44b9761cf2848dbc0e74092addbb8307b67746d7cce6f7f091b,
+an exact prefix without EOF of the original4951720-byte PDF. The intact companion
+ZIP passed CRC and contained the original PDF matching expected SHA256
+6202e3a559db9313b61ec2d54ff689f6236a3b037308820bc77cfedf4d01f5bd.
+Preserved the prefix at ../fixture-preservation-20261015/ebook-prefix-before-recovery.pdf,
+then restored only that local fixture from the verified original ZIP and checked
+its hash before the final full run. Production exports and preservation tests
+were unchanged. Final reports: ../release-1941-saved-final-results/ and
+../saved_products_full_release_final.log; Fast ../saved_products_fast.log.
+Project21 metadata/save status still needs a separate recovery; retrieval did not
+mark it completed or saved. Existing original PDF and ZIP remain accessible.
