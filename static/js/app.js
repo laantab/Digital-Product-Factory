@@ -7446,7 +7446,7 @@ function renderEbookBuild(status) {
     : "";
 
   root.innerHTML = card(
-    `<div data-ebook-build-progress>
+    `<div data-ebook-build-progress ${s.reconnecting ? "data-ebook-build-reconnecting" : ""}>
        <p class="text-xs font-semibold uppercase tracking-wide text-brand-600">Preparing your ebook</p>
        <h2 class="text-xl font-bold text-slate-900 mt-1">${escapeHtml(bookTitle)}</h2>
        ${s.subtitle ? `<p class="text-sm text-slate-500 mt-1">${escapeHtml(s.subtitle)}</p>` : ""}
@@ -7568,10 +7568,32 @@ async function _ebookPictureSheetRefresh(pid, watch) {
   } while (Date.now() < deadline);
 }
 
+// Connection failures describe the screen, not the server's build result.
+function _ebookBuildReconnecting(status, projectId) {
+  return {
+    ...(status || {}), project_id: projectId, failed: false,
+    reconnecting: true,
+    message: "Reconnecting to the Factory. Your last reported progress is shown; this page will continue automatically.",
+    activity: { state: "retrying", label: "Reconnecting" },
+  };
+}
+
+function _ebookBuildCanReconnect(error) {
+  return !error.status || error.status >= 500 || [408, 429].includes(error.status);
+}
+
 //: Drive the build to a conclusion. One request in flight, always.
 async function _ebookBuildLoop(projectId, runToken, opts) {
-  if (_ebookBuildBusy) return;
+  // A reopened screen waits for the retired request instead of losing its
+  // poller. The old owner releases this lock in finally before we continue.
+  while (_ebookBuildBusy) {
+    if (runToken !== _ebookBuildRun) return;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  if (runToken !== _ebookBuildRun) return;
   _ebookBuildBusy = true;
+  let lastStatus = (opts && opts.status) || {};
+  let connectionFailures = 0;
   // v1.8.3: only the FIRST request after a Continue click says so. The
   // polling that follows must never reset the server's retry counter.
   let continued = !!(opts && opts.continued);
@@ -7584,16 +7606,20 @@ async function _ebookBuildLoop(projectId, runToken, opts) {
         continued = false;
         status = await api(`/ebook/build/${projectId}/advance`, { method: "POST", body });
       } catch (e) {
-        // Network or server trouble: report plainly, never a traceback.
-        renderEbookBuild({
-          project_id: projectId,
-          failed: true,
-          percent: 0,
-          message: "We couldn't reach the Factory. Your completed work has been saved.",
-        });
-        return;
+        if (runToken !== _ebookBuildRun) return;
+        if (!_ebookBuildCanReconnect(e)) {
+          renderEbookBuild({ ...lastStatus, project_id: projectId, failed: true,
+            message: "Please reopen the Factory to continue viewing this book. Your completed work is saved." });
+          return;
+        }
+        renderEbookBuild(_ebookBuildReconnecting(lastStatus, projectId));
+        connectionFailures += 1;
+        await new Promise((r) => setTimeout(r, Math.min(10000, EBOOK_RETRY_WAIT_MS * connectionFailures)));
+        continue;
       }
       if (runToken !== _ebookBuildRun) return;
+      connectionFailures = 0;
+      lastStatus = status;
       renderEbookBuild(status);
       if (status.finished) {
         _ebookBuildForget();
@@ -7635,6 +7661,7 @@ async function startEbookBuild(fields) {
     const pid = started.project_id;
     if (!pid) throw new Error("We couldn't start your ebook. Please check the fields above.");
     _ebookBuildRemember(pid);
+    _ebookBuildRun += 1;
     go("ebook-build");
     renderEbookBuild(started);
     // Release the Build button now: the customer has left the form, and a
@@ -7642,7 +7669,7 @@ async function startEbookBuild(fields) {
     // disabled control.
     setBusy("factoryBtn", false);
     if (!started.finished && !started.failed) {
-      await _ebookBuildLoop(pid, _ebookBuildRun);
+      await _ebookBuildLoop(pid, _ebookBuildRun, { status: started });
     }
   } catch (e) {
     const out = document.getElementById("factoryOutput");
@@ -7668,22 +7695,29 @@ async function openEbookBuild(projectId, opts) {
   go("ebook-build");
   const root = document.getElementById("ebookBuildRoot");
   if (root) root.innerHTML = spinner("Preparing your ebook");
-  const runToken = _ebookBuildRun;
+  const runToken = ++_ebookBuildRun;
   let status;
-  try {
-    status = await api(`/ebook/build/${projectId}/status`);
-  } catch (e) {
-    if (root) {
-      root.innerHTML = card(
-        `<p class="text-sm text-slate-700">We couldn't open this ebook right now. Your work is saved.</p>`
-      );
+  let connectionFailures = 0;
+  while (runToken === _ebookBuildRun) {
+    try {
+      status = await api(`/ebook/build/${projectId}/status`);
+      break;
+    } catch (e) {
+      if (runToken !== _ebookBuildRun) return;
+      if (!_ebookBuildCanReconnect(e)) {
+        renderEbookBuild({ project_id: projectId, failed: true,
+          message: "Please reopen the Factory to continue viewing this book. Your completed work is saved." });
+        return;
+      }
+      renderEbookBuild(_ebookBuildReconnecting({}, projectId));
+      connectionFailures += 1;
+      await new Promise((r) => setTimeout(r, Math.min(10000, EBOOK_RETRY_WAIT_MS * connectionFailures)));
     }
-    return;
   }
   if (runToken !== _ebookBuildRun) return;
   renderEbookBuild(status);
-  if (!status.finished && !status.failed) {
-    await _ebookBuildLoop(projectId, runToken, { continued: !!(opts && opts.continued) });
+  if (!status.finished && !status.failed && !status.awaiting_cover_choice && !status.awaiting_picture_approval && !status.paused_after) {
+    await _ebookBuildLoop(projectId, runToken, { continued: !!(opts && opts.continued), status });
   }
 }
 

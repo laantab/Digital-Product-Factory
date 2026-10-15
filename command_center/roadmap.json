@@ -280,5 +280,13 @@
     "release_validation": "Full enforced release gate: 2963 passed, zero failures/errors/skips; 209 acceptance files; paid calls blocked",
     "paid_calls_this_repair": 0,
     "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/35"
+  },
+  "ebook_one_button_completion_2026_10_15": {
+    "version": "1.9.43",
+    "scope": "Ebook progress reconnection and reopen ownership; preserve existing generator workflows",
+    "status": "full release verification running",
+    "baseline_fast_gate": "757 passed,55 files",
+    "focused_browser": "5 passed;4 defects reproduced before repair",
+    "paid_calls": 0
   }
 }

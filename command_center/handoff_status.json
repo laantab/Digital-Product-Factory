@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-15T13:04:00Z",
-  "current_task": "v1.9.42 automatic coloring completion recovery passed full3110 and Fast757 gates; protections relocked; deploy and live Project21 verification next.",
+  "updated_at": "2026-10-15T14:12:52.361858+00:00",
+  "current_task": "v1.9.43 ebook one-button reconnection repair: baseline757 green, reproduced browser defects, repaired5 browser cases green; full release gate running.",
   "stopped_at": "Branch feature/v1.8.0-workflows, off production commit 47393a0 (v1.7.29). Added services/jobs/mode.py (FACTORY_EXECUTION_MODE inline|workflow), services/jobs/dispatch.py (the single decision point app.py calls), services/jobs/workflow_trigger.py (durable job first, then Render start_task, never raises into a request), services/jobs/workflow_runner.py (SDK-free task behaviour), workflow_task.py (the Render entrypoint), two columns on the jobs table (workflow_run_id, workflow_triggered_at) with a conditional-UPDATE duplicate guard, executor.run_project (claims only the named book), a workflow-mode guard on runner.executor_enabled() and on POST /advance, and a read-only GET /ebook/execution-mode. 50 new checks in tests/test_ebook_workflow_execution.py, all green, zero paid API calls. render.yaml, .env.example, V1_8_0_WORKFLOWS_DEPLOYMENT.md and Verify_v1.8.0_Workflows.bat written. NOTE: the earlier unpushed feature/v1.8.0-background-worker branch on the PC is superseded and must not be merged.",
-  "next_step": "Verify both Render services v1.9.42, startup recovery of Project21 from original PDF/ZIP, job reconciliation and unchanged Save consent/checksums. No generation or re-export.",
+  "next_step": "Wait for full release gate. Then publish verified source, relock shared protections and narrow one-button completion at the real verified commit, merge and verify served website asset. Do not regenerate customer books.",
   "next_claude": "code",
   "open_issues": [
     {
