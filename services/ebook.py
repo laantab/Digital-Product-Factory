@@ -238,16 +238,18 @@ def fixture_one_chapter(book, chapter) -> dict:
         f"Considered inside {short}, {kw} is less complicated than it first appears. "
         f"Handle {kw} in the same place and at the same point in the sequence, and it "
         f"stops competing for attention with everything else in this chapter."
-        for kw in (keywords[:7] or ["this method"])
+        for kw in dict.fromkeys(keywords[:7] or ["this method"])
     )
 
     para_a = f"{pick(openers)} {pick(middles)} {pick(closers, 1)}"
     para_b = f"{pick(middles, 2)} {pick(closers, 3)} {pick(openers, 4)}"
     para_c = f"{pick(closers, 2)} {pick(openers, 3)} {pick(middles, 1)}"
+    para_d = f"{pick(openers, 2)} {pick(middles, 4)} {pick(closers, 3)}"
+    para_e = f"{pick(closers)} {pick(middles, 3)} {pick(openers, 1)}"
 
     body = (
         f"## {title}\n\n"
-        f"{para_a}\n\n{para_a}\n\n"
+        f"{para_a}\n\n{para_d}\n\n"
         f"{keyword_lines}\n\n"
         f"| Stage of {short} | What the reader does | Why it matters |\n"
         "| --- | --- | --- |\n"
@@ -267,7 +269,7 @@ def fixture_one_chapter(book, chapter) -> dict:
         f"For example, a reader starting {short} with {lead} can keep the first pass "
         f"deliberately small, repeat it until it feels automatic, and only then extend it. "
         f"{pick(closers, 4)}\n\n"
-        f"{para_b}\n\n{para_c}\n\n{para_b}"
+        f"{para_b}\n\n{para_c}\n\n{para_e}"
     )
 
     return {

@@ -47,7 +47,7 @@ def test_export_stage_packages_and_does_not_regenerate():
 
 
 def test_export_release_state_is_read_from_preflight_not_invented():
-    """export_ready must follow the preflight record, both ways."""
+    """Preflight remains necessary; an absent final PDF is never ready."""
     from services.ebook_build_orchestrator import _run_export
 
     calls: list[dict] = []
@@ -62,7 +62,8 @@ def test_export_release_state_is_read_from_preflight_not_invented():
     packaging.build_product_export = fake_export
     try:
         passed = _run_export({"ebook_design_preflight": {"status": "PASS"}}, 1)
-        assert passed["export_ready"] is True
+        assert passed["export_ready"] is False
+        assert passed["editor_in_chief"]["verdict"] != "EDITOR-IN-CHIEF PASS"
         assert passed["release_status"] == "PASS"
         assert passed["export_package_id"] == "pkg123"
 

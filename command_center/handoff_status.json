@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-15T15:48:37.377631+00:00",
-  "current_task": "v1.9.43 ebook one-button reconnection repair verified and protected; publication tracked in PR #61.",
-  "stopped_at": "Baseline Fast Gate: 757 passed across 55 files. Full Release Gate at 7acc927ab444e7c37f4280747217865d93f2daf5: 3115 unique tests across all 223 manifest files; 0 failures, 0 errors, 0 skipped (3499.846 seconds). Five focused real-browser recovery cases passed; paid API calls blocked. Original reference PDF and ZIP checksums unchanged.",
-  "next_step": "Follow PR #61 for merge and exact served app.js verification. Preserve customer projects and original outputs; no paid live generation.",
+  "updated_at": "2026-10-15T17:53:41.433722+00:00",
+  "current_task": "Consistent ebook quality v1.9.44: all release checks passed; publishing verified source.",
+  "stopped_at": "3125 unique tests passed across all 224 manifest files with zero failures/errors/skips; exact test identity match. Affected protection locks restored at tested source 403aba8ba9b298b9eebc6682ae4110e23c63b822.",
+  "next_step": "Merge PR #62 and verify website and automatic builder deployment; preserve customer outputs.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -200,7 +200,7 @@
     }
   ],
   "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly — it is what the Command Center reads every time it opens.",
-  "factory_version": "1.8.0",
+  "factory_version": "1.9.44",
   "ebook_reliability_2026_10_08": {
     "live_release": "1.9.17",
     "live_commit": "61b2759ee195a68b6e44c9a047ec27724e044b24",
@@ -212,7 +212,7 @@
     "paid_calls_this_repair": 0,
     "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/35"
   },
-  "last_completed": "Free preview/apply/undo manuscript editor, current quality revalidation, stale-write and active-build guards, preserved source revisions and exports, and explicit light route classification. Full 211-file gate: 2976 passed, 0 failures/errors/skips; no paid calls permitted. PR #37.",
+  "last_completed": "Consistent final ebook quality review, metadata identity and failed-quality draft preservation. Full release proof: 3125 passed, zero failures/errors/skips.",
   "ebook_completion_2026_10_13": {
     "website_live_version": "1.9.27",
     "website_live_commit": "e273dfc5739c1e16bd9c670ba158a087263652fc",

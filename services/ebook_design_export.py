@@ -174,7 +174,9 @@ def _html_to_pdf(html_doc: str, *, title: str, author: str, subtitle: str = "") 
     )
 
 
-def _add_chapter_bookmarks(pdf_bytes: bytes, chapter_titles: list[str]) -> bytes:
+def _add_chapter_bookmarks(pdf_bytes: bytes, chapter_titles: list[str], *,
+                           title: str | None = None, author: str | None = None,
+                           subject: str | None = None) -> bytes:
     """PDF viewer navigation panel: one bookmark per chapter, plus Contents.
 
     Generic -- runs for every theme, not just Warm Wellness. Finds each
@@ -194,6 +196,12 @@ def _add_chapter_bookmarks(pdf_bytes: bytes, chapter_titles: list[str]) -> bytes
         reader = PdfReader(_io.BytesIO(pdf_bytes))
         writer = PdfWriter()
         writer.append(reader)
+        metadata = dict(reader.metadata or {})
+        for key, value in (("/Title", title), ("/Author", author), ("/Subject", subject)):
+            if value is not None:
+                metadata[key] = value
+        if metadata:
+            writer.add_metadata(metadata)
         toc_page = None
         for i in range(min(6, len(reader.pages))):
             text = reader.pages[i].extract_text() or ""
@@ -369,7 +377,8 @@ def render_designed_bundle(data: dict, *, output_dir: str | Path | None = None) 
         numbered_pdf = _merge(numbered_html)
         html_doc = numbered_html
         pdf_bytes = numbered_pdf
-    pdf_bytes = _add_chapter_bookmarks(pdf_bytes, chapter_titles)
+    pdf_bytes = _add_chapter_bookmarks(pdf_bytes, chapter_titles,
+                                     title=title, author=author, subject=subtitle or title)
     preview_digest = _sha_bytes(pdf_bytes)
 
     manifest = {

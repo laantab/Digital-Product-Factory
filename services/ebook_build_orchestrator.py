@@ -963,6 +963,7 @@ def _run_export(data: dict, pid: int) -> dict:
     # which blocked the customer's Approve Product save.
     from services.packaging import EXPORTS_DIR
 
+    pkg_dir = ""
     package_id = str(data.get("export_package_id") or data.get("package_id") or "").strip()
     if package_id and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", package_id):
         pkg_dir = os.path.join(EXPORTS_DIR, package_id)
@@ -997,6 +998,12 @@ def _run_export(data: dict, pid: int) -> dict:
     else:
         data["export_ready"] = False
         data["release_status"] = pre_status
+
+    from services.ebook_completion_quality import review_exported_ebook
+    from services.editor_in_chief import VERDICT_PASS
+
+    review = review_exported_ebook(data, package_dir=pkg_dir)
+    data["export_ready"] = bool(data.get("export_ready")) and review["verdict"] == VERDICT_PASS
 
     # This is the moment a workspace-built ebook becomes a finished product the
     # customer can download, so it is the moment it must become findable in
@@ -1163,6 +1170,8 @@ def advance_build(project_id: int) -> dict:
         return status_payload(data, project_id)
 
     rec = _stage_record(state, stage)
+    if rec.get("status") == FAILED_FINAL:
+        return status_payload(data, project_id)
     if int(rec.get("attempts") or 0) >= _max_attempts(stage) and rec.get("status") != COMPLETE:
         _release_stage(state, stage, FAILED_FINAL, rec.get("error") or "attempt ceiling reached")
         state["failed"] = True
@@ -1220,6 +1229,16 @@ def advance_build(project_id: int) -> dict:
             _release_stage(new_state, stage, PENDING_CUSTOMER)
             _stage_record(new_state, stage)["attempts"] = 0
             new_state["customer_message"] = MSG_PICTURES_READY
+        elif (stage == "export"
+              and (updated.get("editor_in_chief") or {}).get("verdict") != "EDITOR-IN-CHIEF PASS"
+              and (updated.get("editor_in_chief") or {}).get("findings")):
+            # Re-rendering identical approved inputs cannot repair an editorial
+            # defect. Keep the draft and findings; do not loop over this export.
+            findings = updated["editor_in_chief"]["findings"]
+            message = "Quality review needs corrections: " + str(findings[0].get("summary") or "Review the saved draft.")
+            _release_stage(new_state, stage, FAILED_FINAL, message)
+            new_state["failed"] = True
+            new_state["customer_message"] = message
         else:
             # The code ran but the validator is not satisfied. That is not done.
             _release_stage(new_state, stage, FAILED_RECOVERABLE, "stage output did not validate")
