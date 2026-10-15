@@ -76,6 +76,15 @@ def edit_text(text: str, *, target_grade: int = 8) -> dict:
             suggestions.append({"code": "PUNCTUATION_SPACING", "line": line,
                                 "excerpt": span[max(0, punct.start()-12):punct.end()+12],
                                 "suggestion": "Consider adding a space after punctuation."})
+        # Flag suspicious spacing without changing quoted or formatted content.
+        for spacing in re.finditer(r"(?<=\w) {2,}(?=\w)", span):
+            suggestions.append({"code": "EXCESS_SPACING", "line": line,
+                                "excerpt": span[max(0, spacing.start()-15):spacing.end()+15],
+                                "suggestion": "Consider using one space between words."})
+        for passive in re.finditer(r"\b(?:was|were|is|are|been|being)\s+(?:\w+ed)\b", span, re.I):
+            suggestions.append({"code": "POSSIBLE_PASSIVE_VOICE", "line": line,
+                                "excerpt": passive.group(0),
+                                "suggestion": "Consider active voice if it improves clarity; passive voice may be appropriate."})
         for sentence in re.split(r"(?<=[.!?])\s+", span):
             if len(re.findall(r"\b[\w'-]+\b", sentence)) > 35:
                 suggestions.append({"code": "LONG_SENTENCE", "line": line,
