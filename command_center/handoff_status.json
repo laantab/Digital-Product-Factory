@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-15T14:12:52.361858+00:00",
-  "current_task": "v1.9.43 ebook one-button reconnection repair: baseline757 green, reproduced browser defects, repaired5 browser cases green; full release gate running.",
-  "stopped_at": "Branch feature/v1.8.0-workflows, off production commit 47393a0 (v1.7.29). Added services/jobs/mode.py (FACTORY_EXECUTION_MODE inline|workflow), services/jobs/dispatch.py (the single decision point app.py calls), services/jobs/workflow_trigger.py (durable job first, then Render start_task, never raises into a request), services/jobs/workflow_runner.py (SDK-free task behaviour), workflow_task.py (the Render entrypoint), two columns on the jobs table (workflow_run_id, workflow_triggered_at) with a conditional-UPDATE duplicate guard, executor.run_project (claims only the named book), a workflow-mode guard on runner.executor_enabled() and on POST /advance, and a read-only GET /ebook/execution-mode. 50 new checks in tests/test_ebook_workflow_execution.py, all green, zero paid API calls. render.yaml, .env.example, V1_8_0_WORKFLOWS_DEPLOYMENT.md and Verify_v1.8.0_Workflows.bat written. NOTE: the earlier unpushed feature/v1.8.0-background-worker branch on the PC is superseded and must not be merged.",
-  "next_step": "Wait for full release gate. Then publish verified source, relock shared protections and narrow one-button completion at the real verified commit, merge and verify served website asset. Do not regenerate customer books.",
+  "updated_at": "2026-10-15T15:48:37.377631+00:00",
+  "current_task": "v1.9.43 ebook one-button reconnection repair verified and protected; publication tracked in PR #61.",
+  "stopped_at": "Baseline Fast Gate: 757 passed across 55 files. Full Release Gate at 7acc927ab444e7c37f4280747217865d93f2daf5: 3115 unique tests across all 223 manifest files; 0 failures, 0 errors, 0 skipped (3499.846 seconds). Five focused real-browser recovery cases passed; paid API calls blocked. Original reference PDF and ZIP checksums unchanged.",
+  "next_step": "Follow PR #61 for merge and exact served app.js verification. Preserve customer projects and original outputs; no paid live generation.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -172,7 +172,7 @@
         "10 GB persistent disk mounted at /var/data on Render.",
         "Render env vars set: FACTORY_DB_PATH=/var/data/projects.db, FACTORY_EXPORTS_DIR=/var/data/exports, FLASK_EXPORTS_DIR=/var/data/exports.",
         "Production redeployed successfully with persistent storage; the live domain loads.",
-        "Word Search regression root-caused (three stacked defects, all in services/product.py) \u2014 read-only, no code changed.",
+        "Word Search regression root-caused (three stacked defects, all in services/product.py) — read-only, no code changed.",
         "Version-recovery audit complete: nothing was lost, reverted, or overwritten; the shared engine is byte-identical since commit e81298e.",
         "Built the standalone Factory Command Center (command_center/), committed as e35654a.",
         "Diagnosed why a live Flower Parts test still showed the old words: no local server was running; the public site (v1.7.0, origin/main 1c86c05) was the one tested, and the fix had never been pushed.",
@@ -199,7 +199,7 @@
       ]
     }
   ],
-  "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly \u2014 it is what the Command Center reads every time it opens.",
+  "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly — it is what the Command Center reads every time it opens.",
   "factory_version": "1.8.0",
   "ebook_reliability_2026_10_08": {
     "live_release": "1.9.17",
@@ -222,5 +222,12 @@
     "review_blocker": "RESOLVED: live review POST 200, all 13 visuals present, zero technical findings, no subsequent server_failed event.",
     "scope": "PDF/ZIP core workflow; EPUB/Kindle/Flipbook and marketing are separate unfinished extensions.",
     "release_validation": "3010 unique required checks passed after one isolated reference fixture skip was corrected; 56 metadata/version checks passed."
+  },
+  "ebook_one_button_completion_2026_10_15": {
+    "source_commit": "7acc927ab444e7c37f4280747217865d93f2daf5",
+    "source_tree": "b1e7744e4783d24735767e7100dfc1e5e48d9a8d",
+    "validation": "Baseline Fast Gate: 757 passed across 55 files. Full Release Gate at 7acc927ab444e7c37f4280747217865d93f2daf5: 3115 unique tests across all 223 manifest files; 0 failures, 0 errors, 0 skipped (3499.846 seconds). Five focused real-browser recovery cases passed; paid API calls blocked. Original reference PDF and ZIP checksums unchanged.",
+    "publication_record": "https://github.com/laantab/Digital-Product-Factory/pull/61",
+    "website_js_sha256": "09ee55a8de03d87e155a4e2b98132b59931c16392055fff7ab4f7d3e38e8a070"
   }
 }
