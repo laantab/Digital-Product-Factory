@@ -27,6 +27,8 @@ const MARKET_PRODUCT_TYPES = [
 ];
 
 let current = "dashboard";
+let _savedOpenRun = 0;
+let _savedOpenController = null;
 let factoryType = null;
 // Workflow lineage: ids of the record being advanced into the next stage, so the
 // generated plan/product UPDATES the existing project instead of creating a new one.
@@ -538,6 +540,7 @@ function buildNav() {
 }
 
 function go(view) {
+  _cancelSavedProductOpen();
   _wsPollRun += 1;
   // Stale lineage must never bleed across navigations; runNextAction/sendToBuilder
   // re-set this AFTER calling go() for the step that needs it.
@@ -1647,12 +1650,48 @@ function _focusReopenedProduct(keptForm) {
   if (out) requestAnimationFrame(() => out.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
 
+function _cancelSavedProductOpen() {
+  _savedOpenRun += 1;
+  if (_savedOpenController) _savedOpenController.abort();
+  _savedOpenController = null;
+}
+
+async function _readSavedProduct(p, run) {
+  const controller = new AbortController();
+  _savedOpenController = controller;
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetch(`/projects/${encodeURIComponent(p.id)}`, {
+      headers: { "Accept": "application/json" }, signal: controller.signal,
+    });
+    const full = await response.json().catch(() => null);
+    if (!response.ok) throw new Error((full && full.error) || `Request failed (${response.status})`);
+    if (!full || full._list_summary || String(full.id) !== String(p.id)
+        || !full.type || !full.data || typeof full.data !== "object" || Array.isArray(full.data)) {
+      throw new Error("The saved product could not be read. Try Open again.");
+    }
+    if (run !== _savedOpenRun) return;
+    clearTimeout(timer);
+    _savedOpenController = null;
+    return openProject(full);
+  } catch (error) {
+    if (run === _savedOpenRun) {
+      const message = controller.signal.aborted
+        ? "The request took too long. Try Open again."
+        : (error.message || "Please try Open again.");
+      toast("Could not open your saved product: " + message, "error");
+    }
+  } finally {
+    clearTimeout(timer);
+    if (_savedOpenController === controller) _savedOpenController = null;
+  }
+}
+
 function openProject(p) {
+  _cancelSavedProductOpen();
   if (p && p._list_summary) {
     toast("Opening your saved product…");
-    return api(`/projects/${p.id}`)
-      .then((full) => openProject(full))
-      .catch((error) => toast("Could not open your saved product: " + error.message, "error"));
+    return _readSavedProduct(p, _savedOpenRun);
   }
   const d = p.data || {};
   if (p.type === "research") {
@@ -4850,13 +4889,14 @@ function renderProduct(d) {
     (d.exports && d.exports.files) || (d.product_exports && d.product_exports.files);
   if (d.product_type === "ebook" && (factoryEbookReady(d) || ebookOnDiskFiles(d))) {
     /* downloads use /download/<package_id>/ — skip nsExport */
-  } else if (hasExportFiles && d._project_id && !(d.product_type === "ebook" && !factoryEbookReady(d))) {
-    nsExport(d);
-  } else if (hasExportFiles && d._project_id && d.product_type === "ebook") {
+  } else if (hasExportFiles && d._project_id) {
+    // Existing downloads are a read-only view. nsExport first saves the
+    // product, so calling it here changed saved data just by opening it.
     const res = typeof nsResult === "function" ? nsResult(d) : null;
     if (res) {
-      res.innerHTML = finalOutputCard(d._project_id, d.exports || d.product_exports || {}, d.packages || {}, d.product_type, d);
-      wireFinalOutputIn(res, d._project_id, d.exports || d.product_exports || {});
+      const ex = (d.exports && d.exports.files) ? d.exports : d.product_exports;
+      res.innerHTML = finalOutputCard(d._project_id, ex, d.packages || {}, d.product_type, d);
+      wireFinalOutputIn(res, d._project_id, ex);
     }
   }
 }
