@@ -1,15 +1,24 @@
 # Changelog
 
-## 1.9.40 — Small coloring previews
+## 1.9.40 — 2026-10-14
 
-- Honor entered small coloring page counts, including 2 and 4, instead of requiring 12 or silently generating extra pages. Book covers remain additional; one page retains Single Sheet behavior.
-- Explain preview counts on the form and distinguish rejected settings from interrupted saved builds.
+**Preview a coloring book using the number of pages you enter.**
 
+### What changed
 
-What changed in the Digital Product Factory, in plain language.
-The version shown in the bottom-left of the app matches the newest entry here.
+Enter a small count, such as 2 or 4 coloring pages, to build a short preview. The Factory honors that count through artwork generation, refresh, and PDF/ZIP downloads. A book cover is additional; one page retains the existing Single Sheet behavior.
 
----
+### What was fixed
+
+The previous 12-page minimum blocked short previews. Small requests now generate only the requested coloring pages. Invalid counts are refused before artwork starts. Settings errors no longer display the misleading interrupted-build guidance.
+
+### Do the steps change?
+
+Enter your theme and page count, then click Generate Product. The form explains how to request a short preview. Existing progress, save, cover checks, and download actions remain available.
+
+### Release gate
+
+Checks use local provider fixtures and real PDFs and ZIPs for small previews. Actual browser checks cover 2-, 4-, and 12-page books, settings errors, refresh, and downloads. No paid artwork calls or new production books are used for verification.
 
 ## 1.9.39 — 2026-10-14
 
