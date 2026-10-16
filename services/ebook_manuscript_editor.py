@@ -141,3 +141,22 @@ def preview_ai_rewrite(data: dict, mode: str, *, provider=None,
     return {'rewrite': suggestion, 'review': review,
             'can_apply': review['can_apply'], 'paid_calls': 0,
             'requires_acceptance': True}
+
+
+def preview_selected_ai_rewrite(data: dict, mode: str, start: int, end: int,
+                                *, provider=None, allow_provider: bool = False,
+                                allow_paid: bool = False) -> dict:
+    """Preview a selected rewrite against whole-book quality rules; never save."""
+    from services.ebook_ai_rewrite import proposal
+    from services.ebook_rewrite_selection import selected_text, replace_selection
+    original = current_text(data)
+    selection = selected_text(original, start, end)
+    suggestion = proposal(selection, mode, provider=provider,
+                          allow_provider=allow_provider, allow_paid=allow_paid)
+    if suggestion['status'] != 'review_required':
+        return {'rewrite': suggestion, 'can_apply': False, 'paid_calls': 0}
+    draft = replace_selection(original, start, end, suggestion['proposed'])
+    review = preview(data, draft)
+    return {'rewrite': suggestion, 'review': review, 'can_apply': review['can_apply'],
+            'requires_acceptance': True, 'original_sha256': digest(original),
+            'paid_calls': 0}
