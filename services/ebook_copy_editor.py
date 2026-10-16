@@ -8,11 +8,12 @@ from __future__ import annotations
 import hashlib
 import re
 
-VERSION = "1"
+VERSION = "2"
 SPELLING = {
     "teh": "the", "recieve": "receive", "seperate": "separate",
     "definately": "definitely", "occured": "occurred", "untill": "until",
     "becuase": "because", "wich": "which", "thier": "their",
+    "adress": "address", "enviroment": "environment", "goverment": "government",
 }
 # Protect source material and Markdown syntax. Never edit quotations, URLs,
 # code, tables, headings, image captions, or quoted source blocks.
@@ -66,6 +67,34 @@ def edit_text(text: str, *, target_grade: int = 8) -> dict:
         replace(r"\b(he|she|it) (are)\b",
                 lambda m: _case(m[0], m[1].lower() + (" is" if m[2].lower() == "are" else " was")),
                 "SUBJECT_VERB_AGREEMENT")
+        # Advisory proofreading: avoid silently modifying intentional wording.
+        for repeated in re.finditer(r"\b([A-Za-z]{3,})[ \t]+\1\b", span, re.I):
+            suggestions.append({"code": "REPEATED_WORD", "line": line,
+                                "excerpt": repeated.group(0),
+                                "suggestion": "Review this repeated word."})
+        for punct in re.finditer(r"(?<=[a-z])[,;:](?=[A-Za-z])", span):
+            suggestions.append({"code": "PUNCTUATION_SPACING", "line": line,
+                                "excerpt": span[max(0, punct.start()-12):punct.end()+12],
+                                "suggestion": "Consider adding a space after punctuation."})
+        # Flag suspicious spacing without changing quoted or formatted content.
+        for spacing in re.finditer(r"(?<=\w) {2,}(?=\w)", span):
+            suggestions.append({"code": "EXCESS_SPACING", "line": line,
+                                "excerpt": span[max(0, spacing.start()-15):spacing.end()+15],
+                                "suggestion": "Consider using one space between words."})
+        for passive in re.finditer(r"\b(?:was|were|is|are|been|being)\s+(?:\w+ed)\b", span, re.I):
+            suggestions.append({"code": "POSSIBLE_PASSIVE_VOICE", "line": line,
+                                "excerpt": passive.group(0),
+                                "suggestion": "Consider active voice if it improves clarity; passive voice may be appropriate."})
+        # Article choice has exceptions (an hour, a university, acronyms).
+        # Offer review suggestions instead of guessing at the intended wording.
+        for article in re.finditer(r"\b(a)\s+(apple|orange|example|idea|image|option|answer)\b", span, re.I):
+            suggestions.append({"code": "ARTICLE_AGREEMENT", "line": line,
+                                "excerpt": article.group(0),
+                                "suggestion": "Consider 'an' before this word."})
+        for article in re.finditer(r"\b(an)\s+(book|chapter|garden|table|document|picture)\b", span, re.I):
+            suggestions.append({"code": "ARTICLE_AGREEMENT", "line": line,
+                                "excerpt": article.group(0),
+                                "suggestion": "Consider 'a' before this word."})
         for sentence in re.split(r"(?<=[.!?])\s+", span):
             if len(re.findall(r"\b[\w'-]+\b", sentence)) > 35:
                 suggestions.append({"code": "LONG_SENTENCE", "line": line,

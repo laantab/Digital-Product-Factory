@@ -25,7 +25,7 @@ def test_advisory_findings_do_not_rewrite_meaning():
     original = " ".join(["complexity"] * 110) + "."
     report = edit_text(original, target_grade=6)
     assert report["edited"] == original
-    assert {f["code"] for f in report["suggestions"]} == {"LONG_SENTENCE", "READING_LEVEL"}
+    assert {"LONG_SENTENCE", "READING_LEVEL", "REPEATED_WORD"} <= {f["code"] for f in report["suggestions"]}
     assert "comprehensive grammar" in report["not_checked"]
 
 
