@@ -66,3 +66,21 @@ def test_manuscript_adapter_uses_existing_quality_preview(monkeypatch):
     assert result["review"]["edited"] == "A clearer sentence."
     assert result["requires_acceptance"] is True
     assert data["content"] == "An original sentence."
+
+
+def test_selection_preserves_unselected_text_and_word_boundaries():
+    from services.ebook_rewrite_selection import replace_selection
+    assert replace_selection("Before. Middle. After.", 8, 15, "Better.") == "Before. Better. After."
+    with pytest.raises(ValueError, match="inside a word"):
+        replace_selection("abcdef", 1, 4, "new")
+
+
+def test_selected_rewrite_uses_quality_preview_without_saving(monkeypatch):
+    from services import ebook_manuscript_editor as editor
+    data = {"content": "Before. Middle. After."}
+    monkeypatch.setattr(editor, "preview", lambda _data, draft: {"edited": draft, "can_apply": True})
+    result = editor.preview_selected_ai_rewrite(data, "clarity", 8, 15,
+                provider=lambda text: "Better.", allow_provider=True)
+    assert result["review"]["edited"] == "Before. Better. After."
+    assert result["requires_acceptance"]
+    assert data["content"] == "Before. Middle. After."
