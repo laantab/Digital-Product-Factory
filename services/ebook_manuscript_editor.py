@@ -121,3 +121,23 @@ def apply_edit(data: dict, proposed: str, expected_digest: str, *, undo: bool = 
     # reviewed source bytes so the saved draft and undo hashes stay exact.
     result = sync_document_from_workspace(result, sync_manuscript=False)
     return invalidate_release_on_data(result)
+
+
+def preview_ai_rewrite(data: dict, mode: str, *, provider=None,
+                       allow_provider: bool = False, allow_paid: bool = False) -> dict:
+    """Review an opt-in rewrite against manuscript contracts without saving it.
+
+    Existing apply_edit handles acceptance, optimistic locking, undo and release
+    invalidation. This function never writes to a project or calls a provider
+    unless it is explicitly injected and authorized.
+    """
+    from services.ebook_ai_rewrite import proposal
+    original = current_text(data)
+    suggestion = proposal(original, mode, provider=provider,
+                          allow_provider=allow_provider, allow_paid=allow_paid)
+    if suggestion['status'] != 'review_required':
+        return {'rewrite': suggestion, 'can_apply': False, 'paid_calls': 0}
+    review = preview(data, suggestion['proposed'])
+    return {'rewrite': suggestion, 'review': review,
+            'can_apply': review['can_apply'], 'paid_calls': 0,
+            'requires_acceptance': True}
