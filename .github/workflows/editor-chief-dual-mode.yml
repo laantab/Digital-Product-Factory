@@ -20,6 +20,10 @@ jobs:
       FACTORY_TEST_MODE: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Enforce protected generator scope
+        run: python scripts/ebook_protected_scope_gate.py origin/main
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
