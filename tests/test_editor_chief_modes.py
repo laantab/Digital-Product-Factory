@@ -21,3 +21,12 @@ def test_manual_keeps_quality_gate_and_requires_acceptance():
 def test_unknown_mode_is_rejected():
     with pytest.raises(ValueError):
         choose_mode("auto-pay")
+
+
+def test_automatic_button_uses_existing_resume_route_without_new_paid_api():
+    from pathlib import Path
+    template = (Path(__file__).resolve().parents[1] / 'templates' / 'ebook_manuscript_editor.html').read_text()
+    assert 'id="auto-continue"' in template
+    assert "fetch('/ebook/build/{{ project_id }}/resume',{method:'POST'})" in template
+    assert 'Required approvals and quality checks still apply.' in template
+    assert 'https://api.' not in template
