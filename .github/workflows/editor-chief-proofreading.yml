@@ -1,0 +1,33 @@
+name: Editor-in-Chief proofreading checks
+on:
+  push:
+    branches:
+      - work/editor-chief-2-proofreading
+  pull_request:
+    paths:
+      - 'services/ebook_copy_editor.py'
+      - 'tests/test_ebook_copy_editor.py'
+      - 'tests/test_editor_chief_v2_proofreading.py'
+      - '.github/workflows/editor-chief-proofreading.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  proofreading:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      FACTORY_TEST_MODE: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: |
+          python -m pip install -r requirements.txt pytest==8.4.1
+      - name: Check Python syntax
+        run: python -m py_compile services/ebook_copy_editor.py tests/test_ebook_copy_editor.py tests/test_editor_chief_v2_proofreading.py
+      - name: Check proofreading regression contracts
+        run: python -m pytest -q tests/test_ebook_copy_editor.py tests/test_editor_chief_v2_proofreading.py
