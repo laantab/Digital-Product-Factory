@@ -84,3 +84,10 @@ def test_selected_rewrite_uses_quality_preview_without_saving(monkeypatch):
     assert result["review"]["edited"] == "Before. Better. After."
     assert result["requires_acceptance"]
     assert data["content"] == "Before. Middle. After."
+
+
+def test_selection_rejects_markdown_headings_and_tables():
+    from services.ebook_rewrite_selection import selected_text
+    for text in ("## Chapter One\nProse", "| Cell | Cell |", "> A quoted source"):
+        with pytest.raises(ValueError, match="Markdown structure"):
+            selected_text(text, 0, len(text))
