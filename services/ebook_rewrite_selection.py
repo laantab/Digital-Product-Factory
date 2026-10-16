@@ -7,7 +7,7 @@ def selected_text(manuscript: str, start: int, end: int) -> str:
     # Selection cannot include structural Markdown lines or break across them.
     import re
     piece = manuscript[start:end]
-    if re.search(r'(?m)^(?:#{1,6}\\s|>|[|]|```|~~~)', piece):
+    if re.search(r'(?m)^(?:#{1,6}\s|>|[|]|```|~~~)', piece):
         raise ValueError('Select prose only, not Markdown structure.')
     return piece
 
