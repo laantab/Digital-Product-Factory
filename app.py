@@ -4755,6 +4755,7 @@ def ebook_manuscript_editor_route(project_id: int):
     """Preview, apply, or undo free edits to the preserved manuscript."""
     from flask import render_template
     from services.ebook_manuscript_editor import apply_edit, current_text, digest, preview
+    from services.editor_chief_modes import editing_policy
     try:
         project, err = _ebook_workspace_project_or_404(project_id)
         if err:
@@ -4767,6 +4768,8 @@ def ebook_manuscript_editor_route(project_id: int):
                                    manuscript=current_text(data), manuscript_digest=digest(current_text(data)))
         body = request.get_json(silent=True) or {}
         action = body.get("action")
+        if action == "mode_policy":
+            return jsonify(ok=True, policy=editing_policy(body.get("mode")))
         if action == "preview":
             return jsonify(ok=True, review=preview(data, body.get("manuscript")))
         if action not in {"apply", "undo"}:
