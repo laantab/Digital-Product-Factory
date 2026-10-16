@@ -52,6 +52,9 @@ jobs:
           python -m pytest -q \
             tests/test_editor_chief_modes.py \
             tests/test_ebook_manuscript_editor.py \
+            tests/test_ebook_copy_editor.py \
+            tests/test_ebook_ai_rewrite.py \
+            tests/test_ebook_creation_modes.py \
             tests/test_ebook_build_resume_recovery.py \
             tests/test_ebook_resume_hands_work_to_the_server.py \
             tests/test_ebook_one_button_path.py \
