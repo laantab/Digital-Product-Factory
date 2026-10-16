@@ -12,7 +12,7 @@ from typing import Callable
 
 MODES = frozenset(("clarity", "shorten", "expand", "professional", "friendly"))
 PROTECTED_LINES = re.compile(r"(?m)^(?:#{1,6} |>|\\||```|~~~)")
-LINKS = re.compile(r"!?\\[[^\\]]*\\]\\([^)]*\\)|https?://\\S+")
+LINKS = re.compile(r'!?\[[^\]]*\]\([^)]*\)|https?://\S+')
 
 
 def _hash(value: str) -> str:
