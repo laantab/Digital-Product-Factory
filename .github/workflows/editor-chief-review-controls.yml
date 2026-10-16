@@ -1,0 +1,26 @@
+name: Editor-in-Chief review controls
+on:
+  push:
+    branches:
+      - work/editor-chief-3-review-controls
+  pull_request:
+    paths:
+      - 'templates/ebook_manuscript_editor.html'
+      - 'tests/test_editor_chief_review_controls.py'
+      - '.github/workflows/editor-chief-review-controls.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FACTORY_TEST_MODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install pytest==8.4.1 jinja2
+      - run: python -m pytest -q tests/test_editor_chief_review_controls.py
