@@ -1,0 +1,28 @@
+name: Editor-in-Chief dual mode policy
+on:
+  push:
+    branches:
+      - work/editor-chief-dual-mode
+  pull_request:
+    paths:
+      - 'services/editor_chief_modes.py'
+      - 'tests/test_editor_chief_modes.py'
+      - 'templates/ebook_manuscript_editor.html'
+      - '.github/workflows/editor-chief-dual-mode.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mode-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FACTORY_TEST_MODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install pytest==8.4.1
+      - run: python -m py_compile services/editor_chief_modes.py tests/test_editor_chief_modes.py
+      - run: python -m pytest -q tests/test_editor_chief_modes.py
