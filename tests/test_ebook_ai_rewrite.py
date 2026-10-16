@@ -42,3 +42,27 @@ def test_paid_mode_and_invalid_mode_rejected():
                  allow_provider=True, allow_paid=True)
     with pytest.raises(ValueError, match="Unsupported"):
         proposal("Test", "fabricate", allow_provider=False)
+
+
+def test_manuscript_adapter_requires_authorization_without_mutation():
+    from services.ebook_manuscript_editor import preview_ai_rewrite
+    data = {"content": "This is the draft."}
+    original = dict(data)
+    result = preview_ai_rewrite(data, "clarity")
+    assert result["can_apply"] is False
+    assert result["rewrite"]["status"] == "provider_not_authorized"
+    assert data == original
+
+
+def test_manuscript_adapter_uses_existing_quality_preview(monkeypatch):
+    from services import ebook_manuscript_editor as editor
+    data = {"content": "An original sentence."}
+    monkeypatch.setattr(editor, "preview", lambda data, proposed: {
+        "edited": proposed, "can_apply": True})
+    result = editor.preview_ai_rewrite(
+        data, "clarity", provider=lambda _: "A clearer sentence.",
+        allow_provider=True)
+    assert result["can_apply"] is True
+    assert result["review"]["edited"] == "A clearer sentence."
+    assert result["requires_acceptance"] is True
+    assert data["content"] == "An original sentence."
