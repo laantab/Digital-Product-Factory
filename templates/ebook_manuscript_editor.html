@@ -6,8 +6,10 @@
 <p><button id="suggest">Suggest copy edits</button><button id="review">Review my edits</button><button id="apply" disabled>Apply reviewed edits</button><button id="undo">Undo last saved edit</button></p>
 <p id="message" role="status"></p><h2>Changes and findings</h2><pre id="findings">Review your edits before applying them.</pre>
 <script>
-document.querySelectorAll('input[name="editor-mode"]').forEach(input=>input.addEventListener('change',()=>{const manual=document.querySelector('input[name="editor-mode"]:checked').value==='manual';document.getElementById('mode-info').textContent=manual?'Manual editing: preview, review and accept each saved change yourself.':'Automatic mode is selected. Return to the Factory builder to continue automatic creation; this page remains a review-only editor.';}));
+function syncEditorMode(){const manual=document.querySelector('input[name="editor-mode"]:checked').value==='manual';document.getElementById('auto-continue').disabled=manual;document.getElementById('mode-info').textContent=manual?'Manual editing: preview, review and accept each saved change yourself.':'Automatic mode is selected. Continue your existing Factory build; required quality checks still apply.';}
+document.querySelectorAll('input[name="editor-mode"]').forEach(input=>input.addEventListener('change',syncEditorMode));
 document.getElementById('auto-continue').onclick=async()=>{
+ if(document.querySelector('input[name="editor-mode"]:checked').value!=='automatic') return;
  const btn=document.getElementById('auto-continue'); btn.disabled=true;
  const info=document.getElementById('mode-info'); info.textContent='Starting the existing Factory build…';
  try {
