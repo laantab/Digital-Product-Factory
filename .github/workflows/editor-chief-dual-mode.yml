@@ -1,0 +1,67 @@
+name: Editor-in-Chief dual mode policy
+on:
+  push:
+    branches:
+      - work/editor-chief-dual-mode
+  pull_request:
+    paths:
+      - 'services/editor_chief_modes.py'
+      - 'tests/test_editor_chief_modes.py'
+      - 'templates/ebook_manuscript_editor.html'
+      - '.github/workflows/editor-chief-dual-mode.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mode-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FACTORY_TEST_MODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Enforce protected generator scope
+        run: python scripts/ebook_protected_scope_gate.py origin/main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements.txt pytest==8.4.1
+      - run: python -m py_compile services/editor_chief_modes.py tests/test_editor_chief_modes.py
+      - run: python -m pytest -q tests/test_editor_chief_modes.py
+
+  protected-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FACTORY_TEST_MODE: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements.txt pytest==8.4.1
+      - name: Install browser test requirements
+        run: |
+          python -m pip install playwright==1.52.0
+          python -m playwright install --with-deps chromium
+      - name: Exercise editing, one-button resume and protected generators
+        run: |
+          python -m pytest -q \
+            tests/test_editor_chief_modes.py \
+            tests/test_ebook_manuscript_editor.py \
+            tests/test_ebook_copy_editor.py \
+            tests/test_ebook_ai_rewrite.py \
+            tests/test_ebook_creation_modes.py \
+            tests/test_ebook_build_resume_recovery.py \
+            tests/test_ebook_resume_hands_work_to_the_server.py \
+            tests/test_ebook_one_button_path.py \
+            tests/test_ebook_completion_quality.py \
+            tests/test_coloring_completion_recovery.py \
+            tests/test_crossword_rebuilds_identically.py \
+            tests/test_ebook_saved_projects_visibility.py \
+            tests/test_saved_product_open_recovery.py
+      - name: Real browser ebook build and PDF ZIP acceptance
+        run: python -m pytest -q tests/test_ebook_real_browser_customer_path.py

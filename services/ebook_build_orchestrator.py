@@ -684,7 +684,11 @@ def _run_visuals(data: dict, pid: int) -> dict:
     # completed pictures and retry history from the current attempt.
     database.update_project(pid, None, data)
     from services.ebook_guided_build import enabled
-    if enabled(data) or self_running_ebook(data):
+    # Manual editorial mode must never silently approve pictures, even if
+    # the project otherwise uses a guided or self-running ebook build.
+    from services.editor_chief_modes import choose_mode
+    manual_editor = choose_mode(data.get("editor_chief_mode")) == "manual"
+    if not manual_editor and (enabled(data) or self_running_ebook(data)):
         from services.ebook_guided_build import approve_visuals
         data = approve_visuals(
             data, persist_progress=lambda partial: database.update_project(pid, None, partial))

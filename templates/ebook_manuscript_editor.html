@@ -2,10 +2,37 @@
 <title>Edit manuscript</title><style>body{font:16px/1.5 system-ui;background:#f8fafc;color:#0f172a;margin:2rem auto;max-width:70rem;padding:1rem}textarea{box-sizing:border-box;width:100%;min-height:28rem;padding:1rem;font:15px/1.6 monospace}button,a{padding:.6rem;margin:.3rem}pre{white-space:pre-wrap;background:white;padding:1rem}button{cursor:pointer}#message{font-weight:600}</style>
 <h1>Edit manuscript</h1><p>Review spelling and grammar suggestions, rewrite passages, and save a validated revision. This editor makes no paid calls. Automated proofreading uses a limited set of English rules; facts and comprehensive grammar still need human review.</p>
 <p><a href="/ebook-workspace/{{ project_id }}/manuscript">Read manuscript</a><a href="/">Factory</a></p>
-<label for="draft">Manuscript (Markdown)</label><textarea id="draft">{{ manuscript }}</textarea>
+<fieldset><legend>How would you like to create?</legend><label><input type="radio" name="editor-mode" value="automatic" {% if editor_mode != "manual" %}checked{% endif %}> Automatic — Factory handles editing during the build</label><label><input type="radio" name="editor-mode" value="manual" {% if editor_mode == "manual" %}checked{% endif %}> Manual — I review and accept changes</label></fieldset><p><button id="auto-continue" type="button">Continue Automatic Build</button></p><p id="mode-info" role="status">Automatic is the default. This page provides manual review; automatic completion runs through the Factory builder.</p><label for="draft">Manuscript (Markdown)</label><textarea id="draft">{{ manuscript }}</textarea>
 <p><button id="suggest">Suggest copy edits</button><button id="review">Review my edits</button><button id="apply" disabled>Apply reviewed edits</button><button id="undo">Undo last saved edit</button></p>
 <p id="message" role="status"></p><h2>Changes and findings</h2><pre id="findings">Review your edits before applying them.</pre>
 <script>
+function syncEditorMode(){const manual=document.querySelector('input[name="editor-mode"]:checked').value==='manual';document.getElementById('auto-continue').disabled=manual;document.getElementById('mode-info').textContent=manual?'Manual editing: preview, review and accept each saved change yourself.':'Automatic mode is selected. Continue your existing Factory build; required quality checks still apply.';}
+document.querySelectorAll('input[name="editor-mode"]').forEach(input=>input.addEventListener('change',async()=>{
+ const requested=document.querySelector('input[name="editor-mode"]:checked').value;
+ document.getElementById('auto-continue').disabled=true;
+ try {
+  const res=await fetch('/ebook-workspace/{{ project_id }}/edit-manuscript',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'set_mode',mode:requested})});
+  const payload=await res.json();
+  if(!res.ok) throw new Error(payload.error||'Could not save editing mode.');
+  syncEditorMode();
+ } catch(err) {
+  document.querySelector('input[name="editor-mode"][value="'+(requested==='manual'?'automatic':'manual')+'"]').checked=true;
+  syncEditorMode();
+  document.getElementById('mode-info').textContent=err.message;
+ }
+}));syncEditorMode();
+document.getElementById('auto-continue').onclick=async()=>{
+ if(document.querySelector('input[name="editor-mode"]:checked').value!=='automatic') return;
+ const btn=document.getElementById('auto-continue'); btn.disabled=true;
+ const info=document.getElementById('mode-info'); info.textContent='Starting the existing Factory build…';
+ try {
+   const response=await fetch('/ebook/build/{{ project_id }}/resume',{method:'POST'});
+   const result=await response.json();
+   if(!response.ok) throw new Error(result.error||'The build could not resume.');
+   info.textContent='Automatic build requested. Follow progress in the Factory. Required approvals and quality checks still apply.';
+   window.location.href='/';
+ } catch(error){ info.textContent=error.message; btn.disabled=false; }
+};
 const draft=document.getElementById('draft'), message=document.getElementById('message'), findings=document.getElementById('findings'), save=document.getElementById('apply');
 let originalDigest={{ manuscript_digest|tojson }}, reviewed=null;
 async function action(name,body={}) {
