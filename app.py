@@ -4765,11 +4765,22 @@ def ebook_manuscript_editor_route(project_id: int):
             if not current_text(data).strip():
                 return _error("This project has no manuscript to edit.", 404)
             return render_template("ebook_manuscript_editor.html", project_id=project_id,
-                                   manuscript=current_text(data), manuscript_digest=digest(current_text(data)))
+                                   manuscript=current_text(data), manuscript_digest=digest(current_text(data)),
+                                   editor_mode=data.get("editor_chief_mode", "automatic"))
         body = request.get_json(silent=True) or {}
         action = body.get("action")
         if action == "mode_policy":
             return jsonify(ok=True, policy=editing_policy(body.get("mode")))
+        if action == "set_mode":
+            from services.editor_chief_modes import choose_mode
+            from services.jobs.store import get_for_project
+            job = get_for_project(project_id)
+            if job and job.get("status") in {"QUEUED", "RUNNING"}:
+                return _error("Wait until the current build finishes before changing editing mode.", 409)
+            mode = choose_mode(body.get("mode"))
+            data["editor_chief_mode"] = mode
+            database.update_project(project_id, None, data)
+            return jsonify(ok=True, policy=editing_policy(mode))
         if action == "preview":
             return jsonify(ok=True, review=preview(data, body.get("manuscript")))
         if action not in {"apply", "undo"}:
