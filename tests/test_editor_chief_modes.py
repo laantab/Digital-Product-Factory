@@ -67,3 +67,11 @@ def test_editor_mode_cannot_change_while_job_is_running(monkeypatch):
         json={"action": "set_mode", "mode": "manual"})
     assert result.status_code == 409
     assert database.get_project(pid)["data"].get("editor_chief_mode") is None
+
+
+def test_manual_mode_is_observed_at_visual_approval_boundary():
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "services" / "ebook_build_orchestrator.py").read_text()
+    assert 'choose_mode(data.get("editor_chief_mode")) == "manual"' in source
+    assert 'if not manual_editor and (enabled(data) or self_running_ebook(data)):' in source
+    assert 'state["awaiting_picture_approval"] = True' in source
