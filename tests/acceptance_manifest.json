@@ -229,6 +229,7 @@
     "tests/test_editor_chief_v2_proofreading.py",
     "tests/test_ebook_ai_rewrite.py",
     "tests/test_billing_postgres_transactions.py",
-    "tests/test_saved_list_nested_payloads.py"
+    "tests/test_saved_list_nested_payloads.py",
+    "tests/test_customer_account_isolation.py"
   ]
 }

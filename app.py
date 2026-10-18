@@ -349,6 +349,13 @@ def _invite_gate():
     return _error(_INVITE_REFUSED_MESSAGE, 401)
 
 
+@app.before_request
+def _customer_account_gate():
+    from services.project_access import guard_request
+
+    return guard_request()
+
+
 @app.route("/invite", methods=["GET", "POST"])
 def invite_route():
     if not _invite_code_required():
@@ -511,6 +518,10 @@ def planner_cover_photo_select_route():
 def index():
     _coloring_customer()  # establish the signed request owner before the first build click
     admin_on = os.environ.get("ADMIN_MODE", "").strip().lower() in {"1", "true", "yes"}
+    from services.project_access import accounts_mode
+    if accounts_mode():
+        from flask_login import current_user
+        admin_on = admin_on and current_user.is_admin
     # Cache-bust the browser bundle on its own modification time. Without this
     # a customer can keep running yesterday's JavaScript against today's
     # server, and the only cure is asking them to clear their cache.
