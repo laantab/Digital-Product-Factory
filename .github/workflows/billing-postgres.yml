@@ -1,0 +1,44 @@
+name: Billing PostgreSQL integration
+on:
+  push:
+    branches:
+      - work/launch-billing-postgres
+  pull_request:
+    paths:
+      - 'services/billing/**'
+      - 'integration_tests/test_billing_postgres_live.py'
+      - 'tests/test_billing_postgres_transactions.py'
+      - '.github/workflows/billing-postgres.yml'
+permissions:
+  contents: read
+jobs:
+  isolated-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: factory_billing_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable_test_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FACTORY_TEST_MODE: '1'
+      FACTORY_TEST_POSTGRES_URL: postgresql://postgres:disposable_test_only@127.0.0.1:5432/factory_billing_test
+      OPENAI_API_KEY: ''
+      TAVILY_API_KEY: ''
+      PEXELS_API_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install pytest==8.4.1 'psycopg[binary]==3.2.9' requests==2.32.4
+      - run: python -m pytest -q integration_tests/test_billing_postgres_live.py

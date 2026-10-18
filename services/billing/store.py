@@ -55,17 +55,27 @@ class SeatsSoldOutError(RuntimeError):
 
 @contextmanager
 def _tx():
-    """IMMEDIATE so concurrent seat claims serialise instead of interleaving."""
+    """Serialise billing writes using the active connection's database dialect."""
+    from services.db.connection import PostgresConnection
+
     conn = database.get_conn()
     try:
-        conn.isolation_level = None
-        conn.execute("BEGIN IMMEDIATE")
+        if isinstance(conn, PostgresConnection):
+            # psycopg starts a transaction on the first statement. A table lock
+            # also serialises the empty-table/last-seat case: row locks cannot
+            # protect a seat that does not yet have a row. Do not reduce this
+            # to plain BEGIN, which would let two buyers choose the same seat.
+            conn.execute("LOCK TABLE billing_subscriptions IN SHARE ROW EXCLUSIVE MODE")
+        else:
+            conn.isolation_level = None
+            conn.execute("BEGIN IMMEDIATE")
         yield conn
-        conn.execute("COMMIT")
+        conn.commit()
     except Exception:
         try:
-            conn.execute("ROLLBACK")
-        except sqlite3.Error:
+            conn.rollback()
+        except Exception:
+            # A rollback failure must not replace the original billing error.
             pass
         raise
     finally:
@@ -416,17 +426,18 @@ def record_event(
     """Return True the first time an event is seen, False on every replay."""
     conn = database.get_conn()
     try:
-        conn.execute(
+        inserted = conn.execute(
             """
             INSERT INTO billing_events
                 (provider, provider_event_id, event_type, payload, handled_at)
             VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (provider, provider_event_id) DO NOTHING
             """,
             (provider, str(event_id), str(event_type),
              json.dumps(payload)[:200000], _now()),
         )
         conn.commit()
-        return True
+        return bool(inserted.rowcount)
     except sqlite3.IntegrityError:
         return False
     finally:
