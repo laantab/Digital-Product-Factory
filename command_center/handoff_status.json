@@ -1,8 +1,8 @@
 {
   "updated_at": "2026-10-18T16:16:40.042798+00:00",
-  "current_task": "Saved ebook preservation repair COMPLETE: version 1.9.47 deployed and verified live.",
-  "stopped_at": "Website and builder report 1.9.47. Original reviewed version shows 100%, both actual downloads match exact original hashes and ZIP integrity. Opening sent no advance/resume POST and left project row/spend unchanged.",
-  "next_step": "Continue launch audit: public customer-account isolation and remaining listing latency. Keep newer Project20 draft unapproved until its own review; preserve all accepted outputs.",
+  "current_task": "Editorial quality repair v1.9.48 verified; deployment pending.",
+  "stopped_at": "3197 exact-candidate release cases passed; code examples protected and practice instructions retained. No accepted exports changed or paid calls.",
+  "next_step": "Verify website and builder release, then address remaining launch gates: sample approval, customer ownership, purchase/access proof, Saved Projects latency and final live rehearsal.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -358,5 +358,6 @@
       "preservation": "Project20 updated_at remained 2026-10-18T14:01:14.127997+00:00; ledger remained 14 calls/$2.35, last call October9. Artifact remains DRAFT; newer draft not approved.",
       "listing": "PLANETS, House Plants, Flower Parts and Container Gardening remain listed. Project20 newer draft appears in Continue where you left off; opening it exposes the reviewed saved version at 100%. List latency remains a separate launch issue."
     }
-  }
+  },
+  "candidate_version": "1.9.48"
 }

@@ -10,7 +10,7 @@ Shorter inner code markers and markers followed by example text no longer expose
 Use the same build and review controls. Existing saved PDFs and ZIPs are preserved; these repairs apply when editing or generating a new draft. No paid provider calls are needed for the repairs.
 
 ### Release gate
-Full exact-candidate verification is pending. Four proofreading regressions and one complete-instruction regression reproduced the defects before their fixes. The focused editorial batch and a real corrected-manuscript PDF/ZIP round-trip passed; chart checks are running. No release-ready claim until the complete manifest passes.
+All 3,197 unique cases passed across all 230 manifest files, with zero failures, errors, skips, missing or duplicate cases. All 3,191 prior cases retained. Includes real local browser builds from both entry paths, tab recovery, reviewed-edit PDF/ZIP output and protected product checks. No paid provider calls; accepted files preserved. Deployment verification pending.
 
 ## 1.9.47 — Preserve saved ebooks when reopening
 
