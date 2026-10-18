@@ -699,7 +699,10 @@ def _practice_sequence_items(body: str) -> list[str]:
     for sentence in _prose_sentences(body):
         first = re.sub(r"[^a-z]", "", sentence.split(" ")[0].lower())
         if first in _IMPERATIVE_OPENERS and 18 <= len(sentence) <= 150:
-            cleaned = _clean_sentence(sentence)
+            # The step renderer wraps complete instructions. Applying the
+            # shorter key-point-card limit here loses the action's ending
+            # before the renderer can lay it out.
+            cleaned = _clean_sentence(sentence, limit=150)
             if cleaned and cleaned not in items:
                 items.append(cleaned)
         if len(items) >= 7:

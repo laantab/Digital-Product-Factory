@@ -1,5 +1,14 @@
 # Five-day launch completion — October 17, 2026
 
+## LIVE VERIFIED — 1.9.47 repair complete, October 18, 2026
+
+PR70 merged as 78069be3babc5b429e486e6cb3e9f819c7145f3b. Render website deployment dep-dbaevh2vcj2c73a5hl90 is LIVE; authenticated footer shows 1.9.47. Builder checked out that merge and startup explicitly logs VERSION1.9.47. All3,191 unique release checks passed; final65 metadata/version/lock checks passed and affected protections are LOCKED.
+
+Live Project20 now shows100% with “Your reviewed version is ready to download. A newer draft needs review.” Both actual UI download controls returned the exact original PDF/ZIP hashes recorded below. ZIP CRC passes; its PDF is byte-identical to the standalone PDF. Opening sent only GETstatus, zero advance/resume POSTs; downloads were GETs to verified previous-export URLs. Project20 updated_at remains14:01:14.127997UTC, the pre-repair value. Ledger remains14calls/$2.35, last recorded call October9. No new generation or paid calls; no customer record/output writes during live verification. Earlier failed ZIP synchronization was superseded by successful actual UI downloads and exact local verification.
+
+PLANETS coloring book and existing word searches remain Export Ready in Saved Projects. The newer Project20 draft is in Continue where you left off; its Ready-to-download entry opens the reviewed saved version at100%. Do not claim newer draft approval. Listing latency remains a separate launch issue, even though payload size is now small. Public memberships remain gated on customer-account isolation. This repair is complete.
+
+
 ## Final 1.9.47 verification — supersedes earlier pending records
 
 All 3,191 unique cases across all 230 manifest files passed with zero failures/errors/skips, missing/extra/duplicate cases. All 3,171 prior case identities remain, plus 20 regressions. Local tested source de0abb3c0468f6e37b6316093eb4dcfbc54e388d; identical remote source 8a123ae3ebb673c678d08927b90f5884649d142b; tree d8db554aeb0f2aeb46779bbfe75995dac6e35c26. See RELEASE_PROOF_1.9.47.json. All affected protection records relocked on that real GitHub source commit. Five standalone real-browser customer paths passed.

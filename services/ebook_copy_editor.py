@@ -46,6 +46,7 @@ def edit_text(text: str, *, target_grade: int = 8) -> dict:
     output = []
     fenced = False
     fence_marker = ""
+    fence_length = 0
     prose = []
 
     def edit_span(span: str, line: int) -> str:
@@ -105,12 +106,14 @@ def edit_text(text: str, *, target_grade: int = 8) -> dict:
 
     for line_number, line in enumerate(text.splitlines(keepends=True), 1):
         stripped = line.lstrip()
-        fence = re.match(r"(`{3,}|~{3,})", stripped)
+        fence = re.match(r"(`{3,}|~{3,})(.*)$", stripped.rstrip("\r\n"))
         if fence:
             marker = fence[1][0]
             if not fenced:
                 fenced, fence_marker = True, marker
-            elif marker == fence_marker:
+                fence_length = len(fence[1])
+            elif (marker == fence_marker and len(fence[1]) >= fence_length
+                  and not fence[2].strip()):
                 fenced = False
             output.append(line)
             continue

@@ -1,0 +1,46 @@
+{
+  "tests": 3197,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "missing": [],
+  "extra": [],
+  "duplicates": 0,
+  "source_commit": "62607c209781b5de9c7465a0304435a5721e1373",
+  "source_tree": "9bda2f6dc7c914d9b53de74360f4972bcb6534c6",
+  "version": "1.9.48",
+  "github_source_commit": "3778616d5bc29aea7b5d090af111fbb952cb3a44",
+  "files": 230,
+  "paid_provider_calls": 0,
+  "baseline_comparison": {
+    "baseline_count": 3191,
+    "candidate_count": 3197,
+    "missing_baseline_cases": [],
+    "new_cases": [
+      "tests/test_ebook_copy_editor.py::test_fenced_source_closes_only_on_a_valid_matching_marker[````markdown\\n```python\\nteh = 'sample'\\n```\\n````\\n]",
+      "tests/test_ebook_copy_editor.py::test_fenced_source_closes_only_on_a_valid_matching_marker[```text\\n```python\\nteh literal\\n```\\n]",
+      "tests/test_ebook_copy_editor.py::test_fenced_source_closes_only_on_a_valid_matching_marker[~~~~markdown\\n~~~\\nteh literal\\n~~~\\n~~~~\\n]",
+      "tests/test_ebook_copy_editor.py::test_fenced_source_closes_only_on_a_valid_matching_marker[~~~~text\\n~~~~ still part of the example\\nteh literal\\n~~~~\\n]",
+      "tests/test_ebook_manuscript_editor.py::test_reviewed_proofreading_reaches_the_new_pdf_and_matching_zip",
+      "tests/test_interior_visual_editorial_standard.py::test_practice_steps_keep_the_full_source_instruction_before_chart_wrapping"
+    ]
+  },
+  "test_identities_sha256": "680623dd3a909017ae114bc6069b8bca7a07558f2799a9aa0043272d265d7ffb",
+  "deployment_status": "Pending",
+  "protected_generators_changed": false,
+  "metadata_only_after_test": [
+    "command_center/function_lock_registry.json",
+    "CHANGELOG.md",
+    "SESSION_HANDOFF_2026-10-20_EDITORIAL_QUALITY.md",
+    "command_center/handoff_status.json",
+    "RELEASE_PROOF_1.9.48.json"
+  ],
+  "dependency_preflight": "Passed",
+  "compilation_preflight": "Passed",
+  "post_verification_metadata_checks": {
+    "tests": 44,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}

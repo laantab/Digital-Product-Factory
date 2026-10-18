@@ -1,6 +1,6 @@
 {
   "schema_note": "Per-function protection status for the Factory's customer-facing generators and shared systems. Seeded 2026-09-12 from a read-only audit -- see PROTECTED_GENERATOR_RULE.md and SESSION_HANDOFF_2026-09-11.md. Status values: LOCKED (proven customer-path fix + machine-checked protected test(s) + known last_known_good_commit), UNLOCKED (an explicit, reasoned, in-progress exception -- see unlocked_by/unlocked_reason), PROTECTED (real test coverage exists but no single commit has been proven as its customer-path last-known-good), UNPROTECTED (no meaningful customer-path test coverage), REGRESSION (currently known broken). last_known_good_commit is null unless a real commit was proven -- never manufactured (Rule 9, PROTECTED_GENERATOR_RULE.md). shared_code_dependencies covers both the function's own dedicated files and any file it shares with other functions -- tests/test_function_lock_enforcement.py treats a trailing '/' as a directory-prefix match.",
-  "updated_at": "2026-10-18T16:11:03.221341+00:00",
+  "updated_at": "2026-10-18",
   "functions": {
     "word_search": {
       "display_name": "Word Search",
@@ -164,7 +164,9 @@
         "tests/test_ebook_manuscript_correction_recovery.py",
         "tests/test_a_cover_is_readable_over_any_photograph.py",
         "tests/test_a_refused_cover_still_leaves_a_way_forward.py",
-        "tests/test_a_pale_photograph_still_gets_a_cover.py"
+        "tests/test_a_pale_photograph_still_gets_a_cover.py",
+        "tests/test_ebook_copy_editor.py",
+        "tests/test_interior_visual_editorial_standard.py"
       ],
       "shared_code_dependencies": [
         "services/ebook_package.py",
@@ -183,7 +185,9 @@
         "services/ebook_manuscript_engine.py",
         "services/ai_providers.py",
         "services/ebook.py",
-        "templates/index.html"
+        "templates/index.html",
+        "services/ebook_copy_editor.py",
+        "services/ebook_visual_pipeline.py"
       ],
       "fast_gate": true,
       "full_gate": true,
@@ -317,8 +321,8 @@
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
       "status": "LOCKED",
-      "last_known_good_commit": "8a123ae3ebb673c678d08927b90f5884649d142b",
-      "factory_version": "1.9.47",
+      "last_known_good_commit": "3778616d5bc29aea7b5d090af111fbb952cb3a44",
+      "factory_version": "1.9.48",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
         "tests/test_guided_cover_choice.py",
@@ -326,7 +330,9 @@
         "tests/test_ebook_workflow_execution.py",
         "tests/test_ebook_completion_quality.py",
         "tests/test_ebook_export_stage.py",
-        "tests/test_editor_in_chief_gate.py"
+        "tests/test_editor_in_chief_gate.py",
+        "tests/test_ebook_copy_editor.py",
+        "tests/test_interior_visual_editorial_standard.py"
       ],
       "shared_code_dependencies": [
         "static/js/app.js",
@@ -337,14 +343,16 @@
         "services/ebook_completion_quality.py",
         "services/ebook_design_export.py",
         "services/editor_in_chief.py",
-        "services/ebook_design_preflight.py"
+        "services/ebook_design_preflight.py",
+        "services/ebook_copy_editor.py",
+        "services/ebook_visual_pipeline.py"
       ],
       "fast_gate": false,
       "full_gate": true,
       "unlocked_by": null,
       "unlocked_reason": null,
-      "relocked_by": "Codex \u2014 owner-authorized repair verified",
-      "relocked_after_tests": "All 3191 unique cases across all 230 manifest files passed; zero failures/errors/skips and exact identity match. Previous 3171-case source baseline preserved; all protected_test_files included. Generator implementations unchanged; shared app.py/app.js changes limited to ebook preservation.",
+      "relocked_by": "Codex \u2014 exact-source editorial and chart verification",
+      "relocked_after_tests": "3197 unique cases across all 230 manifest files passed with zero failures/errors/skips; exact case reconciliation and all 3191 prior cases retained. Extended declared dependencies and protected suites to cover free source-example proofreading and full practice instructions. No protected generator implementation changes.",
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     }
   }

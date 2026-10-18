@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import html as html_lib
+import io
 import json
 import os
 import socket
@@ -294,7 +295,7 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
             page.goto(self.base + "/", wait_until="domcontentloaded")
             created = page.request.post(self.base + "/ebook-workspace", data={
                 "topic": "container gardening", "author": "Guided Fixture Author",
-                "name": "Guided Cover Choice Browser Test",
+                "name": "Container Gardening Handbook",
             }).json()
             pid = int(created["project"]["id"])
             page.evaluate("pid => openEbookWorkspace(pid)", pid)
@@ -308,6 +309,20 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
             page.locator("[data-cover-title]").select_option(selected_id)
             page.locator("[data-cover-update-title]").click()
             expect(page.locator("[data-cover-preview-title]")).to_have_text(selected_title, timeout=120000)
+            project_ids = {row["id"] for row in self._project_rows(page)}
+            # Closing the tab discards sessionStorage. A novice must still
+            # recover the same book through the visible saved-work entry,
+            # including the title choice already saved to the server.
+            page.close()
+            page = context.new_page()
+            page.goto(self.base + "/", wait_until="domcontentloaded")
+            page.locator('#nav [data-go="saved"]').click()
+            resume = page.locator(f'[data-resume-ebook="{pid}"]')
+            expect(resume).to_be_visible(timeout=30000)
+            resume.click()
+            page.wait_for_selector("[data-ebook-cover-choice]", timeout=30000)
+            expect(page.locator("[data-cover-preview-title]")).to_have_text(selected_title)
+            self._assert_screen_is_customer_safe(page, where="after tab closure")
             covers = page.locator("[data-cover-layout]")
             self.assertGreater(covers.count(), 0)
             for img in page.locator("[data-ebook-cover-choice] img").all():
@@ -325,7 +340,12 @@ class EbookRealBrowserCustomerPathTests(unittest.TestCase):
             self.assertTrue(pdf.startswith(b"%PDF"))
             with page.expect_download() as downloaded:
                 page.locator("[data-ebook-dl-zip]").click()
-            self.assertTrue(Path(downloaded.value.path()).read_bytes().startswith(b"PK"))
+            package = Path(downloaded.value.path()).read_bytes()
+            with zipfile.ZipFile(io.BytesIO(package)) as archive:
+                self.assertIsNone(archive.testzip())
+                self.assertEqual(archive.read("ebook.pdf"), pdf)
+            self.assertEqual({row["id"] for row in self._project_rows(page)}, project_ids,
+                             "tab recovery created an extra project")
             calls = json.loads(self.call_log.read_text(encoding="utf-8"))
             self.assertEqual(calls.get("paid", 0), 0)
             self.assertEqual(calls.get("pexels_http", 0), 0)

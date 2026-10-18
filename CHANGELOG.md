@@ -1,3 +1,17 @@
+## 1.9.48 — Preserve source examples and complete chart instructions
+
+### What changed
+The free ebook proofreader respects the full Markdown code fence. Practice-step graphics retain complete source instructions for the existing renderer to wrap.
+
+### What was fixed
+Shorter inner code markers and markers followed by example text no longer expose protected examples to automatic corrections. Practice instructions between 79 and 150 characters no longer lose their endings at the shorter key-point-card limit. Existing saved books and protected generator implementations are unchanged.
+
+### Do the steps change?
+Use the same build and review controls. Existing saved PDFs and ZIPs are preserved; these repairs apply when editing or generating a new draft. No paid provider calls are needed for the repairs.
+
+### Release gate
+All 3,197 unique cases passed across all 230 manifest files, with zero failures, errors, skips, missing or duplicate cases. All 3,191 prior cases retained. Includes real local browser builds from both entry paths, tab recovery, reviewed-edit PDF/ZIP output and protected product checks. No paid provider calls; accepted files preserved. Deployment verification pending.
+
 ## 1.9.47 — Preserve saved ebooks when reopening
 
 ### What changed

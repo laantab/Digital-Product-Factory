@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-18T16:11:03.221341+00:00",
-  "current_task": "Release 1.9.47 fully verified; publishing and verifying live.",
-  "stopped_at": "3191 unique tests passed across all 230 manifest files, zero failures/errors/skips, exact case identity match. Protection records relocked at exact remote source 8a123ae.",
-  "next_step": "Merge PR70 and verify live version 1.9.47. Saved Open must send zero advance/resume requests and expose the original reviewed PDF/ZIP without rebuilding.",
+  "updated_at": "2026-10-18T16:16:40.042798+00:00",
+  "current_task": "Editorial quality repair v1.9.48 verified; deployment pending.",
+  "stopped_at": "3197 exact-candidate release cases passed; code examples protected and practice instructions retained. No accepted exports changed or paid calls.",
+  "next_step": "Verify website and builder release, then address remaining launch gates: sample approval, customer ownership, purchase/access proof, Saved Projects latency and final live rehearsal.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -212,7 +212,7 @@
     "paid_calls_this_repair": 0,
     "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/35"
   },
-  "last_completed": "Preview viewing no longer withdraws certified export status; saved Open stays read-only; historical verified customer exports remain downloadable.",
+  "last_completed": "v1.9.47 release verified with 3191 passing checks and live original PDF/ZIP recovery, read-only reopening and unchanged spending.",
   "ebook_completion_2026_10_13": {
     "website_live_version": "1.9.27",
     "website_live_commit": "e273dfc5739c1e16bd9c670ba158a087263652fc",
@@ -267,7 +267,7 @@
     "github_source_commit": "8a123ae3ebb673c678d08927b90f5884649d142b",
     "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/70",
     "focused_checks": 128,
-    "release_status": "VERIFIED",
+    "release_status": "LIVE_VERIFIED",
     "project20_original_pdf_sha256": "20792e8fcce4ab4fcc7daa8e49df1d0a634f7c624d9197d346d0fda83f8d025d",
     "project20_original_zip_sha256": "f7cc37a90f71e8563039c412f23f7ba11deff52edb055419117197921d572d26",
     "preservation": "Exact original pair verified in existing previous-export assets and separate recovery archive. Newer draft preserved separately; no automatic approval.",
@@ -342,6 +342,22 @@
           "time": "200.331"
         }
       ]
+    },
+    "live_verification": {
+      "version": "1.9.47",
+      "merge_commit": "78069be3babc5b429e486e6cb3e9f819c7145f3b",
+      "website_deploy": "dep-dbaevh2vcj2c73a5hl90",
+      "website_status": "live",
+      "builder_startup": "VERSION 1.9.47 observed 2026-10-18T16:12:58Z after checkout of merge commit",
+      "project_id": 20,
+      "saved_version_percent": 100,
+      "saved_pdf_sha256": "20792e8fcce4ab4fcc7daa8e49df1d0a634f7c624d9197d346d0fda83f8d025d",
+      "saved_zip_sha256": "f7cc37a90f71e8563039c412f23f7ba11deff52edb055419117197921d572d26",
+      "actual_downloads": "Both live UI links downloaded; exact hashes match originals, ZIP CRC passes and embedded PDF is identical.",
+      "open_requests": "GET /ebook/build/20/status only; zero advance/resume POSTs during opening and downloads.",
+      "preservation": "Project20 updated_at remained 2026-10-18T14:01:14.127997+00:00; ledger remained 14 calls/$2.35, last call October9. Artifact remains DRAFT; newer draft not approved.",
+      "listing": "PLANETS, House Plants, Flower Parts and Container Gardening remain listed. Project20 newer draft appears in Continue where you left off; opening it exposes the reviewed saved version at 100%. List latency remains a separate launch issue."
     }
-  }
+  },
+  "candidate_version": "1.9.48"
 }
