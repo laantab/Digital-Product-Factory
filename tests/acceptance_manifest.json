@@ -224,6 +224,11 @@
     "tests/test_saved_products_bounded_loading.py",
     "tests/test_coloring_completion_recovery.py",
     "tests/test_ebook_completion_quality.py",
-    "tests/test_saved_product_open_recovery.py"
+    "tests/test_saved_product_open_recovery.py",
+    "tests/test_editor_chief_review_controls.py",
+    "tests/test_editor_chief_v2_proofreading.py",
+    "tests/test_ebook_ai_rewrite.py",
+    "tests/test_billing_postgres_transactions.py",
+    "tests/test_saved_list_nested_payloads.py"
   ]
 }

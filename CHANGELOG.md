@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.9.46 — 2026-10-17
+
+**Safer manuscript editing, smaller saved-product lists and PostgreSQL billing repairs.**
+
+### What changed
+
+The manuscript editor shows the saved original beside the proposed revision,
+with a Reject button that restores the original in the editor without saving.
+The comparison fits narrow screens.
+Saved lists carry display metadata and PDF/ZIP links instead of nested book and
+image payloads. Opening a project still retrieves its full unchanged record.
+
+### What was fixed
+
+Editing while a review is pending prevents
+that older response from replacing newer typing. Requests time out after 30
+seconds; a save whose response is lost requires a reload before another write.
+Manuscript Apply and Undo now enforce the existing APPROVED/LOCKED content
+guard before editing. Protected artifacts cannot be changed in place.
+Nested document, cover and edit-history data made saved lists unnecessarily
+large. PostgreSQL billing also received SQLite-only transaction syntax, and
+duplicate payment events could raise a database error. Billing now serializes
+seat reservations with the active database's locking mechanism and handles
+event replays idempotently. Prices, payment configuration and seat limits stay
+the same.
+
+### Do the steps change?
+
+Review the comparison, then choose Apply or Reject.
+An approved artifact needs Create Draft Revision before editing; locked
+artifacts remain unchanged.
+Existing acceptance, undo, quality checks and original exported files remain
+protected. No new provider or paid call is introduced.
+
+### Release gate
+
+Browser regressions verify complete-record preservation on rejection, delayed
+review responses, failed-review recovery, and a save that succeeds before its
+response is lost. Saved-list checks verify metadata, download links and unchanged
+full records. Isolated PostgreSQL integration covers final-seat contention,
+rollback, repeated/concurrent webhooks and seat reuse. Required release gates
+must pass on the combined candidate before deployment.
+
 ## 1.9.45 — 2026-10-15
 
 **Reopen saved products without saving or replacing them.**
