@@ -1,0 +1,31 @@
+{
+  "source_commit": "c2c265637ae788d793ceb684b30fce1768b88b31",
+  "source_tree": "ce933d0eab891a037a0d7893e9765744f8da9e57",
+  "files": 230,
+  "collected_tests": 3171,
+  "shards": 4,
+  "tests": 3171,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "missing": [],
+  "extra": [],
+  "duplicates": 0,
+  "exact_collection_match": true,
+  "test_identities_sha256": "758d1bd5b0ce52f1889a193249e986e899ca248fe1f137c81342fbb7ac0fc4af",
+  "version": "1.9.46",
+  "github_source_commit": "740756d408ad2db8734b0a815649a2de62a3a618",
+  "postgres_integration": {
+    "run_id": 39095302129,
+    "conclusion": "success",
+    "tests": 6,
+    "source_commit": "740756d408ad2db8734b0a815649a2de62a3a618"
+  },
+  "paid_provider_calls": 0,
+  "publication_status": "Verified; deployment pending",
+  "scope": "Editor safety, bounded saved summaries, PostgreSQL billing transactions and webhook replay",
+  "preserved_reference_sha256": {
+    "ebook.pdf": "6202e3a559db9313b61ec2d54ff689f6236a3b037308820bc77cfedf4d01f5bd",
+    "package.zip": "5044f086b7335e139bcec94e1b743c4f7effd4fe9eb7738973140176ef6d5c1f"
+  }
+}

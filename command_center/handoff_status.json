@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-15T17:53:41.433722+00:00",
-  "current_task": "Consistent ebook quality v1.9.44: all release checks passed; publishing verified source.",
-  "stopped_at": "3125 unique tests passed across all 224 manifest files with zero failures/errors/skips; exact test identity match. Affected protection locks restored at tested source 403aba8ba9b298b9eebc6682ae4110e23c63b822.",
-  "next_step": "Merge PR #62 and verify website and automatic builder deployment; preserve customer outputs.",
+  "updated_at": "2026-10-18T13:56:36.951980+00:00",
+  "current_task": "Release 1.9.46 verified; publish repair release and verify live.",
+  "stopped_at": "3171 unique release cases across 230 manifest files passed; zero failures/errors/skips and exact collection match. Six real PostgreSQL integration cases passed on identical source.",
+  "next_step": "Merge PR68, verify website and Workflows builder version 1.9.46, then verify customer isolation before public memberships.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -172,7 +172,7 @@
         "10 GB persistent disk mounted at /var/data on Render.",
         "Render env vars set: FACTORY_DB_PATH=/var/data/projects.db, FACTORY_EXPORTS_DIR=/var/data/exports, FLASK_EXPORTS_DIR=/var/data/exports.",
         "Production redeployed successfully with persistent storage; the live domain loads.",
-        "Word Search regression root-caused (three stacked defects, all in services/product.py) — read-only, no code changed.",
+        "Word Search regression root-caused (three stacked defects, all in services/product.py) \u2014 read-only, no code changed.",
         "Version-recovery audit complete: nothing was lost, reverted, or overwritten; the shared engine is byte-identical since commit e81298e.",
         "Built the standalone Factory Command Center (command_center/), committed as e35654a.",
         "Diagnosed why a live Flower Parts test still showed the old words: no local server was running; the public site (v1.7.0, origin/main 1c86c05) was the one tested, and the fix had never been pushed.",
@@ -199,8 +199,8 @@
       ]
     }
   ],
-  "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly — it is what the Command Center reads every time it opens.",
-  "factory_version": "1.9.44",
+  "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly \u2014 it is what the Command Center reads every time it opens.",
+  "factory_version": "1.9.46",
   "ebook_reliability_2026_10_08": {
     "live_release": "1.9.17",
     "live_commit": "61b2759ee195a68b6e44c9a047ec27724e044b24",
@@ -212,7 +212,7 @@
     "paid_calls_this_repair": 0,
     "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/35"
   },
-  "last_completed": "Consistent final ebook quality review, metadata identity and failed-quality draft preservation. Full release proof: 3125 passed, zero failures/errors/skips.",
+  "last_completed": "Editor protection, bounded Saved Projects summaries and PostgreSQL billing repair; full release verification passed.",
   "ebook_completion_2026_10_13": {
     "website_live_version": "1.9.27",
     "website_live_commit": "e273dfc5739c1e16bd9c670ba158a087263652fc",
@@ -229,5 +229,36 @@
     "validation": "Baseline Fast Gate: 757 passed across 55 files. Full Release Gate at 7acc927ab444e7c37f4280747217865d93f2daf5: 3115 unique tests across all 223 manifest files; 0 failures, 0 errors, 0 skipped (3499.846 seconds). Five focused real-browser recovery cases passed; paid API calls blocked. Original reference PDF and ZIP checksums unchanged.",
     "publication_record": "https://github.com/laantab/Digital-Product-Factory/pull/61",
     "website_js_sha256": "09ee55a8de03d87e155a4e2b98132b59931c16392055fff7ab4f7d3e38e8a070"
+  },
+  "launch_release_2026_10_18": {
+    "source_commit": "c2c265637ae788d793ceb684b30fce1768b88b31",
+    "source_tree": "ce933d0eab891a037a0d7893e9765744f8da9e57",
+    "files": 230,
+    "collected_tests": 3171,
+    "shards": 4,
+    "tests": 3171,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "missing": [],
+    "extra": [],
+    "duplicates": 0,
+    "exact_collection_match": true,
+    "test_identities_sha256": "758d1bd5b0ce52f1889a193249e986e899ca248fe1f137c81342fbb7ac0fc4af",
+    "version": "1.9.46",
+    "github_source_commit": "740756d408ad2db8734b0a815649a2de62a3a618",
+    "postgres_integration": {
+      "run_id": 39095302129,
+      "conclusion": "success",
+      "tests": 6,
+      "source_commit": "740756d408ad2db8734b0a815649a2de62a3a618"
+    },
+    "paid_provider_calls": 0,
+    "publication_status": "Verified; deployment pending",
+    "scope": "Editor safety, bounded saved summaries, PostgreSQL billing transactions and webhook replay",
+    "preserved_reference_sha256": {
+      "ebook.pdf": "6202e3a559db9313b61ec2d54ff689f6236a3b037308820bc77cfedf4d01f5bd",
+      "package.zip": "5044f086b7335e139bcec94e1b743c4f7effd4fe9eb7738973140176ef6d5c1f"
+    }
   }
 }

@@ -1,5 +1,12 @@
 # Five-day launch completion — October 17, 2026
 
+## Final verification — October 18, 2026
+
+Release 1.9.46 passed all 3,171 unique tests across all 230 manifest files, with zero failures, errors, skips, missing or duplicate cases. Exact tested tree: ce933d0eab891a037a0d7893e9765744f8da9e57; GitHub source: 740756d408ad2db8734b0a815649a2de62a3a618. Exact-source PostgreSQL integration run 39095302129 succeeded (six cases). Original reference PDF/ZIP hashes match. No paid provider calls. See RELEASE_PROOF_1.9.46.json.
+
+Next: merge PR68 and verify website and builder deployment plus read-only Saved Projects, editor and downloads. Deployment is pending; the historical pending-verification notes below are superseded by this result. Public memberships remain gated pending customer-account isolation verification. No customer records, exports or production configuration were changed.
+
+
 ## Current combined candidate — supersedes pending items in the historical record
 
 The editor-only 228-file baseline completed: 3,154 unique cases, zero failures,
