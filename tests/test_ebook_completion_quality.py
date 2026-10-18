@@ -177,3 +177,44 @@ def test_quality_failure_does_not_repeat_export_without_explicit_resume(export_c
         assert stored["editor_in_chief"]["findings"][0]["code"] == "PAGE_BLANK"
     finally:
         database.delete_project(pid)
+
+
+def test_review_uses_verified_source_when_factory_copy_is_on_another_machine(tmp_path):
+    from PIL import Image
+    from services.editor_in_chief_ebook import collect_ebook_candidate
+    image = tmp_path / "source.png"
+    Image.new("RGB", (100, 100), "green").save(image)
+    digest = hashlib.sha256(image.read_bytes()).hexdigest()
+    data = {"visual_plan": {"chapters": [{"chapter": "A", "aids": [{
+        "type": "photo", "asset_path": str(image), "sha256": digest,
+        "factory_asset_path": str(tmp_path / "retired-builder" / "img.png")
+    }]}]}}
+    before = copy.deepcopy(data)
+    candidate = collect_ebook_candidate(data, package_dir=str(tmp_path))
+    assert candidate["assets"][0]["_info"]["exists"] is True
+    assert candidate["assets"][0]["path"] == str(image)
+    assert data == before
+
+
+@pytest.mark.parametrize('damage', ['', 'pdf_differs', 'broken_zip', 'missing_zip', 'unsafe_id'])
+def test_preserved_draft_downloads_require_matching_real_files(tmp_path, monkeypatch, damage):
+    import services.packaging as packaging
+    from services.ebook_saved_downloads import saved_downloads
+    monkeypatch.setattr(packaging, 'EXPORTS_DIR', str(tmp_path))
+    folder = tmp_path / 'preserved'
+    folder.mkdir()
+    pdf = b'%PDF-1.4\noriginal draft\n%%EOF'
+    (folder / 'ebook.pdf').write_bytes(pdf)
+    with zipfile.ZipFile(folder / 'package.zip', 'w') as z:
+        z.writestr('ebook.pdf', b'%PDF different' if damage == 'pdf_differs' else pdf)
+    if damage == 'broken_zip':
+        (folder / 'package.zip').write_bytes(b'bad zip')
+    if damage == 'missing_zip':
+        (folder / 'package.zip').unlink()
+    before = {p.name: p.read_bytes() for p in folder.iterdir()}
+    data = {'package_id': '../preserved' if damage == 'unsafe_id' else 'preserved'}
+    result = saved_downloads(data)
+    assert bool(result) == (not damage)
+    if result:
+        assert set(result) == {'pdf', 'zip'}
+    assert {p.name: p.read_bytes() for p in folder.iterdir()} == before

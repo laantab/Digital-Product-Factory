@@ -136,9 +136,12 @@ def test_retrying_is_reported_distinctly_from_plain_working():
     assert activity["spinning"] is True
 
 
-def test_finished_and_failed_never_spin():
+def test_finished_and_failed_never_spin(monkeypatch):
+    import services.ebook_build_orchestrator as orch
     project = _project()
-    done = activity_for(project["id"], _data(finished=True))
+    with monkeypatch.context() as m:
+        m.setattr(orch, "next_incomplete_stage", lambda data: None)
+        done = activity_for(project["id"], _data(finished=True))
     assert done["state"] == ACTIVITY_DONE and done["spinning"] is False
 
     failed = activity_for(project["id"], _data(failed=True, seconds_ago=1))
@@ -276,3 +279,41 @@ def test_a_job_queued_for_days_offers_continue_instead_of_spinning():
     # Still within the limit it is honestly "picking back up".
     fresh = activity_for(project["id"], _data(seconds_ago=QUEUED_GIVE_UP_SECONDS - 60))
     assert fresh["state"] == ACTIVITY_QUEUED
+
+
+def test_stale_finished_flag_cannot_contradict_unfinished_export():
+    from services.ebook_build_orchestrator import status_payload
+    project = _project()
+    data = _data(seconds_ago=600, finished=True, failed=True)
+    payload = status_payload(data, project["id"])
+    assert payload["finished"] is False
+    assert payload["activity"]["state"] == ACTIVITY_FAILED
+    assert activity_for(project["id"], data)["state"] == ACTIVITY_FAILED
+
+
+@pytest.mark.parametrize('action', ['advance', 'resume'])
+@pytest.mark.parametrize('workflow', [False, True])
+def test_stale_finished_export_never_runs_or_enqueues_on_old_requests(monkeypatch, action, workflow):
+    import copy
+    import app as web
+    import services.ebook_build_orchestrator as orch
+    import services.jobs.dispatch as dispatch
+    import services.jobs.mode as mode
+    data = _data(seconds_ago=600, finished=True, failed=True)
+    data['ebook_workspace'] = {'rail': {s: {'status': 'approved'} for s in orch.STAGES if s != 'export'}}
+    project = {'id': 987, 'type': 'ebook', 'data': data}
+    before = copy.deepcopy(project)
+    monkeypatch.setattr(database, 'get_project', lambda pid: copy.deepcopy(project))
+    def forbidden(*args, **kwargs):
+        pytest.fail('A saved completed export must not be rewritten or queued by a stale tab')
+    monkeypatch.setattr(database, 'update_project', forbidden)
+    monkeypatch.setattr(dispatch, 'hand_off', forbidden)
+    monkeypatch.setattr(web, '_workflow_hand_off', forbidden)
+    monkeypatch.setattr(mode, 'is_workflow_mode', lambda: workflow)
+    monkeypatch.setattr(web, '_invite_code_required', lambda: '')
+    response = web.app.test_client().post(f'/ebook/build/987/{action}', json={})
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body['needs_export_review'] and body['failed'] and not body['finished']
+    assert body['activity']['state'] == ACTIVITY_FAILED
+    assert project == before

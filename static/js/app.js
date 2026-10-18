@@ -1720,7 +1720,7 @@ function openProject(p) {
     // manuscript is unfinished belongs on the progress screen, where the
     // orchestrator repairs and revalidates on its own.
     if (d.ebook_build || _ebookNeedsAutomaticRepair(d)) {
-      openEbookBuild(p.id);
+      openEbookBuild(p.id, { viewOnly: true });
       return;
     }
     if (d.ebook_project_workspace || d.ebook_workspace) {
@@ -7437,7 +7437,9 @@ function renderEbookBuild(status) {
          )}</p>
          ${_ebookBuildBar(s.percent)}
          <div class="mt-5 flex flex-wrap gap-2">
-           <button type="button" data-ebook-resume class="btn-primary">Resume Build</button>
+           ${s.needs_export_review ? `<a href="${escapeHtml(safeHref(s.review_url || ""))}" target="_blank" rel="noopener" class="btn-primary">Review saved book</a>` : `<button type="button" data-ebook-resume class="btn-primary">Resume Build</button>`}
+           ${s.saved_downloads && safeHref(s.saved_downloads.pdf) ? `<a href="${escapeHtml(safeHref(s.saved_downloads.pdf))}" class="${NS_BTN}" download>Download saved PDF</a>` : ""}
+           ${s.saved_downloads && safeHref(s.saved_downloads.zip) ? `<a href="${escapeHtml(safeHref(s.saved_downloads.zip))}" class="${NS_BTN}" download>Download saved ZIP</a>` : ""}
            <button type="button" data-ebook-changes class="${NS_BTN}">Make Changes</button>
          </div>
        </div>`
@@ -7465,10 +7467,10 @@ function renderEbookBuild(status) {
   // When nothing holds the work, say so plainly and give the customer the
   // action -- never an animated screen over a build that stopped.
   const act = s.activity || {};
-  const stalledPanel = act.state === "stalled"
+  const stalledPanel = act.state === "stalled" || s.view_only
     ? `<div class="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4" data-ebook-stalled>
          <p class="text-sm font-bold text-amber-900">This book is paused</p>
-         <p class="text-sm text-slate-700 mt-1">Nothing is running right now. Your finished chapters are saved.</p>
+         <p class="text-sm text-slate-700 mt-1">${s.view_only ? "Opening this saved book does not restart it. Choose Continue when you want the Factory to continue building." : "Nothing is running right now. Your finished chapters are saved."}</p>
          <button type="button" data-ebook-resume class="btn-primary mt-3">Continue</button>
        </div>`
     : "";
@@ -7755,7 +7757,8 @@ async function openEbookBuild(projectId, opts) {
     }
   }
   if (runToken !== _ebookBuildRun) return;
-  renderEbookBuild(status);
+  renderEbookBuild({ ...status, view_only: !!(opts && opts.viewOnly) });
+  if (opts && opts.viewOnly) return;
   if (!status.finished && !status.failed && !status.awaiting_cover_choice && !status.awaiting_picture_approval && !status.paused_after) {
     await _ebookBuildLoop(projectId, runToken, { continued: !!(opts && opts.continued), status });
   }

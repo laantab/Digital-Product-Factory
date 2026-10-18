@@ -1,3 +1,17 @@
+## 1.9.47 — Preserve saved ebooks when reopening
+
+### What changed
+Saved ebook Open reads status without automatically resuming a build. Continue remains explicit.
+
+### What was fixed
+Stale finished flags no longer contradict failed export verification. A verified saved PDF/ZIP pair remains downloadable as saved files while release approval is pending. Quality review uses the verified acquired picture when a factory-copy path belongs to an old builder. Completed or review-blocked workflow polls do not start a builder task.
+
+### Do the steps change?
+Open a saved ebook to inspect it; choose Continue for unfinished work. A previously finished book requiring verification opens its quality review instead of rebuilding automatically.
+
+### Release gate
+Pending complete verification. No paid provider calls; generator implementations and existing customer exports preserved.
+
 # Changelog
 
 ## 1.9.46 — 2026-10-17

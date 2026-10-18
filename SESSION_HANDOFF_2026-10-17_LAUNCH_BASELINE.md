@@ -1,5 +1,14 @@
 # Five-day launch completion — October 17, 2026
 
+## Live release verification — October 18, 2026, 07:01 Pacific
+
+PR68 merged as 4c804ded691660c01214022a5c5c6ef422466ed3. Render website deployment dep-dbad0e7lk1mc73cngd10 is LIVE; authenticated footer shows 1.9.46. Website briefly returned 502 during the disk-backed restart and recovered. Saved Projects loaded existing ebook, PLANETS coloring book, House Plants and Flower Parts word searches. List responses now 4,147 bytes for limit=3 (previously 5,896,166) and 6,694 bytes for limit=10 (previously 6,456,310). Loading remains slow: payload size is repaired, server-side listing work remains a separate performance issue. Live manuscript editor loads with compare/reject controls, without saving edits. PR66 and PR69 closed as superseded. PR67 remains excluded.
+
+IMPORTANT NEW BLOCKER: Project20 reopen shows activity Finished but 90%, finished=false and message Building your final files. Read-only GET /ebook/build/20/status confirms a DRAFT, complete manuscript, existing PDF/ZIP URLs, activity.state=done, finished=false, attempts_left=0. Do not treat this as launch ready or automatically regenerate the accepted exports. Opening the saved ebook unexpectedly started automatic POST /ebook/build/20/advance polling (200), despite only clicking Open. Closed the Factory tab to stop it. No explicit save/edit/approve/rebuild was clicked. No provider-charge event observed in inspected logs; zero new spend is NOT independently verified by ledger yet. Check ledger and preserve original files before any further action. The unchanged frontend resume behavior and stale finished/validation disagreement need isolated reproduction and repair. Do not simply force ready=true.
+
+Render builder workflow checked out the merge commit and its build succeeded. No new runtime startup/version log was available; runtime verification remains pending. Do not trigger a paid ebook build to prove deployment. Public memberships also remain gated on account isolation (auth Phase A is additive; project routes do not yet enforce per-user ownership). No production settings changed.
+
+
 ## Final verification — October 18, 2026
 
 Release 1.9.46 passed all 3,171 unique tests across all 230 manifest files, with zero failures, errors, skips, missing or duplicate cases. Exact tested tree: ce933d0eab891a037a0d7893e9765744f8da9e57; GitHub source: 740756d408ad2db8734b0a815649a2de62a3a618. Exact-source PostgreSQL integration run 39095302129 succeeded (six cases). Original reference PDF/ZIP hashes match. No paid provider calls. See RELEASE_PROOF_1.9.46.json.

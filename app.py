@@ -4663,7 +4663,8 @@ def ebook_build_advance_route(project_id: int):
             # customer's approval (a light action on this service) ends the
             # wait; the next poll then hands the rest of the book off.
             _waiting = status_payload(dict(project.get("data") or {}), project_id)
-            if _waiting.get("awaiting_picture_approval") or _waiting.get("awaiting_cover_choice"):
+            if (_waiting.get("finished") or _waiting.get("needs_export_review")
+                    or _waiting.get("awaiting_picture_approval") or _waiting.get("awaiting_cover_choice")):
                 _waiting["advanced"] = False
                 _waiting["execution_mode"] = _execution_mode.WORKFLOW
                 return jsonify(_waiting)
@@ -4720,6 +4721,8 @@ def ebook_build_resume_route(project_id: int):
         from services.ebook_build_orchestrator import resume_build
 
         payload = resume_build(project_id)
+        if payload.get("finished") or payload.get("needs_export_review"):
+            return jsonify(payload)
         try:
             from services.jobs.dispatch import hand_off as _hand_off_build
 
