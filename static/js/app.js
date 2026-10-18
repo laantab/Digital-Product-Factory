@@ -7374,6 +7374,7 @@ function renderEbookBuild(status) {
   const s = status || {};
   const pid = s.project_id || _ebookBuildProjectId;
   const bookTitle = s.title || "Your ebook";
+  const savedFileUrl = (url) => /^(\/download\/[A-Za-z0-9_-]{1,128}|\/ebook-workspace\/[1-9][0-9]*\/previous-exports\/[0-9a-f]{16})\/(ebook\.pdf|package\.zip)$/.test(String(url || "")) ? String(url) : "";
 
   if (s.finished) {
     const pdf = (s.downloads || {}).pdf || "";
@@ -7433,13 +7434,13 @@ function renderEbookBuild(status) {
       `<div data-ebook-build-failed>
          <h2 class="text-xl font-bold text-slate-900">${escapeHtml(bookTitle)}</h2>
          <p class="text-sm text-slate-700 mt-2 mb-4" data-ebook-build-message>${escapeHtml(
-           s.message || "Your project is safely saved. We couldn't complete this step automatically."
+           s.saved_version_ready ? "Your reviewed version is ready to download. A newer draft needs review." : s.message || "Your project is safely saved. We couldn't complete this step automatically."
          )}</p>
-         ${_ebookBuildBar(s.percent)}
+         ${_ebookBuildBar(s.saved_version_ready ? 100 : s.percent)}
          <div class="mt-5 flex flex-wrap gap-2">
-           ${s.needs_export_review ? `<a href="${escapeHtml(safeHref(s.review_url || ""))}" target="_blank" rel="noopener" class="btn-primary">Review saved book</a>` : `<button type="button" data-ebook-resume class="btn-primary">Resume Build</button>`}
-           ${s.saved_downloads && safeHref(s.saved_downloads.pdf) ? `<a href="${escapeHtml(safeHref(s.saved_downloads.pdf))}" class="${NS_BTN}" download>Download saved PDF</a>` : ""}
-           ${s.saved_downloads && safeHref(s.saved_downloads.zip) ? `<a href="${escapeHtml(safeHref(s.saved_downloads.zip))}" class="${NS_BTN}" download>Download saved ZIP</a>` : ""}
+           ${s.needs_export_review ? `<a href="/ebook-workspace/${encodeURIComponent(pid)}/release-review" target="_blank" rel="noopener" class="btn-primary">Review saved book</a>` : `<button type="button" data-ebook-resume class="btn-primary">Resume Build</button>`}
+           ${s.saved_downloads && savedFileUrl(s.saved_downloads.pdf) ? `<a href="${escapeHtml(savedFileUrl(s.saved_downloads.pdf))}" class="${NS_BTN}" download>Download saved PDF</a>` : ""}
+           ${s.saved_downloads && savedFileUrl(s.saved_downloads.zip) ? `<a href="${escapeHtml(savedFileUrl(s.saved_downloads.zip))}" class="${NS_BTN}" download>Download saved ZIP</a>` : ""}
            <button type="button" data-ebook-changes class="${NS_BTN}">Make Changes</button>
          </div>
        </div>`

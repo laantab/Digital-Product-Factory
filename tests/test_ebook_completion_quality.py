@@ -218,3 +218,44 @@ def test_preserved_draft_downloads_require_matching_real_files(tmp_path, monkeyp
     if result:
         assert set(result) == {'pdf', 'zip'}
     assert {p.name: p.read_bytes() for p in folder.iterdir()} == before
+
+
+@pytest.mark.parametrize('damage', ['', 'corrupt', 'other_review', 'missing_zip', 'storage_down'])
+def test_original_reviewed_history_pair_is_reused_without_writing(tmp_path, monkeypatch, damage):
+    import io
+    import database
+    import services.storage.compat as compat
+    from services.ebook_saved_downloads import saved_downloads
+    pdf = b'%PDF-1.4\nreviewed original\n%%EOF'
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, 'w') as z:
+        z.writestr('ebook.pdf', pdf)
+    payloads = {'pdf': pdf, 'zip': stream.getvalue()}
+    hashes = {kind: hashlib.sha256(raw).hexdigest() for kind, raw in payloads.items()}
+    rows = []
+    values = {}
+    for kind, name in [('pdf', 'ebook.pdf'), ('zip', 'package.zip')]:
+        key = f'projects/42/previous/{hashes[kind][:16]}/{name}'
+        rows.append({'kind': 'export_previous', 'checksum': hashes[kind], 'storage_key': key})
+        values[key] = payloads[kind]
+    data = {'release_review': {'status': 'Ready for approval', 'pdf_sha256': hashes['pdf'], 'zip_sha256': hashes['zip']}}
+    if damage == 'corrupt':
+        values[rows[0]['storage_key']] = b'%PDF changed'
+    if damage == 'other_review':
+        data['release_review']['pdf_sha256'] = '0' * 64
+    if damage == 'missing_zip':
+        rows.pop()
+    monkeypatch.setattr(database, 'list_assets', lambda pid: rows if pid == 42 else [])
+    def read(key):
+        if damage == 'storage_down':
+            raise OSError('storage unavailable')
+        return values[key]
+    monkeypatch.setattr(compat, 'verified_asset_bytes', read)
+    before = copy.deepcopy(data)
+    result = saved_downloads(data, 42)
+    assert bool(result) == (not damage)
+    if result:
+        assert '/previous-exports/' in result['pdf']
+        assert hashes['pdf'][:16] in result['pdf']
+        assert hashes['zip'][:16] in result['zip']
+    assert data == before

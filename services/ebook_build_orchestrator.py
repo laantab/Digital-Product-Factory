@@ -1473,7 +1473,7 @@ def status_payload(data: dict, project_id: int) -> dict:
     if needs_export_review:
         from services.ebook_saved_downloads import saved_downloads
 
-        preserved_downloads = saved_downloads(data)
+        preserved_downloads = saved_downloads(data, project_id)
     files = (data.get("exports") or {}).get("files") if isinstance(data.get("exports"), dict) else {}
     files = files if isinstance(files, dict) else {}
 
@@ -1499,6 +1499,7 @@ def status_payload(data: dict, project_id: int) -> dict:
         "failed": bool(state.get("failed")) or needs_export_review,
         "needs_export_review": needs_export_review,
         "saved_downloads": preserved_downloads,
+        "saved_version_ready": bool(preserved_downloads) and all('/previous-exports/' in url for url in preserved_downloads.values()),
         "review_url": f"/ebook-workspace/{project_id}/release-review",
         "retrying": bool(retrying),
         "activity": activity_for(project_id, data, retrying=bool(retrying)),

@@ -192,7 +192,7 @@ def test_saved_export_review_exposes_existing_files_without_a_rebuild(saved_brow
     full['data'] = {'title': original['name'], 'ebook_build': {'finished': True}}
     page.route(f'**/projects/{original["id"]}', lambda r: r.fulfill(json=full), times=1)
     status = {'ok': True, 'project_id': original['id'], 'title': original['name'],
-              'finished': False, 'failed': True, 'needs_export_review': True, 'percent': 90,
+              'finished': False, 'failed': True, 'needs_export_review': True, 'saved_version_ready': True, 'percent': 90,
               'review_url': '/ebook-workspace/1/release-review',
               'saved_downloads': {'pdf': '/download/preserved/ebook.pdf', 'zip': '/download/preserved/package.zip'}}
     page.route(f'**/ebook/build/{original["id"]}/status', lambda r: r.fulfill(json=status))
@@ -203,4 +203,6 @@ def test_saved_export_review_exposes_existing_files_without_a_rebuild(saved_brow
     assert page.get_by_role('link', name='Download saved PDF').get_attribute('href') == '/download/preserved/ebook.pdf'
     assert page.get_by_role('link', name='Download saved ZIP').get_attribute('href') == '/download/preserved/package.zip'
     assert page.locator('[data-ebook-resume]').count() == 0
+    assert page.locator('[data-ebook-build-bar]').get_attribute('aria-valuenow') == '100'
+    assert 'reviewed version is ready to download' in page.locator('[data-ebook-build-message]').inner_text()
     assert not writes
