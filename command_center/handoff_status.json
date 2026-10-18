@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-18T13:56:36.951980+00:00",
-  "current_task": "Release 1.9.46 verified; publish repair release and verify live.",
-  "stopped_at": "3171 unique release cases across 230 manifest files passed; zero failures/errors/skips and exact collection match. Six real PostgreSQL integration cases passed on identical source.",
-  "next_step": "Merge PR68, verify website and Workflows builder version 1.9.46, then verify customer isolation before public memberships.",
+  "updated_at": "2026-10-18T16:11:03.221341+00:00",
+  "current_task": "Release 1.9.47 fully verified; publishing and verifying live.",
+  "stopped_at": "3191 unique tests passed across all 230 manifest files, zero failures/errors/skips, exact case identity match. Protection records relocked at exact remote source 8a123ae.",
+  "next_step": "Merge PR70 and verify live version 1.9.47. Saved Open must send zero advance/resume requests and expose the original reviewed PDF/ZIP without rebuilding.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -200,7 +200,7 @@
     }
   ],
   "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly \u2014 it is what the Command Center reads every time it opens.",
-  "factory_version": "1.9.46",
+  "factory_version": "1.9.47",
   "ebook_reliability_2026_10_08": {
     "live_release": "1.9.17",
     "live_commit": "61b2759ee195a68b6e44c9a047ec27724e044b24",
@@ -212,7 +212,7 @@
     "paid_calls_this_repair": 0,
     "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/35"
   },
-  "last_completed": "Editor protection, bounded Saved Projects summaries and PostgreSQL billing repair; full release verification passed.",
+  "last_completed": "Preview viewing no longer withdraws certified export status; saved Open stays read-only; historical verified customer exports remain downloadable.",
   "ebook_completion_2026_10_13": {
     "website_live_version": "1.9.27",
     "website_live_commit": "e273dfc5739c1e16bd9c670ba158a087263652fc",
@@ -259,6 +259,89 @@
     "preserved_reference_sha256": {
       "ebook.pdf": "6202e3a559db9313b61ec2d54ff689f6236a3b037308820bc77cfedf4d01f5bd",
       "package.zip": "5044f086b7335e139bcec94e1b743c4f7effd4fe9eb7738973140176ef6d5c1f"
+    }
+  },
+  "ebook_preservation_2026_10_18": {
+    "runtime_source_commit": "de0abb3c0468f6e37b6316093eb4dcfbc54e388d",
+    "runtime_source_tree": "d8db554aeb0f2aeb46779bbfe75995dac6e35c26",
+    "github_source_commit": "8a123ae3ebb673c678d08927b90f5884649d142b",
+    "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/70",
+    "focused_checks": 128,
+    "release_status": "VERIFIED",
+    "project20_original_pdf_sha256": "20792e8fcce4ab4fcc7daa8e49df1d0a634f7c624d9197d346d0fda83f8d025d",
+    "project20_original_zip_sha256": "f7cc37a90f71e8563039c412f23f7ba11deff52edb055419117197921d572d26",
+    "preservation": "Exact original pair verified in existing previous-export assets and separate recovery archive. Newer draft preserved separately; no automatic approval.",
+    "paid_calls": "Project20 ledger: 14 calls/$2.35; last ledger call October9. No new provider calls in this repair.",
+    "full_release_proof": {
+      "tests": 3191,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "missing": [],
+      "extra": [],
+      "duplicates": 0,
+      "source_commit": "de0abb3c0468f6e37b6316093eb4dcfbc54e388d",
+      "source_tree": "d8db554aeb0f2aeb46779bbfe75995dac6e35c26",
+      "version": "1.9.47",
+      "github_source_commit": "8a123ae3ebb673c678d08927b90f5884649d142b",
+      "files": 230,
+      "exact_collection_match": true,
+      "test_identities_sha256": "fb88d5490e10304e4073eec0ff891912afd3ca3e4981c60347cc2d7bfce65971",
+      "baseline_cases_preserved": 3171,
+      "new_regressions": 20,
+      "paid_provider_calls": 0,
+      "real_browser_customer_journeys": "5 passed after the preview metadata fix",
+      "prior_failure": "Earlier 3190-case run had one repeatable reopen failure. Reproduced preview-open overwriting certified release status, repaired metadata-only read, and reran the entire final suite. No assertion weakened.",
+      "shards": [
+        {
+          "index": 0,
+          "tests": "474",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0",
+          "time": "499.166"
+        },
+        {
+          "index": 1,
+          "tests": "478",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0",
+          "time": "490.581"
+        },
+        {
+          "index": 2,
+          "tests": "617",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0",
+          "time": "506.325"
+        },
+        {
+          "index": 3,
+          "tests": "507",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0",
+          "time": "169.907"
+        },
+        {
+          "index": 4,
+          "tests": "598",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0",
+          "time": "535.471"
+        },
+        {
+          "index": 5,
+          "tests": "517",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0",
+          "time": "200.331"
+        }
+      ]
     }
   }
 }

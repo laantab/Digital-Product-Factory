@@ -101,7 +101,16 @@ def collect_ebook_candidate(
             kind = str(aid.get("type") or "").lower()
             if kind not in ("stock photo", "photo", "illustration", "infographic"):
                 continue
-            p = str(aid.get("factory_asset_path") or aid.get("asset_path") or "")
+            p = str(aid.get("factory_asset_path") or "")
+            # The factory copy may name a previous builder's temporary disk.
+            # Recover the already-acquired, checksum-verified source instead
+            # of reporting a missing image that the PDF actually contains.
+            from services.ebook_visual_pipeline import local_visual_path, _visual_file_matches
+
+            if not _visual_file_matches(p, aid):
+                p = local_visual_path(aid, project_id=int(data.get("_project_id") or 0))
+                if not _visual_file_matches(p, aid):
+                    p = ""
             info = inspect_image_file(p)
             assets.append({
                 "name": os.path.basename(p) or str(aid.get("visual_id") or ""),

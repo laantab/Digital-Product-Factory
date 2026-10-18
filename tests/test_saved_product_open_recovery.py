@@ -150,3 +150,59 @@ def test_stalled_saved_open_times_out_and_the_same_product_can_be_retried(saved_
     open_button(page, first['name']).click()
     page.locator('#factoryOutput').get_by_role('heading', name=first['name'], exact=True).wait_for()
     held[0].fulfill(json=first)
+
+
+@pytest.mark.parametrize("finished", [True, False])
+def test_saved_ebook_open_never_advances_or_resumes_a_build(saved_browser, finished):
+    import copy
+    page, (original, _) = saved_browser
+    full = copy.deepcopy(original)
+    full["type"] = "ebook"
+    full["data"] = {"title": original["name"], "ebook_build": {"finished": True}}
+    page.route(f'**/projects/{original["id"]}', lambda r: r.fulfill(json=full), times=1)
+    status = {"ok": True, "project_id": original["id"], "title": original["name"],
+              "finished": finished, "failed": False, "percent": 100 if finished else 90,
+              "activity": {"state": "done" if finished else "stalled"},
+              "downloads": {"pdf": "/existing.pdf", "zip": "/existing.zip"}}
+    page.route(f'**/ebook/build/{original["id"]}/status', lambda r: r.fulfill(json=status))
+    writes = []
+    def mutation(route):
+        writes.append(route.request.url)
+        route.fulfill(json=status)
+    page.route(f'**/ebook/build/{original["id"]}/advance', mutation)
+    page.route(f'**/ebook/build/{original["id"]}/resume', mutation)
+    page.clock.install()
+    open_button(page, original["name"]).click()
+    page.locator("#ebookBuildRoot h2").wait_for()
+    page.clock.fast_forward(15000)
+    page.evaluate('() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))')
+    assert writes == [], "Open must only read; Continue is a separate action"
+    if finished:
+        assert page.locator("[data-ebook-dl-pdf]").is_visible()
+        assert page.locator("[data-ebook-dl-zip]").is_visible()
+    else:
+        assert page.locator("[data-ebook-resume]").is_visible()
+
+
+def test_saved_export_review_exposes_existing_files_without_a_rebuild(saved_browser):
+    import copy
+    page, (original, _) = saved_browser
+    full = copy.deepcopy(original)
+    full['type'] = 'ebook'
+    full['data'] = {'title': original['name'], 'ebook_build': {'finished': True}}
+    page.route(f'**/projects/{original["id"]}', lambda r: r.fulfill(json=full), times=1)
+    status = {'ok': True, 'project_id': original['id'], 'title': original['name'],
+              'finished': False, 'failed': True, 'needs_export_review': True, 'saved_version_ready': True, 'percent': 90,
+              'review_url': '/ebook-workspace/1/release-review',
+              'saved_downloads': {'pdf': '/download/preserved/ebook.pdf', 'zip': '/download/preserved/package.zip'}}
+    page.route(f'**/ebook/build/{original["id"]}/status', lambda r: r.fulfill(json=status))
+    writes = []
+    page.on('request', lambda req: writes.append(req.url) if '/ebook/build/' in req.url and req.method == 'POST' else None)
+    open_button(page, original['name']).click()
+    page.get_by_role('link', name='Review saved book').wait_for()
+    assert page.get_by_role('link', name='Download saved PDF').get_attribute('href') == '/download/preserved/ebook.pdf'
+    assert page.get_by_role('link', name='Download saved ZIP').get_attribute('href') == '/download/preserved/package.zip'
+    assert page.locator('[data-ebook-resume]').count() == 0
+    assert page.locator('[data-ebook-build-bar]').get_attribute('aria-valuenow') == '100'
+    assert 'reviewed version is ready to download' in page.locator('[data-ebook-build-message]').inner_text()
+    assert not writes

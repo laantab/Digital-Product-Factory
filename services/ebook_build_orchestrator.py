@@ -1140,6 +1140,10 @@ def advance_build(project_id: int) -> dict:
     state = build_state(data)
 
     stage = next_incomplete_stage(data)
+    if state.get("finished") and stage is not None:
+        # Lost local files or a stale quality record cannot authorize a
+        # replacement export, including requests from an older open tab.
+        return status_payload(data, project_id)
     if stage is None:
         state["finished"] = True
         state["customer_message"] = MSG_READY
@@ -1305,6 +1309,8 @@ def resume_build(project_id: int) -> dict:
     state = build_state(data)
 
     stage = next_incomplete_stage(data)
+    if state.get("finished") and stage is not None:
+        return status_payload(data, project_id)
     if stage is None:
         # Finished by the time the customer clicked Resume; nothing to do.
         state["failed"] = False
@@ -1392,16 +1398,14 @@ def activity_for(project_id: int, data: dict, *, retrying: bool = False) -> dict
     # The screen then showed a 100% bar reading "Your ebook is ready" beside an
     # indicator saying "Paused" -- the same contradiction between the message
     # and the indicator that v1.7.25 existed to remove (v1.7.27).
-    done = bool(state.get("finished"))
-    if not done:
-        try:
-            done = next_incomplete_stage(data) is None
-        except Exception:                               # noqa: BLE001
-            done = False
+    try:
+        done = next_incomplete_stage(data) is None
+    except Exception:                                   # noqa: BLE001
+        done = False
     if done:
         return {"state": ACTIVITY_DONE, "spinning": False,
                 "label": "Finished", "idle_seconds": idle_for}
-    if state.get("failed"):
+    if state.get("failed") or state.get("finished"):
         return {"state": ACTIVITY_FAILED, "spinning": False,
                 "label": "Stopped", "idle_seconds": idle_for}
 
@@ -1462,6 +1466,14 @@ def status_payload(data: dict, project_id: int) -> dict:
     state = build_state(data)
     stage = next_incomplete_stage(data)
     finished = stage is None
+    # A historical success whose files no longer validate needs inspection,
+    # never another automatic export over the customer's saved package.
+    needs_export_review = bool(state.get("finished")) and not finished
+    preserved_downloads = {}
+    if needs_export_review:
+        from services.ebook_saved_downloads import saved_downloads
+
+        preserved_downloads = saved_downloads(data, project_id)
     files = (data.get("exports") or {}).get("files") if isinstance(data.get("exports"), dict) else {}
     files = files if isinstance(files, dict) else {}
 
@@ -1484,13 +1496,18 @@ def status_payload(data: dict, project_id: int) -> dict:
         "awaiting_cover_choice": bool(state.get("awaiting_cover_choice")),
         "cover_choice": public_choice(data, project_id) if state.get("awaiting_cover_choice") else None,
         "finished": bool(finished),
-        "failed": bool(state.get("failed")),
+        "failed": bool(state.get("failed")) or needs_export_review,
+        "needs_export_review": needs_export_review,
+        "saved_downloads": preserved_downloads,
+        "saved_version_ready": bool(preserved_downloads) and all('/previous-exports/' in url for url in preserved_downloads.values()),
+        "review_url": f"/ebook-workspace/{project_id}/release-review",
         "retrying": bool(retrying),
         "activity": activity_for(project_id, data, retrying=bool(retrying)),
         "attempts_left": int(attempts_left),
         "percent": progress_percent(data),
         "message": (
             MSG_READY if finished
+            else "Your saved book needs an export review. Your manuscript and saved files are preserved." if needs_export_review
             else (STAGE_READY_MESSAGES.get(held_after(data, state), MSG_WORKING)
                   if held_after(data, state)
                   else (state.get("customer_message") or MSG_WORKING))
