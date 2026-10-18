@@ -132,6 +132,10 @@ def _references(value):
                     yield 'project', project
             elif key in PACKAGE_KEYS and item:
                 yield 'package', item
+            elif key == 'local_path' and item:
+                # Operator-only import: a client-supplied server path could
+                # copy another customer's image into an otherwise owned book.
+                yield 'server_path', item
             if isinstance(item, (dict, list)):
                 yield from _references(item)
     elif isinstance(value, list):
@@ -171,6 +175,8 @@ def guard_request():
                   *list(_references(request.form.to_dict())),
                   *list(_references(request.get_json(silent=True) or {}))]
     for kind, value in references:
+        if kind == 'server_path':
+            return jsonify(ok=False, error='Server file imports require administrator access.'), 403
         if kind == 'project':
             try:
                 owner = database.get_project_owner(int(value))

@@ -283,3 +283,15 @@ def test_real_signed_in_build_downloads_are_private_to_the_account(monkeypatch):
         context.close()
         other.close()
         server.tearDownClass()
+
+
+@pytest.mark.parametrize('nested', [False, True])
+def test_customer_cannot_import_server_file_paths(accounts, monkeypatch, nested):
+    _, projects, _, clients = accounts
+    monkeypatch.setitem(app.view_functions, 'ebook_workspace_visuals_route',
+                        lambda **kw: pytest.fail('server-path import reached visual handler'))
+    payload = {'action': 'replace-photo', 'local_path': '/other-account/private-image.jpg'}
+    if nested:
+        payload = {'data': payload}
+    response = clients[0].post(f"/ebook-workspace/{projects[0]['id']}/visuals", json=payload)
+    assert response.status_code == 403
