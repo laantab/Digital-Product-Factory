@@ -10,7 +10,7 @@ Stale finished flags no longer contradict failed export verification. A verified
 Open a saved ebook to inspect it; choose Continue for unfinished work. A previously finished book requiring verification opens its quality review instead of rebuilding automatically.
 
 ### Release gate
-Pending complete verification. No paid provider calls; generator implementations and existing customer exports preserved.
+All 3,191 unique release cases passed across all 230 manifest files, with zero failures, errors or skips and exact case reconciliation. Five real-browser customer journeys passed. No paid provider calls; protected generator implementations and existing customer exports preserved.
 
 # Changelog
 

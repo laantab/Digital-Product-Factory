@@ -1,0 +1,71 @@
+{
+  "tests": 3191,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "missing": [],
+  "extra": [],
+  "duplicates": 0,
+  "source_commit": "de0abb3c0468f6e37b6316093eb4dcfbc54e388d",
+  "source_tree": "d8db554aeb0f2aeb46779bbfe75995dac6e35c26",
+  "version": "1.9.47",
+  "github_source_commit": "8a123ae3ebb673c678d08927b90f5884649d142b",
+  "files": 230,
+  "exact_collection_match": true,
+  "test_identities_sha256": "fb88d5490e10304e4073eec0ff891912afd3ca3e4981c60347cc2d7bfce65971",
+  "baseline_cases_preserved": 3171,
+  "new_regressions": 20,
+  "paid_provider_calls": 0,
+  "real_browser_customer_journeys": "5 passed after the preview metadata fix",
+  "prior_failure": "Earlier 3190-case run had one repeatable reopen failure. Reproduced preview-open overwriting certified release status, repaired metadata-only read, and reran the entire final suite. No assertion weakened.",
+  "shards": [
+    {
+      "index": 0,
+      "tests": "474",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "499.166"
+    },
+    {
+      "index": 1,
+      "tests": "478",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "490.581"
+    },
+    {
+      "index": 2,
+      "tests": "617",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "506.325"
+    },
+    {
+      "index": 3,
+      "tests": "507",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "169.907"
+    },
+    {
+      "index": 4,
+      "tests": "598",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "535.471"
+    },
+    {
+      "index": 5,
+      "tests": "517",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "200.331"
+    }
+  ]
+}

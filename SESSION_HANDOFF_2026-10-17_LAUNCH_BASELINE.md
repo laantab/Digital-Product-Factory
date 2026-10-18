@@ -1,5 +1,27 @@
 # Five-day launch completion — October 17, 2026
 
+## Final 1.9.47 verification — supersedes earlier pending records
+
+All 3,191 unique cases across all 230 manifest files passed with zero failures/errors/skips, missing/extra/duplicate cases. All 3,171 prior case identities remain, plus 20 regressions. Local tested source de0abb3c0468f6e37b6316093eb4dcfbc54e388d; identical remote source 8a123ae3ebb673c678d08927b90f5884649d142b; tree d8db554aeb0f2aeb46779bbfe75995dac6e35c26. See RELEASE_PROOF_1.9.47.json. All affected protection records relocked on that real GitHub source commit. Five standalone real-browser customer paths passed.
+
+The earlier full run's single reopen timeout was a real defect: record_preview_opened synchronized an older ebook_document.release_status over the certified top-level status, withdrawing export readiness merely by viewing the preview. A regression failed before the metadata-only repair and passed afterward. The entire final suite was rerun. Earlier interrupted runs and the failing run are retained as diagnosis, not success evidence.
+
+Live history serves the exact original PDF. Its fresh download checksum matches 20792e8fcce4ab4fcc7daa8e49df1d0a634f7c624d9197d346d0fda83f8d025d. The original ZIP is retained in history and in the independently CRC/hash-verified recovery archive. Fresh ZIP browser download reported a path but did not synchronize locally; do not claim an additional local checksum for that attempt. The new status helper validates history bytes against the prior review plus ZIP integrity and embedded PDF equality before exposing both links.
+
+Next: publish evidence, merge PR70 and verify live website/footer, read-only Saved Open, reviewed saved version at 100%, original download links, no new build requests. Newer draft remains separate and unapproved. No production configuration, customer records or exports were rewritten by this code repair; no new paid calls. Public account isolation remains outside this repair and blocks public memberships.
+
+
+## Saved ebook preservation repair — October 18, 2026
+
+PR70 is draft pending the complete release gate. Runtime source afd57edc107b1d31147b07bb04239e1277b89c60, tree 6a190941f58d5523ed5fcbb46c78403132c77a31, exact remote source 8e1d867fdbe9fd4b25c54c1e396ca1d224b7b2ee. Focused suite: 128 passed. Full manifest collects 3,190 cases across 230 files, retaining all 3,171 previous case identities and adding 19 regressions. Final six-checkout run is the authority; earlier interrupted checks are superseded, not passes.
+
+Repairs: Saved Open reads status without POST advance/resume; stale finished flags cannot outrank file validation; old advance/resume requests cannot dispatch or rewrite a formerly completed artifact; a verified original release-review PDF/ZIP pair is served from existing previous-export URLs, separately from the newer draft; missing retired factory-copy pictures use an acquired checksum-verified source. No generator implementation or production configuration changes. Do not claim newer draft approval.
+
+Live evidence before repair: prior release-review hashes exactly match the original pair in eight-entry previous-export history. Verified original pair also saved in Factory_Project20_Verified_Recovery_Copy_2026-10-18.zip. Current PDF has 64 pages and the same 13 image digests, but differs from the original in document metadata and repeated table header/page break on pages56–57 after the automatic builder export. Preserve both. Project20 ledger remains 14 calls/$2.35, last entry October9; no new paid call.
+
+Next: finish gate and exact reconciliation, relock affected shared dependencies, publish evidence, merge/deploy, verify website version and Saved Open with zero advance/resume requests, and download original pair to prove exact hashes. Public membership account isolation remains a separate launch blocker.
+
+
 ## Live release verification — October 18, 2026, 07:01 Pacific
 
 PR68 merged as 4c804ded691660c01214022a5c5c6ef422466ed3. Render website deployment dep-dbad0e7lk1mc73cngd10 is LIVE; authenticated footer shows 1.9.46. Website briefly returned 502 during the disk-backed restart and recovered. Saved Projects loaded existing ebook, PLANETS coloring book, House Plants and Flower Parts word searches. List responses now 4,147 bytes for limit=3 (previously 5,896,166) and 6,694 bytes for limit=10 (previously 6,456,310). Loading remains slow: payload size is repaired, server-side listing work remains a separate performance issue. Live manuscript editor loads with compare/reject controls, without saving edits. PR66 and PR69 closed as superseded. PR67 remains excluded.
