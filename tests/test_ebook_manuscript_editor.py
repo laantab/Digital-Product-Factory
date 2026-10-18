@@ -42,6 +42,34 @@ def test_apply_and_undo_preserve_original_and_budget_but_not_certificates(draft)
     assert not restored['export_ready']
 
 
+def test_reviewed_proofreading_reaches_the_new_pdf_and_matching_zip(tmp_path):
+    import io
+    import zipfile
+    import fitz
+    from services.ebook_design_workspace import build_design_ready_fixture_data
+    from services.ebook_design_export import render_designed_bundle, select_theme
+
+    data = build_design_ready_fixture_data()
+    original = current_text(data) + '\n\nTeh photographer should of checked thier backup camera.\n'
+    data['content'] = data['ebook'] = original
+    data['release_certificate'] = {'old': True}
+    data['export_ready'] = True
+    review = preview(data)
+    assert review['can_apply'] and review['paid_calls'] == 0
+    saved = apply_edit(data, review['edited'], review['original_sha256'])
+    assert not saved['export_ready'] and saved['release_certificate'] is None
+    saved = select_theme(saved, 'studio_clean')
+    bundle = render_designed_bundle(saved, output_dir=tmp_path)
+    with fitz.open(stream=bundle['pdf_bytes'], filetype='pdf') as document:
+        text = ' '.join(' '.join(page.get_text().split()) for page in document)
+    assert 'The photographer should have checked their backup camera.' in text
+    assert 'Teh photographer' not in text
+    with zipfile.ZipFile(io.BytesIO(bundle['zip_bytes'])) as archive:
+        assert archive.testzip() is None
+        assert archive.read('ebook.pdf') == bundle['pdf_bytes']
+    assert current_text(data) == original
+
+
 def test_structural_damage_and_stale_edits_are_refused(draft):
     original = current_text(draft)
     with pytest.raises(ValueError, match='new manuscript findings'):

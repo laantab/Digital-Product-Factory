@@ -1,3 +1,11 @@
+## 1.9.48 — Preserve source examples during proofreading
+
+### What changed
+The free ebook proofreader now recognizes the full opening Markdown code fence. Shorter inner markers and markers followed by example text cannot end that protected block and expose its contents to automatic corrections. Prose outside the block is still proofread normally.
+
+### Validation
+Four new regressions reproduced unwanted source edits before the fix. Focused editorial, manuscript, chart-readability and export checks pass after the fix. Full release verification is pending. Existing saved books and protected generator implementations are unchanged; no paid provider calls.
+
 ## 1.9.47 — Preserve saved ebooks when reopening
 
 ### What changed

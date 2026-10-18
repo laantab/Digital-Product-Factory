@@ -1,5 +1,21 @@
 """Copy edits are reversible, cost-free, and cannot bypass chapter contracts."""
 from services.ebook_copy_editor import edit_text
+import pytest
+
+
+@pytest.mark.parametrize("protected", [
+    "````markdown\n```python\nteh = 'sample'\n```\n````\n",
+    "~~~~markdown\n~~~\nteh literal\n~~~\n~~~~\n",
+    "```text\n```python\nteh literal\n```\n",
+    "~~~~text\n~~~~ still part of the example\nteh literal\n~~~~\n",
+])
+def test_fenced_source_closes_only_on_a_valid_matching_marker(protected):
+    original = protected + "Teh reader should of checked thier notes.\n"
+    result = edit_text(original)
+    assert result["edited"] == protected + "The reader should have checked their notes.\n"
+    assert result["original"] == original
+    assert result["paid_calls"] == 0
+    assert edit_text(result["edited"])["changes"] == []
 
 
 def test_copy_edit_and_idempotency():
