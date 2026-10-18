@@ -4,7 +4,9 @@ Provider fixtures only: no real research, paid generation or customer book.
 """
 import copy
 import hashlib
+import io
 import json
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -116,14 +118,16 @@ def browser_factory():
 @pytest.mark.parametrize('mode', ['custom', 'ai_recommended'])
 def test_browser_one_build_click_enters_finished_product_with_the_right_mode(browser_factory, mode):
     server = browser_factory
-    page = server.browser.new_page()
+    context = server()._new_context(accept_downloads=True)
+    page = context.new_page()
     sent = []
-    def start(route):
-        sent.append(route.request.post_data_json['fields'])
-        route.fulfill(json={'ok': True, 'project_id': 900, 'finished': True, 'failed': False,
-                            'percent': 100, 'title': 'Mindfulness for Beginners',
-                            'downloads': {'pdf': '/download/fixture/ebook.pdf', 'zip': '/download/fixture/package.zip'}})
-    page.route('**/ebook/build', start)
+    # Observe the actual start request; do not replace the build with a
+    # fabricated finished response. The isolated server supplies deterministic
+    # providers while real orchestration, persistence and exports still run.
+    def start(request):
+        if request.method == 'POST' and request.url.endswith('/ebook/build'):
+            sent.append(request.post_data_json['fields'])
+    page.on('request', start)
     try:
         page.goto(server.base)
         if mode == 'custom':
@@ -143,16 +147,27 @@ def test_browser_one_build_click_enters_finished_product_with_the_right_mode(bro
             page.locator('#fmaEbookAuthor').fill('Fixture Author')
             assert page.locator('#marketOutput select').count() == 0, 'automatic path must not ask for a template'
             page.locator('#buildThisProductBtn').click()
-        page.get_by_role('button', name='Download PDF', exact=True).wait_for()
+        page.locator('[data-ebook-dl-pdf]').wait_for(timeout=180000)
         assert len(sent) == 1, sent
         assert sent[0]['ebook_creation_mode'] == mode
         if mode == 'custom':
             assert sent[0]['theme_id'] == 'bold_creator'
         else:
             assert 'theme_id' not in sent[0]
-        assert page.get_by_role('button', name='Download ZIP', exact=True).is_visible()
+        assert page.locator('[data-ebook-dl-zip]').is_visible()
+        with page.expect_download() as downloaded:
+            page.locator('[data-ebook-dl-pdf]').click()
+        pdf = Path(downloaded.value.path()).read_bytes()
+        assert pdf.startswith(b'%PDF')
+        with page.expect_download() as downloaded:
+            page.locator('[data-ebook-dl-zip]').click()
+        with zipfile.ZipFile(io.BytesIO(Path(downloaded.value.path()).read_bytes())) as archive:
+            assert archive.testzip() is None
+            assert archive.read('ebook.pdf') == pdf
+        calls = json.loads(server.call_log.read_text())
+        assert calls.get('paid', 0) == calls.get('pexels_http', 0) == 0
     finally:
-        page.close()
+        context.close()
 
 
 def _progress(pid=901):
@@ -191,7 +206,7 @@ def test_browser_recovers_connection_without_another_build_click(browser_factory
         page.locator('[data-ebook-build-reconnecting]').wait_for(timeout=10000)
         assert page.locator('[data-ebook-build-percent]').inner_text() == '40%'
         assert page.locator('[data-ebook-build-failed]').count() == 0
-        page.get_by_role('button', name='Download PDF', exact=True).wait_for(timeout=15000)
+        page.locator('[data-ebook-dl-pdf]').wait_for(timeout=15000)
         assert len(calls) == 3
         assert all(not body.get('continue') for body in calls)
     finally:
@@ -214,7 +229,7 @@ def test_browser_reopening_retries_status_without_restarting_the_book(browser_fa
         page.goto(browser_factory.base)
         page.wait_for_load_state('networkidle')
         page.evaluate('void openEbookBuild(901)')
-        page.get_by_role('button', name='Download PDF', exact=True).wait_for(timeout=15000)
+        page.locator('[data-ebook-dl-pdf]').wait_for(timeout=15000)
         assert len(reads) == 2
         assert not starts
     finally:
@@ -244,7 +259,7 @@ def test_reopened_book_waits_for_old_request_and_ignores_its_late_failure(browse
         page.get_by_role('heading', name='Preserved Book 902', exact=True).wait_for()
         assert not new_calls, 'two advance requests must never overlap'
         pending[0].fulfill(status=503, json={})
-        page.get_by_role('button', name='Download PDF', exact=True).wait_for(timeout=15000)
+        page.locator('[data-ebook-dl-pdf]').wait_for(timeout=15000)
         assert new_calls == [1]
         assert page.locator('[data-ebook-build-failed]').count() == 0
         assert 'Preserved Book 902' in page.locator('[data-ebook-build-done]').inner_text()
