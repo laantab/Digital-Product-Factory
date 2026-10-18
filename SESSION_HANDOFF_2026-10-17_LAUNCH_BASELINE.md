@@ -2,6 +2,20 @@
 
 ## Current combined candidate — supersedes pending items in the historical record
 
+The editor-only 228-file baseline completed: 3,154 unique cases, zero failures,
+errors or skips; all four reports reconcile exactly against collection, including
+68 root-level test cases. Source tree e31b6bb385102b104fefeb97a458cef213042d7c
+matches GitHub source e549c6f09eb6cd12b544fe914f0b349fe4d30f70.
+
+Further release audit found Apply and Undo lacked the established artifact
+mutation gateway. Eight isolated regressions reproduced mutation of APPROVED/
+LOCKED manuscripts through both the pure service and actual HTTP route. Added
+assert_content_mutation_allowed at the start of apply_edit, reusing the Factory's
+existing policy. No shared route or generator was changed. The eight new checks passed after the guard was added. The editor also shows
+a confirmed protection rejection directly, while still requiring reload after
+an uncertain save. The final combined 230-file candidate includes these checks
+and must be fully verified before deployment.
+
 Release 1.9.46 now combines three targeted repairs in PR68: manuscript compare/
 reject and pending-request safety; bounded Saved Projects metadata that excludes
 nested books/images/history; and PostgreSQL billing transaction/event replay

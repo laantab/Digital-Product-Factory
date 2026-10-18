@@ -17,6 +17,8 @@ image payloads. Opening a project still retrieves its full unchanged record.
 Editing while a review is pending prevents
 that older response from replacing newer typing. Requests time out after 30
 seconds; a save whose response is lost requires a reload before another write.
+Manuscript Apply and Undo now enforce the existing APPROVED/LOCKED content
+guard before editing. Protected artifacts cannot be changed in place.
 Nested document, cover and edit-history data made saved lists unnecessarily
 large. PostgreSQL billing also received SQLite-only transaction syntax, and
 duplicate payment events could raise a database error. Billing now serializes
@@ -27,6 +29,8 @@ the same.
 ### Do the steps change?
 
 Review the comparison, then choose Apply or Reject.
+An approved artifact needs Create Draft Revision before editing; locked
+artifacts remain unchanged.
 Existing acceptance, undo, quality checks and original exported files remain
 protected. No new provider or paid call is introduced.
 

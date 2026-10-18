@@ -52,6 +52,8 @@ def preview(data: dict, proposed: str | None = None) -> dict:
 
 
 def apply_edit(data: dict, proposed: str, expected_digest: str, *, undo: bool = False) -> dict:
+    from services.quality.artifact_state import assert_content_mutation_allowed
+    assert_content_mutation_allowed(data, action='edit the manuscript')
     from services.ebook_manuscript_engine import (
         QUALITY_PASS, apply_quality_to_workspace, split_front_chapters_back,
         validate_manuscript_quality,

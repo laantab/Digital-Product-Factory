@@ -137,3 +137,22 @@ def test_browser_uncertain_save_requires_reload_instead_of_repeating_a_write(edi
     expect(page.locator('#undo')).to_be_disabled()
     assert database.get_project(pid)['data']['content'] == proposed
     assert writes == ['apply'] and requests == ['preview']
+
+
+def test_browser_shows_a_confirmed_protection_rejection_without_claiming_an_uncertain_save(editor_browser):
+    import database
+    from playwright.sync_api import expect
+    page, pid, _, _, _ = editor_browser
+    before = copy.deepcopy(database.get_project(pid))
+    proposed = before['data']['content'] + '\n\nCheck the backup before leaving.\n'
+    page.locator('#draft').fill(proposed)
+    page.locator('#review').click()
+    expect(page.locator('#apply')).to_be_enabled()
+    message = 'APPROVED artifact cannot edit the manuscript in place. Use Create Draft Revision before editing.'
+    page.route('**/edit-manuscript', lambda route: route.fulfill(status=400, json={'error': message}))
+    page.locator('#apply').click()
+    expect(page.locator('#message')).to_have_text(message)
+    expect(page.locator('#draft')).to_have_value(proposed)
+    expect(page.locator('#review')).to_be_enabled()
+    expect(page.locator('#apply')).to_be_disabled()
+    assert database.get_project(pid) == before

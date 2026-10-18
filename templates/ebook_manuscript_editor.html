@@ -26,7 +26,8 @@ async function action(name,body={}) {
  message.textContent=mutation?'Saving manuscript…':'Checking manuscript…';
  try {
  const response=await fetch('/ebook-workspace/{{ project_id }}/edit-manuscript',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({action:name,expected_digest:originalDigest,...body})});
- const out=await response.json(); if(!response.ok) throw new Error(out.error||'The editor could not complete this request.');
+ const out=await response.json();
+ if(!response.ok){const error=new Error(out.error||'The editor could not complete this request.');error.rejected=[400,401,403,404,409,422].includes(response.status);throw error;}
  if(requestRevision!==revision||controller.signal.aborted)return;
  if(name==='preview') {
  if(!out.ok||!out.review||typeof out.review.edited!=='string'||typeof out.review.original!=='string'||out.review.original_sha256!==originalDigest||!out.review.quality||!out.review.copy_review)throw new Error('The manuscript review is unavailable. Reload if the project changed.');
@@ -42,7 +43,7 @@ async function action(name,body={}) {
  } catch(error) {
  if(requestRevision!==revision)return;
  clearReview();
- if(mutation){needsReload=true;message.textContent='The save could not be confirmed. Reload this page to check the saved manuscript before making another change.';}
+ if(mutation&&!error.rejected){needsReload=true;message.textContent='The save could not be confirmed. Reload this page to check the saved manuscript before making another change.';}
  else message.textContent=error.name==='AbortError'?'The review timed out. Your draft is still here. Try reviewing again.':error.message;
  } finally {clearTimeout(timer);busy=false;draft.readOnly=false;controls();}
 }

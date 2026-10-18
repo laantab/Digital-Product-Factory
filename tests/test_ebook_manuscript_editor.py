@@ -149,3 +149,40 @@ def test_incomplete_chapter_can_be_improved_in_several_edits(draft):
     saved = apply_edit(draft, improved, digest(thin))
     assert current_text(saved) == improved
     assert stage_status(saved['ebook_workspace'], 'manuscript') == 'needs_correction'
+
+
+@pytest.mark.parametrize('state', ['APPROVED', 'LOCKED'])
+@pytest.mark.parametrize('undo', [False, True])
+def test_apply_and_undo_cannot_mutate_protected_manuscripts(draft, state, undo):
+    from services.quality.artifact_state import ArtifactStateError
+    original = current_text(draft)
+    proposed = original + '\n\nCheck the printer backup before leaving.\n'
+    protected = apply_edit(draft, proposed, digest(original)) if undo else copy.deepcopy(draft)
+    protected['artifact_state'] = state
+    before = copy.deepcopy(protected)
+    with pytest.raises(ArtifactStateError, match=state):
+        apply_edit(protected, '' if undo else proposed, digest(current_text(protected)), undo=undo)
+    assert protected == before
+
+
+@pytest.mark.parametrize('state', ['APPROVED', 'LOCKED'])
+@pytest.mark.parametrize('undo', [False, True])
+def test_protected_editor_requests_preserve_the_entire_saved_record(draft, monkeypatch, state, undo):
+    import database
+    from app import app
+    from services.jobs import store
+    monkeypatch.setattr(store, 'get_for_project', lambda pid: None)
+    original = current_text(draft)
+    proposed = original + '\n\nCheck the printer backup before leaving.\n'
+    protected = apply_edit(draft, proposed, digest(original)) if undo else copy.deepcopy(draft)
+    protected['artifact_state'] = state
+    project = database.create_project('Protected manuscript', 'ebook', protected, system_test=True)
+    before = database.get_project(project['id'])
+    path = f"/ebook-workspace/{project['id']}/edit-manuscript"
+    response = app.test_client().post(path, json={
+        'action': 'undo' if undo else 'apply', 'manuscript': proposed,
+        'expected_digest': digest(current_text(protected)),
+    })
+    assert response.status_code == 400
+    assert state in response.get_json()['error']
+    assert database.get_project(project['id']) == before
