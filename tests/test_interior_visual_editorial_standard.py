@@ -40,6 +40,17 @@ from services.ebook_visual_editorial import (  # noqa: E402
 )
 
 
+def test_practice_steps_keep_the_full_source_instruction_before_chart_wrapping():
+    from services.ebook_visual_pipeline import _practice_sequence_items
+    steps = [
+        'Choose low-toxin materials and products for paint, sealants, flooring, and routine cleaning before beginning your room makeover.',
+        'Check for moisture and condensation around exterior walls and windows before purchasing paint, wallpaper, or replacement flooring.',
+        'Adjust the weatherstripping around windows and doors before deciding whether the entire frame needs replacement.',
+    ]
+    assert all(78 < len(step) <= 150 for step in steps)
+    assert _practice_sequence_items(' '.join(steps)) == steps
+
+
 def _aid(kind, vid, **over):
     aid = {
         "type": kind,

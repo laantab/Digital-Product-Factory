@@ -1,10 +1,16 @@
-## 1.9.48 — Preserve source examples during proofreading
+## 1.9.48 — Preserve source examples and complete chart instructions
 
 ### What changed
-The free ebook proofreader now recognizes the full opening Markdown code fence. Shorter inner markers and markers followed by example text cannot end that protected block and expose its contents to automatic corrections. Prose outside the block is still proofread normally.
+The free ebook proofreader respects the full Markdown code fence. Practice-step graphics retain complete source instructions for the existing renderer to wrap.
 
-### Validation
-Four new regressions reproduced unwanted source edits before the fix. Focused editorial, manuscript, chart-readability and export checks pass after the fix. Full release verification is pending. Existing saved books and protected generator implementations are unchanged; no paid provider calls.
+### What was fixed
+Shorter inner code markers and markers followed by example text no longer expose protected examples to automatic corrections. Practice instructions between 79 and 150 characters no longer lose their endings at the shorter key-point-card limit. Existing saved books and protected generator implementations are unchanged.
+
+### Do the steps change?
+Use the same build and review controls. Existing saved PDFs and ZIPs are preserved; these repairs apply when editing or generating a new draft. No paid provider calls are needed for the repairs.
+
+### Release gate
+Full exact-candidate verification is pending. Four proofreading regressions and one complete-instruction regression reproduced the defects before their fixes. The focused editorial batch and a real corrected-manuscript PDF/ZIP round-trip passed; chart checks are running. No release-ready claim until the complete manifest passes.
 
 ## 1.9.47 — Preserve saved ebooks when reopening
 
