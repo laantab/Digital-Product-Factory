@@ -1,5 +1,47 @@
 # Five-day launch completion — October 17, 2026
 
+## Current combined candidate — supersedes pending items in the historical record
+
+Release 1.9.46 now combines three targeted repairs in PR68: manuscript compare/
+reject and pending-request safety; bounded Saved Projects metadata that excludes
+nested books/images/history; and PostgreSQL billing transaction/event replay
+compatibility. Generator implementations, shared app.js, production settings,
+prices, payment credentials and customer records/exports are unchanged.
+
+The standalone listing regression reproduced oversized nested payloads before
+the fix. Afterward, 52 listing/reopen/visibility/lock checks passed. The billing
+regressions reproduced both PostgreSQL errors before their fixes; 108 local
+checks passed. GitHub Actions run39094194689, commit04004b29cbf8715383b494eb0beac6e3e6350b86,
+passed all six real PostgreSQL16 checks (final-seat concurrency, rollback,
+webhook replay/concurrency and seat reuse) in a disposable localhost database.
+PR69 preserves the independent billing review; its code is included in PR68.
+
+The editor-only 228-file release validation is baseline evidence for the next
+combined 230-file gate. New manifest entries cover all four billing adapter
+cases and four nested-list cases. Run the entire combined candidate and require
+exact unique collected-case reconciliation and zero skips/failures/errors.
+
+Live read-only check: authenticated Saved Projects loaded existing products;
+Project20 reopened after an initial timeout/retry and displayed Finished/100%.
+PDF and ZIP downloads completed, ZIP CRC passed, and its ebook.pdf is identical
+to the downloaded PDF. Current PDF64 pages, SHA256
+20792e8fcce4ab4fcc7daa8e49df1d0a634f7c624d9197d346d0fda83f8d025d;
+ZIP SHA256 f7cc37a90f71e8563039c412f23f7ba11deff52edb055419117197921d572d26.
+No extracted text spans below8pt. Cover and page32 visually inspected; this is
+not a claim that every page was visually reviewed. Open Product's full-preview
+tab also loaded the correct title and approved preview. No approval/build/save
+was submitted and no paid provider requested. Existing unfinished books were
+not resumed. The live website restarted during the check; cause is unproven.
+Logs showed a6.46MB saved list and19.86MB detail response, motivating the bounded
+list fix. Full detail stays unchanged; do not claim the timeout is solved until
+the deployed combined release is checked.
+
+No new generation or new paid build was performed. Public marketing readiness,
+mode-policy PR67, and final live acceptance remain unclaimed. Do not merge or
+deploy until the current exact-source combined gate and PostgreSQL CI pass.
+
+## Historical development record
+
 Owner approved the October 18–22 completion plan and confirmed the Render
 workspace by saying Continue. Work is scoped to launch-critical ebook completion,
 editorial quality, preservation and release verification. Do not expand product

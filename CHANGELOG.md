@@ -2,19 +2,27 @@
 
 ## 1.9.46 — 2026-10-17
 
-**Compare manuscript edits and reject suggestions before saving.**
+**Safer manuscript editing, smaller saved-product lists and PostgreSQL billing repairs.**
 
 ### What changed
 
 The manuscript editor shows the saved original beside the proposed revision,
 with a Reject button that restores the original in the editor without saving.
 The comparison fits narrow screens.
+Saved lists carry display metadata and PDF/ZIP links instead of nested book and
+image payloads. Opening a project still retrieves its full unchanged record.
 
 ### What was fixed
 
 Editing while a review is pending prevents
 that older response from replacing newer typing. Requests time out after 30
 seconds; a save whose response is lost requires a reload before another write.
+Nested document, cover and edit-history data made saved lists unnecessarily
+large. PostgreSQL billing also received SQLite-only transaction syntax, and
+duplicate payment events could raise a database error. Billing now serializes
+seat reservations with the active database's locking mechanism and handles
+event replays idempotently. Prices, payment configuration and seat limits stay
+the same.
 
 ### Do the steps change?
 
@@ -26,7 +34,10 @@ protected. No new provider or paid call is introduced.
 
 Browser regressions verify complete-record preservation on rejection, delayed
 review responses, failed-review recovery, and a save that succeeds before its
-response is lost. Required release gates must pass before deployment.
+response is lost. Saved-list checks verify metadata, download links and unchanged
+full records. Isolated PostgreSQL integration covers final-seat contention,
+rollback, repeated/concurrent webhooks and seat reuse. Required release gates
+must pass on the combined candidate before deployment.
 
 ## 1.9.45 — 2026-10-15
 
