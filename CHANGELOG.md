@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.9.46 — 2026-10-17
+
+**Compare manuscript edits and reject suggestions before saving.**
+
+### What changed
+
+The manuscript editor shows the saved original beside the proposed revision,
+with a Reject button that restores the original in the editor without saving.
+The comparison fits narrow screens.
+
+### What was fixed
+
+Editing while a review is pending prevents
+that older response from replacing newer typing. Requests time out after 30
+seconds; a save whose response is lost requires a reload before another write.
+
+### Do the steps change?
+
+Review the comparison, then choose Apply or Reject.
+Existing acceptance, undo, quality checks and original exported files remain
+protected. No new provider or paid call is introduced.
+
+### Release gate
+
+Browser regressions verify complete-record preservation on rejection, delayed
+review responses, failed-review recovery, and a save that succeeds before its
+response is lost. Required release gates must pass before deployment.
+
 ## 1.9.45 — 2026-10-15
 
 **Reopen saved products without saving or replacing them.**

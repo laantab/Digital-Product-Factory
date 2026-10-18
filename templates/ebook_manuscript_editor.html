@@ -1,27 +1,53 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Edit manuscript</title><style>body{font:16px/1.5 system-ui;background:#f8fafc;color:#0f172a;margin:2rem auto;max-width:70rem;padding:1rem}textarea{box-sizing:border-box;width:100%;min-height:28rem;padding:1rem;font:15px/1.6 monospace}button,a{padding:.6rem;margin:.3rem}pre{white-space:pre-wrap;background:white;padding:1rem}button{cursor:pointer}#message{font-weight:600}</style>
+<title>Edit manuscript</title><style>*{box-sizing:border-box}body{font:16px/1.5 system-ui;background:#f8fafc;color:#0f172a;margin:2rem auto;max-width:70rem;padding:1rem}textarea{width:100%;min-height:28rem;padding:1rem;font:15px/1.6 monospace}button,a{padding:.6rem;margin:.3rem}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:1rem}.comparison{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));gap:1rem}.comparison>div{min-width:0}.comparison pre{max-height:25rem;overflow:auto;border:1px solid #cbd5e1}button{cursor:pointer}#message{font-weight:600}</style>
 <h1>Edit manuscript</h1><p>Review spelling and grammar suggestions, rewrite passages, and save a validated revision. This editor makes no paid calls. Automated proofreading uses a limited set of English rules; facts and comprehensive grammar still need human review.</p>
 <p><a href="/ebook-workspace/{{ project_id }}/manuscript">Read manuscript</a><a href="/">Factory</a></p>
 <label for="draft">Manuscript (Markdown)</label><textarea id="draft">{{ manuscript }}</textarea>
-<p><button id="suggest">Suggest copy edits</button><button id="review">Review my edits</button><button id="apply" disabled>Apply reviewed edits</button><button id="undo">Undo last saved edit</button></p>
-<p id="message" role="status"></p><h2>Changes and findings</h2><pre id="findings">Review your edits before applying them.</pre>
+<p><button id="suggest">Suggest copy edits</button><button id="review">Review my edits</button><button id="apply" disabled>Apply reviewed edits</button><button id="reject" disabled>Reject suggested changes</button><button id="undo">Undo last saved edit</button></p>
+<p id="message" role="status"></p><section id="comparison" hidden><h2>Original and proposed manuscript</h2><div class="comparison"><div><h3>Original</h3><pre id="before"></pre></div><div><h3>Proposed</h3><pre id="after"></pre></div></div></section><h2>Changes and findings</h2><pre id="findings">Review your edits before applying them.</pre>
 <script>
 const draft=document.getElementById('draft'), message=document.getElementById('message'), findings=document.getElementById('findings'), save=document.getElementById('apply');
 let originalDigest={{ manuscript_digest|tojson }}, reviewed=null;
+const comparison=document.getElementById('comparison'), before=document.getElementById('before'), after=document.getElementById('after'), reject=document.getElementById('reject');
+const suggest=document.getElementById('suggest'), reviewButton=document.getElementById('review'), undo=document.getElementById('undo');
+let busy=false, revision=0, needsReload=false;
+function controls() {
+ suggest.disabled=reviewButton.disabled=undo.disabled=busy||needsReload;
+ save.disabled=busy||needsReload||!reviewed||!reviewed.can_apply||reviewed.original_sha256===reviewed.edited_sha256;
+ reject.disabled=busy||!reviewed;
+}
+function clearReview() { reviewed=null; comparison.hidden=true; controls(); }
 async function action(name,body={}) {
- save.disabled=true; message.textContent='Checking manuscript…';
+ if(busy||needsReload)return;
+ busy=true; revision+=1; const requestRevision=revision;
+ const mutation=name!=='preview', controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),30000);
+ clearReview(); draft.readOnly=mutation;
+ message.textContent=mutation?'Saving manuscript…':'Checking manuscript…';
  try {
- const response=await fetch('/ebook-workspace/{{ project_id }}/edit-manuscript',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:name,expected_digest:originalDigest,...body})});
- const out=await response.json(); if(!response.ok) throw new Error(out.error||'The editor could not save this change.');
+ const response=await fetch('/ebook-workspace/{{ project_id }}/edit-manuscript',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({action:name,expected_digest:originalDigest,...body})});
+ const out=await response.json(); if(!response.ok) throw new Error(out.error||'The editor could not complete this request.');
+ if(requestRevision!==revision||controller.signal.aborted)return;
  if(name==='preview') {
+ if(!out.ok||!out.review||typeof out.review.edited!=='string'||typeof out.review.original!=='string'||out.review.original_sha256!==originalDigest||!out.review.quality||!out.review.copy_review)throw new Error('The manuscript review is unavailable. Reload if the project changed.');
  reviewed=out.review; draft.value=reviewed.edited;
+ before.textContent=reviewed.original; after.textContent=reviewed.edited; comparison.hidden=false; reject.disabled=false;
  findings.textContent=(reviewed.diff||'No text changes.')+'\n\nRemaining findings:\n'+(reviewed.quality.book_findings||[]).concat((reviewed.quality.findings||[]).map(f=>f.message)).join('\n')+'\n\nCopy review suggestions:\n'+reviewed.copy_review.suggestions.map(f=>f.suggestion).join('\n');
  save.disabled=!reviewed.can_apply || reviewed.original_sha256===reviewed.edited_sha256;
  message.textContent=reviewed.can_apply?'Reviewed. Apply saves a revision and requires a fresh manuscript approval.':'These edits introduce new findings. Adjust the draft and review again.';
- } else { draft.value=out.manuscript; originalDigest=out.manuscript_digest; reviewed=null; message.textContent='Saved. Review and approve this manuscript before rebuilding final files.'; findings.textContent='Original text is saved for undo. Old exported files are preserved.'; }
- } catch(error) {message.textContent=error.message;}
+ } else {
+ if(!out.ok||typeof out.manuscript!=='string'||typeof out.manuscript_digest!=='string')throw new Error('Invalid save response.');
+ draft.value=out.manuscript; originalDigest=out.manuscript_digest; reviewed=null; comparison.hidden=true; reject.disabled=true; message.textContent='Saved. Review and approve this manuscript before rebuilding final files.'; findings.textContent='Original text is saved for undo. Old exported files are preserved.';
+ }
+ } catch(error) {
+ if(requestRevision!==revision)return;
+ clearReview();
+ if(mutation){needsReload=true;message.textContent='The save could not be confirmed. Reload this page to check the saved manuscript before making another change.';}
+ else message.textContent=error.name==='AbortError'?'The review timed out. Your draft is still here. Try reviewing again.':error.message;
+ } finally {clearTimeout(timer);busy=false;draft.readOnly=false;controls();}
 }
-draft.addEventListener('input',()=>{reviewed=null;save.disabled=true;});
+draft.addEventListener('input',()=>{revision+=1;clearReview();message.textContent='Draft changed. Review your edits before applying them.';});
+reject.onclick=()=>{if(!reviewed||busy)return;draft.value=reviewed.original;clearReview();message.textContent='Changes rejected. Original text restored in the editor; nothing saved.';};
 document.getElementById('suggest').onclick=()=>action('preview');
 document.getElementById('review').onclick=()=>action('preview',{manuscript:draft.value});
 save.onclick=()=>reviewed&&action('apply',{manuscript:reviewed.edited});
