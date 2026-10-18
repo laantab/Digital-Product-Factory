@@ -437,8 +437,10 @@ def record_preview_opened(data: dict) -> dict:
     ws["preview_opened"] = {"digest": digest, "opened_at": _now()}
     _append_history(ws, "preview_opened", digest=digest)
     _recompute_next_action(ws)
-    # Preview is a packaging stage: never rebuild the manuscript-owned plan.
-    return sync_document_from_workspace(data, sync_manuscript=False)
+    # Viewing records only the opened identity. Synchronizing the older
+    # document here can replace the certified release status with its stale
+    # draft status, withdraw export readiness and trigger a replacement build.
+    return data
 
 
 def revoke_unviewed_preview_approval(data: dict) -> dict:

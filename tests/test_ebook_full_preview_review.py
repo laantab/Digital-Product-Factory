@@ -411,3 +411,21 @@ class FullPreviewViewerShellTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_opening_preview_preserves_certified_release_despite_stale_document_status():
+    from services.ebook_project_workspace import record_preview_opened
+    data = build_acceptance_project_data()
+    data['ebook_preview_html'] = '<p>The certified book preview</p>'
+    data['ebook_export_identity'] = {'preview_digest': 'certified-pdf-digest'}
+    data['release_status'] = 'PASS'
+    data['export_ready'] = True
+    data['ebook_document']['release_status'] = ''
+    before = copy.deepcopy(data)
+    after = record_preview_opened(data)
+    assert after['release_status'] == 'PASS'
+    assert after['export_ready'] is True
+    for key in before:
+        if key != 'ebook_workspace':
+            assert after[key] == before[key], f'Viewing changed {key}'
+    assert preview_opened_matches_current(after)
