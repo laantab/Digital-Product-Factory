@@ -270,8 +270,8 @@ def init_db() -> None:
 # user_id column. No existing row is changed by creating them: NULL means
 # "not yet assigned", and ownership is only ever written by an explicit call
 # (create_project(user_id=...), set_project_owner, or the operator-run
-# scripts/migrate_phase_a.py). The project list and Saved Projects code does
-# not read user_id, so their behaviour is unchanged.
+# scripts/migrate_phase_a.py). Private mode preserves legacy access. Explicit
+# accounts mode scopes customer project queries and writes by this column.
 # --------------------------------------------------------------------------
 
 _USERS_DDL = """
@@ -402,6 +402,8 @@ def get_project_owner(project_id: int) -> int | None:
 
 def set_project_owner(project_id: int, owner_id: int) -> bool:
     """Assign one project to one existing user. False if either is missing."""
+    from services.project_access import require_owner_administration
+    require_owner_administration()
     if get_user(owner_id) is None:
         return False
     conn = get_conn()
@@ -419,6 +421,8 @@ def backfill_project_owners(owner_id: int) -> int:
     """Give every UNOWNED project to one existing user. Idempotent: a second
     run finds nothing unowned and changes nothing. Never reassigns a project
     that already has an owner. Returns the number of rows changed."""
+    from services.project_access import require_owner_administration
+    require_owner_administration()
     if get_user(owner_id) is None:
         raise ValueError("owner does not exist")
     conn = get_conn()
@@ -525,9 +529,11 @@ def _iter_project_records(where: str, order: str):
     Callers supply constant SQL clauses. Only small IDs are collected first;
     the exact existing visibility/output checks still see the full record.
     """
+    from services.project_access import ownership_clause
+    scope, params = ownership_clause()
     conn = get_conn()
     try:
-        ids = conn.execute(f"SELECT id FROM projects WHERE {where} ORDER BY {order}").fetchall()
+        ids = conn.execute(f"SELECT id FROM projects WHERE {where}{scope} ORDER BY {order}", params).fetchall()
     finally:
         conn.close()
     for row in ids:
@@ -608,17 +614,19 @@ def list_projects(
     internal_record=false, hidden_from_customer=false, plus a name/metadata
     safety net for older rows whose flags were never set.
     """
+    from services.project_access import ownership_clause
+    scope, params = ownership_clause()
     conn = get_conn()
     if include_system:
         rows = conn.execute(
-            f"SELECT {','.join(_TABLE_COLS)} FROM projects ORDER BY updated_at DESC"
+            f"SELECT {','.join(_TABLE_COLS)} FROM projects WHERE 1=1{scope} ORDER BY updated_at DESC", params
         ).fetchall()
         conn.close()
         return [_row_to_dict(r) for r in rows]
     rows = conn.execute(
         f"SELECT {','.join(_TABLE_COLS)} FROM projects "
-        "WHERE user_saved = 1 AND system_test = 0 AND temporary = 0 "
-        "ORDER BY updated_at DESC"
+        f"WHERE user_saved = 1 AND system_test = 0 AND temporary = 0{scope} "
+        "ORDER BY updated_at DESC", params
     ).fetchall()
     conn.close()
     visible: list[dict] = []
@@ -1136,9 +1144,11 @@ def list_factory_source_projects() -> list[dict]:
 
 
 def get_project(project_id: int) -> dict | None:
+    from services.project_access import ownership_clause
+    scope, params = ownership_clause()
     conn = get_conn()
     row = conn.execute(
-        f"SELECT {','.join(_TABLE_COLS)} FROM projects WHERE id = ?", (project_id,)
+        f"SELECT {','.join(_TABLE_COLS)} FROM projects WHERE id = ?{scope}", (project_id, *params)
     ).fetchone()
     conn.close()
     return _row_to_dict(row) if row else None
@@ -1256,13 +1266,15 @@ def find_project_by_package(
     if not pkg:
         return None
 
+    from services.project_access import ownership_clause
+    scope, params = ownership_clause()
     placeholders = ", ".join("?" for _ in types)
     conn = get_conn()
     try:
         rows = conn.execute(
             "SELECT id, name, type, data FROM projects "
-            f"WHERE type IN ({placeholders}) AND data LIKE ?",
-            (*types, f"%{pkg}%"),
+            f"WHERE type IN ({placeholders}) AND data LIKE ?{scope}",
+            (*types, f"%{pkg}%", *params),
         ).fetchall()
     finally:
         conn.close()
@@ -1310,6 +1322,10 @@ def create_project(
                       None = apply backend safety guard + default to False.
         user_confirmed_save — only this overrides the internal/test name guard.
     """
+    from services.project_access import request_owner
+    request_user_id = request_owner()
+    if request_user_id is not None:
+        user_id = request_user_id
     payload = dict(data or {})
     resolved_user, resolved_sys, resolved_temp = apply_save_flags(
         name=name,
@@ -1332,9 +1348,12 @@ def create_project(
 
     now = _now()
     conn = get_conn()
+    owner_column = ", user_id" if request_user_id is not None else ""
+    owner_placeholder = ", ?" if request_user_id is not None else ""
+    owner_params = (request_user_id,) if request_user_id is not None else ()
     cur = conn.execute(
-        f"INSERT INTO projects (name, type, data, user_saved, system_test, temporary, created_at, updated_at) "
-        f"VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        f"INSERT INTO projects (name, type, data, user_saved, system_test, temporary, created_at, updated_at{owner_column}) "
+        f"VALUES (?, ?, ?, ?, ?, ?, ?, ?{owner_placeholder})",
         (
             name,
             type_,
@@ -1344,12 +1363,13 @@ def create_project(
             int(resolved_temp),
             now,
             now,
+            *owner_params,
         ),
     )
     conn.commit()
     project_id = cur.lastrowid
     conn.close()
-    if user_id is not None:
+    if user_id is not None and request_user_id is None:
         # Phase A ownership. Written separately so the insert above -- and
         # every caller that does not pass an owner -- is exactly as before.
         set_project_owner(project_id, int(user_id))
@@ -1456,11 +1476,15 @@ def update_project(
     if expected_version is not None:
         sql += " AND version=?"
         params.append(expected_version)
+    from services.project_access import ownership_clause
+    scope, owner_params = ownership_clause()
+    sql += scope
+    params.extend(owner_params)
 
     conn = get_conn()
     try:
         cur = conn.execute(sql, tuple(params))
-        if expected_version is not None and cur.rowcount == 0:
+        if cur.rowcount == 0 and (expected_version is not None or scope):
             # The row still exists (checked above), so the only way to match
             # nothing is that its version moved: somebody wrote after this
             # caller read. Refuse rather than overwrite their work. No retry
@@ -1468,8 +1492,10 @@ def update_project(
             # lost update being prevented.
             conn.rollback()
             actual = conn.execute(
-                "SELECT version FROM projects WHERE id=?", (project_id,)
+                f"SELECT version FROM projects WHERE id=?{scope}", (project_id, *owner_params)
             ).fetchone()
+            if scope and actual is None:
+                return None
             raise StaleProjectWrite(
                 project_id, expected_version, int(actual["version"]) if actual else None
             )
@@ -1720,8 +1746,10 @@ def delete_project(project_id: int) -> bool:
     if not existing:
         return False
     _assert_unlocked_for_deletion(existing.get("data"))
+    from services.project_access import ownership_clause
+    scope, params = ownership_clause()
     conn = get_conn()
-    cur = conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+    cur = conn.execute(f"DELETE FROM projects WHERE id = ?{scope}", (project_id, *params))
     conn.commit()
     deleted = cur.rowcount > 0
     conn.close()

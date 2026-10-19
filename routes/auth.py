@@ -145,7 +145,8 @@ def register():
     if database.get_user_by_email(email):
         return jsonify({"ok": False, "error": "An account with that email already exists."}), 409
     # Phase A rule: the first account becomes the admin; everyone after is a user.
-    role = "admin" if database.count_users() == 0 else "user"
+    from services.project_access import accounts_mode
+    role = "admin" if not accounts_mode() and database.count_users() == 0 else "user"
     try:
         row = database.create_user(email, _hash_password(password), role=role)
     except Exception:  # noqa: BLE001 -- a race on the unique email
@@ -269,6 +270,8 @@ _SIGNIN_PAGE = """<!doctype html>
     var signedIn = document.getElementById("signed-in");
     var forms = document.getElementById("forms");
     if (user) {
+      window.location.replace("/");
+      return;
       document.getElementById("who").textContent = user.email;
       document.getElementById("role").textContent = user.role;
       signedIn.style.display = "block"; forms.style.display = "none";

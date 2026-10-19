@@ -1,3 +1,17 @@
+## 1.9.49 — Customer account isolation candidate
+
+### What changed
+An explicit accounts mode binds project access and standalone puzzle files to signed-in users. Private invite mode remains the default for the existing owner workspace.
+
+### What was fixed
+Account-mode project reads, listings, writes through the database, build references and package downloads must use the signed session identity. Client owner IDs and admin flags cannot select another customer's work. Registration cannot grant a new customer the administrator role in accounts mode. The public entry page shows the existing subscription plans and leads to joining or signing in. Signed-out Account navigation is replaced by a clear Sign in link. In explicit accounts mode, signed identity replaces the shared beta invitation. The sign-in page is explicitly permitted before authentication; successful registration and sign-in open the dashboard automatically. Signed-in users can sign out from the dashboard.
+
+### Do the steps change?
+This candidate is not enabled in production. Account mode requires a verified owner sign-in and stable session key before activation. Unreviewed generic project writes, marketing and billing endpoints are unavailable to customers in this staged mode; owner/admin access is retained. Do not advertise public memberships as complete.
+
+### Release gate
+All 3234 acceptance cases across 231 files passed, including all prior 3197 cases and the real plans-first/join/sign-out/sign-in flow. Zero failures, errors, skips, missing, extra or duplicate cases. Disposable PostgreSQL CI passed on the same runtime source. Existing locks restored; customer isolation remains PROTECTED pending production activation proof. No live configuration changes or paid provider calls. See release_evidence/account-isolation-final.json.
+
 ## 1.9.48 — Preserve source examples and complete chart instructions
 
 ### What changed

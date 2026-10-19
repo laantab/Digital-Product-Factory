@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify, make_response, render_template, request, s
 from services.crossword.pdf_builder import CrosswordPdfRequest, build_crossword_pdf
 from services.ebook_package import EXPORTS_DIR
 from services.quality.download_pipeline_agent import pipeline_download
+from services.project_access import export_directory
 
 crossword_builder_bp = Blueprint(
     "crossword_builder",
@@ -133,9 +134,10 @@ def crossword_builder_generate():
             }
         ), 400
 
-    os.makedirs(CROSSWORD_EXPORT_DIR, exist_ok=True)
+    directory = export_directory(CROSSWORD_EXPORT_DIR)
+    os.makedirs(directory, exist_ok=True)
     stored_name = _unique_filename(result.filename)
-    file_path = os.path.join(CROSSWORD_EXPORT_DIR, stored_name)
+    file_path = os.path.join(directory, stored_name)
     with open(file_path, "wb") as handle:
         handle.write(result.pdf_bytes)
 
@@ -157,7 +159,7 @@ def crossword_builder_download(filename: str):
     safe_name = os.path.basename(filename)
     if not _FILENAME_RE.match(safe_name):
         return jsonify({"error": "Invalid download file."}), 404
-    directory = CROSSWORD_EXPORT_DIR
+    directory = export_directory(CROSSWORD_EXPORT_DIR, safe_name)
     file_path = os.path.join(directory, safe_name)
     if not os.path.isfile(file_path):
         return jsonify({"error": "PDF not found."}), 404

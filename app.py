@@ -328,6 +328,14 @@ def _invite_page(message: str = "", status: int = 200):
 @app.before_request
 def _invite_gate():
     path = request.path or "/"
+    # Explicit accounts mode replaces the shared beta invitation with signed
+    # user authentication. Its guard still fails closed until sessions are ready.
+    from services.project_access import accounts_mode
+    try:
+        if accounts_mode():
+            return None
+    except RuntimeError:
+        pass  # The account guard returns the configuration error below.
     if path.startswith(_INVITE_EXEMPT_PREFIXES):
         return None
     if _access_control_is_unconfigured():
@@ -347,6 +355,13 @@ def _invite_gate():
     if request.method == "GET" and accepts_html:
         return _invite_page("", 401)
     return _error(_INVITE_REFUSED_MESSAGE, 401)
+
+
+@app.before_request
+def _customer_account_gate():
+    from services.project_access import guard_request
+
+    return guard_request()
 
 
 @app.route("/invite", methods=["GET", "POST"])
@@ -511,6 +526,10 @@ def planner_cover_photo_select_route():
 def index():
     _coloring_customer()  # establish the signed request owner before the first build click
     admin_on = os.environ.get("ADMIN_MODE", "").strip().lower() in {"1", "true", "yes"}
+    from services.project_access import accounts_mode
+    if accounts_mode():
+        from flask_login import current_user
+        admin_on = admin_on and current_user.is_admin
     # Cache-bust the browser bundle on its own modification time. Without this
     # a customer can keep running yesterday's JavaScript against today's
     # server, and the only cure is asking them to clear their cache.
@@ -525,6 +544,19 @@ def index():
         app_version=APP_VERSION,
         asset_version=asset_version,
     )
+
+
+@app.get('/plans')
+def public_plans_route():
+    """Public plan information only; never accepts a customer billing identity."""
+    from services.billing.plans import ALL_PLANS
+    try:
+        from services.billing import pricing_payload
+        plans = pricing_payload('')['plans']
+    except Exception:
+        app.logger.exception('public plan availability unavailable')
+        plans = [plan.as_dict() for plan in ALL_PLANS]
+    return render_template('plans.html', plans=plans, app_version=APP_VERSION)
 
 
 # --------------------------------------------------------------------------- #

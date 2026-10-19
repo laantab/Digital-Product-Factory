@@ -4,7 +4,7 @@ Owner authorized continued work while away. Continue from this record, not older
 
 ## Current candidate
 
-Version 1.9.48, PR71. Exact tested runtime source: GitHub 3778616d5bc29aea7b5d090af111fbb952cb3a44, local 62607c209781b5de9c7465a0304435a5721e1373, tree 9bda2f6dc7c914d9b53de74360f4972bcb6534c6. Full release verification PASSED: 3,197 unique cases across all 230 files; zero failures/errors/skips and exact identity reconciliation. All 3,191 baseline cases retained. Deployment is pending; record live proof before claiming deployed.
+Version 1.9.48, PR71. Exact tested runtime source: GitHub 3778616d5bc29aea7b5d090af111fbb952cb3a44, local 62607c209781b5de9c7465a0304435a5721e1373, tree 9bda2f6dc7c914d9b53de74360f4972bcb6534c6. Full release verification PASSED: 3,197 unique cases across all 230 files; zero failures/errors/skips and exact identity reconciliation. All 3,191 baseline cases retained. Deployment VERIFIED: PR71 merged as 4fb69ac36e4903e6f4059e03dceb7632d18913d0. Website deploy dep-dbagaau7bikc73ekc2j0 LIVE at 2026-10-18 17:44:22 UTC; authenticated footer shows v1.9.48. Builder startup log at 17:44:15 UTC explicitly reports VERSION1.9.48. Saved Projects loaded existing coloring/word-search/ebook records. Project20 opens its reviewed prior version at100% with saved PDF/ZIP links and the newer-draft review notice. Its raw updated_at, DRAFT state and ledger14/$2.35 are unchanged before/after. No production generation or edits. Local original recovery pair hash comparison passed; no new live download byte comparison in this check.
 
 ## Reproduced defects and fixes
 

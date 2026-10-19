@@ -26,7 +26,7 @@
     ]
   },
   "test_identities_sha256": "680623dd3a909017ae114bc6069b8bca7a07558f2799a9aa0043272d265d7ffb",
-  "deployment_status": "Pending",
+  "deployment_status": "Live; website and builder versions verified",
   "protected_generators_changed": false,
   "metadata_only_after_test": [
     "command_center/function_lock_registry.json",
@@ -42,5 +42,24 @@
     "failures": 0,
     "errors": 0,
     "skipped": 0
+  },
+  "live_verification": {
+    "merge_commit": "4fb69ac36e4903e6f4059e03dceb7632d18913d0",
+    "website_deploy": "dep-dbagaau7bikc73ekc2j0",
+    "website_status": "live",
+    "website_finished_at": "2026-10-18T17:44:22.341976Z",
+    "website_browser_version": "1.9.48",
+    "builder_startup_version": "1.9.48",
+    "builder_startup_at": "2026-10-18T17:44:15.534063591Z",
+    "saved_projects": "Existing PLANETS coloring book, House Plants and Flower Parts word searches, and Container Gardening record visible. Listing latency remains.",
+    "project20": {
+      "updated_at": "2026-10-18T14:01:14.127997+00:00",
+      "artifact_state": "DRAFT",
+      "paid_calls": 14,
+      "spent_usd": 2.35,
+      "unchanged_before_after": true,
+      "screen": "100%; reviewed saved PDF/ZIP links available; newer draft needs review."
+    },
+    "limits": "No live paid generation or manuscript changes; original recovery pair hashes verified locally, download controls verified live; no new download byte comparison in this deployment check."
   }
 }

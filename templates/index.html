@@ -99,9 +99,31 @@
           <button onclick="go('subscription')" class="rounded-xl border border-brand-300 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 text-xs font-semibold text-brand-700 transition">
             Upgrade Plan
           </button>
+          {% if current_user.is_authenticated %}
           <button onclick="go('subscription')" class="rounded-xl bg-slate-100 hover:bg-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition">
             Account
           </button>
+          <button id="factorySignOut" class="rounded-xl bg-slate-100 hover:bg-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition">Sign out</button>
+          <script>
+            document.getElementById('factorySignOut').addEventListener('click', async function () {
+              this.disabled = true;
+              try {
+                const response = await fetch('/auth/logout', {
+                  method: 'POST', credentials: 'same-origin',
+                  headers: {'Content-Type': 'application/json'}, body: '{}'
+                });
+                const result = await response.json();
+                if (!response.ok || !result.ok) throw new Error('Sign out failed');
+                window.location.replace('/auth/signin');
+              } catch (error) {
+                this.disabled = false;
+                alert('Could not sign out. Please try again.');
+              }
+            });
+          </script>
+          {% else %}
+          <a href="/auth/signin" class="rounded-xl bg-slate-100 hover:bg-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition">Sign in</a>
+          {% endif %}
         </div>
       </header>
 
