@@ -1,0 +1,37 @@
+{
+  "verified_at": "2026-10-19T03:41:43.343965+00:00",
+  "factory_version": "1.9.49",
+  "merge_commit": "711b696d4a7a1c8e5dc01b0cb23f05469f5f1990",
+  "release_tree": "cdd6c602247968701cc96ed90d12eb3159c4db02",
+  "website": {
+    "service_id": "srv-da8qisegekts7380vdvg",
+    "deploy_id": "dep-dbap0tm7bikc73esok7g",
+    "status": "live",
+    "finished_at": "2026-10-19T03:38:40.301988Z",
+    "footer": "v1.9.49",
+    "signed_out_signin_link": "verified",
+    "plans_page": "verified",
+    "plans_join_link_reaches_forms": "verified",
+    "saved_projects": "existing list rendered, including coloring book and word searches"
+  },
+  "builder": {
+    "resource_id": "wfl-damqq8uk1f9s738jtgc0",
+    "startup_version": "1.9.49",
+    "startup_at": "2026-10-19T03:38:34.940952123Z",
+    "registration_start_observed": true,
+    "task_invocation_performed": false
+  },
+  "project20": {
+    "updated_at_before_and_after": "2026-10-18T14:01:14.127997+00:00",
+    "user_id": null,
+    "owner_reassignment_performed": false
+  },
+  "access_mode": "existing private invite mode unchanged",
+  "public_account_mode_activated": false,
+  "administrator_signin_verified": false,
+  "active_administrators": 1,
+  "existing_paid_subscription_rows": 0,
+  "production_configuration_changes": false,
+  "password_or_role_changes": false,
+  "new_paid_generation_performed": false
+}

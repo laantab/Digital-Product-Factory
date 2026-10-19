@@ -1,6 +1,6 @@
 # Customer account isolation — staged rollout
 
-Candidate: v1.9.49. Production remains on v1.9.48 with its existing private access policy. This document does not authorize a production configuration change.
+Candidate: v1.9.49. The v1.9.49 code is live with the existing private access policy. Public account mode is not activated. This document does not authorize a production configuration change.
 
 ## Implemented boundary
 
@@ -39,3 +39,9 @@ The attachment became available and was inspected: it shows Subscription Plans, 
 ## Final candidate verification
 
 All 3,234 cases across 231 acceptance files passed on source tree `5df25b7a13c4922657517bee4d0932d677e41f7d` (GitHub `25ff6760c61e34cad643bc58d919dc496868d534`). All prior 3,197 cases remain. PostgreSQL runs 39194518287 and 39194513592 succeeded. Machine-readable proof is in `release_evidence/account-isolation-final.json`. Production remains unchanged. Read-only production query confirmed one active administrator account exists. The secure owner sign-in request returned declined; administrator sign-in is unverified. No sign-in retry or ownership promotion was performed. The screenshot was later available and inspected: it shows the subscription plans page, not a credential error. The signed-out Account button incorrectly opened Subscription Plans; the candidate gives signed-out visitors a Sign in link. The requested public flow is plans first, joining/sign-in second, then Dashboard.
+
+## Live verification
+
+v1.9.49 was merged through PR72 and website deploy `dep-dbap0tm7bikc73esok7g` became live at 2026-10-19 03:38:40 UTC. The live footer, Sign in link, pricing page and Join-to-forms navigation were verified. Existing Saved Projects rendered. Builder startup reports VERSION1.9.49; registration start was observed without invoking a product task. Project20 retained its exact previous update timestamp and legacy ownership. See `release_evidence/account-isolation-live.json`.
+
+Existing private access remains in place. Public root-to-plans enforcement and account isolation are staged behind the unactivated accounts mode. Administrator login, purchase/account binding, quota enforcement and all advertised customer workflows remain launch gates; this deployment does not authorize accepting memberships.
