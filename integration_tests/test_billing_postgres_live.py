@@ -98,3 +98,68 @@ def test_released_seat_can_be_reserved_again(billing_pg):
     first = reserve('first')
     store.release_founder_seat(first['id'])
     assert reserve('second')['founder_seat'] == 1
+
+
+@pytest.fixture
+def subscriber_pg(billing_pg):
+    from services.billing import subscriber_store as C
+    C.init_schema()
+    return billing_pg
+
+
+def _subscriber_seed(customer, quantity=1):
+    from datetime import datetime, timedelta, timezone
+    from services.billing import subscriber_store as C
+    end = (datetime.now(timezone.utc) + timedelta(days=28)).isoformat()
+    with store._tx() as c:
+        c.execute('''INSERT INTO billing_account_state
+            (account_ref, subscription_row, provider, allowance, status, period_end, updated_at)
+            VALUES (?, ?, 'stripe', ?, 'active', ?, ?)''',
+            (customer, int(customer.split('_')[1]), quantity, end, C.now()))
+        C.grant_in_transaction(c, customer=customer, receipt=customer+'-invoice',
+            cycle_key=customer+'-cycle', quantity=quantity, expires_at=end)
+
+
+def test_postgres_competing_credit_and_budget_reservations(subscriber_pg):
+    from services.billing import subscriber_store as C
+    _subscriber_seed('user_101'); _subscriber_seed('user_102')
+    C.initialize_verified_budget(limit_usd='7', existing_spend_usd='1', verified_at=C.now())
+    ready = Barrier(2)
+    def build(pair):
+        account, project = pair
+        ready.wait(timeout=10)
+        try:
+            C.reserve(account, project)
+            return True
+        except C.CreditError:
+            return False
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        assert sorted(workers.map(build, [('user_101',101),('user_102',102)])) == [False,True]
+    assert sum(C.balance(a)['available'] for a in ('user_101','user_102')) == 1
+
+
+def test_postgres_completion_is_exactly_once_under_concurrency(subscriber_pg):
+    from services.billing import subscriber_store as C
+    _subscriber_seed('user_103')
+    C.initialize_verified_budget(limit_usd='7', existing_spend_usd='0', verified_at=C.now())
+    C.reserve('user_103',103)
+    ready = Barrier(2)
+    def finish(_):
+        ready.wait(timeout=10)
+        return C.consume_verified_export('user_103',103,'a'*64,'b'*64)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        assert sorted(workers.map(finish, range(2))) == [False,True]
+    assert C.balance('user_103')['consumed'] == 1
+
+
+def test_postgres_failed_credit_transaction_rolls_back_budget_hold(subscriber_pg):
+    from services.billing import subscriber_store as C
+    _subscriber_seed('user_104')
+    C.initialize_verified_budget(limit_usd='7', existing_spend_usd='0', verified_at=C.now())
+    with pytest.raises(RuntimeError):
+        with store._tx() as c:
+            C._budget_hold(c,'user_104',104,'3.5')
+            raise RuntimeError('failure after budget authorization')
+    with subscriber_pg() as c:
+        assert c.execute('SELECT COUNT(*) AS n FROM billing_budget_holds').fetchone()['n'] == 0
+    assert C.balance('user_104')['available'] == 1
