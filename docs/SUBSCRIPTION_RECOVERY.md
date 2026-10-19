@@ -53,3 +53,19 @@ checkout, renewal and cancellation; actual provider routing and measured unit
 costs; owner approval of price/allowance and a verified business-spend baseline;
 website/builder version match; subscriber rehearsal and original export hashes.
 Public access/payment activation requires those gates and owner configuration.
+
+
+## Exact-source release closure
+
+The reconstruction passed all 3,287 unique cases across 237 acceptance files on
+c34066b1b785bc46c8053c2ae8d5b476ea5aa095, retaining every one of the 3,234 baseline
+case identities. Zero final failures/errors/skips/missing/extra/duplicates. An
+entire group was rerun unchanged outside the OS temporary directory to exercise
+production-path guards correctly; both initial and final raw reports remain.
+Native billing/account PostgreSQL checks passed 11/7 cases. The final source
+includes the phone workflow, readable template labels, hidden completed-book
+recovery controls, and visible candidate version. Original reference hashes
+remain unchanged and the five shared locks are restored. No paid provider calls,
+production changes, merge or deployment. See the reconstruction handoff and
+release_evidence/subscription-rebuild-final.json for exact evidence and remaining
+live gates. Earlier pending notes above are historical checkpoints.

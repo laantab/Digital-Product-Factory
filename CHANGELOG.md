@@ -20,8 +20,7 @@ reconstructed subscriber phone journey pass.
 
 ### Release gate
 
-The exact-source release manifest
-and live merchant/deployment gates remain required. No paid provider calls.
+All 3,287 unique cases across 237 acceptance files passed on exact source c34066b, retaining all 3,234 baseline cases. Native PostgreSQL checks passed 11 billing and seven account-isolation cases. Five function locks restored; 72 post-lock checks passed. Original reference PDF/ZIP hashes are unchanged. Live merchant/deployment gates remain required. No paid provider calls. See release_evidence/subscription-rebuild-final.json.
 
 ## 1.9.49 — Customer account isolation candidate
 

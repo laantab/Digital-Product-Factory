@@ -1,9 +1,9 @@
 {
-  "updated_at": "2026-10-19T03:35:24.012778+00:00",
-  "current_task": "v1.9.49 account isolation and plans-first onboarding: candidate runtime verified; production activation pending.",
-  "stopped_at": "3234 acceptance cases across 231 files passed on exact source 25ff6760c61e34cad643bc58d919dc496868d534. All prior 3197 cases retained. PostgreSQL CI passed. Earlier browser dependency failures resolved without weakening tests. Production remains v1.9.48. One active administrator exists; owner sign-in is unverified. Protection/Command Center metadata checks: 38 passed; compilation and diff checks passed. JUnit evidence archived in release_evidence/v1.9.49-account-isolation-tests.tar.gz.",
-  "next_step": "Deploy verified v1.9.49 code with the current private access unchanged. Verify the existing Factory administrator through secure sign-in before approved public account-mode activation. Customer billing/account binding, other customer workflows and marketing remain launch gates.",
-  "next_claude": "code",
+  "updated_at": "2026-10-19T23:46:02.081836+00:00",
+  "current_task": "Subscription candidate reconstructed, exact-source verified, and protected; draft PR73 remains undeployed.",
+  "stopped_at": "Code and isolated release checks complete. Merchant test mode, owner sign-in, cost/routing and deployment gates remain.",
+  "next_step": "Verify actual provider/payment configuration and merchant sandbox behavior without paid calls. Obtain browser fallback access where connected tools cannot read settings. Keep public accounts and billing disabled.",
+  "next_claude": "Fetch work/subscription-launch-controls, read SESSION_HANDOFF_2026-10-19_SUBSCRIPTION_REBUILD.md and release_evidence/subscription-rebuild-final.json. The old unpublished f69b95a source was lost; do not reuse its 3286-case report. This reconstructed source passed 3287 cases. Do not merge or deploy from a test count alone; remaining live gates are recorded.",
   "open_issues": [
     {
       "title": "Builder deployment version verification pending",
@@ -200,7 +200,7 @@
     }
   ],
   "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly \u2014 it is what the Command Center reads every time it opens.",
-  "factory_version": "1.9.48",
+  "factory_version": "1.9.50",
   "ebook_reliability_2026_10_08": {
     "live_release": "1.9.17",
     "live_commit": "61b2759ee195a68b6e44c9a047ec27724e044b24",
@@ -359,5 +359,17 @@
       "listing": "PLANETS, House Plants, Flower Parts and Container Gardening remain listed. Project20 newer draft appears in Continue where you left off; opening it exposes the reviewed saved version at 100%. List latency remains a separate launch issue."
     }
   },
-  "candidate_version": "1.9.48"
+  "candidate_version": "1.9.50",
+  "production_version": "1.9.49",
+  "subscription_rebuild_2026_10_19": {
+    "pull_request": 73,
+    "source_commit": "c34066b1b785bc46c8053c2ae8d5b476ea5aa095",
+    "source_tree": "699a92a3cd2ce39fda5055a1e8308e084c5cc962",
+    "tests": 3287,
+    "manifest_files": 237,
+    "native_postgres_cases": 18,
+    "deployed": false,
+    "public_activation": false,
+    "paid_provider_requests": 0
+  }
 }
