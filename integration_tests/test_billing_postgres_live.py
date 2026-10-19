@@ -163,3 +163,56 @@ def test_postgres_failed_credit_transaction_rolls_back_budget_hold(subscriber_pg
     with subscriber_pg() as c:
         assert c.execute('SELECT COUNT(*) AS n FROM billing_budget_holds').fetchone()['n'] == 0
     assert C.balance('user_104')['available'] == 1
+
+
+def _pending_subscriber():
+    from services.billing import subscriber_store as C
+    from datetime import datetime, timedelta, timezone
+    import json
+    end=(datetime.now(timezone.utc)+timedelta(days=25)).isoformat()
+    with store._tx() as c:
+        cur=c.execute('''INSERT INTO billing_subscriptions
+            (account_ref,plan_id,billing_period,provider,status,price_cents,currency,metadata,created_at,updated_at)
+            VALUES ('user_105','starter','monthly','stripe','reserved',1900,'usd',?, ?, ?)''',
+            (json.dumps({'price_id':'price_monthly'}),C.now(),C.now()))
+        row_id=cur.lastrowid
+        c.execute('''INSERT INTO billing_account_state
+            (account_ref,subscription_row,provider,allowance,test_mode,updated_at)
+            VALUES ('user_105',?,'stripe',2,1,?)''',(row_id,C.now()))
+        c.execute('''INSERT INTO billing_checkout_claims
+            (account_ref,subscription_row,provider,checkout_id,created_at)
+            VALUES ('user_105',?,'stripe','cs_fixture',?)''',(row_id,C.now()))
+    return row_id
+
+
+def test_postgres_payment_receipt_and_grant_rollback_together(subscriber_pg,monkeypatch):
+    from services.billing import subscriber_store as C, subscriber_payments as W
+    from tests.test_subscriber_payments import bind,invoice
+    _pending_subscriber()
+    event=bind();event['data']['object']['client_reference_id']='user_105'
+    W.handle_event('stripe',event)
+    original=C.grant_in_transaction
+    def fail(conn,**kwargs):
+        original(conn,**kwargs)
+        raise RuntimeError('rollback paid grant')
+    monkeypatch.setattr(C,'grant_in_transaction',fail)
+    with pytest.raises(RuntimeError): W.handle_event('stripe',invoice())
+    assert C.balance('user_105')['available']==0
+    monkeypatch.setattr(C,'grant_in_transaction',original)
+    assert W.handle_event('stripe',invoice())['status']=='credited'
+    assert C.balance('user_105')['available']==2
+
+
+def test_postgres_concurrent_paid_webhooks_grant_once(subscriber_pg):
+    from services.billing import subscriber_store as C, subscriber_payments as W
+    from tests.test_subscriber_payments import bind,invoice
+    _pending_subscriber()
+    event=bind();event['data']['object']['client_reference_id']='user_105'
+    W.handle_event('stripe',event)
+    ready=Barrier(2)
+    def deliver(_):
+        ready.wait(timeout=10)
+        return W.handle_event('stripe',invoice())['status']
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        assert sorted(workers.map(deliver,range(2)))==['credited','duplicate']
+    assert C.balance('user_105')['available']==2

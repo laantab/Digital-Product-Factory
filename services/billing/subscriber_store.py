@@ -70,6 +70,7 @@ SCHEMA = (
         provider_subscription_id TEXT NOT NULL DEFAULT '',
         provider_customer_id TEXT NOT NULL DEFAULT '', allowance INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending', period_end TEXT NOT NULL DEFAULT '',
+        pending_period_end TEXT NOT NULL DEFAULT '', test_mode INTEGER NOT NULL DEFAULT 0,
         last_event_at INTEGER NOT NULL DEFAULT 0, terminal INTEGER NOT NULL DEFAULT 0,
         payment_hold INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL)''',
     '''CREATE TABLE IF NOT EXISTS billing_subscriber_events (
