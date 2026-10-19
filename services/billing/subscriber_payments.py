@@ -129,7 +129,7 @@ def _grant_invoice(conn, provider, stamp, obj, event):
     old = conn.execute('SELECT id FROM billing_invoice_receipts WHERE provider = ? AND invoice_id = ?', (provider, invoice)).fetchone()
     if old:
         return 'duplicate_invoice'
-    if row['terminal'] or row['payment_hold']:
+    if row['terminal'] or row['payment_hold'] or row['status'] == 'cancelled':
         return 'held'
     recorded = conn.execute('SELECT * FROM billing_subscriptions WHERE id = ?', (row['subscription_row'],)).fetchone()
     if not recorded:

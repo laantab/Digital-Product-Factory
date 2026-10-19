@@ -220,3 +220,12 @@ def test_lemon_wrong_checkout_row_never_binds(lemon):
     ev['meta']['custom_data']['subscription_row']='999'
     with pytest.raises(C.CreditError): W.handle_event('lemon_squeezy',ev)
     assert C.balance('user_2')['available']==0
+
+
+def test_paid_invoice_does_not_silently_reverse_scheduled_cancellation(checkout):
+    W.handle_event('stripe',bind());W.handle_event('stripe',invoice())
+    W.handle_event('stripe',lifecycle(cancel_at_period_end=True))
+    ev=invoice(event='new_after_cancel',stamp=400,invoice_id='in_new',end=int((datetime.now(timezone.utc)+timedelta(days=55)).timestamp()))
+    assert W.handle_event('stripe',ev)['status']=='held'
+    assert C.balance('user_1')['status']=='cancelled'
+    assert C.balance('user_1')['available']==10
