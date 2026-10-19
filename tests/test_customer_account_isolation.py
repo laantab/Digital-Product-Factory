@@ -295,3 +295,54 @@ def test_customer_cannot_import_server_file_paths(accounts, monkeypatch, nested)
         payload = {'data': payload}
     response = clients[0].post(f"/ebook-workspace/{projects[0]['id']}/visuals", json=payload)
     assert response.status_code == 403
+
+
+def test_signed_out_first_visit_reaches_the_signin_and_join_page(accounts):
+    client = app.test_client()
+    response = client.get('/', headers={'Accept': 'text/html'})
+    assert response.status_code == 302
+    assert response.headers['Location'] == '/auth/signin'
+    landing = client.get(response.headers['Location'])
+    assert landing.status_code == 200
+    assert b'id="login-form"' in landing.data and b'id="register-form"' in landing.data
+    assert client.get('/projects').status_code == 401
+
+
+def test_real_browser_first_visit_join_signout_and_signin_reach_dashboard(monkeypatch):
+    from tests.test_ebook_real_browser_customer_path import EbookRealBrowserCustomerPathTests as server
+    monkeypatch.setenv('FACTORY_ACCESS_MODE', 'accounts')
+    monkeypatch.setenv('SECRET_KEY', 'browser-onboarding-test-secret-key-32-characters')
+    server.setUpClass()
+    context = server()._new_context()
+    try:
+        page = context.new_page()
+        arrival = page.goto(server.base)
+        assert page.url == server.base + '/auth/signin', (arrival.request.headers.get('accept'), page.locator('body').inner_text()[:500])
+        page.wait_for_url(server.base + '/auth/signin')
+        assert page.locator('#login-form').is_visible()
+        assert page.locator('#register-form').is_visible()
+        email = 'join-' + uuid.uuid4().hex + '@example.test'
+        password = 'Disposable-test-password'
+        page.locator('#reg-email').fill(email)
+        page.locator('#reg-password').fill(password)
+        page.locator('#reg-confirm').fill(password)
+        page.locator('#register-form button').click()
+        page.wait_for_url(server.base + '/')
+        page.locator('#pageTitle').wait_for()
+        assert page.locator('#pageTitle').inner_text() == 'Dashboard'
+        assert context.request.get(server.base + '/auth/me').json()['user']['role'] == 'user'
+        page.locator('#factorySignOut').click()
+        page.wait_for_url(server.base + '/auth/signin')
+        assert context.request.get(server.base + '/projects').status == 401
+        page.locator('#login-email').fill(email)
+        page.locator('#login-password').fill('Wrong-disposable-password')
+        page.locator('#login-form button').click()
+        page.locator('#login-msg').get_by_text('Invalid email or password.', exact=True).wait_for()
+        assert page.url == server.base + '/auth/signin'
+        page.locator('#login-password').fill(password)
+        page.locator('#login-form button').click()
+        page.wait_for_url(server.base + '/')
+        assert page.locator('#pageTitle').inner_text() == 'Dashboard'
+    finally:
+        context.close()
+        server.tearDownClass()

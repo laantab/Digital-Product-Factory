@@ -53,7 +53,7 @@ def export_directory(base: str, filename: str | None = None) -> str:
 
 
 PUBLIC_ENDPOINTS = frozenset({
-    'auth.signin', 'auth.login', 'auth.register', 'auth.logout', 'auth.me',
+    'auth.signin_page', 'auth.login', 'auth.register', 'auth.logout', 'auth.me',
     'static', 'invite_route', 'billing_stripe_webhook_route',
     'billing_lemon_webhook_route',
 })
@@ -156,7 +156,9 @@ def guard_request():
     if request.endpoint in PUBLIC_ENDPOINTS:
         return None
     if not current_user.is_authenticated or not current_user.is_active:
-        if request.path == '/' and request.accept_mimetypes.best == 'text/html':
+        if (request.method == 'GET' and request.path == '/'
+                and 'text/html' in request.headers.get('Accept', '')
+                and request.accept_mimetypes['text/html'] > 0):
             return redirect('/auth/signin')
         return jsonify(ok=False, error='Please sign in.'), 401
     if current_user.is_admin:

@@ -1,0 +1,18 @@
+{
+  "source_commit": "b84596c608085f2b0a73c5ffa7dfb0fcd150aa3a",
+  "source_tree": "c125651ca20d5df353859831d6433fb1bdcbd0e9",
+  "cases": 3229,
+  "files": 231,
+  "failures_errors_skips": [],
+  "missing": [],
+  "extra": [],
+  "duplicates": 0,
+  "method": "Original six shards with every case in the ten affected files replaced by complete-file reruns after installing missing test browser; original failure reports retained.",
+  "baseline_comparison": {
+    "baseline_cases": 3197,
+    "candidate_cases": 3229,
+    "missing_baseline_cases": [],
+    "added_cases": 32
+  },
+  "status": "Previous candidate verified; superseded by first-visit routing and dashboard navigation repair. Not a production activation record."
+}

@@ -4,7 +4,7 @@
 An explicit accounts mode binds project access and standalone puzzle files to signed-in users. Private invite mode remains the default for the existing owner workspace.
 
 ### What was fixed
-Account-mode project reads, listings, writes through the database, build references and package downloads must use the signed session identity. Client owner IDs and admin flags cannot select another customer's work. Registration cannot grant a new customer the administrator role in accounts mode.
+Account-mode project reads, listings, writes through the database, build references and package downloads must use the signed session identity. Client owner IDs and admin flags cannot select another customer's work. Registration cannot grant a new customer the administrator role in accounts mode. The sign-in page is explicitly permitted before authentication; successful registration and sign-in open the dashboard automatically. Signed-in users can sign out from the dashboard.
 
 ### Do the steps change?
 This candidate is not enabled in production. Account mode requires a verified owner sign-in and stable session key before activation. Unreviewed generic project writes, marketing and billing endpoints are unavailable to customers in this staged mode; owner/admin access is retained. Do not advertise public memberships as complete.

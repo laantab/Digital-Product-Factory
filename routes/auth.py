@@ -270,6 +270,8 @@ _SIGNIN_PAGE = """<!doctype html>
     var signedIn = document.getElementById("signed-in");
     var forms = document.getElementById("forms");
     if (user) {
+      window.location.replace("/");
+      return;
       document.getElementById("who").textContent = user.email;
       document.getElementById("role").textContent = user.role;
       signedIn.style.display = "block"; forms.style.display = "none";
