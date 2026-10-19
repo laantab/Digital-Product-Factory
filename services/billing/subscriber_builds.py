@@ -24,6 +24,8 @@ def request_customer():
     if not accounts_mode() or not current_user.is_authenticated or current_user.is_admin:
         return None
     if not Q.enabled():
+        if not os.environ.get('RENDER'):
+            return None
         raise C.CreditError('Subscription building is not available yet.')
     return C.account('user_'+str(current_user.id))
 
@@ -102,7 +104,12 @@ def settle(project_id, data):
                 raise C.CreditError('The ZIP does not contain the verified PDF.')
     except (zipfile.BadZipFile,KeyError,RuntimeError):
         raise C.CreditError('The ZIP could not be verified.') from None
-    return C.consume_verified_export(customer,project_id,hashlib.sha256(pdf).hexdigest(),hashlib.sha256(bundle).hexdigest())
+    pdf_hash,zip_hash=hashlib.sha256(pdf).hexdigest(),hashlib.sha256(bundle).hexdigest()
+    identity=data.get('ebook_export_identity') or {}
+    if (identity.get('pdf_sha256')!=pdf_hash or identity.get('zip_sha256')!=zip_hash
+            or str(identity.get('verified_at_revision'))!=str(data.get('artifact_revision'))):
+        raise C.CreditError('The delivered files do not match the approved export revision.')
+    return C.consume_verified_export(customer,project_id,pdf_hash,zip_hash)
 
 
 def release_failed(project_id,data):

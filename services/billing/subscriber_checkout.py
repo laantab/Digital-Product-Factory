@@ -59,6 +59,10 @@ def start_checkout(customer, email, provider, plan_id, period='monthly'):
         raise C.CreditError('The payment service is not ready yet.')
     test_mode = cfg.mode == 'test' if provider == 'stripe' else os.environ.get('FACTORY_BILLING_TEST_MODE') == '1'
     price_id = PR.provider_price_id(provider,plan.id,'monthly')
+    base = os.environ.get('FACTORY_PUBLIC_URL','http://127.0.0.1:5000').rstrip('/')
+    u = urlparse(base)
+    if u.scheme != 'https' and not (os.environ.get('FACTORY_TEST_MODE') == '1' and u.hostname in ('localhost','127.0.0.1')):
+        raise C.CreditError('The secure subscription return address is not configured.')
     # Verify before reserving a local checkout. Failure never falls through.
     _verify_price(provider,price_id,plan)
     with S._tx() as conn:
@@ -87,10 +91,6 @@ def start_checkout(customer, email, provider, plan_id, period='monthly'):
                 VALUES (?, ?, ?, ?, ?, ?)''', (customer,sub_id,provider,plan.products_per_month,int(test_mode),C.now()))
             conn.execute('''INSERT INTO billing_checkout_claims
                 (account_ref,subscription_row,provider,created_at) VALUES (?, ?, ?, ?)''', (customer,sub_id,provider,C.now()))
-    base = os.environ.get('FACTORY_PUBLIC_URL','http://127.0.0.1:5000').rstrip('/')
-    u = urlparse(base)
-    if u.scheme != 'https' and not (os.environ.get('FACTORY_TEST_MODE') == '1' and u.hostname in ('localhost','127.0.0.1')):
-        raise C.CreditError('The secure subscription return address is not configured.')
     metadata = {'account_ref':customer,'subscription_row':str(sub_id),'plan_id':plan.id}
     try:
         if provider == 'stripe':

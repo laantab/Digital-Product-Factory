@@ -1,3 +1,4 @@
+from tests.test_subscriber_store import wallet
 from datetime import date
 from services.billing.provider_maintenance import report
 
@@ -21,3 +22,15 @@ def test_invalid_and_low_balance_observations_are_explicit(monkeypatch):
     assert 'invalid_expiry_date' in rows['openai']['alerts']
     assert 'low_balance' in rows['tavily']['alerts']
     assert rows['tavily']['balance_source']=='owner_recorded'
+
+
+def test_observed_errors_store_only_sanitized_categories(wallet):
+    from services.billing.provider_maintenance import record_failure,owner_report
+    from services.billing import store as S
+    assert record_failure(11,RuntimeError('401 invalid_api_key secret-should-never-be-stored'))
+    assert record_failure(11,RuntimeError('401 invalid_api_key second-private-message'))
+    with S._tx() as c:
+        rows=c.execute('SELECT * FROM billing_service_notices').fetchall()
+    assert len(rows)==1 and rows[0]['category']=='credentials'
+    r=owner_report()
+    assert len(r['notices'])==1 and 'secret-' not in str(r)

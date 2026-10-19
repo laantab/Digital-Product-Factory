@@ -1070,7 +1070,8 @@ def start_build(fields: dict, *, customer: str = "local"):
     existing = find_existing_build(idem)
     if existing:
         log.info("attaching to existing build for idempotency key %s", idem)
-        return existing, False
+        from services.billing.subscriber_builds import enroll
+        return enroll(existing), False
 
     from services.ebook_contamination import normalize_author, normalize_book_title
 
@@ -1120,7 +1121,8 @@ def start_build(fields: dict, *, customer: str = "local"):
         (title or "Untitled Ebook")[:200], "ebook", data,
         user_saved=True, system_test=False, temporary=False,
     )
-    return project, True
+    from services.billing.subscriber_builds import enroll
+    return enroll(project), True
 
 
 def advance_build(project_id: int) -> dict:
@@ -1138,6 +1140,8 @@ def advance_build(project_id: int) -> dict:
     data = dict(project.get("data") or {})
     data["_project_id"] = project_id
     state = build_state(data)
+    from services.billing.subscriber_builds import before_advance
+    before_advance(project_id, data)
 
     stage = next_incomplete_stage(data)
     if state.get("finished") and stage is not None:
@@ -1182,6 +1186,8 @@ def advance_build(project_id: int) -> dict:
         state["customer_message"] = MSG_FINAL
         database.update_project(project_id, None, data)
         log.error("build %s stage %s exhausted attempts", project_id, stage)
+        from services.billing.subscriber_builds import release_failed
+        release_failed(project_id, data)
         return status_payload(data, project_id)
 
     if not _claim_stage(state, stage):
@@ -1249,6 +1255,12 @@ def advance_build(project_id: int) -> dict:
             new_state["customer_message"] = still_working_message if still_working else MSG_RETRY
         new_state["updated_at"] = _now()
         database.update_project(project_id, None, updated)
+        if next_incomplete_stage(updated) is None:
+            from services.billing.subscriber_builds import settle
+            settle(project_id, updated)
+        elif new_state.get("failed"):
+            from services.billing.subscriber_builds import release_failed
+            release_failed(project_id, updated)
         return status_payload(updated, project_id)
 
     except Exception as exc:  # noqa: BLE001
@@ -1278,6 +1290,15 @@ def advance_build(project_id: int) -> dict:
         fresh_state["failed"] = final
         fresh_state["updated_at"] = _now()
         database.update_project(project_id, None, fresh_data)
+        if fresh_data.get("_subscription_account"):
+            try:
+                from services.billing.provider_maintenance import record_failure
+                record_failure(project_id, exc, category="accounting" if stage == "export" and next_incomplete_stage(fresh_data) is None else None)
+            except Exception:
+                log.exception("could not record a service maintenance notice")
+            if final and next_incomplete_stage(fresh_data) is not None:
+                from services.billing.subscriber_builds import release_failed
+                release_failed(project_id, fresh_data)
         return status_payload(fresh_data, project_id)
 
 
@@ -1490,7 +1511,7 @@ def status_payload(data: dict, project_id: int) -> dict:
             attempts_left = max(0, _max_attempts(stage) - int(rec.get("attempts") or 0))
 
     from services.ebook_guided_build import public_choice
-    return {
+    payload = {
         "ok": True,
         "project_id": project_id,
         "awaiting_cover_choice": bool(state.get("awaiting_cover_choice")),
@@ -1544,6 +1565,9 @@ def status_payload(data: dict, project_id: int) -> dict:
             if stage == "visuals" and awaiting_picture_approval(data, state) else None
         ),
     }
+
+    from services.billing.subscriber_builds import account_status
+    return account_status(payload, data, project_id)
 
 
 def _picture_review(data: dict) -> dict:

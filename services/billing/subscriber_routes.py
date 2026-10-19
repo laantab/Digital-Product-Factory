@@ -48,12 +48,12 @@ def portal():
 
 @bp.get('/admin/provider-maintenance')
 def maintenance():
-    from services.billing.provider_maintenance import report
+    from services.billing.provider_maintenance import owner_report
     if not current_user.is_authenticated or not current_user.is_active:
         raise Unauthorized('Please sign in.')
     if not current_user.is_admin:
         raise Forbidden('Administrator access required.')
-    return jsonify(report())
+    return jsonify(owner_report())
 
 
 def dashboard():
@@ -69,3 +69,11 @@ def dashboard():
     from services.ebook_design_export import theme_catalog_payload
     themes=theme_catalog_payload()['themes']
     return render_template('subscriber_dashboard.html',credits=C.balance(customer),plan=plan,providers=providers,themes=themes)
+
+
+@bp.app_context_processor
+def owner_notices():
+    if not current_user.is_authenticated or not current_user.is_active or not current_user.is_admin:
+        return {}
+    from services.billing.provider_maintenance import owner_report
+    return {'provider_maintenance':owner_report()}

@@ -92,6 +92,8 @@ ROUTES: tuple[dict, ...] = (
        DEFERRED),
     _l("/planner/cover-photo/select", "records which photograph was chosen"),
 
+    _l("/account/checkout", "creates one identity-bound checkout at the payment provider"),
+    _l("/account/portal", "opens the signed customer subscription management portal"),
     _l("/billing/account", "reads the billing account row"),
     _l("/billing/checkout", "creates a checkout session at the payment provider"),
     _l("/billing/webhook/stripe", "records a payment event"),

@@ -52,7 +52,7 @@
   }
   async function poll(){
     clearTimeout(timer);if(!project||stopped)return;
-    try{const b=await api(`/ebook/build/${project}/status`);const pause=show(b);if(b.finished){await credits();await saved();}if(pause)return;}
+    try{let b=await api(`/ebook/build/${project}/status`);if(!b.finished&&!b.failed&&!b.awaiting_cover_choice&&!b.retrying){b=await api(`/ebook/build/${project}/advance`,{});}const pause=show(b);if(b.finished){await credits();await saved();}if(pause)return;}
     catch(e){message(e.name==='AbortError'?'Connection timed out. Your book is saved; use Continue to reconnect.':e.message);el('resume').hidden=false;return;}
     timer=setTimeout(poll,2500);
   }

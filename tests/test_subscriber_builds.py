@@ -1,5 +1,6 @@
 """Credit settlement requires the exact current PDF/ZIP, never render success alone."""
 import io
+import hashlib
 import zipfile
 import pytest
 from tests.test_subscriber_store import wallet,seed,budget
@@ -24,7 +25,7 @@ def exported(wallet,monkeypatch):
     monkeypatch.setattr(R,'customer_download_refs',lambda _:{'package_id':'book','pdf_path':'book/ebook.pdf','zip_path':'book/package.zip'})
     pdf=b'%PDF-fixture-exact-accepted-bytes'
     monkeypatch.setattr(compat,'read_export_or_legacy',lambda pid,path,legacy:pdf if path.endswith('ebook.pdf') else bundle(pdf))
-    return {B.MARKER:'user_1'},O,R,compat
+    return {B.MARKER:'user_1','artifact_revision':1,'ebook_export_identity':{'pdf_sha256':hashlib.sha256(pdf).hexdigest(),'zip_sha256':hashlib.sha256(bundle(pdf)).hexdigest(),'verified_at_revision':1}},O,R,compat
 
 
 def test_only_verified_files_settle_and_repeated_reopen_is_free(exported):
@@ -78,3 +79,12 @@ def test_completed_files_are_not_labeled_ready_until_credit_settlement(exported)
     B.settle(1,data)
     b=B.account_status({'finished':True},data,1)
     assert b['finished'] and not b['accounting_pending']
+
+
+
+def test_stored_asset_from_an_earlier_revision_never_consumes(exported,monkeypatch):
+    data,_,_,compat=exported
+    older=b'%PDF-prior-export'
+    monkeypatch.setattr(compat,'read_export_or_legacy',lambda pid,path,legacy:older if path.endswith('ebook.pdf') else bundle(older))
+    with pytest.raises(C.CreditError,match='export revision'):B.settle(1,data)
+    assert C.reservation(1)['status']=='reserved'

@@ -46,6 +46,9 @@ def account(value):
 
 
 SCHEMA = (
+    '''CREATE TABLE IF NOT EXISTS billing_service_notices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL,
+        category TEXT NOT NULL, observed_at TEXT NOT NULL)''',
     '''CREATE TABLE IF NOT EXISTS billing_credit_grants (
         id INTEGER PRIMARY KEY AUTOINCREMENT, account_ref TEXT NOT NULL,
         receipt TEXT NOT NULL UNIQUE, cycle_key TEXT NOT NULL UNIQUE,
