@@ -328,6 +328,14 @@ def _invite_page(message: str = "", status: int = 200):
 @app.before_request
 def _invite_gate():
     path = request.path or "/"
+    # Explicit accounts mode replaces the shared beta invitation with signed
+    # user authentication. Its guard still fails closed until sessions are ready.
+    from services.project_access import accounts_mode
+    try:
+        if accounts_mode():
+            return None
+    except RuntimeError:
+        pass  # The account guard returns the configuration error below.
     if path.startswith(_INVITE_EXEMPT_PREFIXES):
         return None
     if _access_control_is_unconfigured():
@@ -536,6 +544,19 @@ def index():
         app_version=APP_VERSION,
         asset_version=asset_version,
     )
+
+
+@app.get('/plans')
+def public_plans_route():
+    """Public plan information only; never accepts a customer billing identity."""
+    from services.billing.plans import ALL_PLANS
+    try:
+        from services.billing import pricing_payload
+        plans = pricing_payload('')['plans']
+    except Exception:
+        app.logger.exception('public plan availability unavailable')
+        plans = [plan.as_dict() for plan in ALL_PLANS]
+    return render_template('plans.html', plans=plans, app_version=APP_VERSION)
 
 
 # --------------------------------------------------------------------------- #

@@ -301,8 +301,12 @@ def test_signed_out_first_visit_reaches_the_signin_and_join_page(accounts):
     client = app.test_client()
     response = client.get('/', headers={'Accept': 'text/html'})
     assert response.status_code == 302
-    assert response.headers['Location'] == '/auth/signin'
-    landing = client.get(response.headers['Location'])
+    assert response.headers['Location'] == '/plans'
+    plans = client.get(response.headers['Location'])
+    assert plans.status_code == 200
+    assert b'Simple, Transparent Pricing' in plans.data
+    assert b'id="nav"' not in plans.data
+    landing = client.get('/auth/signin')
     assert landing.status_code == 200
     assert b'id="login-form"' in landing.data and b'id="register-form"' in landing.data
     assert client.get('/projects').status_code == 401
@@ -317,7 +321,9 @@ def test_real_browser_first_visit_join_signout_and_signin_reach_dashboard(monkey
     try:
         page = context.new_page()
         arrival = page.goto(server.base)
-        assert page.url == server.base + '/auth/signin', (arrival.request.headers.get('accept'), page.locator('body').inner_text()[:500])
+        assert page.url == server.base + '/plans', page.locator('body').inner_text()[:500]
+        page.get_by_role('heading', name='Simple, Transparent Pricing').wait_for()
+        page.get_by_role('link', name='Join free', exact=True).click()
         page.wait_for_url(server.base + '/auth/signin')
         assert page.locator('#login-form').is_visible()
         assert page.locator('#register-form').is_visible()
@@ -346,3 +352,46 @@ def test_real_browser_first_visit_join_signout_and_signin_reach_dashboard(monkey
     finally:
         context.close()
         server.tearDownClass()
+
+
+def test_accounts_mode_uses_signed_identity_instead_of_the_shared_invite(accounts, monkeypatch):
+    import app as app_module
+    monkeypatch.setattr(app_module, '_invite_code_required', lambda: 'private-beta-invite')
+    monkeypatch.setattr(app_module, '_access_control_is_unconfigured', lambda: True)
+    client = app.test_client()
+    assert client.get('/', headers={'Accept': 'text/html'}).headers['Location'] == '/plans'
+    assert client.get('/plans').status_code == 200
+    assert client.get('/auth/signin').status_code == 200
+    assert client.get('/projects').status_code == 401
+    joined = client.post('/auth/register', json={'email': f'join-{uuid.uuid4().hex}@example.test',
+                                               'password': 'Disposable-test-password'})
+    assert joined.status_code == 201 and joined.get_json()['user']['role'] == 'user'
+    assert client.get('/').status_code == 200
+    monkeypatch.setenv('FACTORY_ACCESS_MODE', 'private')
+    assert app.test_client().get('/').status_code == 503
+
+
+def test_public_plans_never_accept_a_customer_billing_identity(accounts, monkeypatch):
+    import services.billing as billing
+    from services.billing.plans import catalog
+    refs = []
+    def pricing(ref):
+        refs.append(ref)
+        return {**catalog(founder_seats_remaining=17), 'current': {'private': 'other-customer-secret'}}
+    monkeypatch.setattr(billing, 'pricing_payload', pricing)
+    response = app.test_client().get('/plans?account_ref=foreign', headers={'X-Factory-Account': 'foreign'})
+    assert response.status_code == 200 and refs == ['']
+    assert b'other-customer-secret' not in response.data
+    assert b'17 of 100 seats left' in response.data
+
+
+def test_public_plans_fallback_keeps_real_catalog_prices_without_inventing_availability(accounts, monkeypatch):
+    import services.billing as billing
+    def unavailable(*args):
+        raise RuntimeError('disposable unavailable count')
+    monkeypatch.setattr(billing, 'pricing_payload', unavailable)
+    response = app.test_client().get('/plans')
+    assert response.status_code == 200
+    for price in (b'$0', b'$19', b'$29', b'$39', b'$99'):
+        assert price in response.data
+    assert b'seats left' not in response.data

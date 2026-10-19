@@ -55,7 +55,7 @@ def export_directory(base: str, filename: str | None = None) -> str:
 PUBLIC_ENDPOINTS = frozenset({
     'auth.signin_page', 'auth.login', 'auth.register', 'auth.logout', 'auth.me',
     'static', 'invite_route', 'billing_stripe_webhook_route',
-    'billing_lemon_webhook_route',
+    'billing_lemon_webhook_route', 'public_plans_route',
 })
 # These endpoints either create state entirely on the server or use the scoped
 # database reads below. Generic raw-project writes and unreviewed marketing,
@@ -159,7 +159,7 @@ def guard_request():
         if (request.method == 'GET' and request.path == '/'
                 and 'text/html' in request.headers.get('Accept', '')
                 and request.accept_mimetypes['text/html'] > 0):
-            return redirect('/auth/signin')
+            return redirect('/plans')
         return jsonify(ok=False, error='Please sign in.'), 401
     if current_user.is_admin:
         return None

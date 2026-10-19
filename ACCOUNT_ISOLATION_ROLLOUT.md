@@ -8,7 +8,7 @@ Candidate: v1.9.49. Production remains on v1.9.48 with its existing private acce
 
 The customer endpoint allowlist is explicit. Reviewed ebook workspace/build flows and standalone puzzle flows are available. Generic raw project writes, operator actions, billing and marketing are unavailable to customer accounts in this stage. Other product workflows and paid membership onboarding remain launch work. Private mode retains the existing owner workflow.
 
-The intended entry flow is first visit → sign up or sign in → dashboard. Successful authentication redirects automatically; Sign out returns to the entry page and ends access to account projects. Existing invitation protection remains during the staged private rollout. Production account-mode activation is still required before this becomes the live default.
+The intended entry flow is first visit → subscription plans → join or sign in → dashboard. Successful authentication redirects automatically; Sign out returns to the entry page and ends access to account projects. Private mode keeps the existing invitation protection. Explicit accounts mode replaces the shared invitation with signed user authentication; its session-readiness guard still fails closed. Production account-mode activation is still required before this becomes the live default.
 
 ## Before activation
 
@@ -28,6 +28,10 @@ Preserve every legacy product and export. If verification fails, close customer 
 - Focused account/auth batch: 44 passed; the real-browser case was excluded from that batch and passed separately.
 - Real signed-in ebook creation, matching PDF/ZIP downloads, and second-account denial passed without paid provider calls.
 - Earlier candidate b84596c: all 3,229 unique cases across 231 files passed after complete-file browser reruns; original missing-browser failures retained in the evidence. The subsequently requested first-visit/sign-in/dashboard repair adds two cases and requires final validation.
-- First-visit UI check: signed-out browser reaches both forms, registration opens Dashboard, Sign out closes project access, wrong-password sign-in displays an error, and correct sign-in opens Dashboard; both targeted cases passed.
+- First-visit UI check: signed-out browser sees plans first and can then reach both forms, registration opens Dashboard, Sign out closes project access, wrong-password sign-in displays an error, and correct sign-in opens Dashboard; both targeted cases passed.
 - Disposable PostgreSQL integration: seven cases; GitHub Actions job 117750384785 passed against the candidate source (run 39153022326).
 - Source tree under full verification: `1bb0b49be9f015e8b54dc3de9b89b21bd89a6c79` (local `2776ff355213ba7dc9669f3c2761364e2aa839bf`, GitHub `ffccfa1e822cdb64652f6d311a33c6d7fb9f4fdb`). Documentation and subsequent lock metadata require their own final validation.
+
+## Screenshot clarification
+
+The attachment became available and was inspected: it shows Subscription Plans, not a sign-in error. The requested first page is therefore the pricing page. The public `/plans` page uses the existing server catalog, accepts no customer billing reference, hides private dashboard navigation, and links to joining/sign-in. Live seat counts are shown only when read successfully. Joining does not grant paid entitlements or charge a customer. Payment/account binding remains a separate launch gate. The signed-out dashboard header now links to Sign in instead of opening Subscription Plans under an Account label.
