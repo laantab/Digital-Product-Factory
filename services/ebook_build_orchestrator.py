@@ -700,7 +700,7 @@ def _run_visuals(data: dict, pid: int) -> dict:
 
 def _run_cover(data: dict, pid: int) -> dict:
     from services.ebook_guided_build import enabled, run_cover
-    if enabled(data) and not self_running_ebook(data):
+    if enabled(data) and (not self_running_ebook(data) or data.get("_subscription_account")):
         return run_cover(data, pid, _prepare_cover)
     return _prepare_cover(data, pid)
 

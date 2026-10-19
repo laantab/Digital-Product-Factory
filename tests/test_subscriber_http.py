@@ -83,3 +83,14 @@ def test_hosted_accounts_fail_closed_without_subscription_rollout(clients,monkey
     _,cs,_=clients
     monkeypatch.setenv('FACTORY_SUBSCRIPTIONS_ENABLED','0');monkeypatch.setenv('RENDER','true')
     assert cs[0].post('/ebook/build',json={'fields':{'topic':'gardening'}}).status_code==403
+
+
+def test_unpaid_build_is_denied_before_provider_or_queue_work(clients,monkeypatch):
+    users,cs,_=clients
+    from services.jobs import dispatch
+    handoff=Mock();monkeypatch.setattr(dispatch,'hand_off',handoff)
+    response=cs[0].post('/ebook/build',json={'fields':{'topic':'container gardening','author_brand':'Test author','ebook_creation_mode':'ai_recommended'}})
+    assert response.status_code==409
+    assert 'paid billing period' in response.json['error']
+    assert handoff.call_count==0
+    assert C.balance('user_'+str(users[0]['id']))['consumed']==0

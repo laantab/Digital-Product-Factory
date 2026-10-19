@@ -20,7 +20,7 @@
     project=b.project_id;sessionStorage.setItem('factorySubscriberProject',String(project));
     el('buildPanel').hidden=false;el('buildTitle').textContent=b.title||'Building your ebook';
     el('progress').value=b.percent||0;el('buildMessage').textContent=b.message||'';
-    el('resume').hidden=!(b.failed||b.retrying||b.activity?.state==='stalled'||b.accounting_pending);
+    el('resume').hidden=b.finished||!(b.failed||b.retrying||b.activity?.state==='stalled'||b.accounting_pending);
     el('choices').replaceChildren();el('downloads').replaceChildren();
     if(b.finished){for(const [kind,label] of [['pdf','Download PDF'],['zip','Download ZIP']]){const href=b.downloads?.[kind]||b.saved_downloads?.[kind];if(href){const a=safeLink(href,label);if(a)el('downloads').append(a);}}}
     if(b.awaiting_cover_choice){renderChoice(b.cover_choice);return true;}
@@ -65,7 +65,7 @@
   el('signout').onclick=async()=>{stopped=true;clearTimeout(timer);await api('/auth/logout',{});sessionStorage.removeItem('factorySubscriberProject');location.assign('/plans');};
   el('manage').onclick=async()=>{try{const b=await api('/account/portal',{});location.assign(b.url);}catch(e){message(e.message);}};
   if(el('subscribe'))el('subscribe').onclick=async()=>{el('subscribe').disabled=true;try{const b=await api('/account/checkout',{plan_id:el('subscribe').dataset.plan,billing_period:'monthly',provider:el('provider').value});location.assign(b.checkout_url);}catch(e){message(e.message);el('subscribe').disabled=false;}};
-  el('mode').onchange=()=>{el('theme').disabled=el('mode').value!=='custom';};
+  el('mode').onchange=()=>{const custom=el('mode').value==='custom';el('theme').disabled=!custom;el('theme').hidden=!custom;el('themeLabel').hidden=!custom;};
   async function init(){
     try{await saved();const id=sessionStorage.getItem('factorySubscriberProject');if(/^[1-9][0-9]*$/.test(id||'')){project=Number(id);await poll();}}catch(e){message(e.message);}
   }

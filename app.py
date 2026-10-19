@@ -4640,6 +4640,9 @@ def ebook_build_start_route():
         payload["created"] = bool(created)
         return jsonify(payload)
     except Exception as exc:  # noqa: BLE001
+        from services.billing.subscriber_store import CreditError
+        if isinstance(exc, CreditError):
+            return _error(str(exc), 409)
         return _customer_error(exc, 500, log="ebook build start failed")
 
 

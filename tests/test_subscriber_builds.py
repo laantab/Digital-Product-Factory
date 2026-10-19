@@ -88,3 +88,13 @@ def test_stored_asset_from_an_earlier_revision_never_consumes(exported,monkeypat
     monkeypatch.setattr(compat,'read_export_or_legacy',lambda pid,path,legacy:older if path.endswith('ebook.pdf') else bundle(older))
     with pytest.raises(C.CreditError,match='export revision'):B.settle(1,data)
     assert C.reservation(1)['status']=='reserved'
+
+
+def test_signed_subscriber_keeps_the_cover_decision_while_owner_mode_is_unchanged(monkeypatch):
+    from services import ebook_build_orchestrator as O,ebook_guided_build as G
+    monkeypatch.setattr(O,'_prepare_cover',lambda data,pid:'automatic owner cover')
+    monkeypatch.setattr(G,'run_cover',lambda data,pid,prepare:'subscriber choice')
+    data={'fields':{'guided_cover_choice':True,'ebook_creation_mode':'ai_recommended'}}
+    assert O._run_cover(data,1)=='automatic owner cover'
+    data[B.MARKER]='user_1'
+    assert O._run_cover(data,1)=='subscriber choice'

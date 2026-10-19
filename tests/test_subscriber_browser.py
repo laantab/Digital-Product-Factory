@@ -45,6 +45,8 @@ def test_subscriber_phone_build_cover_choice_download_and_reopen(monkeypatch,tmp
             assert z.testzip() is None and z.read('ebook.pdf')==pdf
         page.reload()
         page.get_by_role('link',name='Download PDF',exact=True).wait_for(timeout=30000)
+        assert not page.locator('#resume').is_visible()
+        assert not page.locator('#theme').is_visible()
         balance=context.request.get(server.base+'/account/subscription').json()['credits']
         assert balance['available']==0 and balance['consumed']==1
         with sqlite3.connect(server.db_path) as c:

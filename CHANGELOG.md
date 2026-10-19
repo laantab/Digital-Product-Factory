@@ -1,3 +1,28 @@
+## 1.9.50 — Subscription controls reconstruction (DRAFT)
+
+### What changed
+
+Rebuilt from v1.9.49 after the unpublished candidate was lost. Prior-source
+results do not certify this replacement. Adds opt-in signed subscriber checkout,
+paid-invoice credits, atomic reservations and conservative spending holds,
+verified PDF/ZIP settlement and accounting recovery, payment lifecycle controls,
+provider maintenance observations, and a focused mobile ebook dashboard.
+
+### What was fixed
+
+Credit deductions now follow verified current-revision downloads, duplicate paid invoices cannot grant twice, and late lifecycle notifications cannot reverse terminal expiry.
+
+### Do the steps change?
+
+Existing owner/private product tools remain the default. This candidate is not
+merged, deployed, or enabled for customers. Native PostgreSQL checks and the
+reconstructed subscriber phone journey pass.
+
+### Release gate
+
+The exact-source release manifest
+and live merchant/deployment gates remain required. No paid provider calls.
+
 ## 1.9.49 — Customer account isolation candidate
 
 ### What changed

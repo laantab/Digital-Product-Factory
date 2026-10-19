@@ -230,6 +230,12 @@
     "tests/test_ebook_ai_rewrite.py",
     "tests/test_billing_postgres_transactions.py",
     "tests/test_saved_list_nested_payloads.py",
-    "tests/test_customer_account_isolation.py"
+    "tests/test_customer_account_isolation.py",
+    "tests/test_subscriber_store.py",
+    "tests/test_subscriber_payments.py",
+    "tests/test_subscriber_builds.py",
+    "tests/test_provider_maintenance.py",
+    "tests/test_subscriber_http.py",
+    "tests/test_subscriber_browser.py"
   ]
 }
