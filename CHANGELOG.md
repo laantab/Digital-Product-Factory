@@ -10,7 +10,7 @@ Account-mode project reads, listings, writes through the database, build referen
 This candidate is not enabled in production. Account mode requires a verified owner sign-in and stable session key before activation. Unreviewed generic project writes, marketing and billing endpoints are unavailable to customers in this staged mode; owner/admin access is retained. Do not advertise public memberships as complete.
 
 ### Release gate
-In progress. Baseline v1.9.48 passed3197 cases. Two-account, signed-out, legacy-owner and protected-product checks are required before any rollout.
+All 3234 acceptance cases across 231 files passed, including all prior 3197 cases and the real plans-first/join/sign-out/sign-in flow. Zero failures, errors, skips, missing, extra or duplicate cases. Disposable PostgreSQL CI passed on the same runtime source. Existing locks restored; customer isolation remains PROTECTED pending production activation proof. No live configuration changes or paid provider calls. See release_evidence/account-isolation-final.json.
 
 ## 1.9.48 — Preserve source examples and complete chart instructions
 

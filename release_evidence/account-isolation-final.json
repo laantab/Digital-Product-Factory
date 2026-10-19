@@ -1,0 +1,70 @@
+{
+  "tests": 3234,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "missing": [],
+  "extra": [],
+  "duplicates": 0,
+  "source_commit": "b6c338e8a145bbe82226373167fc08bf5f828402",
+  "source_tree": "5df25b7a13c4922657517bee4d0932d677e41f7d",
+  "remote_source_commit": "25ff6760c61e34cad643bc58d919dc496868d534",
+  "previous_candidate_cases_retained": 3229,
+  "new_onboarding_cases": 5,
+  "baseline_cases_retained": 3197,
+  "production_activated": false,
+  "postgres_workflow_runs": [
+    39194518287,
+    39194513592
+  ],
+  "postgres_result": "success",
+  "verified_at": "2026-10-19T03:35:24.012778+00:00",
+  "suites": [
+    {
+      "file": "shard-0.xml",
+      "sha256": "03c92fb4e6d79769767cbb179208224b35455df4e388c38e588063b332c187d5",
+      "tests": 475
+    },
+    {
+      "file": "shard-1.xml",
+      "sha256": "b1fa3043c981cdd2b85be1b21698d4c5eac6b8145ceb1afa44c6e1980bc9ca10",
+      "tests": 478
+    },
+    {
+      "file": "shard-2.xml",
+      "sha256": "d7d9c6bd341d8e1ff9e8cbdd8baef8fafaf09ac80e7ffd3441a372a65a33d42e",
+      "tests": 654
+    },
+    {
+      "file": "shard-3.xml",
+      "sha256": "cd1dfbb2dcab6bf596a92dc3f7be7c7bc308f327fbf2357f3930ee0b070f913e",
+      "tests": 507
+    },
+    {
+      "file": "shard-4.xml",
+      "sha256": "97b2140ea80a8d19bf610ab6a37ce1e63c5c097152ea68a37afd6cb5769c0ba8",
+      "tests": 598
+    },
+    {
+      "file": "shard-5.xml",
+      "sha256": "4904055439f4ff469ed0c87570945d845c39ea3eec50d28fbbbaaea6030e3589",
+      "tests": 522
+    }
+  ],
+  "test_evidence_archive": "release_evidence/v1.9.49-account-isolation-tests.tar.gz",
+  "test_evidence_archive_sha256": "37353aa1cb5c8295da4cf58ef0022d798bbdc1cfda6afeab6ec2d5adbab114be",
+  "metadata_validation": {
+    "tests": 38,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "files": [
+      "tests/test_function_lock_registry_integrity.py",
+      "tests/test_function_lock_enforcement.py",
+      "tests/test_the_fast_gate_covers_what_it_claims.py",
+      "tests/test_command_center.py"
+    ]
+  },
+  "compile_and_diff_checks": "passed",
+  "visual_check": "Desktop 1440px and phone 390px inspected; no horizontal overflow at 390px."
+}
