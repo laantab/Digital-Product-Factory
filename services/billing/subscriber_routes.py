@@ -68,7 +68,8 @@ def dashboard():
     providers=PR.configured_providers() if plan else []
     from services.ebook_design_export import theme_catalog_payload
     themes=theme_catalog_payload()['themes']
-    return render_template('subscriber_dashboard.html',credits=C.balance(customer),plan=plan,providers=providers,themes=themes)
+    from services.factory_version import get_version
+    return render_template('subscriber_dashboard.html',credits=C.balance(customer),plan=plan,providers=providers,themes=themes,app_version=get_version())
 
 
 @bp.app_context_processor
