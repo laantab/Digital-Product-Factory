@@ -1,0 +1,89 @@
+{
+  "version": "1.9.50",
+  "source_commit": "7bd623b20de7580f03b85c3196eb9dd120c578dd",
+  "source_tree": "e03cf2785379aec742ff4da12c1d0a2ab30ac846",
+  "local_test_commit": "e12143c6543cdbf73c0807771c61696e2fbabc3f",
+  "manifest_files": 238,
+  "tests": 3310,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "previous_cases_retained": 3287,
+  "original_baseline_retained": 3234,
+  "new_topup_cases": 23,
+  "missing": [],
+  "extra": [],
+  "duplicates": [],
+  "suites": [
+    {
+      "file": "shard-0.xml",
+      "tests": 478,
+      "sha256": "57c7a3e6b3f2e3b555c40f49448d4802a666e882809da5c7354a86ed1f4016cd"
+    },
+    {
+      "file": "shard-1.xml",
+      "tests": 483,
+      "sha256": "a24d2a2fb5b63682bca51613f66457c008cd46fe6f3229cf77819c9a48a8f114"
+    },
+    {
+      "file": "shard-2.xml",
+      "tests": 655,
+      "sha256": "fa795ffa73c22032865ec3c38408fef994e148d77103f742fce70436938f6831"
+    },
+    {
+      "file": "shard-3.xml",
+      "tests": 544,
+      "sha256": "a94aa934db568b9fab8aa1ebf71f97a4baf0efa0650f774004ed94a4f2d35902"
+    },
+    {
+      "file": "shard-4.xml",
+      "tests": 620,
+      "sha256": "1e1e8fb3808c617b43b079ea3509576ddd9d0095b75d4301dce6011a9b13886b"
+    },
+    {
+      "file": "shard-5.xml",
+      "tests": 530,
+      "sha256": "7299633d264691a9775ce7d6215b338b53f2037188cfe411c7dadf3e3a804b87"
+    }
+  ],
+  "paid_calls": 0,
+  "production_changes": false,
+  "native_postgres": {
+    "billing": {
+      "run_id": 39360086577,
+      "tests": 13,
+      "result": "success"
+    },
+    "account_isolation": {
+      "run_id": 39360086371,
+      "tests": 7,
+      "result": "success"
+    }
+  },
+  "preserved_reference_hashes_verified": true,
+  "topups_enabled": false,
+  "merchant_test_mode_rehearsal": false,
+  "live_deployment": false,
+  "scheduled_off_app_reminders": false,
+  "setup_notes": "Reinstalled the identical pinned OpenCV 5.0.0.93 wheel after an import bus error in a superseded pre-review run. Final groups all run after repair. No test or application guard was weakened.",
+  "source_unchanged_after_tests": true,
+  "dependencies_verified": true,
+  "python_compilation_verified": true,
+  "javascript_syntax_verified": [
+    "static/js/subscriber_dashboard.js"
+  ],
+  "function_locks_restored": [
+    "word_search",
+    "coloring_book",
+    "crossword",
+    "invite_protection",
+    "ebook_one_button_completion"
+  ],
+  "post_lock_checks": {
+    "tests": 72,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "sha256": "bdd0c01d65998fa07fe4da35e9fdc33d12859356faa50735b26ac7de84d0a078"
+  }
+}
