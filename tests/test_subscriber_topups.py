@@ -180,3 +180,41 @@ def test_signed_http_payment_boundary_and_session_identity(topups,monkeypatch,tm
     assert client.post('/billing/webhook/lemonsqueezy',data=raw,headers={'X-Signature':signature},content_type='application/json').status_code==200
     assert C.balance(account)['available']==before+3
     assert app.test_client().post('/account/topup',json={'request_key':KEY}).status_code==401
+
+
+def test_phone_offer_discloses_terms_and_reuses_request_after_back_navigation(topups):
+    from pathlib import Path
+    from flask import render_template
+    from app import app
+    from playwright.sync_api import sync_playwright
+    offered=T.customer_offer('user_1')
+    with app.test_request_context('/'):
+        html=render_template('subscriber_dashboard.html',credits=C.balance('user_1'),
+            plan=None,providers=[],themes=[],app_version='test',topup=offered)
+    script=Path('static/js/subscriber_dashboard.js').read_text()
+    keys=[]
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        page=browser.new_page(viewport={'width':390,'height':844})
+        def fixture(route):
+            path=route.request.url.split('factory.example.test')[-1]
+            if path=='/account/topup':
+                keys.append(route.request.post_data_json['request_key'])
+                return route.fulfill(json={'checkout_url':'https://tryme.lemonsqueezy.com/checkout/fixture'})
+            if path=='/account/subscription':return route.fulfill(json={'credits':C.balance('user_1'),'topup':offered})
+            if path=='/projects':return route.fulfill(json=[])
+            if path.startswith('/static/'):return route.fulfill(body=script,content_type='application/javascript')
+            return route.fulfill(body=html,content_type='text/html')
+        page.route('https://factory.example.test/**',fixture)
+        page.route('https://tryme.lemonsqueezy.com/**',lambda r:r.fulfill(body='Fixture checkout',content_type='text/html'))
+        page.goto('https://factory.example.test/')
+        assert page.get_by_text('3 extra ebook credits for $5.00 USD',exact=False).is_visible()
+        assert 'do not roll over or renew' in page.locator('#topupPanel').inner_text()
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        page.get_by_role('button',name='Buy extra credits',exact=True).click()
+        page.wait_for_url('https://tryme.lemonsqueezy.com/checkout/fixture')
+        page.go_back();page.get_by_role('button',name='Buy extra credits',exact=True).click()
+        page.wait_for_url('https://tryme.lemonsqueezy.com/checkout/fixture')
+        assert len(keys)==2 and keys[0]==keys[1]
+        assert C.balance('user_1')['available']==1
+        browser.close()
