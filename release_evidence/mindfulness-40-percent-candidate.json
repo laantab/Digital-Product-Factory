@@ -1,0 +1,43 @@
+{
+  "candidate_version": "1.9.52",
+  "source_commit": "42ace7d30c635bb0d62c472f084cc427a1cb64d4",
+  "local_equivalent_commit": "95ea944d032fd3ed330963523ebca15bb7eb7f23",
+  "source_tree": "dd1d01cb71c41dbb7f900051baa28e4936705414",
+  "live_project_id": 11,
+  "root_cause": "Household-object mentions classified ordinary mindfulness chapters as printed keepsake merchandise; uncertain stock candidates also terminated free-source search early.",
+  "offline_live_chapter_reclassification": {
+    "chapters": 9,
+    "chapter_scene": 9,
+    "provider_calls": 0
+  },
+  "new_regressions": 6,
+  "baseline_photo_and_matching_cases": 139,
+  "focused_after_passed": 145,
+  "baseline_protected_ebook_passed": 194,
+  "baseline_fast_gate_passed": 809,
+  "after_fast_gate_passed": 809,
+  "full_manifest_executed": false,
+  "preservation_check": "1 skipped: exact original Project 351 PDF/ZIP absent",
+  "release_status": "BLOCKED",
+  "production_writes": 0,
+  "paid_provider_calls": 0,
+  "merged": false,
+  "deployed": false,
+  "protected_after_passed": 339,
+  "previous_case_identities_retained": 333,
+  "zero_failures_errors_skips_in_executed_protected_suites": true,
+  "archive": "release_evidence/v1.9.52-mindfulness-tests.tar.gz",
+  "archive_sha256": "9d7e98fd99d2be41afe36386826c6318434978ac2e941f286e758c545d7ab74a",
+  "acceptance_manifest_added_existing_files": [
+    "tests/test_photograph_quota_recovery.py"
+  ],
+  "acceptance_manifest_files": 232,
+  "metadata_checks_passed": 13,
+  "acceptance_collection": {
+    "baseline_cases": 3240,
+    "candidate_cases": 3251,
+    "baseline_cases_retained": true,
+    "duplicates": 0,
+    "full_execution": false
+  }
+}

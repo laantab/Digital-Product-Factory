@@ -1,6 +1,6 @@
 {
   "schema_note": "Per-function protection status for the Factory's customer-facing generators and shared systems. Seeded 2026-09-12 from a read-only audit -- see PROTECTED_GENERATOR_RULE.md and SESSION_HANDOFF_2026-09-11.md. Status values: LOCKED (proven customer-path fix + machine-checked protected test(s) + known last_known_good_commit), UNLOCKED (an explicit, reasoned, in-progress exception -- see unlocked_by/unlocked_reason), PROTECTED (real test coverage exists but no single commit has been proven as its customer-path last-known-good), UNPROTECTED (no meaningful customer-path test coverage), REGRESSION (currently known broken). last_known_good_commit is null unless a real commit was proven -- never manufactured (Rule 9, PROTECTED_GENERATOR_RULE.md). shared_code_dependencies covers both the function's own dedicated files and any file it shares with other functions -- tests/test_function_lock_enforcement.py treats a trailing '/' as a directory-prefix match.",
-  "updated_at": "2026-10-20T20:55:10.628877+00:00",
+  "updated_at": "2026-10-20T21:39:16.429196+00:00",
   "functions": {
     "word_search": {
       "display_name": "Word Search",
@@ -333,9 +333,9 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "UNLOCKED",
-      "last_known_good_commit": "9e794ae68655095735195b6090b9eb226b70ca88",
-      "factory_version": "1.9.51",
+      "status": "LOCKED",
+      "last_known_good_commit": "42ace7d30c635bb0d62c472f084cc427a1cb64d4",
+      "factory_version": "1.9.52",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
         "tests/test_guided_cover_choice.py",
@@ -374,10 +374,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": "Codex, owner-authorized recurring 40% ebook failure repair",
-      "unlocked_reason": "Correct merchandise misclassification of everyday objects and continue free stock search after uncertain matches.",
-      "relocked_by": null,
-      "relocked_after_tests": null,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Codex, owner-authorized recurring ebook visual failure repair",
+      "relocked_after_tests": "Runtime tree dd1d01cb71c41dbb7f900051baa28e4936705414: 333 prior protected/photo cases retained and passing; six new regressions; 339 passed, zero failures/errors/skips. Fast Gate 809 passed before and after. Exact published source 42ace7d30c635bb0d62c472f084cc427a1cb64d4 matches locally tested 95ea944. Full release is blocked by the absent preserved Project 351 reference pair. See release_evidence/mindfulness-40-percent-candidate.json.",
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {

@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-20T20:55:10.628877+00:00",
-  "current_task": "v1.9.51 editorial PDF quality candidate verified in scope; full release blocked by missing preserved Project 351 reference pair.",
-  "stopped_at": "178 protected ebook cases passed before/after with identical identities, 16 design/export checks passed, and 809 stability cases passed before/after. Tall measured diagrams preserve readable labels while staying with chapter headings. Candidate only; no merge/deploy.",
-  "next_step": "Provide the original preserved Project 351 PDF/ZIP pair with the existing expected hashes, then run the unmodified full release gate. Complete production book review and website/builder release verification before deployment.",
+  "updated_at": "2026-10-20T21:39:16.429196+00:00",
+  "current_task": "Mindfulness visual-stage repair verified locally; release blocked by missing immutable reference pair.",
+  "stopped_at": "No merge or deployment. Project 11 remains safely saved at failed visuals stage.",
+  "next_step": "Restore the exact original Project 351 PDF and ZIP; run unchanged full release gate with zero skips before merge/deploy; then recover the saved Mindfulness in Motion visuals stage.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -367,5 +367,18 @@
       "listing": "PLANETS, House Plants, Flower Parts and Container Gardening remain listed. Project20 newer draft appears in Continue where you left off; opening it exposes the reviewed saved version at 100%. List latency remains a separate launch issue."
     }
   },
-  "candidate_version": "1.9.48"
+  "candidate_version": "1.9.52",
+  "mindfulness_visual_recovery_2026_10_20": {
+    "version": "1.9.52",
+    "source_commit": "42ace7d30c635bb0d62c472f084cc427a1cb64d4",
+    "status": "candidate_verified_release_blocked",
+    "protected_cases_passed": 339,
+    "fast_gate_passed": 809,
+    "paid_calls": 0,
+    "production_writes": 0,
+    "merged": false,
+    "deployed": false,
+    "evidence": "release_evidence/mindfulness-40-percent-candidate.json",
+    "next_step": "Restore the exact original Project 351 PDF and ZIP; run unchanged full release gate with zero skips before merge/deploy; then recover the saved Mindfulness in Motion visuals stage."
+  }
 }
