@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-20T21:39:16.429196+00:00",
-  "current_task": "Mindfulness visual-stage repair verified locally; release blocked by missing immutable reference pair.",
-  "stopped_at": "No merge or deployment. Project 11 remains safely saved at failed visuals stage.",
-  "next_step": "Restore the exact original Project 351 PDF and ZIP; run unchanged full release gate with zero skips before merge/deploy; then recover the saved Mindfulness in Motion visuals stage.",
+  "updated_at": "2026-10-20T23:32:26.815046+00:00",
+  "current_task": "Full v1.9.52 release checks passed; merge PR74 and verify website and builder deployments.",
+  "stopped_at": "No release blocker remains in the executed acceptance tests. Deployment and real saved-book recovery still require verification.",
+  "next_step": "Verify PR74 release status and Render resources; then resume saved Mindfulness in Motion at visuals without rebuilding accepted chapters.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -208,7 +208,7 @@
     }
   ],
   "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly \u2014 it is what the Command Center reads every time it opens.",
-  "factory_version": "1.9.48",
+  "factory_version": "1.9.49",
   "ebook_reliability_2026_10_08": {
     "live_release": "1.9.17",
     "live_commit": "61b2759ee195a68b6e44c9a047ec27724e044b24",
@@ -380,5 +380,19 @@
     "deployed": false,
     "evidence": "release_evidence/mindfulness-40-percent-candidate.json",
     "next_step": "Restore the exact original Project 351 PDF and ZIP; run unchanged full release gate with zero skips before merge/deploy; then recover the saved Mindfulness in Motion visuals stage."
+  },
+  "editorial_release_1_9_52": {
+    "version": "1.9.52",
+    "status": "full_release_verified_awaiting_deployment",
+    "source_commit": "a6343fb4491c830330fc721bd6d77842744e5010",
+    "cases_passed": 3253,
+    "manifest_files": 232,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "paid_provider_calls": 0,
+    "reference_authorized": true,
+    "evidence": "release_evidence/v1.9.52-full-release.json",
+    "deployment_status": "Verify PR74 and both Render resources; no customer build has been resumed by this verification."
   }
 }

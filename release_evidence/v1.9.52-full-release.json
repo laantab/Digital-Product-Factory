@@ -1,0 +1,104 @@
+{
+  "status": "PASS",
+  "source_commit": "a6343fb4491c830330fc721bd6d77842744e5010",
+  "source_tree": "4baaae21b7911ac0443d2045bb1471440cb9e398",
+  "local_equivalent_commit": "ae63f62297da14549ee77337bdc600c737436d5a",
+  "counts": {
+    "tests": 3253,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "manifest_files": 232,
+  "expected_cases": 3253,
+  "missing": [],
+  "extra": [],
+  "duplicates": 0,
+  "method": "Six isolated complete manifest shards, Python compilation and JavaScript syntax check. Shard 1 repeated in full after documentation correction.",
+  "initial_failure": "test_changelog_entry_answers_the_customer_questions: required changelog headings were missing; corrected documentation only. Initial failing log/XML retained. No assertions weakened.",
+  "affected_shard_reverified_in_full": 1,
+  "source_delta_for_recheck": [
+    "CHANGELOG.md"
+  ],
+  "shards": [
+    {
+      "xml": "shard-0.xml",
+      "counts": {
+        "tests": 481,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "sha256": "ceccc9e4b0e1d5108fcb3c38d6ed142d3f523ffe5db7674cbc6dd57acf069e6a"
+    },
+    {
+      "xml": "shard-1-retry.xml",
+      "counts": {
+        "tests": 478,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "sha256": "ff78e00104e297d4b54a587c8831ba44e40a391c7a9459eb73df27a80c225c89"
+    },
+    {
+      "xml": "shard-2.xml",
+      "counts": {
+        "tests": 657,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "sha256": "d963ba57dc5de198a32bc15fecc734defefea4bff6927b28a870aa4d7e4cdf2a"
+    },
+    {
+      "xml": "shard-3.xml",
+      "counts": {
+        "tests": 512,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "sha256": "c3d8c15a953015ef2720a80005a9e85d95e3ea87a10a16ab9f725704d2557dbb"
+    },
+    {
+      "xml": "shard-4.xml",
+      "counts": {
+        "tests": 598,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "sha256": "57921e74f71ad880bbda117309dd2d9c9ed3eedbae86f2ae1bf1403dcd8b81ce"
+    },
+    {
+      "xml": "shard-5.xml",
+      "counts": {
+        "tests": 527,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "sha256": "dc3bfb4f77acbc5658f1358a86865c9e163b52f0b558b5aef3e340188920f4fd"
+    }
+  ],
+  "preserved_reference": {
+    "ebook.pdf": "20792e8fcce4ab4fcc7daa8e49df1d0a634f7c624d9197d346d0fda83f8d025d",
+    "package.zip": "f7cc37a90f71e8563039c412f23f7ba11deff52edb055419117197921d572d26"
+  },
+  "reference_authorization": "Owner explicitly approved Room-by-Room as the required preservation reference, October 20, 2026. Original Project 351 hashes retained as additional checks when its pair exists.",
+  "source_upload_unchanged": true,
+  "archive": "release_evidence/v1.9.52-full-release-tests.tar.gz",
+  "archive_sha256": "09099ca36ab53276330223f6fba110b9f06adfcf69857ae761b51e56457440ee",
+  "paid_provider_calls_permitted": 0,
+  "production_writes_during_verification": 0,
+  "verified_at": "2026-10-20T23:32:26.787001+00:00",
+  "merged": false,
+  "deployed": false,
+  "final_metadata_checks": {
+    "tests": 44,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}
