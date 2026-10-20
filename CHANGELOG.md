@@ -1,3 +1,13 @@
+## 1.9.52 — Mindfulness picture classification and free-search recovery (candidate)
+
+### What changed
+Ordinary mugs, plates, shirts and ceramic objects no longer turn unrelated ebook chapters into printed-merchandise briefs. Keepsake classification requires merchandise intent, with word boundaries to prevent matches inside words such as template. Existing stale merchandise briefs are rederived from the chapter.
+
+Free photo acquisition continues through the existing query ladder and configured sources when a candidate needs review, returning early only for a verified match. It stores only the selected candidate so later searches cannot overwrite its image. If no verified match exists, uncertainty still requires review; paid-image authorization and editorial requirements remain in force.
+
+### Verification and release status
+Six new regressions cover everyday objects, genuine printed products, stale briefs, later queries, later providers and exhausted uncertain searches. Offline inspection of all nine saved Mindfulness in Motion chapters confirms the corrected chapter-scene purpose. See SESSION_HANDOFF_2026-10-20_MINDFULNESS_40_PERCENT.md for final checks. Candidate only: the required original Project 351 preservation PDF/ZIP remains unavailable. No production build, paid call, merge or deployment was performed.
+
 ## 1.9.51 — Readable diagrams and verified PDF picture placements (candidate)
 
 ### What changed

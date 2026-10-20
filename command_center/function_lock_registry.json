@@ -333,7 +333,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "9e794ae68655095735195b6090b9eb226b70ca88",
       "factory_version": "1.9.51",
       "protected_test_files": [
@@ -346,7 +346,14 @@
         "tests/test_editor_in_chief_gate.py",
         "tests/test_ebook_copy_editor.py",
         "tests/test_interior_visual_editorial_standard.py",
-        "tests/test_ebook_design_export.py"
+        "tests/test_ebook_design_export.py",
+        "tests/test_ebook_visual_match.py",
+        "tests/test_ebook_source_authority_matching.py",
+        "tests/test_visual_routing_outcomes.py",
+        "tests/test_photograph_quota_recovery.py",
+        "tests/test_v196_free_image_sources.py",
+        "tests/test_factory_ebook_pexels_route.py",
+        "tests/test_chapter_photo_queries.py"
       ],
       "shared_code_dependencies": [
         "static/js/app.js",
@@ -361,14 +368,16 @@
         "services/ebook_copy_editor.py",
         "services/ebook_visual_pipeline.py",
         "services/project_access.py",
-        "services/ebook_visual_editorial.py"
+        "services/ebook_visual_editorial.py",
+        "services/ebook_visual_match.py",
+        "services/ebook_factory_pipeline.py"
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Codex, owner-authorized editorial PDF quality correction",
-      "relocked_after_tests": "178 registered ebook cases passed before and after with identical identities; all 16 design/export cases passed. Fast Gate: 809 passed before and after. No failures/errors/skips in these runs. Full release NOT certified: preserved Project 351 PDF/ZIP pair unavailable. Evidence: release_evidence/editorial-pdf-quality-candidate.json.",
+      "unlocked_by": "Codex, owner-authorized recurring 40% ebook failure repair",
+      "unlocked_reason": "Correct merchandise misclassification of everyday objects and continue free stock search after uncertain matches.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {

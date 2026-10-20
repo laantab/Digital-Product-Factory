@@ -583,6 +583,16 @@ def fill_photo_aid_from_pexels(
     last_error = "No matching photograph was found."
     technical: list[Exception] = []
     attempted = 0
+    review_candidate = None
+
+    def finish_candidate(candidate):
+        raw, inspected, photo, query, provider = candidate
+        filled = store_interior_photo(out, raw, package_id=package_id)
+        filled.update(_inspected=inspected, _photo=photo, _query=query)
+        return _finish_stock_fill(
+            filled, out, provider=provider, package_id=package_id,
+            failed_queries=failed_queries, rejected_ids=rejected_ids,
+        )
     garden = is_garden_topic(title=title, topic=topic, chapter=chapter, caption=str(out.get("caption") or ""))
     for provider in _stock_provider_order(providers):
         provider_queries = queries if provider == PROVIDER_PEXELS else queries[:AUTOMATIC_QUERY_LIMIT]
@@ -605,7 +615,6 @@ def fill_photo_aid_from_pexels(
                         or "Every Pexels result failed the visual brief."
                     )
                     continue
-                filled = None
                 for photo in ranked[:5]:
                     raw = _download_stock(provider, photo)
                     inspected = score_photo_against_brief(
@@ -632,23 +641,16 @@ def fill_photo_aid_from_pexels(
                             rejected_ids.add(pid)
                         last_error = "Photograph is not a container-garden scene."
                         continue
-                    # Candidates arrive best-ranked first, so the first one that
-                    # is not rejected is the best available. Keep the best, and
-                    # stop early on a genuine PASS.
-                    if filled is None or inspected.status == MATCH_PASS:
-                        filled = store_interior_photo(out, raw, package_id=package_id)
-                        filled["_inspected"] = inspected
-                        filled["_photo"] = photo
-                        filled["_query"] = query
+                    # An uncertain candidate must not hide a verified match
+                    # in the remaining queries or configured free sources.
+                    # Keep its bytes in memory; only the selected candidate
+                    # may overwrite/publish this visual slot's image file.
+                    candidate = (raw, inspected, photo, query, provider)
                     if inspected.status == MATCH_PASS:
-                        break
-                if filled is None:
-                    failed_queries.append(query)
-                    continue
-                return _finish_stock_fill(
-                    filled, out, provider=provider, package_id=package_id,
-                    failed_queries=failed_queries, rejected_ids=rejected_ids,
-                )
+                        return finish_candidate(candidate)
+                    if review_candidate is None:
+                        review_candidate = candidate
+                failed_queries.append(query)
             attempted += 1
         except (PexelsError, ImageSourceError) as exc:
             # A source that is blocked in test mode was never really tried.
@@ -656,6 +658,9 @@ def fill_photo_aid_from_pexels(
                 continue
             technical.append(exc)
             continue
+    if review_candidate is not None:
+        # Exhaustion still requires review. Never promote uncertainty to PASS.
+        return finish_candidate(review_candidate)
     out["failed_queries"] = list(dict.fromkeys(failed_queries))
     out["rejected_photo_ids"] = sorted(rejected_ids)
     if technical and not attempted:

@@ -221,3 +221,58 @@ def test_guided_free_replacement_cannot_reach_paid_generation(tmp_path):
     assert Path(replaced['asset_path']).is_file()
     import hashlib
     assert hashlib.sha256(Path(replaced['asset_path']).read_bytes()).hexdigest() == replaced['sha256']
+
+
+def _search_after_uncertainty(monkeypatch, responses, providers=('pexels',)):
+    """Exercise the real query/provider loop with no network or image purchase."""
+    from types import SimpleNamespace
+    from services import ebook_factory_pipeline as pipeline
+    calls, stored = [], []
+    monkeypatch.setattr(pipeline, 'candidate_search_queries', lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, 'chapter_pexels_queries', lambda **k: ['first', 'second'])
+    monkeypatch.setattr(pipeline, 'topic_pexels_query', lambda **k: '')
+    monkeypatch.setattr(pipeline, '_stock_provider_order', lambda p: providers)
+    monkeypatch.setattr(pipeline, 'rank_pexels_candidates', lambda b, p, **k: (p, []))
+    def search(provider, query):
+        calls.append((provider, query))
+        status = responses.get((provider, query))
+        return [{'photo_id': provider + query, 'alt': status}] if status else []
+    monkeypatch.setattr(pipeline, '_search_stock', search)
+    monkeypatch.setattr(pipeline, '_download_stock', lambda p, a: a['photo_id'].encode())
+    monkeypatch.setattr(pipeline, 'score_photo_against_brief',
+                        lambda b, **k: SimpleNamespace(status=k['alt'], rejection_reason='uncertain scene'))
+    def store(aid, raw, **k):
+        stored.append(raw)
+        return {**aid, 'stored_bytes': raw}
+    monkeypatch.setattr(pipeline, 'store_interior_photo', store)
+    monkeypatch.setattr(pipeline, '_finish_stock_fill',
+                        lambda filled, out, **k: {**filled, 'source': k['provider']})
+    result = pipeline.fill_photo_aid_from_pexels(
+        _aid(), package_id='search-recovery', title='Mindfulness in Motion')
+    return result, calls, stored
+
+
+def test_uncertain_first_query_does_not_hide_a_later_verified_photo(monkeypatch):
+    result, calls, stored = _search_after_uncertainty(monkeypatch, {
+        ('pexels', 'first'): 'needs_review', ('pexels', 'second'): 'pass'})
+    assert result['_inspected'].status == 'pass'
+    assert calls == [('pexels', 'first'), ('pexels', 'second')]
+    assert stored == [b'pexelssecond'], 'only the selected image may overwrite the slot'
+
+
+def test_uncertain_first_provider_does_not_hide_a_verified_fallback_source(monkeypatch):
+    result, calls, stored = _search_after_uncertainty(monkeypatch, {
+        ('pexels', 'first'): 'needs_review', ('unsplash', 'first'): 'pass'},
+        providers=('pexels', 'unsplash', 'pixabay'))
+    assert result['source'] == 'unsplash'
+    assert result['_inspected'].status == 'pass'
+    assert stored == [b'unsplashfirst']
+    assert not any(p == 'pixabay' for p, q in calls), 'stop once a real match is found'
+
+
+def test_exhausted_search_retains_uncertain_candidate_without_approving_it(monkeypatch):
+    result, calls, stored = _search_after_uncertainty(monkeypatch, {
+        ('pexels', 'first'): 'needs_review', ('pexels', 'second'): 'reject'})
+    assert result['_inspected'].status == 'needs_review'
+    assert stored == [b'pexelsfirst']
+    assert len(calls) == 2

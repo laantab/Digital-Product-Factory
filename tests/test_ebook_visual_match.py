@@ -569,3 +569,42 @@ class IndependentVisualBriefTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_everyday_objects_do_not_turn_mindfulness_into_printed_merchandise():
+    from services.ebook_visual_match import build_visual_brief
+    for body in (
+        'Notice the warmth of your mug while you drink your morning tea.',
+        'Feel the weight of a plate while washing dishes.',
+        'Fold one shirt and notice the texture of the fabric.',
+        'Use a simple template to record your daily practice.',
+        'Stand beside the ceramic sink and notice the water.',
+    ):
+        brief = build_visual_brief({
+            'type': 'photo', 'title': 'Mindful daily routines',
+            'caption': 'Practicing mindfulness during ordinary daily life',
+            'chapter': 'Mindfulness in Motion', 'chapter_body': body,
+        }, title='Mindfulness in Motion', topic='mindfulness for beginners')
+        assert brief.purpose == 'chapter_scene', (body, brief.purpose)
+        assert 'photographic keepsake' not in brief.required_subject
+
+
+def test_printed_and_personalized_products_still_get_keepsake_briefs():
+    from services.ebook_visual_match import build_visual_brief
+    for caption in ('A ceramic mug with a photograph printed on it',
+                    'A personalized shirt with a family photo',
+                    'A metal print displaying the event photograph',
+                    'A keepsake ornament for the family'):
+        brief = build_visual_brief({'type': 'photo', 'caption': caption})
+        assert brief.purpose == 'keepsake_product', caption
+
+
+def test_stale_merchandise_brief_is_rederived_from_the_mindfulness_chapter():
+    from services.ebook_visual_match import build_visual_brief, keepsake_product_brief
+    aid = {'type': 'photo', 'title': 'Mindful eating', 'caption': 'Mindful eating',
+           'chapter': 'Mindful eating',
+           'chapter_body': 'Notice the food on your plate before the first bite.',
+           'visual_brief': keepsake_product_brief().as_dict()}
+    brief = build_visual_brief(aid, title='Mindfulness in Motion', topic='mindfulness')
+    assert brief.purpose == 'chapter_scene'
+    assert 'photographic keepsake' not in brief.required_subject
