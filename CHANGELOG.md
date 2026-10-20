@@ -1,16 +1,16 @@
-## 1.9.51 — Verify actual interior picture placements (candidate)
+## 1.9.51 — Readable diagrams and verified PDF picture placements (candidate)
 
 ### What changed
-The ebook visual review inspects image placements in the PDF page content. An image stored only as an unused PDF resource cannot satisfy the interior picture count.
+Tall, measured ebook diagrams fit beneath chapter openers when they can retain labels of at least 8 pt. The complete high-resolution image is preserved. Unmeasured graphics and graphics that cannot safely shrink keep their existing size for review.
 
 ### What was fixed
-All cover-page images are excluded from the interior count. An unavailable PDF reader reports an incomplete inspection instead of returning a passing result.
+A real rendered fixture stranded Chapter 4's heading on a separate page. The corrected 37-page fixture keeps all ten chapter openers with their visuals; the original had 38 pages. PDF visual inspection now counts image placements rather than unused image resources, excludes every cover-page image from the interior count, and reports an unavailable PDF reader instead of a false pass.
 
 ### Do the steps change?
-Use the existing ebook build and quality review. No provider calls or saved-product changes are required.
+Use the existing ebook build and review controls. No paid provider calls are required. Existing saved products and protected coloring, puzzle, and planner implementations are preserved.
 
 ### Release gate
-Candidate only. Baseline: 806 stability checks and 30 visual-editorial checks passed in GitHub run 39490163659. Three new regression cases and corrected-source checks are pending. Full release and visual sample acceptance remain required before deployment.
+Candidate only. Before/after protected ebook workflow checks: 178 passed each. Focused design/export checks: 16 passed. The earlier PDF-inspection regressions were proved to fail on unchanged main and pass after correction. Complete acceptance collection retains all 3,234 prior cases and adds six (3,240 unique cases); collection is not a full test run. Final stability and metadata verification are recorded in the release evidence. Full release remains blocked because the preserved Project 351 PDF/ZIP pair is absent from this environment; its preservation case skips. No gate or reference hash was weakened. No merge or deployment.
 
 ## 1.9.49 — Customer account isolation candidate
 

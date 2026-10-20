@@ -107,6 +107,32 @@ class EbookDesignExportTests(unittest.TestCase):
     def tearDown(self):
         self._client_patch.stop()
 
+    def test_tall_diagram_fit_preserves_readable_labels_and_full_image(self):
+        from PIL import Image
+        from services.ebook_visual_pipeline import bounded_diagram_dimensions, label_min_pt
+        image = Image.new("RGB", (2800, 2760))
+        image.info.update(label_min_px=40, canvas_logical_w=1400)
+        width, height = bounded_diagram_dimensions(image)
+        self.assertLessEqual(height * 0.75, 360)
+        self.assertGreaterEqual(label_min_pt(image, column_pt=width * 0.75), 8)
+        self.assertAlmostEqual(width / height, image.width / image.height, places=2)
+        self.assertEqual(image.size, (2800, 2760), "Do not crop or resample the asset")
+
+    def test_diagram_fit_never_shrinks_unknown_or_small_labels(self):
+        from PIL import Image
+        from services.ebook_visual_pipeline import bounded_diagram_dimensions
+        image = Image.new("RGB", (2800, 2760))
+        self.assertEqual(bounded_diagram_dimensions(image), (1400, 1380))
+        image.info.update(label_min_px=25, canvas_logical_w=1400)
+        self.assertEqual(bounded_diagram_dimensions(image), (1400, 1380))
+
+    def test_short_diagram_keeps_existing_dimensions(self):
+        from PIL import Image
+        from services.ebook_visual_pipeline import bounded_diagram_dimensions
+        image = Image.new("RGB", (2800, 1700))
+        image.info.update(label_min_px=40, canvas_logical_w=1400)
+        self.assertEqual(bounded_diagram_dimensions(image), (1400, 850))
+
     def test_quality_pass_required_to_enter_design(self):
         data = build_acceptance_project_data()
         data["content"] = "## What This Business Actually Looks Like\n\nThin.\n"
@@ -308,6 +334,16 @@ class EbookDesignExportTests(unittest.TestCase):
         self.assertEqual(bundle["preflight"]["status"], PREFLIGHT_PASS, bundle["preflight"]["findings"][:15])
         blankish = [p for p in inspection["pages"] if p.get("nearly_blank") and p["page"] > 1]
         self.assertFalse(blankish, blankish[:3])
+        # Every chapter in this fixture has an opening visual. A tall diagram
+        # previously pushed itself to the next page, stranding Chapter 4's
+        # heading on an otherwise empty page despite a passing preflight.
+        import fitz
+        import re
+        with fitz.open(stream=bundle["pdf_bytes"], filetype="pdf") as doc:
+            for page in doc:
+                if re.search(r"(?m)^Chapter \d+\s*$", page.get_text()):
+                    self.assertTrue(page.get_image_info(),
+                                    f"Chapter heading stranded on page {page.number + 1}")
         html = bundle["html"]
         self.assertIn("<pdf:nextpage", html)
         self.assertGreaterEqual(html.count("<pdf:nextpage"), 12)

@@ -333,7 +333,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "25ff6760c61e34cad643bc58d919dc496868d534",
       "factory_version": "1.9.49",
       "protected_test_files": [
@@ -345,7 +345,8 @@
         "tests/test_ebook_export_stage.py",
         "tests/test_editor_in_chief_gate.py",
         "tests/test_ebook_copy_editor.py",
-        "tests/test_interior_visual_editorial_standard.py"
+        "tests/test_interior_visual_editorial_standard.py",
+        "tests/test_ebook_design_export.py"
       ],
       "shared_code_dependencies": [
         "static/js/app.js",
@@ -359,14 +360,15 @@
         "services/ebook_design_preflight.py",
         "services/ebook_copy_editor.py",
         "services/ebook_visual_pipeline.py",
-        "services/project_access.py"
+        "services/project_access.py",
+        "services/ebook_visual_editorial.py"
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Codex, owner-authorized account isolation and onboarding repair",
-      "relocked_after_tests": "All 3234 cases across all 231 acceptance files passed at source tree 5df25b7a13c4922657517bee4d0932d677e41f7d; all previous 3197 cases retained. All registered protected suites included; zero failures/errors/skips/missing/extra/duplicates. See release_evidence/account-isolation-final.json. Account mode has not been activated in production.",
+      "unlocked_by": "Codex, owner-authorized nonstop editorial/design upgrade",
+      "unlocked_reason": "Fit tall measured ebook diagrams beneath chapter openers without cropping content or reducing labels below 8pt; preserve the proven one-button workflow.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {
