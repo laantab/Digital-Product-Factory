@@ -1,14 +1,18 @@
-## 1.9.52 — Mindfulness picture classification and free-search recovery (candidate)
+## 1.9.52 — Mindfulness picture classification and free-search recovery
 
 ### What changed
-Ordinary mugs, plates, shirts and ceramic objects no longer turn unrelated ebook chapters into printed-merchandise briefs. Keepsake classification requires merchandise intent, with word boundaries to prevent matches inside words such as template. Existing stale merchandise briefs are rederived from the chapter.
+Ordinary mugs, plates, shirts and ceramic objects no longer turn unrelated ebook chapters into printed-merchandise briefs. Classification requires merchandise intent and word boundaries. A stale inconsistent brief is rederived from the chapter. Free photo searches continue past uncertain candidates through the existing query ladder and configured sources. Only the selected image is stored; uncertainty still requires review and paid-image safeguards remain.
 
-Free photo acquisition continues through the existing query ladder and configured sources when a candidate needs review, returning early only for a verified match. It stores only the selected candidate so later searches cannot overwrite its image. If no verified match exists, uncertainty still requires review; paid-image authorization and editorial requirements remain in force.
+### What was fixed
+Mindfulness in Motion stopped at 40% because everyday scenes were incorrectly judged against printed-keepsake requirements. The fallback then produced an all-text-box set rejected by the unchanged editorial standard. The release also retains the readable tall-diagram sizing and accurate interior PDF picture inspection from the earlier quality candidate.
 
-### Verification and release status
-Owner authorized the uploaded completed Room-by-Room PDF/ZIP as the required preservation reference on October 20. The original Project 351 hashes remain checked when its pair is present. Missing or modified current reference files fail rather than skip. Full release results supersede the earlier missing-reference blocker only after all checks pass.
+### Do the steps change?
+Use the existing Resume Build control for saved unfinished ebooks after deployment. Accepted manuscripts are reused. Title, cover and picture decisions continue to use their existing controls. Existing saved products are preserved; no paid image authorization is added.
 
-Six new regressions cover everyday objects, genuine printed products, stale briefs, later queries, later providers and exhausted uncertain searches. Offline inspection of all nine saved Mindfulness in Motion chapters confirms the corrected chapter-scene purpose. See SESSION_HANDOFF_2026-10-20_MINDFULNESS_40_PERCENT.md for final checks. Candidate only: the required original Project 351 preservation PDF/ZIP remains unavailable. No production build, paid call, merge or deployment was performed.
+### Release gate
+Owner authorized the uploaded completed Room-by-Room PDF and ZIP as the required preservation reference on October 20. Its exact hashes, ZIP integrity and embedded PDF identity are checked. Missing or altered reference files fail rather than skip. Original Project 351 checksum assertions remain additional checks when its pair is present. The customer reference bytes remain outside the public repository.
+
+The prior candidate passed 339 protected ebook/photo checks and 809 stability checks. The complete 232-file acceptance run and final source proof are recorded in release evidence before deployment. See the newest release handoff and PR74 for actual deployment status; a test pass alone does not certify the live book as finished.
 
 ## 1.9.51 — Readable diagrams and verified PDF picture placements (candidate)
 
