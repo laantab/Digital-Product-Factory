@@ -1,3 +1,17 @@
+## 1.9.51 — Verify actual interior picture placements (candidate)
+
+### What changed
+The ebook visual review inspects image placements in the PDF page content. An image stored only as an unused PDF resource cannot satisfy the interior picture count.
+
+### What was fixed
+All cover-page images are excluded from the interior count. An unavailable PDF reader reports an incomplete inspection instead of returning a passing result.
+
+### Do the steps change?
+Use the existing ebook build and quality review. No provider calls or saved-product changes are required.
+
+### Release gate
+Candidate only. Baseline: 806 stability checks and 30 visual-editorial checks passed in GitHub run 39490163659. Three new regression cases and corrected-source checks are pending. Full release and visual sample acceptance remain required before deployment.
+
 ## 1.9.49 — Customer account isolation candidate
 
 ### What changed

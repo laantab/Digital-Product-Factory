@@ -455,3 +455,59 @@ class TheGateActuallyUsesThisTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_pdf_reader_unavailable_never_passes_visual_inspection(tmp_path, monkeypatch):
+    import builtins
+    original_import = builtins.__import__
+    def without_pdf_reader(name, *args, **kwargs):
+        if name == "fitz":
+            raise ImportError("PDF reader unavailable")
+        return original_import(name, *args, **kwargs)
+    pdf = tmp_path / "uninspected.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(builtins, "__import__", without_pdf_reader)
+    report = verify_embedded_in_pdf(_plan(_aid("photo", "one")), str(pdf))
+    assert not report.ok
+    assert "inspection is unavailable" in _text(report.findings)
+
+
+def test_unused_pdf_image_resource_does_not_satisfy_planned_visual(tmp_path):
+    import fitz
+    from io import BytesIO
+    from PIL import Image
+    image = BytesIO()
+    Image.new("RGB", (240, 160), "blue").save(image, format="PNG")
+    pdf = tmp_path / "unused-resource.pdf"
+    with fitz.open() as doc:
+        doc.new_page()
+        page = doc.new_page()
+        page.insert_image(fitz.Rect(72, 72, 312, 232), stream=image.getvalue())
+        for xref in page.get_contents():
+            doc.update_stream(xref, b"")
+        doc.save(pdf)
+    with fitz.open(pdf) as doc:
+        assert len(doc[1].get_images(full=True)) == 1
+        assert doc[1].get_image_info() == []
+    report = verify_embedded_in_pdf(_plan(_aid("photo", "one")), str(pdf))
+    assert not report.ok
+    assert "0 interior image" in _text(report.findings)
+
+
+def test_multiple_cover_images_cannot_substitute_for_interior_visual(tmp_path):
+    import fitz
+    from io import BytesIO
+    from PIL import Image
+    pdf = tmp_path / "cover-only-images.pdf"
+    with fitz.open() as doc:
+        cover = doc.new_page()
+        for i, colour in enumerate(("blue", "red")):
+            image = BytesIO()
+            Image.new("RGB", (240, 160), colour).save(image, format="PNG")
+            cover.insert_image(fitz.Rect(72, 72 + 180*i, 312, 232 + 180*i),
+                               stream=image.getvalue())
+        doc.new_page()
+        doc.save(pdf)
+    report = verify_embedded_in_pdf(_plan(_aid("photo", "one")), str(pdf))
+    assert not report.ok
+    assert "0 interior image" in _text(report.findings)

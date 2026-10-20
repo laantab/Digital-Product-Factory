@@ -338,25 +338,27 @@ def verify_embedded_in_pdf(plan: dict | None, pdf_path: str) -> EditorialReport:
     try:
         import fitz
     except ImportError:
-        return EditorialReport(True, [], total=len(aids))
+        return EditorialReport(False, ["PDF image inspection is unavailable. Restore the PDF reader and retry the review."], total=len(aids))
 
     pages: dict[int, int] = {}
-    embedded = 0
+    interior = 0
     try:
         doc = fitz.open(pdf_path)
         try:
             for number, page in enumerate(doc, start=1):
-                images = page.get_images(full=True)
+                # The resource list also contains unused image files. Inspect
+                # placements in the page content instead of accepting those files.
+                images = page.get_image_info()
                 if images:
                     pages[number] = len(images)
-                    embedded += len(images)
+                    if number > 1:
+                        interior += len(images)
         finally:
             doc.close()
     except Exception as exc:  # noqa: BLE001
         return EditorialReport(False, [f"The PDF could not be read: {exc}"], total=len(aids))
 
-    # One of the embedded images is the cover, which is not an interior visual.
-    interior = max(0, embedded - (1 if 1 in pages else 0))
+    # All artwork on page one belongs to the cover, regardless of its count.
     if interior < len(aids):
         findings.append(
             f"The PDF carries {interior} interior image(s) for {len(aids)} "
