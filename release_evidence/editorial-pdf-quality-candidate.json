@@ -1,0 +1,120 @@
+{
+  "verified_at": "2026-10-20T20:55:10.628877+00:00",
+  "version": "1.9.51",
+  "runtime_source_commit": "9e794ae68655095735195b6090b9eb226b70ca88",
+  "runtime_source_tree": "ca2c7c209b3bd6c11f67ed46328c912f71e9432d",
+  "reports": {
+    "protected_before": {
+      "tests": 178,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "7ccdd1a431ef028781e7b62116c6a838a236a41a34a75fe39618505adc8c28c8"
+    },
+    "protected_after": {
+      "tests": 178,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "86f45016c0d792656337e9a4bfa1c411d60f9aa50f5e6086c9ba7bf60f46426e"
+    },
+    "design_export": {
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "4a233fbc93ae706d6d431d1de7af8d4dee6ae59ff8c10d586d1bf2176e641bbf"
+    },
+    "preservation_blocker": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "sha256": "86d858ce9946108a131c4536c2dc287ed503571bd178e15ea249d06658ac8656"
+    }
+  },
+  "protected_case_identities_equal": true,
+  "stability_before": 809,
+  "stability_after": 809,
+  "acceptance_collection": {
+    "collected": 3240,
+    "unique": 3240,
+    "retained_baseline": 3234,
+    "missing": [],
+    "added": [
+      "tests/test_ebook_design_export.py::EbookDesignExportTests::test_diagram_fit_never_shrinks_unknown_or_small_labels",
+      "tests/test_ebook_design_export.py::EbookDesignExportTests::test_short_diagram_keeps_existing_dimensions",
+      "tests/test_ebook_design_export.py::EbookDesignExportTests::test_tall_diagram_fit_preserves_readable_labels_and_full_image",
+      "tests/test_interior_visual_editorial_standard.py::test_multiple_cover_images_cannot_substitute_for_interior_visual",
+      "tests/test_interior_visual_editorial_standard.py::test_pdf_reader_unavailable_never_passes_visual_inspection",
+      "tests/test_interior_visual_editorial_standard.py::test_unused_pdf_image_resource_does_not_satisfy_planned_visual"
+    ],
+    "duplicates": []
+  },
+  "template_chapter_placement_experiments": [
+    {
+      "theme": "warm_wellness",
+      "chapter_openers": 10,
+      "stranded": []
+    },
+    {
+      "theme": "modern_practical",
+      "chapter_openers": 10,
+      "stranded": []
+    },
+    {
+      "theme": "bold_creator",
+      "chapter_openers": 10,
+      "stranded": []
+    },
+    {
+      "theme": "editorial_professional",
+      "chapter_openers": 10,
+      "stranded": []
+    },
+    {
+      "theme": "bright_workbook",
+      "chapter_openers": 10,
+      "stranded": []
+    },
+    {
+      "theme": "studio_clean",
+      "chapter_openers": 10,
+      "stranded": []
+    }
+  ],
+  "rendered_fixture": {
+    "before_pages": 38,
+    "after_pages": 37,
+    "chapter_opener_with_visual_page": 15,
+    "repaired_diagram_label_pt": 10.414285714285715,
+    "minimum_native_pdf_text_pt": 8,
+    "pdf_zip_identical": true,
+    "zip_crc_valid": true
+  },
+  "preflight": {
+    "dependencies": true,
+    "python_compile": true,
+    "javascript_syntax": true
+  },
+  "full_release_gate": {
+    "status": "BLOCKED",
+    "full_manifest_executed": false,
+    "reason": "The preserved Project 351 ebook.pdf/package.zip reference pair is absent; the preservation test skips. No replacement reference or weakened assertion is permitted."
+  },
+  "production_mutations": false,
+  "paid_provider_calls": 0,
+  "merged": false,
+  "deployed": false,
+  "archive": "release_evidence/v1.9.51-editorial-tests.tar.gz",
+  "archive_sha256": "9dd5293fe1c1e3a7af341851ed52ee30c8097be33d233e1bbe61223a4bdd4976",
+  "metadata_checks": {
+    "tests": 38,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "sha256": "e4984d44055cd706a411e73218d4ce6e422f187dbb4e3f05d2012759bbf0afde"
+  },
+  "local_verification_commit": "999444925fa9d2ae49510aec771dc527a76bc048",
+  "published_source_tree_identical": true
+}

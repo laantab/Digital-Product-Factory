@@ -301,5 +301,14 @@
     "baseline": "10763bb4c377a8ad4d1dff6d40df254430c7ad0d; 3115-test full release gate from preceding phase. New Fast Gate: 756 passed, browser case failed because runtime browser missing; installed browser and failed case passed (1 test).",
     "verification": "3125 unique tests across all 224 manifest files; zero failures/errors/skips. Source 403aba8ba9b298b9eebc6682ae4110e23c63b822. See RELEASE_PROOF_1.9.44.json.",
     "next_step": "Merge PR #62 and verify automatic deployment."
+  },
+  "editorial_pdf_quality_2026_10_20": {
+    "version": "1.9.51",
+    "status": "candidate_verified_release_blocked",
+    "source_commit": "9e794ae68655095735195b6090b9eb226b70ca88",
+    "evidence": "release_evidence/editorial-pdf-quality-candidate.json",
+    "next_step": "Restore original preserved Project 351 reference pair for the unchanged full release gate; complete production acceptance.",
+    "paid_calls": 0,
+    "deployed": false
   }
 }

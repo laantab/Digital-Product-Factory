@@ -1,6 +1,6 @@
 {
   "schema_note": "Per-function protection status for the Factory's customer-facing generators and shared systems. Seeded 2026-09-12 from a read-only audit -- see PROTECTED_GENERATOR_RULE.md and SESSION_HANDOFF_2026-09-11.md. Status values: LOCKED (proven customer-path fix + machine-checked protected test(s) + known last_known_good_commit), UNLOCKED (an explicit, reasoned, in-progress exception -- see unlocked_by/unlocked_reason), PROTECTED (real test coverage exists but no single commit has been proven as its customer-path last-known-good), UNPROTECTED (no meaningful customer-path test coverage), REGRESSION (currently known broken). last_known_good_commit is null unless a real commit was proven -- never manufactured (Rule 9, PROTECTED_GENERATOR_RULE.md). shared_code_dependencies covers both the function's own dedicated files and any file it shares with other functions -- tests/test_function_lock_enforcement.py treats a trailing '/' as a directory-prefix match.",
-  "updated_at": "2026-10-19T03:35:24.012778+00:00",
+  "updated_at": "2026-10-20T20:55:10.628877+00:00",
   "functions": {
     "word_search": {
       "display_name": "Word Search",
@@ -333,9 +333,9 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "UNLOCKED",
-      "last_known_good_commit": "25ff6760c61e34cad643bc58d919dc496868d534",
-      "factory_version": "1.9.49",
+      "status": "LOCKED",
+      "last_known_good_commit": "9e794ae68655095735195b6090b9eb226b70ca88",
+      "factory_version": "1.9.51",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
         "tests/test_guided_cover_choice.py",
@@ -365,10 +365,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": "Codex, owner-authorized nonstop editorial/design upgrade",
-      "unlocked_reason": "Fit tall measured ebook diagrams beneath chapter openers without cropping content or reducing labels below 8pt; preserve the proven one-button workflow.",
-      "relocked_by": null,
-      "relocked_after_tests": null,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Codex, owner-authorized editorial PDF quality correction",
+      "relocked_after_tests": "178 registered ebook cases passed before and after with identical identities; all 16 design/export cases passed. Fast Gate: 809 passed before and after. No failures/errors/skips in these runs. Full release NOT certified: preserved Project 351 PDF/ZIP pair unavailable. Evidence: release_evidence/editorial-pdf-quality-candidate.json.",
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {
