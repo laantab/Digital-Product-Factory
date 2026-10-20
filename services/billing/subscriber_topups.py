@@ -44,11 +44,19 @@ def customer_offer(customer):
         o = offer()
         with S._tx() as conn:
             row = _eligible(conn, customer)
-            claim = conn.execute('SELECT state FROM billing_topup_claims WHERE account_ref = ? ORDER BY id DESC LIMIT 1', (customer,)).fetchone()
+            claim = conn.execute('SELECT * FROM billing_topup_claims WHERE account_ref = ? ORDER BY id DESC LIMIT 1', (customer,)).fetchone()
+            if claim and claim['state'] in ('creating','ready','review') and not _matches_offer(claim,o,row):
+                return None
         return dict(quantity=o['quantity'], price=f"${o['cents']/100:.2f}",
                     expires_at=row['period_end'], last_state=claim['state'] if claim else '')
     except C.CreditError:
         return None
+
+
+def _matches_offer(claim, offered, subscription):
+    return (claim['quantity'] == offered['quantity'] and claim['price_cents'] == offered['cents']
+            and claim['variant_id'] == offered['variant'] and claim['store_id'] == offered['store']
+            and claim['expires_at'] == subscription['period_end'])
 
 
 def checkout(customer, email, request_key):
@@ -69,6 +77,8 @@ def checkout(customer, email, request_key):
         old = conn.execute('''SELECT * FROM billing_topup_claims WHERE account_ref = ?
             AND (request_key = ? OR state IN ('creating','ready','review')) ORDER BY id DESC LIMIT 1''', (customer, request_key)).fetchone()
         if old:
+            if not _matches_offer(old,o,row):
+                raise C.CreditError('Your existing checkout uses an earlier offer. Contact support before purchasing.')
             if old['state'] == 'ready' and old['expires_at'] > C.now():
                 return dict(checkout_url=Q.provider_url(old['checkout_url'], 'lemon_squeezy'))
             raise C.CreditError('This checkout is already recorded. Check your credit balance or contact support.')

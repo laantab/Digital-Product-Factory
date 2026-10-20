@@ -218,3 +218,44 @@ def test_phone_offer_discloses_terms_and_reuses_request_after_back_navigation(to
         assert len(keys)==2 and keys[0]==keys[1]
         assert C.balance('user_1')['available']==1
         browser.close()
+
+
+def test_changed_offer_cannot_reuse_an_earlier_checkout(topups,monkeypatch):
+    remote,_=topups;start()
+    monkeypatch.setenv('FACTORY_TOPUP_CREDITS','9')
+    assert T.customer_offer('user_1') is None
+    with pytest.raises(C.CreditError,match='earlier offer'):start()
+    assert remote.call_count==1
+
+
+def test_returned_phone_checkout_waits_for_verified_credits_without_new_purchase(topups):
+    from pathlib import Path
+    from flask import render_template
+    from app import app
+    from playwright.sync_api import sync_playwright
+    start();offered=T.customer_offer('user_1');event=order()
+    with app.test_request_context('/'):
+        html=render_template('subscriber_dashboard.html',credits=C.balance('user_1'),
+            plan=None,providers=[],themes=[],app_version='test',topup=offered)
+    count=[0]
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True);page=browser.new_page(viewport={'width':390,'height':844})
+        def fixture(route):
+            path=route.request.url.split('factory.example.test')[-1]
+            if path=='/account/subscription':
+                count[0]+=1
+                if count[0]==3:W.handle_event('lemon_squeezy',event)
+                return route.fulfill(json={'credits':C.balance('user_1'),'topup':T.customer_offer('user_1')})
+            if path=='/projects':return route.fulfill(json=[])
+            if path.startswith('/static/'):return route.fulfill(body=Path('static/js/subscriber_dashboard.js').read_text(),content_type='application/javascript')
+            assert path.startswith('/?topup=returned')
+            return route.fulfill(body=html,content_type='text/html')
+        page.route('https://factory.example.test/**',fixture)
+        page.goto('https://factory.example.test/?topup=returned')
+        page.get_by_text('Checking your payment confirmation. Your existing credits are safe.',exact=True).wait_for()
+        assert page.get_by_role('button',name='Buy extra credits').is_disabled()
+        page.get_by_text('Payment verified. Your extra credits are ready.',exact=True).wait_for(timeout=15000)
+        assert page.get_by_text('4 product credits available',exact=True).is_visible()
+        assert page.url=='https://factory.example.test/'
+        assert topups[0].call_count==1
+        browser.close()

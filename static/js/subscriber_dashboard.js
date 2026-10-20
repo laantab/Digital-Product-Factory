@@ -15,7 +15,7 @@
     if(u.origin!==location.origin||!u.pathname.startsWith('/'))return null;
     const a=document.createElement('a');a.href=u.href;a.textContent=label;a.className='link';return a;
   }
-  async function credits(){const b=await api('/account/subscription');el('creditBalance').textContent=`${b.credits.available} product credit${b.credits.available===1?'':'s'} available`;el('createBook').disabled=b.credits.available<1||b.credits.payment_hold;if(el('topupPanel'))el('topupPanel').hidden=!b.topup;if(b.topup&&['credited','refunded'].includes(b.topup.last_state))sessionStorage.removeItem('factoryTopupRequest');}
+  async function credits(){const b=await api('/account/subscription');el('creditBalance').textContent=`${b.credits.available} product credit${b.credits.available===1?'':'s'} available`;el('createBook').disabled=b.credits.available<1||b.credits.payment_hold;if(el('topupPanel'))el('topupPanel').hidden=!b.topup;if(b.topup&&['credited','refunded'].includes(b.topup.last_state))sessionStorage.removeItem('factoryTopupRequest');return b;}
   function show(b){
     project=b.project_id;sessionStorage.setItem('factorySubscriberProject',String(project));
     el('buildPanel').hidden=false;el('buildTitle').textContent=b.title||'Building your ebook';
@@ -68,7 +68,13 @@
   if(el('subscribe'))el('subscribe').onclick=async()=>{el('subscribe').disabled=true;try{const b=await api('/account/checkout',{plan_id:el('subscribe').dataset.plan,billing_period:'monthly',provider:el('provider').value});location.assign(b.checkout_url);}catch(e){message(e.message);el('subscribe').disabled=false;}};
   el('mode').onchange=()=>{const custom=el('mode').value==='custom';el('theme').disabled=!custom;el('theme').hidden=!custom;el('themeLabel').hidden=!custom;};
   async function init(){
-    try{await credits();await saved();const id=sessionStorage.getItem('factorySubscriberProject');if(/^[1-9][0-9]*$/.test(id||'')){project=Number(id);await poll();}}catch(e){message(e.message);}
+    try{await credits();await saved();if(new URLSearchParams(location.search).get('topup')==='returned'){if(el('buyCredits'))el('buyCredits').disabled=true;message('Checking your payment confirmation. Your existing credits are safe.');confirmTopup(0);}const id=sessionStorage.getItem('factorySubscriberProject');if(/^[1-9][0-9]*$/.test(id||'')){project=Number(id);await poll();}}catch(e){message(e.message);}
+  }
+  async function confirmTopup(attempt){
+    try{const b=await credits();if(b.credits.payment_hold){message('Your payment needs review. Your saved books remain available.');return;}if(b.topup?.last_state==='credited'){message('Payment verified. Your extra credits are ready.');if(el('buyCredits'))el('buyCredits').disabled=false;history.replaceState(null,'',location.pathname);return;}}
+    catch{message('Payment confirmation is temporarily unavailable. Your existing credits are safe.');}
+    if(attempt<14){setTimeout(()=>confirmTopup(attempt+1),2000);return;}
+    message('Payment confirmation is still pending. Refresh this page to check again or contact support before purchasing again.');
   }
   init();
 })();
