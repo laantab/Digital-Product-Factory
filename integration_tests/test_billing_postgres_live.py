@@ -216,3 +216,43 @@ def test_postgres_concurrent_paid_webhooks_grant_once(subscriber_pg):
     with ThreadPoolExecutor(max_workers=2) as workers:
         assert sorted(workers.map(deliver,range(2)))==['credited','duplicate']
     assert C.balance('user_105')['available']==2
+
+
+def _topup_seed():
+    from services.billing import subscriber_store as C
+    from datetime import datetime,timedelta,timezone
+    _subscriber_seed('user_106')
+    end=(datetime.now(timezone.utc)+timedelta(days=20)).isoformat()
+    with store._tx() as c:
+        c.execute('''INSERT INTO billing_topup_claims
+            (account_ref,request_key,token,customer_id,email,variant_id,store_id,
+             quantity,price_cents,test_mode,expires_at,state,created_at)
+            VALUES ('user_106','isolated-request','isolated-token','12',
+             'owner@example.test','42','9',3,500,1,?,'ready',?)''',(end,C.now()))
+    return {'meta':{'event_name':'order_created','custom_data':{'account_ref':'user_106','topup_token':'isolated-token'}},
+        'data':{'type':'orders','id':'101','attributes':{'created_at':C.now(),
+            'customer_id':12,'store_id':9,'test_mode':True,'user_email':'owner@example.test',
+            'currency':'USD','subtotal':500,'discount_total':0,'status':'paid',
+            'first_order_item':{'variant_id':42,'price':500}}}}
+
+
+def test_postgres_concurrent_topup_deliveries_grant_only_once(subscriber_pg):
+    from services.billing import subscriber_store as C,subscriber_payments as W
+    event=_topup_seed();ready=Barrier(2)
+    def deliver(_):
+        ready.wait(timeout=10)
+        return W.handle_event('lemon_squeezy',event)['status']
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        assert sorted(workers.map(deliver,range(2)))==['duplicate','topup_credited']
+    assert C.balance('user_106')['available']==4
+
+
+def test_postgres_topup_refund_before_payment_never_grants(subscriber_pg):
+    from copy import deepcopy
+    from services.billing import subscriber_store as C,subscriber_payments as W
+    event=_topup_seed();refund=deepcopy(event)
+    refund['meta']['event_name']='order_refunded';refund['data']['attributes']['refunded_amount']=500
+    assert W.handle_event('lemon_squeezy',refund)['status']=='topup_refunded'
+    assert W.handle_event('lemon_squeezy',event)['status']=='held'
+    assert C.balance('user_106')['available']==1
+    assert C.balance('user_106')['payment_hold']

@@ -97,3 +97,16 @@ reservations before reopening work. The recovery has not been exercised live.
 
 No deployment, production mutation, paid call or live payment was performed by
 this closeout work. Dashboard sign-in was unavailable; these gates remain open.
+
+## Top-up implementation checkpoint — October 19 evening
+
+The earlier missing top-up implementation is now being addressed in this draft.
+A default-off Lemon Squeezy one-time credit offer has isolated checkout, signed
+paid-order grants, replay/concurrency/refund safeguards and customer controls.
+The initial focused run passed 68 cases. Full release and PostgreSQL CI for this
+new source are pending; the 3,287-case proof above certifies the prior runtime.
+The shared access allowlist is unlocked for its before/after protected checks.
+No top-up price, quantity, expiry terms or merchant configuration is approved or
+activated. Credits currently expire with the paid billing period; the owner must
+approve this visible policy before launch. Optional SMTP/off-app reminders have
+not been added. Nothing was deployed or charged.

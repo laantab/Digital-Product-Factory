@@ -15,7 +15,7 @@
     if(u.origin!==location.origin||!u.pathname.startsWith('/'))return null;
     const a=document.createElement('a');a.href=u.href;a.textContent=label;a.className='link';return a;
   }
-  async function credits(){const b=await api('/account/subscription');el('creditBalance').textContent=`${b.credits.available} product credit${b.credits.available===1?'':'s'} available`;el('createBook').disabled=b.credits.available<1||b.credits.payment_hold;}
+  async function credits(){const b=await api('/account/subscription');el('creditBalance').textContent=`${b.credits.available} product credit${b.credits.available===1?'':'s'} available`;el('createBook').disabled=b.credits.available<1||b.credits.payment_hold;if(el('topupPanel'))el('topupPanel').hidden=!b.topup;if(b.topup&&['credited','refunded'].includes(b.topup.last_state))sessionStorage.removeItem('factoryTopupRequest');}
   function show(b){
     project=b.project_id;sessionStorage.setItem('factorySubscriberProject',String(project));
     el('buildPanel').hidden=false;el('buildTitle').textContent=b.title||'Building your ebook';
@@ -64,10 +64,11 @@
   el('resume').onclick=async()=>{if(!project)return;el('resume').disabled=true;try{await api(`/ebook/build/${project}/resume`,{});stopped=false;await poll();}catch(e){message(e.message);}finally{el('resume').disabled=false;}};
   el('signout').onclick=async()=>{stopped=true;clearTimeout(timer);await api('/auth/logout',{});sessionStorage.removeItem('factorySubscriberProject');location.assign('/plans');};
   el('manage').onclick=async()=>{try{const b=await api('/account/portal',{});location.assign(b.url);}catch(e){message(e.message);}};
+  if(el('buyCredits'))el('buyCredits').onclick=async()=>{el('buyCredits').disabled=true;try{let key=sessionStorage.getItem('factoryTopupRequest');if(!key){key=crypto.randomUUID();sessionStorage.setItem('factoryTopupRequest',key);}const b=await api('/account/topup',{request_key:key});location.assign(b.checkout_url);}catch(e){message(e.message);el('buyCredits').disabled=false;}};
   if(el('subscribe'))el('subscribe').onclick=async()=>{el('subscribe').disabled=true;try{const b=await api('/account/checkout',{plan_id:el('subscribe').dataset.plan,billing_period:'monthly',provider:el('provider').value});location.assign(b.checkout_url);}catch(e){message(e.message);el('subscribe').disabled=false;}};
   el('mode').onchange=()=>{const custom=el('mode').value==='custom';el('theme').disabled=!custom;el('theme').hidden=!custom;el('themeLabel').hidden=!custom;};
   async function init(){
-    try{await saved();const id=sessionStorage.getItem('factorySubscriberProject');if(/^[1-9][0-9]*$/.test(id||'')){project=Number(id);await poll();}}catch(e){message(e.message);}
+    try{await credits();await saved();const id=sessionStorage.getItem('factorySubscriberProject');if(/^[1-9][0-9]*$/.test(id||'')){project=Number(id);await poll();}}catch(e){message(e.message);}
   }
   init();
 })();

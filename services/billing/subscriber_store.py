@@ -46,6 +46,15 @@ def account(value):
 
 
 SCHEMA = (
+    '''CREATE TABLE IF NOT EXISTS billing_topup_claims (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, account_ref TEXT NOT NULL,
+        request_key TEXT NOT NULL, token TEXT NOT NULL UNIQUE,
+        customer_id TEXT NOT NULL, email TEXT NOT NULL, variant_id TEXT NOT NULL,
+        store_id TEXT NOT NULL, quantity INTEGER NOT NULL, price_cents INTEGER NOT NULL,
+        test_mode INTEGER NOT NULL, expires_at TEXT NOT NULL,
+        checkout_id TEXT NOT NULL DEFAULT '', checkout_url TEXT NOT NULL DEFAULT '',
+        order_id TEXT UNIQUE, state TEXT NOT NULL DEFAULT 'creating',
+        created_at TEXT NOT NULL, UNIQUE (account_ref, request_key))''',
     '''CREATE TABLE IF NOT EXISTS billing_service_notices (
         id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL,
         category TEXT NOT NULL, observed_at TEXT NOT NULL)''',

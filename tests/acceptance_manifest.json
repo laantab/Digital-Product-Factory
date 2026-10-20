@@ -236,6 +236,7 @@
     "tests/test_subscriber_builds.py",
     "tests/test_provider_maintenance.py",
     "tests/test_subscriber_http.py",
-    "tests/test_subscriber_browser.py"
+    "tests/test_subscriber_browser.py",
+    "tests/test_subscriber_topups.py"
   ]
 }

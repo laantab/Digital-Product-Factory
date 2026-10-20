@@ -55,6 +55,10 @@ def _find(conn, provider, subscription, customer):
 def enrolled_event(provider, event):
     """Route a stored enrollment even when the public rollout is switched off."""
     _, kind, _, obj = _event(provider, event)
+    if provider == 'lemon_squeezy':
+        from services.billing import subscriber_topups as T
+        if T.handles(event):
+            return True
     if provider == 'stripe':
         metadata = obj.get('metadata') or ((obj.get('parent') or {}).get('subscription_details') or {}).get('metadata') or (obj.get('subscription_details') or {}).get('metadata') or {}
     else:
@@ -223,7 +227,13 @@ def handle_event(provider, event):
     with S._tx() as conn:
         if conn.execute('SELECT id FROM billing_subscriber_events WHERE provider = ? AND event_key = ?', (provider,key)).fetchone():
             return {'status':'duplicate'}
-        if (provider == 'stripe' and kind == 'checkout.session.completed') or (provider == 'lemon_squeezy' and kind == 'subscription_created'):
+        from services.billing import subscriber_topups as T
+        topup = provider == 'lemon_squeezy' and (
+            ((event.get('meta') or {}).get('custom_data') or {}).get('topup_token')
+            or ((event.get('data') or {}).get('type') == 'orders' and T.event_claim(conn,event)))
+        if topup:
+            result = T.apply_event(conn,kind,obj,event)
+        elif (provider == 'stripe' and kind == 'checkout.session.completed') or (provider == 'lemon_squeezy' and kind == 'subscription_created'):
             result = _bind(conn,provider,kind,stamp,obj,event)
         elif kind in ('invoice.paid','invoice.payment_succeeded','subscription_payment_success','subscription_payment_recovered'):
             result = _grant_invoice(conn,provider,stamp,obj,event)

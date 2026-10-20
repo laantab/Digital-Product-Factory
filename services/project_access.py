@@ -62,7 +62,7 @@ PUBLIC_ENDPOINTS = frozenset({
 # billing and rendering APIs are intentionally unavailable to customers during
 # this rollout. Admin/owner access and the private Factory are preserved.
 CUSTOMER_ENDPOINTS = frozenset({
-    'subscriber.subscription', 'subscriber.checkout', 'subscriber.portal',
+    'subscriber.subscription', 'subscriber.checkout', 'subscriber.portal', 'subscriber.topup',
     'index', 'list_projects_route', 'get_project_route',
     'list_unfinished_ebook_workspaces_route', 'create_ebook_workspace_route',
     'ebook_build_start_route', 'download_export_route',
@@ -178,7 +178,7 @@ def guard_request():
     if subscriber:
         allowed_posts = {'ebook_build_start_route', 'ebook_build_advance_route',
                          'ebook_build_resume_route', 'ebook_cover_choice_route',
-                         'subscriber.checkout', 'subscriber.portal'}
+                         'subscriber.checkout', 'subscriber.portal', 'subscriber.topup'}
         allowed_gets = {'index', 'list_projects_route', 'get_project_route',
                         'get_ebook_workspace_route', 'ebook_build_status_route',
                         'download_export_route', 'ebook_workspace_cover_variant_route',

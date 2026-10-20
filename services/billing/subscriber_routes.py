@@ -4,6 +4,7 @@ from flask_login import current_user
 from werkzeug.exceptions import Forbidden, Unauthorized
 
 from services.billing import subscriber_checkout as Q, subscriber_store as C
+from services.billing import subscriber_topups as T
 
 bp=Blueprint('subscriber',__name__)
 
@@ -20,7 +21,18 @@ def identity():
 @bp.get('/account/subscription')
 def subscription():
     customer=identity()
-    return jsonify(credits=C.balance(customer))
+    return jsonify(credits=C.balance(customer),topup=T.customer_offer(customer))
+
+
+@bp.post('/account/topup')
+def topup():
+    customer=identity(); body=request.get_json(silent=True) or {}
+    try:
+        return jsonify(T.checkout(customer,current_user.email,body.get('request_key')))
+    except C.CreditError as e:
+        return jsonify(ok=False,error=str(e)),409
+    except Exception:
+        return jsonify(ok=False,error='Extra-credit checkout is unavailable. Your existing credits are preserved. Contact support before retrying.'),503
 
 
 @bp.post('/account/checkout')
@@ -69,7 +81,7 @@ def dashboard():
     from services.ebook_design_export import theme_catalog_payload
     themes=theme_catalog_payload()['themes']
     from services.factory_version import get_version
-    return render_template('subscriber_dashboard.html',credits=C.balance(customer),plan=plan,providers=providers,themes=themes,app_version=get_version())
+    return render_template('subscriber_dashboard.html',credits=C.balance(customer),plan=plan,providers=providers,themes=themes,app_version=get_version(),topup=T.customer_offer(customer))
 
 
 @bp.app_context_processor
