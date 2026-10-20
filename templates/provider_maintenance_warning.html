@@ -1,0 +1,12 @@
+{% if provider_maintenance is defined %}
+{% set warnings = namespace(any=false) %}
+{% for provider in provider_maintenance.providers %}{% if provider.alerts %}{% set warnings.any=true %}{% endif %}{% endfor %}
+{% if warnings.any or provider_maintenance.notices or provider_maintenance.billing_review_count %}
+<aside role="status" style="margin:16px;padding:16px;border:1px solid #b7791f;border-radius:10px;background:#fffaf0;color:#513c16;font:16px/1.5 system-ui,sans-serif">
+<strong>Service maintenance</strong>
+{% for provider in provider_maintenance.providers %}{% if provider.alerts %}<p>{{ provider.provider|replace('_',' ')|title }}: {% if provider.days_until_expiry is not none %}key expiry is {{ provider.days_until_expiry }} day(s) away. {% endif %}{% if 'low_balance' in provider.alerts %}The last recorded balance is low. {% endif %}{% if 'invalid_expiry_date' in provider.alerts or 'invalid_balance_observation' in provider.alerts %}Review the saved maintenance observations. {% endif %}</p>{% endif %}{% endfor %}
+{% for notice in provider_maintenance.notices %}<p>{{ notice.message }}</p>{% endfor %}
+{% if provider_maintenance.billing_review_count %}<p>{{provider_maintenance.billing_review_count}} subscription payment(s) need review.</p>{% endif %}
+<small>Expiry dates and balances are owner-recorded observations. This notice does not renew keys or measure provider bills.</small>
+</aside>
+{% endif %}{% endif %}

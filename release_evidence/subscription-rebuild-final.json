@@ -1,0 +1,105 @@
+{
+  "version": "1.9.50",
+  "source_commit": "c34066b1b785bc46c8053c2ae8d5b476ea5aa095",
+  "source_tree": "699a92a3cd2ce39fda5055a1e8308e084c5cc962",
+  "manifest_files": 237,
+  "expected_cases": 3287,
+  "baseline_retained": 3234,
+  "paid_calls": 0,
+  "production_changes": false,
+  "tests": 3287,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "missing": [],
+  "extra": [],
+  "duplicates": [],
+  "suites": [
+    {
+      "file": "shard-0.xml",
+      "tests": 517,
+      "seconds": 442.9,
+      "sha256": "fcf483832cd0e1fcccb0a38db63e7113ab9a5f9f687d9ea5f3257177b3d4cb8b"
+    },
+    {
+      "file": "shard-1.xml",
+      "tests": 520,
+      "seconds": 457.62,
+      "sha256": "c1c130cf44c1121644fadd93fde071135824b354c5237c7ac1f59d9a95eac68e"
+    },
+    {
+      "file": "shard-2.xml",
+      "tests": 352,
+      "seconds": 404.84,
+      "sha256": "2040b91ec414fb880d94d328529bc302cd11134f974abedfb4cf2b516c0bd8fc"
+    },
+    {
+      "file": "shard-3.xml",
+      "tests": 720,
+      "seconds": 439.68,
+      "sha256": "754e4ab3565cec9a045c54ce2882a0724b1401485f0e3755092ff845b934d95f"
+    },
+    {
+      "file": "shard-4.xml",
+      "tests": 640,
+      "seconds": 443.03,
+      "sha256": "9d14331e3f0afc6ac0a1b15d04c6806d560fcc236c11b21f4cac0287e57b60e4"
+    },
+    {
+      "file": "shard-5.xml",
+      "tests": 538,
+      "seconds": 428.96,
+      "sha256": "8d59d0f545563b16788d65160d884417c39845a6ee856aa77e350207f2e99883"
+    }
+  ],
+  "native_postgres": {
+    "billing": {
+      "run_id": 39341833531,
+      "tests": 11,
+      "result": "success"
+    },
+    "account_isolation": {
+      "run_id": 39341833560,
+      "tests": 7,
+      "result": "success"
+    }
+  },
+  "public_subscription_activation": false,
+  "production_deployment": false,
+  "preserved_reference_hashes_verified": true,
+  "source_unchanged_after_tests": true,
+  "setup_rechecks": [
+    {
+      "shard": 2,
+      "initial_failed_cases": 2,
+      "reason": "Checkout under OS temporary root; identical source rerun from normal workspace to exercise production-path guards correctly."
+    }
+  ],
+  "dependencies_verified": true,
+  "python_compilation_verified": true,
+  "javascript_syntax_verified": [
+    "static/js/app.js",
+    "static/js/subscriber_dashboard.js"
+  ],
+  "production_read_only_preflight": {
+    "website_version": "1.9.49",
+    "website_commit": "711b696d4a7a1c8e5dc01b0cb23f05469f5f1990",
+    "legacy_project_record_and_ledger_unchanged": true,
+    "workspace_or_provider_cost_baseline": "not verified; not initialized"
+  },
+  "protected_generator_implementation_changes": [],
+  "function_locks_restored": [
+    "word_search",
+    "coloring_book",
+    "crossword",
+    "invite_protection",
+    "ebook_one_button_completion"
+  ],
+  "post_lock_checks": {
+    "tests": 72,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "sha256": "947f5947beda91efa00cf6cd41ec687e86779968adc39fd312a2d22690f0e532"
+  }
+}

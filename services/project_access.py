@@ -62,6 +62,7 @@ PUBLIC_ENDPOINTS = frozenset({
 # billing and rendering APIs are intentionally unavailable to customers during
 # this rollout. Admin/owner access and the private Factory are preserved.
 CUSTOMER_ENDPOINTS = frozenset({
+    'subscriber.subscription', 'subscriber.checkout', 'subscriber.portal', 'subscriber.topup',
     'index', 'list_projects_route', 'get_project_route',
     'list_unfinished_ebook_workspaces_route', 'create_ebook_workspace_route',
     'ebook_build_start_route', 'download_export_route',
@@ -170,6 +171,22 @@ def guard_request():
     workspace = endpoint in WORKSPACE_ENDPOINTS
     if not workspace and endpoint not in CUSTOMER_ENDPOINTS:
         return jsonify(ok=False, error='This action is not available for this account.'), 403
+    from services.billing.subscriber_checkout import enabled as _subscriptions_enabled
+    subscriber = _subscriptions_enabled()
+    if request.method == 'POST' and not subscriber and os.environ.get('RENDER'):
+        return jsonify(ok=False, error='Subscription building is not available yet.'), 403
+    if subscriber:
+        allowed_posts = {'ebook_build_start_route', 'ebook_build_advance_route',
+                         'ebook_build_resume_route', 'ebook_cover_choice_route',
+                         'subscriber.checkout', 'subscriber.portal', 'subscriber.topup'}
+        allowed_gets = {'index', 'list_projects_route', 'get_project_route',
+                        'get_ebook_workspace_route', 'ebook_build_status_route',
+                        'download_export_route', 'ebook_workspace_cover_variant_route',
+                        'ebook_workspace_full_preview_route', 'ebook_previous_export_download',
+                        'list_unfinished_ebook_workspaces_route', 'subscriber.subscription'}
+        if (request.method == 'POST' and endpoint not in allowed_posts
+                or request.method == 'GET' and endpoint not in allowed_gets):
+            return jsonify(ok=False, error='This subscription currently includes the complete ebook workflow.'), 403
     if request.args.get('admin') == '1' or request.args.get('include_system') == '1':
         return jsonify(ok=False, error='Administrator access required.'), 403
     import database
@@ -189,4 +206,11 @@ def guard_request():
             allowed = database.find_project_by_package(str(value)) is not None
         if not allowed:
             return jsonify(ok=False, error='Project not found.'), 404
+    if subscriber and endpoint == 'download_export_route':
+        project = database.find_project_by_package(str(args.get('package_id') or ''))
+        if project and (project.get('data') or {}).get('_subscription_account'):
+            from services.billing.subscriber_store import reservation
+            rec = reservation(project['id'])
+            if not rec or rec['status'] != 'consumed':
+                return jsonify(ok=False, error='Your files are saved while credit accounting finishes. Continue your book to recover this step.'), 409
     return None

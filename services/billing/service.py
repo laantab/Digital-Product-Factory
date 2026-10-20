@@ -249,6 +249,11 @@ _LEMON_PAST_DUE = {"subscription_payment_failed"}
 
 def handle_stripe_event(event: dict[str, Any]) -> dict[str, Any]:
     """Apply one verified Stripe event. Safe to call twice with the same event."""
+    from services.billing import subscriber_store as _SC, subscriber_payments as _SP
+    _SC.init_schema()
+    if _SP.enrolled_event('stripe', event):
+        return _SP.handle_event('stripe', event)
+
     event_id = str(event.get("id") or "")
     event_type = str(event.get("type") or "")
     if not S.record_event(provider=PR.STRIPE, event_id=event_id,
@@ -301,6 +306,11 @@ def handle_stripe_event(event: dict[str, Any]) -> dict[str, Any]:
 
 def handle_lemon_event(event: dict[str, Any]) -> dict[str, Any]:
     """Apply one verified Lemon Squeezy event. Idempotent."""
+    from services.billing import subscriber_store as _SC, subscriber_payments as _SP
+    _SC.init_schema()
+    if _SP.enrolled_event('lemon_squeezy', event):
+        return _SP.handle_event('lemon_squeezy', event)
+
     meta = event.get("meta") or {}
     event_type = str(meta.get("event_name") or "")
     data = event.get("data") or {}

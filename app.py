@@ -120,6 +120,8 @@ with app.app_context():
     from services.billing.store import init_billing_db
 
     init_billing_db()
+    from services.billing.subscriber_store import init_schema as _init_subscriber_schema
+    _init_subscriber_schema()
 
     # Durable ebook execution. Starting this at boot is also the recovery
     # path: any job whose lease expired when the previous process died is
@@ -168,6 +170,9 @@ app.register_blueprint(crossword_builder_bp)
 from routes.auth import auth_bp  # noqa: E402
 
 app.register_blueprint(auth_bp)
+
+from services.billing.subscriber_routes import bp as subscriber_bp
+app.register_blueprint(subscriber_bp)
 
 
 @app.after_request
@@ -524,6 +529,12 @@ def planner_cover_photo_select_route():
 
 @app.route("/")
 def index():
+    from services.billing.subscriber_checkout import enabled as _subscriptions_enabled
+    from services.project_access import accounts_mode as _accounts_mode
+    from flask_login import current_user as _signed_user
+    if _accounts_mode() and _subscriptions_enabled() and not _signed_user.is_admin:
+        from services.billing.subscriber_routes import dashboard
+        return dashboard()
     _coloring_customer()  # establish the signed request owner before the first build click
     admin_on = os.environ.get("ADMIN_MODE", "").strip().lower() in {"1", "true", "yes"}
     from services.project_access import accounts_mode
@@ -550,6 +561,19 @@ def index():
 def public_plans_route():
     """Public plan information only; never accepts a customer billing identity."""
     from services.billing.plans import ALL_PLANS
+    from services.billing.subscriber_checkout import enabled as _subscriptions_enabled, selected_plan as _subscriber_plan
+    if _subscriptions_enabled():
+        try:
+            offer = _subscriber_plan()
+            row = offer.as_dict()
+            row.update(highlight=False, tagline='Create complete ebooks with a clear monthly allowance.',
+                features=[f'{offer.products_per_month} completed ebooks per monthly billing period',
+                          'Verified PDF and ZIP downloads', 'Saved books and build recovery',
+                          'Failed builds do not consume a completed-product credit'])
+            plans = [row]
+        except ValueError:
+            plans = []
+        return render_template('plans.html', plans=plans, app_version=APP_VERSION, subscription_launch=True)
     try:
         from services.billing import pricing_payload
         plans = pricing_payload('')['plans']
@@ -4616,6 +4640,9 @@ def ebook_build_start_route():
         payload["created"] = bool(created)
         return jsonify(payload)
     except Exception as exc:  # noqa: BLE001
+        from services.billing.subscriber_store import CreditError
+        if isinstance(exc, CreditError):
+            return _error(str(exc), 409)
         return _customer_error(exc, 500, log="ebook build start failed")
 
 
