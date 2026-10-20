@@ -1,0 +1,28 @@
+name: Ebook PDF editorial evidence
+on:
+  push:
+    branches: [work/editor-chief-pdf-evidence]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FACTORY_TEST_MODE: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements.txt pytest==8.4.1
+      - run: python -m pip install playwright==1.52.0
+      - run: python -m playwright install --with-deps chromium
+      - name: Existing stability baseline
+        run: python scripts/fast_gate.py
+      - name: Existing visual editorial baseline
+        run: python -m pytest -q tests/test_interior_visual_editorial_standard.py
