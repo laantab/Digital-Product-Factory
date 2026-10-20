@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-19T03:35:24.012778+00:00",
-  "current_task": "v1.9.49 account isolation and plans-first onboarding: candidate runtime verified; production activation pending.",
-  "stopped_at": "3234 acceptance cases across 231 files passed on exact source 25ff6760c61e34cad643bc58d919dc496868d534. All prior 3197 cases retained. PostgreSQL CI passed. Earlier browser dependency failures resolved without weakening tests. Production remains v1.9.48. One active administrator exists; owner sign-in is unverified. Protection/Command Center metadata checks: 38 passed; compilation and diff checks passed. JUnit evidence archived in release_evidence/v1.9.49-account-isolation-tests.tar.gz.",
-  "next_step": "Deploy verified v1.9.49 code with the current private access unchanged. Verify the existing Factory administrator through secure sign-in before approved public account-mode activation. Customer billing/account binding, other customer workflows and marketing remain launch gates.",
+  "updated_at": "2026-10-20T23:32:26.815046+00:00",
+  "current_task": "Full v1.9.52 release checks passed; merge PR74 and verify website and builder deployments.",
+  "stopped_at": "No release blocker remains in the executed acceptance tests. Deployment and real saved-book recovery still require verification.",
+  "next_step": "Verify PR74 release status and Render resources; then resume saved Mindfulness in Motion at visuals without rebuilding accepted chapters.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -197,10 +197,18 @@
         "Original reference PDF and ZIP checksums unchanged. No paid provider calls or production build performed.",
         "Automatic proofreading remains conservative English rules; comprehensive grammar, external plagiarism and factual verification are not claimed."
       ]
+    },
+    {
+      "date": "2026-10-20T20:55:10.628877+00:00",
+      "items": [
+        "Editor-in-Chief PDF placement review corrected (PR74).",
+        "Tall diagram/chapter opener defect reproduced in real PDF, repaired without truncation, and checked under six template styles.",
+        "Scoped protection restored at 9e794ae68655095735195b6090b9eb226b70ca88; full release remains blocked, not waived."
+      ]
     }
   ],
   "notes": "Seeded from SESSION_HANDOFF_2026-09-11.md (end-of-day) when the Command Center was built. Update this record yourself with the \"Update handoff\" form on the page, or by editing this file directly \u2014 it is what the Command Center reads every time it opens.",
-  "factory_version": "1.9.48",
+  "factory_version": "1.9.49",
   "ebook_reliability_2026_10_08": {
     "live_release": "1.9.17",
     "live_commit": "61b2759ee195a68b6e44c9a047ec27724e044b24",
@@ -359,5 +367,32 @@
       "listing": "PLANETS, House Plants, Flower Parts and Container Gardening remain listed. Project20 newer draft appears in Continue where you left off; opening it exposes the reviewed saved version at 100%. List latency remains a separate launch issue."
     }
   },
-  "candidate_version": "1.9.48"
+  "candidate_version": "1.9.52",
+  "mindfulness_visual_recovery_2026_10_20": {
+    "version": "1.9.52",
+    "source_commit": "42ace7d30c635bb0d62c472f084cc427a1cb64d4",
+    "status": "candidate_verified_release_blocked",
+    "protected_cases_passed": 339,
+    "fast_gate_passed": 809,
+    "paid_calls": 0,
+    "production_writes": 0,
+    "merged": false,
+    "deployed": false,
+    "evidence": "release_evidence/mindfulness-40-percent-candidate.json",
+    "next_step": "Restore the exact original Project 351 PDF and ZIP; run unchanged full release gate with zero skips before merge/deploy; then recover the saved Mindfulness in Motion visuals stage."
+  },
+  "editorial_release_1_9_52": {
+    "version": "1.9.52",
+    "status": "full_release_verified_awaiting_deployment",
+    "source_commit": "a6343fb4491c830330fc721bd6d77842744e5010",
+    "cases_passed": 3253,
+    "manifest_files": 232,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "paid_provider_calls": 0,
+    "reference_authorized": true,
+    "evidence": "release_evidence/v1.9.52-full-release.json",
+    "deployment_status": "Verify PR74 and both Render resources; no customer build has been resumed by this verification."
+  }
 }

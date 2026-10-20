@@ -2765,6 +2765,27 @@ def _embed_preview_image(path: str, max_w: int = 2400, *, lossless: bool = False
         return "", 0, 0
 
 
+def bounded_diagram_dimensions(img: Image.Image) -> tuple[int, int]:
+    """Size a 2x designed diagram without cropping pixels or shrinking labels below 8pt.
+
+    A five-inch illustration leaves room for a chapter opener and caption.
+    Only measured graphics can be fitted; an unknown or unreadable label size
+    keeps the original dimensions for the existing quality review to inspect.
+    Dimensions are HTML pixels (0.75pt), which the PDF renderer honors ahead
+    of CSS image sizing. The underlying high-resolution PNG is unchanged.
+    """
+    width, height = img.width // 2, img.height // 2
+    column = min(DIAGRAM_COLUMN_PT, width * 0.75)
+    if width <= 0 or height <= 0 or column * height / width <= 360.0:
+        return width, height
+    fitted_width = max(1, int(360.0 * width / height / 0.75))
+    fitted_height = max(1, round(fitted_width * height / width))
+    if (fitted_height * 0.75 <= 360.0
+            and label_min_pt(img, column_pt=fitted_width * 0.75) >= MIN_LABEL_PT):
+        return fitted_width, fitted_height
+    return width, height
+
+
 def figure_html(aid: dict[str, Any], *, palette: dict[str, tuple[int, int, int]] | None = None) -> str:
     """`palette`, when given, re-renders a generated (non-photo) diagram
     fresh in the current design theme's colors instead of embedding the
@@ -2801,9 +2822,9 @@ def figure_html(aid: dict[str, Any], *, palette: dict[str, tuple[int, int, int]]
             # v1.9.10: lossless PNG. JPEG blurred the edges of chart lettering.
             img.convert("RGB").save(buf, format="PNG", optimize=True)
             uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
-            # scale=2.0 doubles pixel dimensions for print sharpness; report
-            # the same logical width/height _embed_preview_image would.
-            w, h = img.size[0] // 2, img.size[1] // 2
+            # Keep the 2x pixels for sharpness; only the displayed size changes
+            # when a tall measured diagram can fit without undersized labels.
+            w, h = bounded_diagram_dimensions(img)
         except Exception:
             uri = None
     if not uri:

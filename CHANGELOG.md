@@ -1,3 +1,33 @@
+## 1.9.52 — Mindfulness picture classification and free-search recovery
+
+### What changed
+Ordinary mugs, plates, shirts and ceramic objects no longer turn unrelated ebook chapters into printed-merchandise briefs. Classification requires merchandise intent and word boundaries. A stale inconsistent brief is rederived from the chapter. Free photo searches continue past uncertain candidates through the existing query ladder and configured sources. Only the selected image is stored; uncertainty still requires review and paid-image safeguards remain.
+
+### What was fixed
+Mindfulness in Motion stopped at 40% because everyday scenes were incorrectly judged against printed-keepsake requirements. The fallback then produced an all-text-box set rejected by the unchanged editorial standard. The release also retains the readable tall-diagram sizing and accurate interior PDF picture inspection from the earlier quality candidate.
+
+### Do the steps change?
+Use the existing Resume Build control for saved unfinished ebooks after deployment. Accepted manuscripts are reused. Title, cover and picture decisions continue to use their existing controls. Existing saved products are preserved; no paid image authorization is added.
+
+### Release gate
+Owner authorized the uploaded completed Room-by-Room PDF and ZIP as the required preservation reference on October 20. Its exact hashes, ZIP integrity and embedded PDF identity are checked. Missing or altered reference files fail rather than skip. Original Project 351 checksum assertions remain additional checks when its pair is present. The customer reference bytes remain outside the public repository.
+
+The prior candidate passed 339 protected ebook/photo checks and 809 stability checks. The complete 232-file acceptance run and final source proof are recorded in release evidence before deployment. See the newest release handoff and PR74 for actual deployment status; a test pass alone does not certify the live book as finished.
+
+## 1.9.51 — Readable diagrams and verified PDF picture placements (candidate)
+
+### What changed
+Tall, measured ebook diagrams fit beneath chapter openers when they can retain labels of at least 8 pt. The complete high-resolution image is preserved. Unmeasured graphics and graphics that cannot safely shrink keep their existing size for review.
+
+### What was fixed
+A real rendered fixture stranded Chapter 4's heading on a separate page. The corrected 37-page fixture keeps all ten chapter openers with their visuals; the original had 38 pages. PDF visual inspection now counts image placements rather than unused image resources, excludes every cover-page image from the interior count, and reports an unavailable PDF reader instead of a false pass.
+
+### Do the steps change?
+Use the existing ebook build and review controls. No paid provider calls are required. Existing saved products and protected coloring, puzzle, and planner implementations are preserved.
+
+### Release gate
+Candidate only. Before/after protected ebook workflow checks: 178 passed each. Focused design/export checks: 16 passed. The earlier PDF-inspection regressions were proved to fail on unchanged main and pass after correction. Complete acceptance collection retains all 3,234 prior cases and adds six (3,240 unique cases); collection is not a full test run. Final stability and metadata verification are recorded in the release evidence. Full release remains blocked because the preserved Project 351 PDF/ZIP pair is absent from this environment; its preservation case skips. No gate or reference hash was weakened. No merge or deployment.
+
 ## 1.9.49 — Customer account isolation candidate
 
 ### What changed

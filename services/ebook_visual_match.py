@@ -353,29 +353,28 @@ def _is_print_contrast(text: str) -> bool:
 
 
 def _has_keepsake_product(text: str) -> bool:
-    return _has_any_phrase(
-        text,
-        (
-            "mug",
-            "ceramic",
-            "plate",
-            "shirt",
-            "t shirt",
-            "metal print",
-            "photo on stone",
-            "stone print",
-            "photo on glass",
-            "glass print",
-            "button",
-            "keepsake",
-            "tumbler",
-            "tote",
-            "ornament",
-            "photo applied",
-            "photograph applied",
-            "image applied",
-        ),
-    )
+    """Require merchandise intent, not an ordinary household object.
+
+    A mug of tea, a dinner plate, and folding a shirt occur in mindfulness
+    chapters too. They do not require a photograph printed on a product.
+    Word boundaries also keep "plate" from matching "template".
+    """
+    if _hint_matches(text, (
+        "keepsake", "keepsakes", "metal print", "metal prints",
+        "photo on stone", "stone print", "photo on glass", "glass print",
+        "photo applied", "photograph applied", "image applied",
+    )):
+        return True
+    objects = r"\b(?:mugs?|ceramic|plates?|shirts?|buttons?|tumblers?|totes?|ornaments?)\b"
+    for sentence in re.split(r"[.!?;\n]", text):
+        if not re.search(objects, sentence, re.I):
+            continue
+        if re.search(r"\b(?:personali[sz]ed|customi[sz]ed|sublimation|sublimated)\b", sentence, re.I):
+            return True
+        if (re.search(r"\b(?:photo(?:graphs?|graphic)?|images?)\b", sentence, re.I)
+                and re.search(r"\b(?:printed|applied|transferred|printing)\b", sentence, re.I)):
+            return True
+    return False
 
 
 def _has_equipment_kit(text: str) -> bool:

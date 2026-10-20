@@ -1,0 +1,12 @@
+{
+  "authorized_by": "Lonnie Brown, October 20, 2026, affirmative approval in this conversation",
+  "reference_title": "The Room-by-Room Eco Home Makeover Checklist",
+  "pdf_sha256": "20792e8fcce4ab4fcc7daa8e49df1d0a634f7c624d9197d346d0fda83f8d025d",
+  "zip_sha256": "f7cc37a90f71e8563039c412f23f7ba11deff52edb055419117197921d572d26",
+  "reference_directory": "exports/preservation/room-by-room",
+  "customer_bytes_committed": false,
+  "required": true,
+  "legacy_project_351_checks": "Original expected hashes remain unchanged; checked additionally when either legacy file is present. An incomplete legacy pair fails.",
+  "missing_current_reference": "Fails; never skips.",
+  "scope": "Preservation identity only; the older reference is not a quality verdict on upgraded output."
+}

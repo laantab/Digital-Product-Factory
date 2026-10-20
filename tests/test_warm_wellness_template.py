@@ -442,19 +442,62 @@ class RevisionIdentityAndIsolation(unittest.TestCase):
         self.assertEqual(before, after)
 
     def test_preserved_project_351_package_is_untouched_if_present(self):
-        """Best-effort: only meaningful on a machine with Project 351's real
-        exports, so it skips cleanly elsewhere rather than failing the gate
-        on an unrelated developer machine."""
+        """Owner authorized Room-by-Room as the required reference on Oct 20.
+
+        Keep the original Project 351 assertions when its files are available.
+        The current completed reference is always required: no missing-file skip.
+        Customer artifacts stay outside git and isolated generated test exports.
+        """
+        import hashlib
+        import zipfile
+
         preserved_pdf = ROOT / "exports" / "ebook-visuals-local" / "ebook.pdf"
         preserved_zip = ROOT / "exports" / "ebook-visuals-local" / "package.zip"
-        if not preserved_pdf.is_file() or not preserved_zip.is_file():
-            self.skipTest("Project 351 preserved package not present on this machine")
-        import hashlib
+        if preserved_pdf.exists() or preserved_zip.exists():
+            self.assertTrue(preserved_pdf.is_file(), "Project 351 PDF is missing from its existing pair")
+            self.assertTrue(preserved_zip.is_file(), "Project 351 ZIP is missing from its existing pair")
+            pdf_sha = hashlib.sha256(preserved_pdf.read_bytes()).hexdigest()
+            zip_sha = hashlib.sha256(preserved_zip.read_bytes()).hexdigest()
+            self.assertEqual(pdf_sha, "6202e3a559db9313b61ec2d54ff689f6236a3b037308820bc77cfedf4d01f5bd")
+            self.assertEqual(zip_sha, "5044f086b7335e139bcec94e1b743c4f7effd4fe9eb7738973140176ef6d5c1f")
 
-        pdf_sha = hashlib.sha256(preserved_pdf.read_bytes()).hexdigest()
-        zip_sha = hashlib.sha256(preserved_zip.read_bytes()).hexdigest()
-        self.assertEqual(pdf_sha, "6202e3a559db9313b61ec2d54ff689f6236a3b037308820bc77cfedf4d01f5bd")
-        self.assertEqual(zip_sha, "5044f086b7335e139bcec94e1b743c4f7effd4fe9eb7738973140176ef6d5c1f")
+        reference = Path(os.environ.get("FACTORY_PRESERVATION_REFERENCE_DIR") or
+                         ROOT / "exports" / "preservation" / "room-by-room")
+        _verify_room_by_room_reference(reference)
+
+
+def _verify_room_by_room_reference(reference: Path) -> None:
+    import hashlib
+    import zipfile
+
+    pdf = reference / "ebook.pdf"
+    package = reference / "package.zip"
+    assert pdf.is_file() and package.is_file(), (
+        "Restore the owner-supplied Room-by-Room preservation PDF and ZIP; "
+        "a release cannot pass without both original files.")
+    pdf_bytes = pdf.read_bytes()
+    assert hashlib.sha256(pdf_bytes).hexdigest() == "20792e8fcce4ab4fcc7daa8e49df1d0a634f7c624d9197d346d0fda83f8d025d"
+    assert hashlib.sha256(package.read_bytes()).hexdigest() == "f7cc37a90f71e8563039c412f23f7ba11deff52edb055419117197921d572d26"
+    with zipfile.ZipFile(package) as archive:
+        assert archive.testzip() is None, "Preserved ZIP has corrupt entries"
+        assert archive.read("ebook.pdf") == pdf_bytes, "Preserved PDF/ZIP disagree"
+
+
+def test_preservation_reference_cannot_pass_without_both_files(tmp_path):
+    import pytest
+    with pytest.raises(AssertionError, match="both original files"):
+        _verify_room_by_room_reference(tmp_path)
+    (tmp_path / "ebook.pdf").write_bytes(b"incomplete reference")
+    with pytest.raises(AssertionError, match="both original files"):
+        _verify_room_by_room_reference(tmp_path)
+
+
+def test_preservation_reference_cannot_pass_with_replacement_bytes(tmp_path):
+    import pytest
+    (tmp_path / "ebook.pdf").write_bytes(b"replacement PDF")
+    (tmp_path / "package.zip").write_bytes(b"replacement ZIP")
+    with pytest.raises(AssertionError):
+        _verify_room_by_room_reference(tmp_path)
 
 
 class TestDatabaseIsolation(unittest.TestCase):
