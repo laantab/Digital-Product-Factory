@@ -2854,6 +2854,12 @@ def figure_html(aid: dict[str, Any], *, palette: dict[str, tuple[int, int, int]]
         uri, w, h = _embed_preview_image(path, lossless=not is_photo)
         if not uri:
             return ""
+    if is_photo and w and h and min(DIAGRAM_COLUMN_PT, w * 0.75) * h / w > 360.0:
+        # xhtml2pdf honors HTML dimensions ahead of CSS max-height. Keep a
+        # portrait beside its chapter opener, preserving every source pixel.
+        fitted_w = max(1, int(360.0 * w / h / 0.75))
+        h = max(1, round(fitted_w * h / w))
+        w = fitted_w
     photo_cls = " ebook-figure-photo" if is_photo else ""
     return (
         f'<figure class="ebook-figure{photo_cls}" id="{vid}" data-visual-id="{vid}" data-sha="{sha}">'
