@@ -83,6 +83,22 @@ def _ident(**overrides) -> dict[str, str]:
 
 
 class UniversalPhotoCoverEngineTests(unittest.TestCase):
+    def test_title_has_a_strong_thumbnail_hierarchy(self):
+        ident = _ident(title='Mindfulness in Motion', subtitle=(
+            'A beginner’s guide to practicing calm and focus while eating, walking, '
+            'showering, commuting, and moving through daily life'))
+        for layout in LAYOUT_IDS:
+            plan = plan_typography(ident, default_editor(), layout, _solid())
+            self.assertTrue(plan['pass'], plan.get('findings'))
+            self.assertGreaterEqual(plan['sizes']['title'] * 240 / 1275, 18)
+            self.assertGreaterEqual(plan['sizes']['title'], plan['sizes']['subtitle'] * 2)
+            undersized = {**plan, 'sizes': {**plan['sizes'], 'title': 80},
+                          'blocks': [{**block, 'size': 80} if block['role'] == 'title'
+                                     else block for block in plan['blocks']]}
+            qa = inspect_variant(_solid(COVER_W, COVER_H), layout, ident, plan=undersized)
+            self.assertFalse(qa['pass'])
+            self.assertIn('title_too_small', qa['findings'])
+
     def setUp(self):
         self._client_patch = patch("ai_client.get_client", side_effect=AssertionError("paid client"))
         self._chat_patch = patch("ai_client.chat", side_effect=AssertionError("paid chat"))

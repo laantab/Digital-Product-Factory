@@ -1,3 +1,17 @@
+## 1.9.53 — Preserve instructional meaning and strengthen ebook cover titles
+
+### What changed
+Checklist extraction keeps each bullet list with its own heading and introduction. Lists of things the reader does not need cannot become positive checklists. Numbered instruction headings can supply the chapter's real practice sequence. The editor checks existing saved graphics for the same reversal before reuse.
+
+### What was fixed
+The completed Mindfulness in Motion PDF exposed defects that file-integrity checks missed: unnecessary equipment appeared as a checklist, the eating chapter used a generic meditation photograph, and a brief cover title passed at a weak thumbnail size. Concrete chapter activities now constrain automatic photo matching and lead the free search queries. Cached pictures are rechecked before acquisition so an outdated match can be replaced. Brief cover titles have a larger rendering and thumbnail floor; long titles retain safe wrapping, and render cache identities change with the typography policy. Approved wording and paid-provider safeguards remain intact.
+
+### Do the steps change?
+Use the existing ebook editing and build controls. Accepted manuscripts are preserved. Previously downloaded PDFs and ZIPs remain intact; they are not silently replaced. A corrected export still requires the normal quality checks and any existing cover choice.
+
+### Release gate
+The unchanged baseline passed 809 stability checks and five real-browser customer-path checks. Six regression cases cover the exported defects and a correct activity match. Full acceptance and actual deployment results are recorded in release evidence before this candidate is released. No paid provider calls are authorized by this repair.
+
 ## 1.9.52 — Mindfulness picture classification and free-search recovery
 
 ### What changed

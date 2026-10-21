@@ -51,6 +51,41 @@ def test_practice_steps_keep_the_full_source_instruction_before_chart_wrapping()
     assert _practice_sequence_items(' '.join(steps)) == steps
 
 
+def test_checklists_preserve_polarity_and_never_join_separate_lists():
+    from services.ebook_visual_pipeline import _parse_checklist
+    body = '''### What practice does not require
+You do not need:
+- a quiet mind
+- special clothes
+- long sessions
+- a private room
+
+### Useful anchors
+Notice these sensations:
+- your breathing
+- your feet
+- running water
+- your hands
+'''
+    assert _parse_checklist(body) == ['your breathing', 'your feet', 'running water', 'your hands']
+    assert _parse_checklist('You do not need:\n- equipment\n- silence\n- long sessions\n- special clothes') == []
+    assert _parse_checklist('## Checklist\n- Check the seal\n- Check the cord\n- Check the switch\n\n## Examples\n- A\n- B\n- C\n- D') == ['Check the seal', 'Check the cord', 'Check the switch']
+
+
+def test_numbered_instruction_headings_become_a_real_workflow():
+    from services.ebook_visual_pipeline import _parse_workflow
+    body = '#### 1. Choose one routine\nKeep it simple.\n#### 2. Pick one anchor\nTry your breath.\n#### 3. Return gently\nBegin again.'
+    assert _parse_workflow(body) == ['Choose one routine', 'Pick one anchor', 'Return gently']
+
+
+def test_editor_rejects_a_saved_checklist_that_reverses_its_source():
+    plan = _plan(_aid('checklist', 'wrong', source='local_manuscript_checklist',
+                      items=['special clothes', 'long sessions', 'a private room']))
+    plan['chapters'][0]['chapter_body'] = 'You do not need:\n- special clothes\n- long sessions\n- a private room\n- silence'
+    report = review_visual_set(plan, photography_supported=False)
+    assert any('reverses' in finding for finding in report.findings), report.findings
+
+
 def _aid(kind, vid, **over):
     aid = {
         "type": kind,

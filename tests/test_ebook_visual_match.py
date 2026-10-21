@@ -608,3 +608,28 @@ def test_stale_merchandise_brief_is_rederived_from_the_mindfulness_chapter():
     brief = build_visual_brief(aid, title='Mindfulness in Motion', topic='mindfulness')
     assert brief.purpose == 'chapter_scene'
     assert 'photographic keepsake' not in brief.required_subject
+
+
+def test_broad_wellness_metadata_cannot_replace_the_chapter_activity():
+    brief = build_visual_brief({'type': 'photo', 'title': 'Mindful Eating',
+        'chapter': 'Mindful Eating: Turning Meals Into Practice',
+        'caption': 'Mindful eating is a practical way to learn mindfulness.'})
+    report = score_photo_against_brief(brief,
+        appears_to_show='Close-up of a hand in a meditation pose, focusing on mindfulness and calmness.',
+        image_bytes=_noisy_jpeg(), book_topic='mindfulness')
+    assert report.status != MATCH_PASS
+    assert 'required chapter activity' in report.missing_requirements
+
+
+def test_activity_brief_repairs_stale_theme_tokens_and_accepts_the_right_scene():
+    aid = {'type': 'photo', 'title': 'Mindful Eating', 'chapter': 'Mindful Eating',
+           'caption': 'Mindful eating at a meal'}
+    old = build_visual_brief(aid).as_dict()
+    old['action_tokens'] = ['mindfulness', 'calmness']
+    brief = build_visual_brief({**aid, 'visual_brief': old})
+    assert 'eating' in brief.action_tokens
+    assert brief.search_queries[0] == 'person eating'
+    report = score_photo_against_brief(brief,
+        appears_to_show='A person eating a mindful meal, noticing the food before the next bite.',
+        image_bytes=_noisy_jpeg(), book_topic='mindfulness')
+    assert report.status == MATCH_PASS, report.as_dict()

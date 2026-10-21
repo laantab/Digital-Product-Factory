@@ -333,7 +333,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "a6343fb4491c830330fc721bd6d77842744e5010",
       "factory_version": "1.9.52",
       "protected_test_files": [
@@ -374,10 +374,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Codex, owner-authorized editorial repair and completed-book reference approval",
-      "relocked_after_tests": "All 3253 unique acceptance cases across all 232 manifest files passed with zero failures/errors/skips/missing/extra/duplicates. Shard 1 repeated in full after a documentation-only correction; initial failure retained. Owner-approved Room-by-Room PDF/ZIP hashes, CRC and embedded PDF identity verified; original Project 351 assertions retained when its pair exists. See release_evidence/v1.9.52-full-release.json. Runtime source a6343fb4491c830330fc721bd6d77842744e5010.",
+      "unlocked_by": "Codex, owner-authorized ebook quality repair",
+      "unlocked_reason": "Repair source polarity, chapter activity matching and thumbnail cover typography found in the real exported book.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {

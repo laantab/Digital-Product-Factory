@@ -46,12 +46,13 @@ MIN_AUTHOR_PT = 13
 # Universal typography — preferred editor sizes are starting points only.
 # Wrap more lines to keep subtitle readable; shrink title slightly if needed;
 # FAIL rather than emit tiny unclipped text.
-TITLE_PX_SCALE = 2.0
+TITLE_PX_SCALE = 2.8
 SUBTITLE_PX_SCALE = 3.4
 AUTHOR_PX_SCALE = 2.05
 SERIES_PX_SCALE = 1.85
 MIN_TITLE_RENDER_PX = 48
-MAX_TITLE_RENDER_PX = 88
+SHORT_TITLE_MIN_RENDER_PX = 96
+MAX_TITLE_RENDER_PX = 128
 MIN_SUBTITLE_RENDER_PX = 44
 MAX_SUBTITLE_RENDER_PX = 56
 MIN_AUTHOR_RENDER_PX = 28
@@ -149,7 +150,7 @@ MISSING_STEP_RECOVERY = (
     "This cover step could not be shown. Choose another photo, or pick a cover "
     "from the options already saved."
 )
-RECOVERY_VERSION = 2
+RECOVERY_VERSION = 3
 MAX_RECOVERY_ATTEMPTS = 12
 FORBIDDEN_LABELS = (
     "Event Photography Field Guide",
@@ -1118,6 +1119,13 @@ def _preferred_px(editor: dict) -> dict[str, int]:
     }
 
 
+def _title_min_px(ident: dict) -> int:
+    # A brief title must lead the cover. Longer approved titles need room to
+    # wrap beside a subject without splitting words or losing working layouts.
+    title = str(ident.get('title') or '').strip()
+    return SHORT_TITLE_MIN_RENDER_PX if len(title) <= 28 else MIN_TITLE_RENDER_PX
+
+
 def plan_typography(
     ident: dict[str, str],
     editor: dict,
@@ -1131,6 +1139,7 @@ def plan_typography(
     title slightly if needed; FAIL rather than emit tiny unclipped subtitle.
     """
     title = str(ident.get("title") or "").strip()
+    title_min = _title_min_px(ident)
     subtitle = str(ident.get("subtitle") or "").strip()
     author = str(ident.get("author") or "").strip()
     series = str(ident.get("series") or "").strip()
@@ -1197,7 +1206,7 @@ def plan_typography(
             title_x, title_w = margin_x, full_w
 
         roles = [
-            ("title", title, True, pref["title"], MIN_TITLE_RENDER_PX, MAX_TITLE_RENDER_PX, MAX_TITLE_LINES, TITLE_LINE_GAP, False),
+            ("title", title, True, pref["title"], title_min, MAX_TITLE_RENDER_PX, MAX_TITLE_LINES, TITLE_LINE_GAP, False),
             ("subtitle", subtitle, False, pref["subtitle"], MIN_SUBTITLE_RENDER_PX, MAX_SUBTITLE_RENDER_PX, MAX_SUBTITLE_LINES, SUBTITLE_LINE_GAP, True),
             ("series", series, False, pref["series"], MIN_SERIES_RENDER_PX, MAX_SERIES_RENDER_PX, MAX_SERIES_LINES, SERIES_LINE_GAP, False),
             ("author", author, True, pref["author"], MIN_AUTHOR_RENDER_PX, MAX_AUTHOR_RENDER_PX, MAX_AUTHOR_LINES, 6, False),
@@ -1232,13 +1241,13 @@ def plan_typography(
             room = 2 * sub_lh + SUBTITLE_LINE_GAP
             target_title_h = max(0, ceiling_y - margin_y - BLOCK_GAP - room)
             tsize = int(fitted["title"]["size"])
-            while int(fitted["title"]["height"]) > target_title_h and tsize > MIN_TITLE_RENDER_PX:
+            while int(fitted["title"]["height"]) > target_title_h and tsize > title_min:
                 tsize -= 2
                 row = fit(
                     title,
                     bold=True,
                     start=tsize,
-                    min_px=MIN_TITLE_RENDER_PX,
+                    min_px=title_min,
                     max_px=tsize,
                     max_lines=MAX_TITLE_LINES,
                     gap=TITLE_LINE_GAP,
@@ -1454,7 +1463,7 @@ def plan_typography(
                     for hb in _block_hit_boxes(b)
                 ):
                     findings.append("text_overlap")
-        if fitted["title"]["size"] < MIN_TITLE_RENDER_PX:
+        if fitted["title"]["size"] < title_min:
             findings.append("title_too_small")
         if fitted["author"]["size"] < MIN_AUTHOR_RENDER_PX:
             findings.append("author_too_small")
@@ -1846,7 +1855,7 @@ def inspect_variant(
         title_px = int(sizes.get("title") or 0)
         sub_px = int(sizes.get("subtitle") or 0)
         auth_px = int(sizes.get("author") or 0)
-        if title_px and title_px < MIN_TITLE_RENDER_PX:
+        if title_px and title_px < _title_min_px(ident):
             findings.append("title_too_small")
         if str(ident.get("subtitle") or "").strip() and sub_px < MIN_SUBTITLE_RENDER_PX:
             findings.append("subtitle_unreadable")
@@ -1864,7 +1873,8 @@ def inspect_variant(
                 if measured < size * 0.55:
                     findings.append("title_too_small" if role == "title" else "subtitle_unreadable" if role == "subtitle" else "author_too_small")
                     break
-        if title_px and (title_px * THUMB_SCALE) < MIN_TITLE_THUMB_PX - 0.05:
+        title_thumb_min = max(MIN_TITLE_THUMB_PX, _title_min_px(ident) * THUMB_SCALE)
+        if title_px and (title_px * THUMB_SCALE) < title_thumb_min - 0.05:
             findings.append("title_unreadable_at_thumbnail")
         if str(ident.get("subtitle") or "").strip() and sub_px and (sub_px * THUMB_SCALE) < MIN_SUBTITLE_THUMB_PX - 0.05:
             findings.append("subtitle_unreadable_at_thumbnail")

@@ -309,6 +309,29 @@ def review_visual_set(
         if aid_type(aid) in PHOTO_TYPES and not str(aid.get("attribution") or "").strip():
             findings.append(f"Photograph {aid.get('visual_id')} has no attribution.")
 
+    # A cached graphic can be technically perfect and reverse the manuscript.
+    # Recheck saved lists too, so fixing extraction repairs existing plans.
+    from services.ebook_visual_pipeline import _contextual_bullet_lists, _negative_list_context
+
+    def normalized_item(value):
+        return re.sub(r"[\W_]+", " ", str(value).lower()).strip()
+
+    for chapter in (plan or {}).get("chapters") or []:
+        body = str(chapter.get("chapter_body") or "")
+        negative_items = {
+            normalized_item(item)
+            for context, items in _contextual_bullet_lists(body)
+            if _negative_list_context(context)
+            for item in items
+        }
+        for aid in chapter.get("aids") or []:
+            if aid_type(aid) in TEXT_BOX_TYPES and any(
+                normalized_item(item) in negative_items for item in aid.get("items") or []
+            ):
+                findings.append(
+                    f"Visual {aid.get('visual_id')} reverses a list of things the manuscript says are not required."
+                )
+
     # 10. The visuals must be in the book, not merely beside it.
     if pdf_path:
         embedded = verify_embedded_in_pdf(plan, pdf_path)
