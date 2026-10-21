@@ -107,6 +107,27 @@ class EbookDesignExportTests(unittest.TestCase):
     def tearDown(self):
         self._client_patch.stop()
 
+    def test_portrait_photo_stays_with_its_chapter_heading_without_cropping(self):
+        import tempfile
+        import fitz
+        from PIL import Image
+        from services.ebook_visual_pipeline import figure_html
+        from services.pdf_export import _html_to_pdf_xhtml2pdf
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'portrait.jpg'
+            Image.new('RGB', (1600, 2400), (80, 110, 70)).save(path)
+            before = path.read_bytes()
+            figure = figure_html({'visual_id': 'portrait', 'type': 'photo',
+                                  'asset_path': str(path), 'caption': 'An entire portrait photograph.'})
+            html = '<html><head><style>@page {size:letter; margin:54pt;}</style></head><body><h1>Chapter 1</h1><h2>An ordinary daily practice</h2>' + figure + '<p>Begin with one small moment of attention.</p></body></html>'
+            payload = _html_to_pdf_xhtml2pdf(html)
+            with fitz.open(stream=payload, filetype='pdf') as doc:
+                self.assertTrue(doc[0].get_image_info(), 'The photograph must stay beside its chapter heading')
+                info = doc[0].get_image_info()[0]
+                self.assertEqual((info['width'], info['height']), (1600, 2400))
+                self.assertLessEqual(info['bbox'][3] - info['bbox'][1], 361)
+            self.assertEqual(path.read_bytes(), before)
+
     def test_tall_diagram_fit_preserves_readable_labels_and_full_image(self):
         from PIL import Image
         from services.ebook_visual_pipeline import bounded_diagram_dimensions, label_min_pt

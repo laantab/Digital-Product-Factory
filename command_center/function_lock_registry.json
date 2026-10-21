@@ -1,6 +1,6 @@
 {
   "schema_note": "Per-function protection status for the Factory's customer-facing generators and shared systems. Seeded 2026-09-12 from a read-only audit -- see PROTECTED_GENERATOR_RULE.md and SESSION_HANDOFF_2026-09-11.md. Status values: LOCKED (proven customer-path fix + machine-checked protected test(s) + known last_known_good_commit), UNLOCKED (an explicit, reasoned, in-progress exception -- see unlocked_by/unlocked_reason), PROTECTED (real test coverage exists but no single commit has been proven as its customer-path last-known-good), UNPROTECTED (no meaningful customer-path test coverage), REGRESSION (currently known broken). last_known_good_commit is null unless a real commit was proven -- never manufactured (Rule 9, PROTECTED_GENERATOR_RULE.md). shared_code_dependencies covers both the function's own dedicated files and any file it shares with other functions -- tests/test_function_lock_enforcement.py treats a trailing '/' as a directory-prefix match.",
-  "updated_at": "2026-10-20T23:32:26.815046+00:00",
+  "updated_at": "2026-10-21T00:42:52.545627+00:00",
   "functions": {
     "word_search": {
       "display_name": "Word Search",
@@ -334,8 +334,8 @@
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
       "status": "LOCKED",
-      "last_known_good_commit": "a6343fb4491c830330fc721bd6d77842744e5010",
-      "factory_version": "1.9.52",
+      "last_known_good_commit": "5e961e8146bc7685dec32a3b871895798956f177",
+      "factory_version": "1.9.53",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
         "tests/test_guided_cover_choice.py",
@@ -376,8 +376,8 @@
       "full_gate": true,
       "unlocked_by": null,
       "unlocked_reason": null,
-      "relocked_by": "Codex, owner-authorized editorial repair and completed-book reference approval",
-      "relocked_after_tests": "All 3253 unique acceptance cases across all 232 manifest files passed with zero failures/errors/skips/missing/extra/duplicates. Shard 1 repeated in full after a documentation-only correction; initial failure retained. Owner-approved Room-by-Room PDF/ZIP hashes, CRC and embedded PDF identity verified; original Project 351 assertions retained when its pair exists. See release_evidence/v1.9.52-full-release.json. Runtime source a6343fb4491c830330fc721bd6d77842744e5010.",
+      "relocked_by": "Codex after complete acceptance verification",
+      "relocked_after_tests": "All 3260 cases in 232 acceptance files passed, zero failures/errors/skips/missing/extra/duplicates; all protected ebook suites included. Baseline 809 stability and five real-browser checks passed. Seven new regressions retained, actual corrected 49-page PDF/ZIP verified, required completed-book reference unchanged.",
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {

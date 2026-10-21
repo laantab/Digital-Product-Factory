@@ -847,6 +847,22 @@ def _significant_tokens(text: str, *, limit: int = 8) -> list[str]:
     return out
 
 
+def _chapter_activity_terms(chapter: str) -> list[str]:
+    """Concrete chapter activities outrank a shared broad theme like wellness."""
+    activities = (
+        (r"\b(?:eating|meals?)\b", ['eating', 'meal', 'food', 'bite', 'chewing', 'dining']),
+        (r"\b(?:walking|strolling)\b", ['walking', 'walk', 'strolling', 'footsteps']),
+        (r"\b(?:showering|washing|chores)\b", ['shower', 'washing', 'cleaning', 'chores', 'brushing']),
+        (r"\bcommuting\b", ['commuting', 'commuter', 'bus', 'train', 'driving', 'traffic']),
+        (r"\blistening\b", ['listening', 'conversation', 'talking', 'speaking']),
+    )
+    terms = []
+    for pattern, synonyms in activities:
+        if re.search(pattern, chapter, re.I):
+            terms.extend(synonyms)
+    return terms
+
+
 def _chapter_scene_brief_from_text(
     aid: dict[str, Any],
     *,
@@ -883,6 +899,9 @@ def _chapter_scene_brief_from_text(
     tokens = _significant_tokens(blob, limit=10)
     subject_tokens = _significant_tokens(clean_title or clean_chapter_title or planned, limit=5) or tokens[:4]
     action_tokens = _significant_tokens(clean_caption or planned, limit=5) or tokens[1:5]
+    activity_terms = _chapter_activity_terms(chapter_title)
+    if activity_terms:
+        action_tokens = activity_terms
     setting_tokens = _significant_tokens(clean_chapter_title or body[:180], limit=5) or tokens[:4]
     object_tokens = tokens[:5]
 
@@ -907,6 +926,7 @@ def _chapter_scene_brief_from_text(
     queries: list[str] = []
     equipment_prefix = " ".join(equipment[:1])
     for item in (
+        f"person {activity_terms[0]}" if activity_terms else "",
         f"{equipment_prefix} {clean_chapter_title}".strip() if equipment_prefix else "",
         f"{equipment_prefix} {' '.join(action_tokens[:3])}".strip() if equipment_prefix else "",
         planned,
@@ -1060,6 +1080,10 @@ def _stored_brief_matches_purpose(existing: dict[str, Any], derived: VisualBrief
         return False
     stored_purpose = _purpose_from_stored_brief(existing)
     if stored_purpose != derived.purpose:
+        return False
+    if (derived.purpose == PURPOSE_CHAPTER_SCENE
+            and _chapter_activity_terms(derived.chapter_title)
+            and _fresh_strings(existing.get('action_tokens')) != derived.action_tokens):
         return False
     stored_blob = _blob(
         existing.get("required_subject"),
@@ -1282,6 +1306,11 @@ def score_photo_against_brief(
         else:
             missing.append("required action")
             reasons.append("missing required action")
+    activity_terms = _chapter_activity_terms(brief.chapter_title)
+    if (brief.purpose == PURPOSE_CHAPTER_SCENE and activity_terms
+            and not _requirement_hit(appearance, activity_terms)):
+        missing.append('required chapter activity')
+        reasons.append('missing required chapter activity')
     if brief.setting_tokens:
         if "required setting" not in missing and _requirement_hit(appearance, brief.setting_tokens):
             passed.append("required setting")
@@ -1333,7 +1362,7 @@ def score_photo_against_brief(
     critical_missing = [
         item
         for item in missing
-        if item in {"required subject", "required action", "required setting", "specific workflow", "honest scene match"}
+        if item in {"required subject", "required action", "required chapter activity", "required setting", "specific workflow", "honest scene match"}
         or item in {group[0] for group in brief.object_token_groups if group}
     ]
     tech_ok = bool(inspection.get("ok")) if (image_path or image_bytes) else False

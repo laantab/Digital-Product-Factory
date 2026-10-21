@@ -529,26 +529,47 @@ def _parse_tables(md: str) -> list[dict[str, Any]]:
     return tables
 
 
+def _contextual_bullet_lists(md: str):
+    """Keep each list with its heading and introduction, never merge lists."""
+    lines = str(md or "").splitlines()
+    heading, lead = "", []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if re.match(r"^\s*#{1,6}\s+", line):
+            heading, lead = line, []
+        elif re.match(r"^\s*[-*]\s+\S", line):
+            items = []
+            while i < len(lines):
+                match = re.match(r"^\s*[-*]\s+(.+)$", lines[i])
+                if not match:
+                    break
+                items.append(match.group(1).strip())
+                i += 1
+            yield "\n".join([heading, *lead[-4:]]), items
+            lead = []
+            continue
+        elif line.strip():
+            lead.append(line.strip())
+        i += 1
+
+
+def _negative_list_context(context: str) -> bool:
+    return bool(re.search(
+        r"\b(?:do(?:es)? not|don['’]t|doesn['’]t)\s+(?:need|require)\b|"
+        r"\bnot\s+(?:needed|required)\b|\b(?:myths?|misconceptions?|unnecessary)\b",
+        context, re.I,
+    ))
+
+
 def _parse_checklist(md: str) -> list[str]:
-    items: list[str] = []
-    in_list = False
-    for line in str(md or "").splitlines():
-        if re.match(r"(?i)^\*\*.*checklist.*\*\*", line) or re.match(r"(?i)^#{2,4}\s*.*checklist", line):
-            in_list = True
+    for context, items in _contextual_bullet_lists(md):
+        if _negative_list_context(context):
             continue
-        m = re.match(r"^\s*[-*]\s+(.+)$", line)
-        if m and (in_list or "checklist" in str(md or "").lower()):
-            items.append(m.group(1).strip())
-            in_list = True
-            continue
-        if in_list and line.strip() and not line.strip().startswith(("-", "*")):
-            if items and len(items) >= 3:
-                break
-            in_list = False
-    if len(items) >= 3:
-        return items[:8]
-    bullets = [re.sub(r"^\s*[-*]\s+", "", ln).strip() for ln in str(md or "").splitlines() if re.match(r"^\s*[-*]\s+\S", ln)]
-    return bullets[:8] if len(bullets) >= 4 else []
+        explicit = bool(re.search(r"\bchecklist\b", context, re.I))
+        if len(items) >= (3 if explicit else 4):
+            return items[:8]
+    return []
 
 
 def _parse_checkbox_items(md: str) -> list[str]:
@@ -558,21 +579,20 @@ def _parse_checkbox_items(md: str) -> list[str]:
     an ordinary prose bullet list can outrank a rich comparison table. A real
     checkbox list is a deliberate authoring signal; a bullet list is not.
     """
-    items = [
-        m.group(1).strip()
-        for m in (
-            re.match(r"^\s*[-*]\s*\[\s*[xX ]?\s*\]\s*(.+)$", ln)
-            for ln in str(md or "").splitlines()
-        )
-        if m
-    ]
-    return items[:8] if len(items) >= 3 else []
+    for context, bullets in _contextual_bullet_lists(md):
+        if _negative_list_context(context):
+            continue
+        items = [match.group(1).strip() for item in bullets
+                 if (match := re.match(r"^\[\s*[xX ]?\s*\]\s*(.+)$", item))]
+        if len(items) >= 3:
+            return items[:8]
+    return []
 
 
 def _parse_workflow(md: str) -> list[str]:
     steps: list[str] = []
     for line in str(md or "").splitlines():
-        m = re.match(r"^\s*(\d+)\.\s+(.+)$", line)
+        m = re.match(r"^\s*(?:#{2,6}\s+)?(\d+)\.\s+(.+)$", line)
         if m:
             steps.append(m.group(2).strip())
     return steps[:8] if len(steps) >= 3 else []
@@ -2834,6 +2854,12 @@ def figure_html(aid: dict[str, Any], *, palette: dict[str, tuple[int, int, int]]
         uri, w, h = _embed_preview_image(path, lossless=not is_photo)
         if not uri:
             return ""
+    if is_photo and w and h and min(DIAGRAM_COLUMN_PT, w * 0.75) * h / w > 360.0:
+        # xhtml2pdf honors HTML dimensions ahead of CSS max-height. Keep a
+        # portrait beside its chapter opener, preserving every source pixel.
+        fitted_w = max(1, int(360.0 * w / h / 0.75))
+        h = max(1, round(fitted_w * h / w))
+        w = fitted_w
     photo_cls = " ebook-figure-photo" if is_photo else ""
     return (
         f'<figure class="ebook-figure{photo_cls}" id="{vid}" data-visual-id="{vid}" data-sha="{sha}">'
@@ -3373,6 +3399,10 @@ def prepare_visuals_for_review(data: dict, *, preserve_downstream: bool = False)
         plan = _carry_over_resolved_photographs(existing, plan)
     pkg = _package_id(data)
     data["package_id"] = data.get("package_id") or pkg
+    # Recheck carried/cached photos before acquisition decides to skip them.
+    # Otherwise an old broad-theme PASS is rejected only after search ends,
+    # leaving Resume to repeat the same stale candidate indefinitely.
+    plan = stamp_plan_photo_matches(plan)
     # _commission_media_mix (above, inside plan_content_aware_visuals) commits
     # a chapter to a "photo, status=missing" aid whenever the SUBJECT supports
     # photography -- by its own design comment, "whether the book may have a
