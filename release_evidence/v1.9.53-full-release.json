@@ -1,0 +1,83 @@
+{
+  "status": "PASS",
+  "source_commit": "5e961e8146bc7685dec32a3b871895798956f177",
+  "source_tree": "57ebf5a8827e9acffd9a4521e86c679574709a22",
+  "local_equivalent_commit": "4a00b7c85ef82fa46c0e4b6206a3c9fdb8d422a9",
+  "counts": {
+    "tests": 3260,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "manifest_files": 232,
+  "retained_prior_cases": 3253,
+  "new_regression_cases": 7,
+  "missing": [],
+  "extra": [],
+  "duplicates": 0,
+  "method": "Complete acceptance manifest in six isolated processes, compilation and JavaScript syntax. Final run repeats every case after all source changes.",
+  "baseline": {
+    "stability_passed": 809,
+    "real_browser_passed": 5
+  },
+  "initial_failures": "Six negative regression checks reproduced the exported defects; the seventh verifies a correct activity scene. A full candidate run additionally caught two unchanged dashed long-title cases; adaptive sizing fixed them. Partial earlier runs were stopped after a further portrait placement defect was reproduced. Final complete source run supersedes those candidates; original failure evidence remains in the archive.",
+  "shards": [
+    {
+      "index": 0,
+      "returncode": 0,
+      "xml_sha256": "db9faa7b0bb2778a676494fd57b99a5467da425e088dac237eab3570b830dde6"
+    },
+    {
+      "index": 1,
+      "returncode": 0,
+      "xml_sha256": "526125de0c52c671bedd413149ca15ee707c1b79068efcd7485bd9c494353eca"
+    },
+    {
+      "index": 2,
+      "returncode": 0,
+      "xml_sha256": "a5089658c228cf6aa83a2ba7772c1dcc0f1c0c0cce2ef6e9e143a9ce9e277317"
+    },
+    {
+      "index": 3,
+      "returncode": 0,
+      "xml_sha256": "e390feef08dd6c80140c13f6fe0566a923c799ca90b5cc89520a45ae69c3e8b3"
+    },
+    {
+      "index": 4,
+      "returncode": 0,
+      "xml_sha256": "a4cb7bb10b916fa65a83e68745c440ca3ac1946c43b76c93a5b3dc52155c5a11"
+    },
+    {
+      "index": 5,
+      "returncode": 0,
+      "xml_sha256": "b623eb4a49ae9b4ac44e881e83a0119d626bf28ff3a741fedb730bbacae43221"
+    }
+  ],
+  "archive_sha256": "4fec03a0d449de16318b333abc4377010ef0abf83d67856ca26282f42e1d458e",
+  "paid_provider_calls_permitted": 0,
+  "compile_passed": true,
+  "javascript_syntax_passed": true,
+  "preservation_reference": {
+    "pdf_sha256": "20792e8fcce4ab4fcc7daa8e49df1d0a634f7c624d9197d346d0fda83f8d025d",
+    "zip_sha256": "f7cc37a90f71e8563039c412f23f7ba11deff52edb055419117197921d572d26",
+    "zip_crc_and_embedded_pdf_match": true
+  },
+  "corrected_customer_copy": {
+    "pages": 49,
+    "chapters": 9,
+    "all_chapter_openers_have_images": true,
+    "manuscript_byte_identical": true,
+    "preflight": "PASS",
+    "zip_crc_and_embedded_pdf_match": true,
+    "pdf_sha256": "a30e2ebd7bf0b2c72c639782e2c799d463a9f5bd884ec089fb1600e70feb0fa9",
+    "zip_sha256": "131de3e24a8bca61ca9094bfa7e7189e1f13b2a82a4a94a757dc3d554f283c87",
+    "production_project_replaced": false
+  },
+  "deployment": "Not certified by tests. Verify website and builder after merge and record their actual results in PR75.",
+  "final_metadata_checks": {
+    "passed": 40,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}
