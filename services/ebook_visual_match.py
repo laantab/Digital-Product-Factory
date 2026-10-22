@@ -197,7 +197,11 @@ def photo_appearance_text(
     content_labels: Any = None,
     photographer: str = "",
 ) -> str:
-    """What the selected photo appears to show. Never uses the planned caption."""
+    """Scene descriptions, excluding planned captions and local filenames.
+
+    A stored filename can come from the requested chapter rather than from
+    the photograph. It must never supply a missing subject or activity.
+    """
     tag_text = ""
     if isinstance(tags, (list, tuple)):
         tag_text = " ".join(str(t) for t in tags)
@@ -208,7 +212,7 @@ def photo_appearance_text(
         label_text = " ".join(str(t) for t in content_labels)
     elif isinstance(content_labels, str):
         label_text = content_labels
-    return _blob(alt, _slug_from_url(page_url), Path(str(filename or "")).stem, tag_text, label_text, photographer)
+    return _blob(alt, _slug_from_url(page_url), tag_text, label_text)
 
 
 def event_print_brief(*, chapter_number: int = 7, chapter_title: str = "") -> VisualBrief:
@@ -1273,6 +1277,8 @@ def score_photo_against_brief(
         tags=tags,
         content_labels=content_labels,
     )
+    # Filenames may expose a conflict, but cannot certify the requested scene.
+    rejection_appearance = _blob(appearance, Path(str(filename or "")).stem)
     inspection = inspect_local_image(image_path, image_bytes=image_bytes) if (image_path or image_bytes) else {
         "ok": False,
         "findings": ["missing or unreadable asset"],
@@ -1285,12 +1291,12 @@ def score_photo_against_brief(
     reasons: list[str] = []
     inspected_labels = content_labels not in (None, "", [], ())
 
-    forbidden = _forbidden_hit(appearance, brief.forbidden_tokens)
+    forbidden = _forbidden_hit(rejection_appearance, brief.forbidden_tokens)
     if forbidden:
         reasons.append(f"setting conflict: {forbidden}")
         missing.append("required setting")
 
-    if brief.generic_tokens and _has_any(appearance, [_norm(t) for t in brief.generic_tokens]):
+    if brief.generic_tokens and _has_any(rejection_appearance, [_norm(t) for t in brief.generic_tokens]):
         reasons.append("generic person using a printer instead of the specific event workflow")
         missing.append("specific workflow")
 
@@ -1332,7 +1338,7 @@ def score_photo_against_brief(
                 missing.append("specific workflow")
 
     planned = _norm(planned_caption)
-    contradiction = _named_scene_contradiction(planned, appearance, forbidden)
+    contradiction = _named_scene_contradiction(planned, rejection_appearance, forbidden)
     if contradiction:
         reasons.append(contradiction)
         missing.append("honest scene match")
@@ -1457,7 +1463,7 @@ def score_photo_against_brief(
         )
 
         cliche = cliche_rejection_reason(
-            appearance, book_topic=book_topic, chapter_body=chapter_body
+            rejection_appearance, book_topic=book_topic, chapter_body=chapter_body
         )
         if cliche and status != MATCH_REJECT:
             status = MATCH_REJECT
