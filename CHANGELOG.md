@@ -6,6 +6,9 @@ A local photo filename can no longer supply a missing subject or chapter activit
 ### What was fixed
 The same meditation image could fail the Mindful Eating check under its original name and pass when renamed person-eating-mindful-meal.jpg. Three regression cases reproduce the filename-only, misleading-metadata and saved-approval paths. Existing chapter-activity checks and genuine scene descriptions remain required.
 
+### Do the steps change?
+Use the existing ebook picture review and replacement controls. Revalidate saved pictures before building corrected downloads. Existing exported files remain available until corrected files are explicitly rebuilt and reviewed.
+
 ### Release gate
 Candidate only. The original 26 photo-matching cases passed before the source change; all 29 pass after it. Complete workflow and release verification are pending. No customer projects were overwritten and no paid generation calls were made by this repair. Existing saved exports require an explicit corrected rebuild; a code deployment does not replace their bytes.
 
