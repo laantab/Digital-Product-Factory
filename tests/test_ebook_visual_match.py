@@ -633,3 +633,42 @@ def test_activity_brief_repairs_stale_theme_tokens_and_accepts_the_right_scene()
         appears_to_show='A person eating a mindful meal, noticing the food before the next bite.',
         image_bytes=_noisy_jpeg(), book_topic='mindfulness')
     assert report.status == MATCH_PASS, report.as_dict()
+
+
+def test_renaming_a_meditation_photo_cannot_supply_the_missing_eating_scene():
+    brief = build_visual_brief({'type': 'photo', 'title': 'Mindful Eating',
+        'chapter': 'Mindful Eating', 'caption': 'Mindful eating at a meal'})
+    for filename in ('meditation.jpg', 'person-eating-mindful-meal.jpg'):
+        report = score_photo_against_brief(brief,
+            alt='Close-up of a hand in a meditation pose, focusing on mindfulness and calmness.',
+            page_url='https://www.pexels.com/photo/a-person-s-hand-while-meditating-6867682/',
+            filename=filename, image_bytes=_noisy_jpeg(), book_topic='mindfulness')
+        assert report.status != MATCH_PASS, (filename, report.as_dict())
+        assert 'required chapter activity' in report.missing_requirements
+
+
+def test_a_planned_filename_alone_cannot_certify_an_eating_photo():
+    brief = build_visual_brief({'type': 'photo', 'title': 'Mindful Eating',
+        'chapter': 'Mindful Eating', 'caption': 'Mindful eating at a meal'})
+    report = score_photo_against_brief(brief,
+        filename='person-eating-mindful-meal.jpg', image_bytes=_noisy_jpeg())
+    assert report.status != MATCH_PASS, report.as_dict()
+    assert 'required chapter activity' in report.missing_requirements
+
+
+def test_saved_photo_approval_is_revoked_when_only_its_filename_matches(tmp_path):
+    path = tmp_path / 'person-eating-mindful-meal.jpg'
+    path.write_bytes(_noisy_jpeg())
+    plan = {'chapters': [{'chapter': 'Mindful Eating', 'aids': [{
+        'type': 'photo', 'title': 'Mindful Eating', 'caption': 'Mindful eating at a meal',
+        'asset_path': str(path),
+        'alt': 'A person meditating, focusing on mindfulness and calmness.',
+        'page_url': 'https://www.pexels.com/photo/a-person-s-hand-while-meditating-6867682/',
+        'approved': True, 'match_status': MATCH_PASS, 'internally_ready': True,
+    }]}]}
+    stamp_plan_photo_matches(plan)
+    aid = plan['chapters'][0]['aids'][0]
+    assert aid['match_status'] != MATCH_PASS
+    assert not aid['approved']
+    assert not aid['internally_ready']
+    assert 'required chapter activity' in aid['missing_requirements']

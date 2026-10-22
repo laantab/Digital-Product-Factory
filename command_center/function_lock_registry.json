@@ -333,7 +333,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "5e961e8146bc7685dec32a3b871895798956f177",
       "factory_version": "1.9.53",
       "protected_test_files": [
@@ -374,10 +374,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Codex after complete acceptance verification",
-      "relocked_after_tests": "All 3260 cases in 232 acceptance files passed, zero failures/errors/skips/missing/extra/duplicates; all protected ebook suites included. Baseline 809 stability and five real-browser checks passed. Seven new regressions retained, actual corrected 49-page PDF/ZIP verified, required completed-book reference unchanged.",
+      "unlocked_by": "Codex for owner-authorized ebook completion",
+      "unlocked_reason": "Prevent a planned image filename from satisfying required photo scene evidence; retain rejection checks and saved-book protections.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {
