@@ -1,0 +1,69 @@
+{
+  "source_commit": "0b35b0aca6eb5161149782f3f703c4c0d45719c2",
+  "source_tree": "2a47911e9cda1cbb1ddab6cffd6607d7cc636322",
+  "counts": {
+    "tests": 3263,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "missing": [],
+  "extra": [],
+  "duplicates": [],
+  "failed_cases": [],
+  "reports": [
+    {
+      "file": "0.xml",
+      "sha256": "1cd80bb7d8f252e357c0524bfa22fb812511542a7a7eb5906ecc30edc3dbe300"
+    },
+    {
+      "file": "1.xml",
+      "sha256": "4a1a1720840a2b67442462daec8c8393c6af6f74384a1d5788c7a90d94d2c855"
+    },
+    {
+      "file": "2.xml",
+      "sha256": "11a489a64be1435e792b84a5edeaa53bac76a3423342c1e9ac82023a10bdc152"
+    },
+    {
+      "file": "3.xml",
+      "sha256": "5c098c256d43a3e7c6d96becdfb7d3855c426e668295e920e74b857acb5ee849"
+    },
+    {
+      "file": "4.xml",
+      "sha256": "9982e4cfcdfbe691c7f8c538bda208bf728fd5380cd092d91fe5557a38291a87"
+    },
+    {
+      "file": "5.xml",
+      "sha256": "acffcccdd936c5a4339c614af6f30f2f4076e9ce2d661f1d57bf2d6340393ceb"
+    },
+    {
+      "file": "browser.xml",
+      "sha256": "0320a96a08fbe4bb0b5e1524c1b9e511dc4dd13da4294de9ff8af0e79b4fbfd1"
+    }
+  ],
+  "retained_prior_cases": 3260,
+  "new_regression_cases": 3,
+  "paid_provider_calls_permitted": 0,
+  "method": "Every acceptance case, six isolated non-browser groups followed by browser cases without competing test processes.",
+  "status": "PASS",
+  "baseline": {
+    "source_commit": "5e961e8146bc7685dec32a3b871895798956f177",
+    "counts": {
+      "tests": 3260,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "archive_sha256": "4fec03a0d449de16318b333abc4377010ef0abf83d67856ca26282f42e1d458e",
+    "note": "Runtime source unchanged between verified baseline and parent main; later baseline differences are metadata and evidence only."
+  },
+  "initial_findings": "Earlier candidate run had timing and changelog-heading failures. Targeted rerun: 37 PASS. After workspace maintenance, an initial incomplete run found missing preservation fixtures; exact approved Room-by-Room bytes restored, 30 preservation/template checks PASS. This complete rerun supersedes incomplete runs.",
+  "final_metadata_checks": {
+    "tests": 40,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "xml_sha256": "e23c214a16f1dbe297b265c0fd616e16eca5e4992b8589d9967166e55ee08c9d",
+    "note": "After relocking; runtime code unchanged from verified source."
+  }
+}
