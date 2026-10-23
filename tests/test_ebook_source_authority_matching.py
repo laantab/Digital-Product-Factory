@@ -153,3 +153,57 @@ class TestResearchSourceClassification:
     )
     def test_real_social_sources_are_still_classified_as_social(self, url):
         assert self._cls(url) == "Social signal"
+
+
+def _source_recovery_fixture():
+    from services.ebook_manuscript_engine import (
+        EVENT_PHOTO_CHAPTER_SPECS, build_book_contract,
+        split_front_chapters_back,
+    )
+    from services.ebook_manuscript_fixtures import build_event_photo_strong_manuscript
+    data = {
+        'title': 'Event Photography',
+        'outline': [{'order': c.order, 'title': c.title, 'purpose': c.purpose}
+                    for c in EVENT_PHOTO_CHAPTER_SPECS],
+        'ebook_workspace': {'research_payload': {'source_urls': [
+            'https://www.facebook.com/example/posts/123',
+            'https://www.canon.com/support',
+        ]}},
+    }
+    book = build_book_contract(data)
+    _, chapters, _ = split_front_chapters_back(build_event_photo_strong_manuscript())
+    for ch in chapters:
+        ch.accepted = True
+    return book, chapters
+
+
+def test_generated_references_exclude_sources_rejected_by_quality_gate():
+    from services.ebook_manuscript_engine import assemble_back_matter
+    book, _ = _source_recovery_fixture()
+    original = list(book.citations)
+    _, sources = assemble_back_matter(book)
+    assert 'facebook.com' not in sources
+    assert 'https://www.canon.com/support' in sources
+    assert book.citations == original  # retain original research evidence
+
+
+def test_source_only_recovery_keeps_all_chapters_without_provider_calls():
+    from services.ebook_manuscript_engine import run_chapter_pipeline, QUALITY_PASS
+    book, chapters = _source_recovery_fixture()
+    before = [(c.order, c.body) for c in chapters]
+    def forbidden_provider(*args):
+        raise AssertionError('Reference repair must not regenerate accepted chapters')
+    out = run_chapter_pipeline(book, accepted_chapters=chapters,
+                               generate_chapter_fn=forbidden_provider)
+    assert out['chapter_calls'] == 0
+    assert out['quality'].status == QUALITY_PASS, out['quality'].finding_messages
+    assert [(c.order, c.body) for c in out['chapters']] == before
+    assert 'facebook.com' not in out['manuscript_md']
+
+
+def test_excluded_reference_cannot_hide_inside_an_allowed_urls_path():
+    from services.ebook_manuscript_engine import assemble_back_matter
+    book, _ = _source_recovery_fixture()
+    book.citations = ['https://example.org/archive/facebook.com/post']
+    _, sources = assemble_back_matter(book)
+    assert not _non_authoritative_sources(sources)
