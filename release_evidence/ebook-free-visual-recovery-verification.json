@@ -1,0 +1,66 @@
+{
+  "runtime_commit": "d90ef3809ffde3f4db3108513aa1e60833559bf0",
+  "runtime_tree": "f878f517601b928896588d8d60b624808e2be6a4",
+  "unique_passing": 3341,
+  "unresolved": [],
+  "runs": [
+    {
+      "report": "test-results/v1959-release.xml",
+      "cases": 3332,
+      "failed_or_skipped": [
+        [
+          "tests.test_version_management",
+          "test_changelog_exists_and_covers_the_current_version"
+        ],
+        [
+          "tests.test_version_management",
+          "test_changelog_entry_answers_the_customer_questions"
+        ]
+      ]
+    },
+    {
+      "report": "test-results/v1959-protected.xml",
+      "cases": 1009,
+      "failed_or_skipped": [
+        [
+          "tests.test_ebook_manuscript_correction_recovery",
+          "test_slow_chapter_generation_never_blocks_one_advance_call_for_the_whole_book"
+        ],
+        [
+          "tests.test_ebook_creation_modes",
+          "test_browser_one_build_click_enters_finished_product_with_the_right_mode[custom]"
+        ]
+      ]
+    },
+    {
+      "report": "test-results/v1959-ui.xml",
+      "cases": 253,
+      "failed_or_skipped": [
+        [
+          "tests.test_version_management",
+          "test_changelog_exists_and_covers_the_current_version"
+        ],
+        [
+          "tests.test_version_management",
+          "test_changelog_entry_answers_the_customer_questions"
+        ]
+      ]
+    },
+    {
+      "report": "test-results/v1959-recovery-rerun.xml",
+      "cases": 2,
+      "failed_or_skipped": []
+    },
+    {
+      "report": "test-results/v1959-version.xml",
+      "cases": 31,
+      "failed_or_skipped": []
+    },
+    {
+      "report": "test-results/v1959-final-metadata.xml",
+      "cases": 40,
+      "failed_or_skipped": []
+    }
+  ],
+  "note": "Combined evidence across broad, protected, UI, and unchanged serial reruns. Initial failures retained. Runtime source unchanged after the final one-line UI revision; UI-source-sensitive files rerun after that revision. Not one uninterrupted green full run."
+}

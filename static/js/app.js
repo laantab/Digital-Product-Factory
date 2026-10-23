@@ -8261,7 +8261,7 @@ function showEbookWorkspaceStage(stageId) {
         ${missing ? `<p class="text-xs text-amber-800 mt-2">This chapter visual still needs attention.</p>` : ""}
       </article>`;
     }).join("");
-    const canPrepare = ws.gates && ws.gates.visuals_enabled && stage.status !== "approved";
+    const canPrepare = ws.gates && ws.gates.visuals_enabled && (stage.status !== "approved" || !review.approvable);
     const canApprove = review.approvable && stage.status !== "approved";
     const heading = review.heading || "Visuals Ready for Review";
     const intro = review.intro || "Your chapter visuals have been selected and prepared. Review them below, then approve them to build your ebook preview.";
