@@ -1035,13 +1035,13 @@ def _generic_photo_brief(
             business_purpose=purpose_text,
         )
     garden_blob = _norm(f"{chapter_title} {title} {caption}")
-    if any(
-        tok in garden_blob
-        for tok in (
-            "garden", "vegetable", "herb", "tomato", "potting", "patio", "balcony",
-            "container", "soil", "pest", "harvest", "water", "sun", "pot",
-        )
-    ):
+    # Household containers, a bedside water bottle and flat "spots" are
+    # not gardening briefs. Require whole-word horticultural context;
+    # ambiguous supplies inherit that context only from a gardening book.
+    garden_anchor = r"\b(?:garden(?:ing|s)?|vegetables?|herbs?|tomato(?:es)?|potting|patios?|balcon(?:y|ies)|soil|pests?|harvest(?:ing)?)\b"
+    book_gardens = bool(re.search(garden_anchor, _norm(f"{book_title} {book_topic}")))
+    garden_supplies = r"\b(?:containers?|water(?:ing)?|sun|pots?)\b"
+    if re.search(garden_anchor, garden_blob) or (book_gardens and re.search(garden_supplies, garden_blob)):
         return gardening_chapter_brief(aid, chapter=chapter_title)
     return _chapter_scene_brief_from_text(
         aid, chapter=chapter_title, chapter_body=chapter_body, book_title=book_title, book_topic=book_topic
@@ -1084,6 +1084,13 @@ def _stored_brief_matches_purpose(existing: dict[str, Any], derived: VisualBrief
         return False
     stored_purpose = _purpose_from_stored_brief(existing)
     if stored_purpose != derived.purpose:
+        return False
+    # A cached scene brief can retain the same purpose while describing the
+    # wrong domain. Retire the canonical gardening brief when fresh chapter
+    # evidence no longer supports it (and vice versa).
+    garden_subject = "vegetables herbs or container plants"
+    if ((_norm(existing.get("required_subject")) == garden_subject)
+            != (_norm(derived.required_subject) == garden_subject)):
         return False
     if (derived.purpose == PURPOSE_CHAPTER_SCENE
             and _chapter_activity_terms(derived.chapter_title)

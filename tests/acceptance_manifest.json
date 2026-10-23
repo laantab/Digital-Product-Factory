@@ -231,6 +231,7 @@
     "tests/test_billing_postgres_transactions.py",
     "tests/test_saved_list_nested_payloads.py",
     "tests/test_customer_account_isolation.py",
-    "tests/test_photograph_quota_recovery.py"
+    "tests/test_photograph_quota_recovery.py",
+    "tests/test_editor_in_chief.py"
   ]
 }

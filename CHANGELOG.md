@@ -1,3 +1,17 @@
+## 1.9.57 — Recognize chapter endings and keep household photos on topic
+
+### What changed
+Rendered page review recognizes standalone back-matter headings despite PDF footer extraction order. A substantive closing page is recognized only when the next rendered page begins a numbered chapter or back matter. Blank pages, tiny orphan fragments and sparse midchapter pages remain findings. Gardening photo routing now requires whole-word horticultural context; ordinary household containers and bedside water bottles inherit gardening context only from a gardening book. Cached canonical gardening briefs are rederived when the chapter belongs to another subject.
+
+### What was fixed
+Fresh project 23 reached export, but the reviewer classified its short chapter endings on pages 8 and 51 and its legal disclaimer on page 52 as ordinary sparse body pages. Real rendered text reproduces all three false findings. The bedroom photo also retried gardening images because “pot” matched inside “spots,” and the saved gardening brief survived retries. No manuscript, font size, image resolution or quality threshold is changed.
+
+### Do the steps change?
+Resume the saved build after deployment. The unchanged PDF content is checked using its real page boundaries. No manuscript generation or budget increase is needed.
+
+### Release gate
+The full pinned-dependency run passed 3,275 cases with zero failures, errors or skips. The editor unit suite had not been enrolled in the manifest: it is now permanently registered and adds 63 passing cases. Combined exact-case evidence covers all 3,338 unique cases, including every prior 3,269 case, with no missing or duplicate cases. Runtime source did not change after the full run. Three page-context and four photo-routing regressions were proved to fail before their respective repairs. The actual saved PDF clears all three page-context false alarms locally. Completion is relocked to verified candidate 12799f347d383aa0b2569a9b9fef175c4c88f786. Live deployment and final export remain pending. See release_evidence/ebook-page-photo-recovery.json.
+
 ## 1.9.56 — Keep research signals out of ebook references
 
 ### What changed

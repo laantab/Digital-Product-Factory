@@ -672,3 +672,41 @@ def test_saved_photo_approval_is_revoked_when_only_its_filename_matches(tmp_path
     assert not aid['approved']
     assert not aid['internally_ready']
     assert 'required chapter activity' in aid['missing_requirements']
+
+
+class TestGardeningTopicBoundaries(unittest.TestCase):
+    def _aid(self, title='The Bedroom: Calm Surfaces and Better Bedside Storage',
+             caption='A bedroom feels smaller when every flat spot collects stuff'):
+        return {'type': 'photo', 'chapter_index': 7, 'chapter': title,
+                'title': title + ': chapter scene', 'caption': caption}
+
+    def test_flat_spots_do_not_mean_garden_pots(self):
+        brief = build_visual_brief(self._aid(), title='Small-Space Home Organization for Beginners')
+        self.assertNotIn('vegetables', brief.required_subject)
+        self.assertFalse(any('garden' in q for q in brief.search_queries))
+
+    def test_household_containers_do_not_imply_gardening(self):
+        aid = self._aid('Everyday Containers', 'Use containers to organize your household essentials')
+        brief = build_visual_brief(aid, title='Home Organization')
+        self.assertNotIn('vegetables', brief.required_subject)
+
+    def test_water_bottle_in_a_bedroom_is_not_a_garden_topic(self):
+        brief = build_visual_brief(self._aid(caption='Keep a water bottle on the bedside table'),
+                                   title='Home Organization')
+        self.assertNotIn('vegetables', brief.required_subject)
+
+    def test_gardening_book_keeps_its_watering_and_container_context(self):
+        brief = build_visual_brief(self._aid('Water and Containers', 'Choose pots and watering routines'),
+                                   title='Container Gardening for Beginners')
+        self.assertIn('vegetables', brief.required_subject)
+
+    def test_explicit_gardening_chapter_stays_gardening(self):
+        brief = build_visual_brief(self._aid('Balcony Vegetable Garden', 'Grow tomatoes on a patio'))
+        self.assertIn('vegetables', brief.required_subject)
+
+    def test_saved_gardening_brief_is_rederived_for_a_bedroom(self):
+        from services.ebook_visual_match import gardening_chapter_brief
+        aid = self._aid();aid['visual_brief'] = gardening_chapter_brief(aid).as_dict()
+        brief = build_visual_brief(aid, title='Small-Space Home Organization for Beginners')
+        self.assertNotIn('vegetables', brief.required_subject)
+        self.assertFalse(any('garden' in q for q in brief.search_queries))
