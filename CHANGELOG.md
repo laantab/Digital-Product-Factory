@@ -1,3 +1,17 @@
+## 1.9.58 — Preserve manuscript boundaries in practice charts (candidate)
+
+### What changed
+Practice charts keep paragraph, heading and list boundaries. Questions and introductions ending in a colon cannot become action steps. Redrawing a defective saved automatic practice chart derives complete instructions from its original chapter, keeps the previous wording, and preserves owner edits.
+
+### What was fixed
+A kitchen chart joined “ask three questions” to its first question, mixing questions and actions. The redraw control previously rendered those same invalid words again.
+
+### Do the steps change?
+New practice charts use the corrected extraction automatically. For an existing generated practice chart, use “Use clearer type and redraw charts”, then rebuild and review the revised PDF and ZIP. Human approval and release checks remain required.
+
+### Release gate
+Candidate verification is running. Three targeted boundary and saved-chart recovery regressions are enrolled in the acceptance manifest. No deployment or completed full-release verdict is claimed.
+
 ## 1.9.57 — Recognize chapter endings and keep household photos on topic
 
 ### What changed

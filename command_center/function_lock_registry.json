@@ -333,7 +333,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "12799f347d383aa0b2569a9b9fef175c4c88f786",
       "factory_version": "1.9.57",
       "protected_test_files": [
@@ -375,8 +375,8 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
+      "unlocked_by": "Lonnie Brown \u2014 explicit source repair approval, 2026-10-23",
+      "unlocked_reason": "Repair manuscript question/list boundaries in practice charts and recover cached generated charts without paid regeneration.",
       "relocked_by": "Codex \u2014 owner-authorized verified page-context and household-photo repair",
       "relocked_after_tests": "Full pinned acceptance run: 3275 passed, zero failures/errors/skips on candidate tree afabac79abefaa41c71ce97a24c2865f99b74362. The previously unenrolled editor unit suite is now registered and adds 63 passing cases; combined exact-case evidence covers 3338 cases. Runtime source unchanged after full run. See release_evidence/ebook-page-photo-recovery.json.",
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
