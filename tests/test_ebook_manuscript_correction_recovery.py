@@ -244,6 +244,53 @@ def _make(name, data):
     return database.create_project(name, "ebook", data, user_saved=True, system_test=False, temporary=False)
 
 
+def test_stalled_repairs_stop_before_a_third_paid_correction(monkeypatch, _bypass_estimate_machinery):
+    data = _project_data()
+    data["content"] = "Saved chapter draft"
+    ws = data["ebook_workspace"]
+    ws["accepted_chapters"] = [{"order": 1, "body": "Preserved chapter"}]
+    workspace.set_stage_status(ws, "manuscript", workspace.STATUS_NEEDS_CORRECTION)
+    calls = []
+
+    def stalled(data, **kwargs):
+        calls.append("paid correction")
+        return {"data": data}
+
+    monkeypatch.setattr(workspace, "execute_correct_manuscript", stalled)
+    monkeypatch.setattr(workspace, "approve_stage", _real_shaped_approve_stage([]))
+    pid = _make("Stalled repair test", data)["id"]
+    for _ in range(4):
+        status = orch.advance_build(pid)
+    assert len(calls) == 2
+    assert status["failed"] is True
+    saved = database.get_project(pid)["data"]
+    assert saved["content"] == "Saved chapter draft"
+    assert saved["ebook_workspace"]["accepted_chapters"][0]["body"] == "Preserved chapter"
+
+
+def test_newly_accepted_chapters_reset_the_repair_bound(monkeypatch, _bypass_estimate_machinery):
+    data = _project_data()
+    data["content"] = "Saved draft"
+    ws = data["ebook_workspace"]
+    ws["accepted_chapters"] = [{"order": 1}, {"order": 2}]
+    ws["automatic_manuscript_repair"] = {"accepted_orders": [1], "attempts": 2}
+    workspace.set_stage_status(ws, "manuscript", workspace.STATUS_NEEDS_CORRECTION)
+    calls = []
+
+    def corrected(data, **kwargs):
+        calls.append("correct")
+        workspace.set_stage_status(data["ebook_workspace"], "manuscript", workspace.STATUS_AWAITING)
+        return {"data": data}
+
+    monkeypatch.setattr(workspace, "execute_correct_manuscript", corrected)
+    monkeypatch.setattr(workspace, "approve_stage", _real_shaped_approve_stage([]))
+    pid = _make("Progress repair test", data)["id"]
+    status = orch.advance_build(pid)
+    assert calls == ["correct"]
+    assert status["failed"] is False
+    assert status["percent"] == 40
+
+
 @pytest.fixture()
 def _bypass_estimate_machinery(monkeypatch):
     """These tests are about orchestration sequencing, not the cost-estimate flow.

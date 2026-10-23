@@ -1079,6 +1079,19 @@ def format_unresolved_findings_for_prompt(findings: list[str]) -> list[str]:
                 "slot or generic label anywhere in the chapter. Keep all the "
                 "surrounding prose that is already good."
             )
+        elif code == "GENERIC_FILLER":
+            marker = "generic filler phrase:"
+            phrase = text.lower().partition(marker)[2].strip()
+            # Only validator-owned phrases become literal repair targets.
+            # The error code alone does not tell an author what to change.
+            targets = [phrase] if phrase in GENERIC_FILLER_PHRASES else sorted(GENERIC_FILLER_PHRASES)
+            instruction = (
+                "REPLACE every occurrence of these forbidden phrases: "
+                + ", ".join(json.dumps(target) for target in targets)
+                + ". Write the specific action or explanation each sentence needs, "
+                "or delete an empty encouragement. Preserve useful surrounding material. "
+                "Do not quote the forbidden phrases or repair instructions in the chapter."
+            )
         elif code == "THIN_CHAPTER":
             instruction = (
                 "EXPAND this chapter with additional useful material until it is "

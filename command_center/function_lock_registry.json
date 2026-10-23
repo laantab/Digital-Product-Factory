@@ -333,7 +333,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "0b35b0aca6eb5161149782f3f703c4c0d45719c2",
       "factory_version": "1.9.54",
       "protected_test_files": [
@@ -374,10 +374,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Codex for owner-authorized ebook verification",
-      "relocked_after_tests": "3263 unique acceptance checks PASS at 0b35b0aca6eb5161149782f3f703c4c0d45719c2; 47 real-browser checks PASS; prior 3260-case protected baseline archived and verified. No weakened tests.",
+      "unlocked_by": "Codex for owner-authorized fresh ebook failure repair",
+      "unlocked_reason": "Fresh project22 repeated paid chapter repairs without advancing; make repair instructions actionable and bound stalled retries.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {
