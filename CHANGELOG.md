@@ -10,7 +10,7 @@ Fresh project 23 reached export, but the reviewer classified its short chapter e
 Resume the saved build after deployment. The unchanged PDF content is checked using its real page boundaries. No manuscript generation or budget increase is needed.
 
 ### Release gate
-Candidate pending full acceptance and live verification. All 167 targeted editorial/photo/source checks pass. Three page-context and four photo-routing regressions fail before their respective repairs. Five page controls retain sparse midchapter, tiny-orphan and blank-page detection; genuine gardening controls remain green. The actual saved 53-page PDF passes the corrected page-context check. The prior release's combined 3,269-case evidence supplies the before-change protected baseline.
+The full pinned-dependency run passed 3,275 cases with zero failures, errors or skips. The editor unit suite had not been enrolled in the manifest: it is now permanently registered and adds 63 passing cases. Combined exact-case evidence covers all 3,338 unique cases, including every prior 3,269 case, with no missing or duplicate cases. Runtime source did not change after the full run. Three page-context and four photo-routing regressions were proved to fail before their respective repairs. The actual saved PDF clears all three page-context false alarms locally. Completion is relocked to verified candidate 12799f347d383aa0b2569a9b9fef175c4c88f786. Live deployment and final export remain pending. See release_evidence/ebook-page-photo-recovery.json.
 
 ## 1.9.56 — Keep research signals out of ebook references
 

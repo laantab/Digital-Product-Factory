@@ -1,0 +1,38 @@
+{
+  "version": "1.9.57",
+  "candidate_commit": "12799f347d383aa0b2569a9b9fef175c4c88f786",
+  "candidate_tree": "afabac79abefaa41c71ce97a24c2865f99b74362",
+  "acceptance_files": 233,
+  "unique_cases": 3338,
+  "failures": 0,
+  "errors": 0,
+  "skips": 0,
+  "case_set_matches_collection": true,
+  "initial_full_gate": {
+    "passed": 3275,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0
+  },
+  "registered_editor_suite": {
+    "passed": 63,
+    "failures": 0,
+    "file": "tests/test_editor_in_chief.py"
+  },
+  "earlier_cases_retained": 3269,
+  "runtime_source_changed_after_full_gate": false,
+  "single_uninterrupted_full_run_of_final_manifest": false,
+  "regressions_proved_red": {
+    "rendered_page_context": 3,
+    "household_photo_routing": 4
+  },
+  "controls": "Blank, sparse midchapter and tiny-orphan pages remain findings; genuine gardening context remains gardening.",
+  "actual_draft_pdf_sha256": "290355ca7326bd8606ab688066d479f8e6c571766b33f5880c2c7b6cd4107208",
+  "actual_false_page_findings": [
+    8,
+    51,
+    52
+  ],
+  "live_export_verified": false,
+  "runner": "pytest8.4.1; four xdist workers; module groups; two shared design-fixture suites serialized"
+}
