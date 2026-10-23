@@ -8251,7 +8251,6 @@ function showEbookWorkspaceStage(stageId) {
           <div class="flex flex-wrap gap-2 mt-2">
             <button type="button" class="btn-secondary text-xs" data-ws-replace-photo="${vidAttr}">Try another free photo</button>
             ${sourceButtons}
-            ${a.match_status !== "pass" ? `<button type="button" class="btn-secondary text-xs" data-ws-replace-photo="${vidAttr}" data-ws-replace-source="automatic-free">Repair this visual for free</button>` : ""}
             ${review.ai_edit_enabled ? `<button type="button" class="btn-secondary text-xs" data-ws-generate-ai="${escapeHtml(String(a.visual_id || ""))}">Generate AI alternative</button>` : ""}
             <label class="btn-secondary text-xs cursor-pointer">Upload my own image
               <input type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" class="hidden" data-ws-upload-photo="${escapeHtml(String(a.visual_id || ""))}" />
@@ -8262,7 +8261,7 @@ function showEbookWorkspaceStage(stageId) {
         ${missing ? `<p class="text-xs text-amber-800 mt-2">This chapter visual still needs attention.</p>` : ""}
       </article>`;
     }).join("");
-    const canPrepare = ws.gates && ws.gates.visuals_enabled && stage.status !== "approved";
+    const canPrepare = ws.gates && ws.gates.visuals_enabled && (stage.status !== "approved" || !review.approvable);
     const canApprove = review.approvable && stage.status !== "approved";
     const heading = review.heading || "Visuals Ready for Review";
     const intro = review.intro || "Your chapter visuals have been selected and prepared. Review them below, then approve them to build your ebook preview.";
