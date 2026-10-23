@@ -1,3 +1,14 @@
+## 1.9.56 — Keep research signals out of ebook references
+
+### What changed
+Generated ebook references exclude sources rejected by the existing manuscript authority policy. The original research evidence and book contract remain intact. A source-only correction reassembles references while retaining every accepted chapter and making no chapter-provider calls.
+
+### What was fixed
+Fresh Project23 wrote nine passing chapters but stopped at30% because Facebook research was copied into Sources. Correction copied the same rejected citation repeatedly. The unchanged validator now passes the locally recovered saved manuscript with all nine chapter bodies byte-for-byte preserved.
+
+### Release gate
+Candidate pending full release and live export verification. Three regressions fail before this repair; all61 source-policy tests pass after it. The baseline Fast Stability Gate passed814 tests. No successful live PDF/ZIP export is claimed here.
+
 ## 1.9.55 — Give chapter repairs exact targets and stop stalled retries
 
 ### What changed
