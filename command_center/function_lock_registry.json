@@ -334,8 +334,8 @@
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
       "status": "LOCKED",
-      "last_known_good_commit": "0b35b0aca6eb5161149782f3f703c4c0d45719c2",
-      "factory_version": "1.9.54",
+      "last_known_good_commit": "c4c009581ec0205bffcc4ba46fa6c90e14e2b412",
+      "factory_version": "1.9.55",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
         "tests/test_guided_cover_choice.py",
@@ -376,8 +376,8 @@
       "full_gate": true,
       "unlocked_by": null,
       "unlocked_reason": null,
-      "relocked_by": "Codex for owner-authorized ebook verification",
-      "relocked_after_tests": "3263 unique acceptance checks PASS at 0b35b0aca6eb5161149782f3f703c4c0d45719c2; 47 real-browser checks PASS; prior 3260-case protected baseline archived and verified. No weakened tests.",
+      "relocked_by": "Codex for owner-authorized fresh ebook failure repair",
+      "relocked_after_tests": "All 3266 unique acceptance cases PASS at c4c009581ec0205bffcc4ba46fa6c90e14e2b412; 38 environment-affected cases passed after restoring Chromium headless shell. Original reports retained; no weakened tests.",
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {

@@ -1,0 +1,11 @@
+# Ebook automatic repair — October 23, 2026
+
+Source authority: PR79, https://github.com/laantab/Digital-Product-Factory/pull/79 . Verified runtime commit c4c009581ec0205bffcc4ba46fa6c90e14e2b412 (tree b537969f9872ae4d14b2aaac1d43f321ad59e6b5), v1.9.55. This metadata checkpoint precedes merge/deployment; inspect main and Render before claiming deployment.
+
+PR76 was merged and v1.9.54 was verified live on the website and builder. Its fresh automatic book test, project22, exposed repeated paid repairs of chapter4 for GENERIC_FILLER (keep going). The prompt had omitted the exact forbidden phrase. Repairs now name it explicitly, keeping the validator unchanged. A durable automatic-repair counter stops before a third correction without another accepted chapter. Chapter progress resets the allowance.
+
+All3266 unique acceptance cases pass, retaining3263 previous cases plus3. Two new defect regressions fail against the previous deployed source. The initial full run lacked Chromium headless shell1169:38 affected checks subsequently passed in isolation after installing the missing official test dependency. Original failed reports, rerun reports, case collection and provenance are archived. This is not a claim of one uninterrupted clean run. Targeted66 checks also pass. No tests were weakened. The completion function is relocked to the verified real commit; other function locks are unchanged.
+
+The fresh live book stopped at30%, with3 of8 chapters accepted and its entire authorized$3.50 spent. The live state was FAILED_FINAL. No finished PDF or ZIP exists for this test. No manual manuscript edits were made. No further paid generation is authorized. Do not raise a cap or restart a paid build without new owner authorization. No paid images or infrastructure were purchased. Old ebook work was canceled by the owner: leave old projects and separate finished copies alone. Never use them as proof of this fresh test.
+
+Next: inspect PR79 merge and Render website/builder registration; verify deployment only after a legitimate merge. A successful fresh automatic PDF/ZIP and saved-project reopening remain unproven and require an explicitly funded test. Preserve coloring, puzzle and planner behavior. Do not drift into TrafficLift or billing. Do not request passwords or repeat sign-in loops; the cloud browser and personal Chrome sessions are separate.

@@ -552,6 +552,10 @@ def _mark_stage_still_working(data: dict, result: dict, *, verb: str) -> None:
     state["_no_retry_message"] = True
 
 
+class ManuscriptRepairStalled(ValueError):
+    """Automatic correction made no chapter progress; preserve and stop."""
+
+
 def _run_manuscript(data: dict, pid: int) -> dict:
     """Write and validate chapters, auto-correct if needed, then approve.
 
@@ -621,7 +625,18 @@ def _run_manuscript(data: dict, pid: int) -> dict:
         ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
 
     if stage_status(ws, "manuscript") == STATUS_NEEDS_CORRECTION:
+        # Stage attempts also count normal chapter checkpoints, so their high
+        # ceiling must not become permission to buy sixty failed repairs.
+        # Persist before the call: a worker restart must not reset the bound.
+        accepted_orders = sorted({int(ch["order"]) for ch in ws.get("accepted_chapters", [])})
+        repair = ws.get("automatic_manuscript_repair") or {}
+        attempts = int(repair.get("attempts") or 0) if repair.get("accepted_orders") == accepted_orders else 0
+        if attempts >= 2:
+            raise ManuscriptRepairStalled("Automatic manuscript correction stopped after two attempts without chapter progress.")
         data, cest = _authorized(data, "correct_manuscript")
+        ws = data["ebook_workspace"]
+        ws["automatic_manuscript_repair"] = {"accepted_orders": accepted_orders, "attempts": attempts + 1}
+        database.update_project(pid, None, data)
         ckwargs = _confirm_kwargs(cest, data,
                                   _attempt_idempotency_key(data, "manuscript", pid,
                                                            suffix="correct"))
@@ -1272,7 +1287,7 @@ def advance_build(project_id: int) -> dict:
         fresh_data["_project_id"] = project_id
         fresh_state = build_state(fresh_data)
         fresh_rec = _stage_record(fresh_state, stage)
-        final = int(fresh_rec.get("attempts") or 0) >= _max_attempts(stage)
+        final = isinstance(exc, ManuscriptRepairStalled) or int(fresh_rec.get("attempts") or 0) >= _max_attempts(stage)
         _release_stage(fresh_state, stage, FAILED_FINAL if final else FAILED_RECOVERABLE, str(exc)[:500])
         fresh_state["customer_message"] = MSG_FINAL if final else MSG_RETRY
         fresh_state["failed"] = final

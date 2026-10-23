@@ -610,6 +610,17 @@ class PlaceholderLeakSanitizationTests(unittest.TestCase):
         self.assertNotIn("- PLACEHOLDER: Placeholder/production instruction: placeholder", prompt)
         self.assertNotIn("mandatory deliverable: placeholder", prompt.lower())
 
+    def test_filler_repair_names_the_exact_forbidden_phrase(self):
+        instructions = format_unresolved_findings_for_prompt([
+            "GENERIC_FILLER: Generic filler phrase: keep going",
+            "GENERIC_FILLER: Generic filler phrase: keep going",
+        ])
+        self.assertEqual(len(instructions), 1)
+        self.assertIn('"keep going"', instructions[0])
+        self.assertIn("REPLACE", instructions[0])
+        self.assertIn("every occurrence", instructions[0])
+        self.assertNotIn("GENERIC_FILLER", instructions[0])
+
     def test_standalone_production_headings_removed_prose_kept(self):
         from services.ebook_document import sanitize_leaked_production_labels
 
