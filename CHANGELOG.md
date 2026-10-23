@@ -4,10 +4,13 @@
 Generated ebook references exclude sources rejected by the existing manuscript authority policy. The original research evidence and book contract remain intact. A source-only correction reassembles references while retaining every accepted chapter and making no chapter-provider calls.
 
 ### What was fixed
-Fresh Project23 wrote nine passing chapters but stopped at30% because Facebook research was copied into Sources. Correction copied the same rejected citation repeatedly. The unchanged validator now passes the locally recovered saved manuscript with all nine chapter bodies byte-for-byte preserved.
+Fresh project 23 wrote nine passing chapters but stopped at 30% because Facebook research was copied into Sources. Correction copied the same rejected citation repeatedly. The unchanged validator now passes the locally recovered saved manuscript with all nine chapter bodies byte-for-byte preserved.
+
+### Do the steps change?
+Use the ordinary automatic ebook builder. For a saved source-only failure, use Request Correction, approve the recovered manuscript, and resume the build. Accepted chapters and the original research evidence are preserved. No budget increase or chapter regeneration is required for this correction.
 
 ### Release gate
-Candidate pending full release and live export verification. Three regressions fail before this repair; all61 source-policy tests pass after it. The baseline Fast Stability Gate passed814 tests. No successful live PDF/ZIP export is claimed here.
+The 232-file pinned-dependency acceptance run passed 3,268 cases; its only failure was this missing release-note section. All 31 version-management checks pass after correcting the note; the combined evidence retains all 3,269 unique acceptance cases, with zero failures, errors, skips, missing or duplicate cases. See release_evidence/ebook-reference-recovery.json. This is not a claim of one uninterrupted green run. All 61 source-policy tests pass, including three regressions proved to fail before the repair. The baseline Fast Stability Gate passed 814 tests. Live deployment and PDF/ZIP verification remain pending.
 
 ## 1.9.55 — Give chapter repairs exact targets and stop stalled retries
 
