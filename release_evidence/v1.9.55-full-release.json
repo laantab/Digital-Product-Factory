@@ -1,0 +1,89 @@
+{
+  "source_commit": "c4c009581ec0205bffcc4ba46fa6c90e14e2b412",
+  "source_tree": "b537969f9872ae4d14b2aaac1d43f321ad59e6b5",
+  "unique_cases": 3266,
+  "failed_cases": [],
+  "skipped_cases": [],
+  "missing": [],
+  "extra": [],
+  "reports": [
+    {
+      "file": "0.xml",
+      "sha256": "724b34d4479a9ebe25c340ee273c9cb7421450305abe12030a1665de0a1288cc"
+    },
+    {
+      "file": "1.xml",
+      "sha256": "8b45be15322ce55c78a10115750a8c94939790ddccb7520883615cec7fd014e1"
+    },
+    {
+      "file": "2.xml",
+      "sha256": "4ac0e2c27fc19358e903b177a85bf29af51856422fdef51aedfebb57ce2824f6"
+    },
+    {
+      "file": "3.xml",
+      "sha256": "c0b87cd6fd9c37a192b51584fdccfa068e445534463c56b466f81e58b3efae87"
+    },
+    {
+      "file": "4.xml",
+      "sha256": "047543e6580c453835bcbe48d2d9577043a653ce90504035a97f922df3b300bf"
+    },
+    {
+      "file": "5.xml",
+      "sha256": "1fb1fd725773ce1d43777c7a705b6331e7133faf7be444a6f72a08a063b25b49"
+    },
+    {
+      "file": "browser.xml",
+      "sha256": "2194d0770e68e3ef5aff5f51132db081de3550145b11bd85b124f52a6012eba9"
+    },
+    {
+      "file": "environment-recheck.xml",
+      "sha256": "4addd6f25d3fd63f9d5e2050171c089fe1216efa00a5ecd8f05fe2b1ea6d2094"
+    }
+  ],
+  "retained_prior_cases": 3263,
+  "new_regression_cases": 3,
+  "paid_provider_calls_permitted": 0,
+  "method": "All acceptance cases executed; 38 affected cases rerun in isolation after restoring the missing Chromium headless-shell executable. Original failed reports retained. No source or test changes between runs.",
+  "initial_environment_affected_cases": [
+    "tests/test_release_review_never_hangs_v1_9_15.py::test_page_shows_an_error_and_try_again_when_the_review_fails",
+    "tests/test_release_review_never_hangs_v1_9_15.py::test_page_retry_recovers_after_a_failure",
+    "tests/test_release_review_never_hangs_v1_9_15.py::test_page_uses_the_saved_review_and_a_decision_does_not_rerun_it",
+    "tests/test_ebook_creation_modes.py::test_reopened_book_waits_for_old_request_and_ignores_its_late_failure",
+    "tests/test_saved_product_open_recovery.py::test_opening_finished_product_does_not_save_or_rebuild_it",
+    "tests/test_saved_product_open_recovery.py::test_late_open_cannot_replace_the_more_recently_selected_saved_product",
+    "tests/test_saved_product_open_recovery.py::test_leaving_saved_projects_does_not_get_undone_by_a_late_open",
+    "tests/test_saved_product_open_recovery.py::test_failed_saved_open_keeps_the_list_and_allows_retry[unavailable]",
+    "tests/test_saved_product_open_recovery.py::test_failed_saved_open_keeps_the_list_and_allows_retry[malformed]",
+    "tests/test_saved_product_open_recovery.py::test_failed_saved_open_keeps_the_list_and_allows_retry[wrong_product]",
+    "tests/test_saved_product_open_recovery.py::test_stalled_saved_open_times_out_and_the_same_product_can_be_retried",
+    "tests/test_saved_product_open_recovery.py::test_saved_ebook_open_never_advances_or_resumes_a_build[True]",
+    "tests/test_saved_product_open_recovery.py::test_saved_ebook_open_never_advances_or_resumes_a_build[False]",
+    "tests/test_saved_product_open_recovery.py::test_saved_export_review_exposes_existing_files_without_a_rebuild",
+    "tests/test_customer_account_isolation.py::test_real_signed_in_build_downloads_are_private_to_the_account",
+    "tests/test_ebook_print_clarity.py::test_review_controls_target_the_clicked_visual_when_two_share_a_page",
+    "tests/test_ebook_real_browser_customer_path.py::EbookRealBrowserCustomerPathTests::test_21_step_container_gardening_customer_path",
+    "tests/test_ebook_real_browser_customer_path.py::EbookRealBrowserCustomerPathTests::test_22_repeat_build_click_attaches_to_the_same_project",
+    "tests/test_ebook_real_browser_customer_path.py::EbookRealBrowserCustomerPathTests::test_23_other_product_builders_keep_their_own_flow",
+    "tests/test_ebook_real_browser_customer_path.py::EbookRealBrowserCustomerPathTests::test_24_picture_sheet_names_each_photo_source_and_stays_customer_safe",
+    "tests/test_ebook_real_browser_customer_path.py::EbookRealBrowserCustomerPathTests::test_25_generate_project_runs_to_one_title_and_cover_choice",
+    "tests/test_ebook_manuscript_editor.py::test_browser_editor_review_apply_and_undo",
+    "tests/test_ebook_creation_modes.py::test_browser_one_build_click_enters_finished_product_with_the_right_mode[custom]",
+    "tests/test_ebook_creation_modes.py::test_browser_one_build_click_enters_finished_product_with_the_right_mode[ai_recommended]",
+    "tests/test_ebook_creation_modes.py::test_browser_recovers_connection_without_another_build_click[disconnect]",
+    "tests/test_ebook_creation_modes.py::test_browser_recovers_connection_without_another_build_click[503]",
+    "tests/test_ebook_creation_modes.py::test_browser_reopening_retries_status_without_restarting_the_book",
+    "tests/test_ebook_creation_modes.py::test_browser_does_not_retry_a_denied_build_request",
+    "tests/test_coloring_background_browser.py::test_coloring_build_survives_browser_refresh_and_downloads[2]",
+    "tests/test_coloring_background_browser.py::test_coloring_build_survives_browser_refresh_and_downloads[4]",
+    "tests/test_coloring_background_browser.py::test_coloring_build_survives_browser_refresh_and_downloads[12]",
+    "tests/test_saved_products_bounded_loading.py::test_browser_retries_failed_list_and_opens_original_full_record",
+    "tests/test_editor_chief_review_controls.py::test_browser_compare_reject_preserves_the_complete_saved_record",
+    "tests/test_editor_chief_review_controls.py::test_browser_typing_during_review_cannot_be_overwritten_by_late_response",
+    "tests/test_editor_chief_review_controls.py::test_browser_failed_review_keeps_draft_and_allows_retry",
+    "tests/test_editor_chief_review_controls.py::test_browser_uncertain_save_requires_reload_instead_of_repeating_a_write",
+    "tests/test_editor_chief_review_controls.py::test_browser_shows_a_confirmed_protection_rejection_without_claiming_an_uncertain_save",
+    "tests/test_customer_account_isolation.py::test_real_browser_first_visit_join_signout_and_signin_reach_dashboard"
+  ],
+  "single_uninterrupted_run_pass": false,
+  "status": "PASS"
+}

@@ -1,4 +1,4 @@
-## 1.9.55 — Give chapter repairs exact targets and stop stalled retries (candidate)
+## 1.9.55 — Give chapter repairs exact targets and stop stalled retries
 
 ### What changed
 Filler repairs name the exact forbidden wording and ask for a concrete replacement while preserving valid prose. Automatic corrections stop after two attempts without another accepted chapter; the durable counter survives worker restarts. Accepted chapter progress starts a fresh allowance.
@@ -10,7 +10,7 @@ A fresh weekly desk reset book repeatedly failed chapter 4 for “keep going”.
 Use the ordinary automatic ebook build. A stalled repair preserves the draft and accepted chapters and stops for an engine correction rather than spending through repeated retries.
 
 ### Release gate
-Candidate under verification. Two regression cases fail before the repair. No successful fresh-book export is claimed; project22 reached its authorized $3.50 cap before this source change.
+All 3266 unique acceptance cases pass at c4c009581ec0205bffcc4ba46fa6c90e14e2b412, including three added checks. Two defect regressions fail before the repair. The initial run lacked Chromium headless shell; all 38 affected checks pass after restoring it, and the initial reports are retained. No source or test changes were made between runs. No successful fresh-book export is claimed; project22 reached its authorized $3.50 cap before this source change.
 
 ## 1.9.54 — Do not approve chapter photos from planned filenames (candidate)
 
