@@ -333,7 +333,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "c4c009581ec0205bffcc4ba46fa6c90e14e2b412",
       "factory_version": "1.9.55",
       "protected_test_files": [
@@ -374,10 +374,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Codex for owner-authorized fresh ebook failure repair",
-      "relocked_after_tests": "All 3266 unique acceptance cases PASS at c4c009581ec0205bffcc4ba46fa6c90e14e2b412; 38 environment-affected cases passed after restoring Chromium headless shell. Original reports retained; no weakened tests.",
+      "unlocked_by": "Codex \u2014 owner-authorized fresh ebook repair",
+      "unlocked_reason": "Correct sparse-page classification using real chapter and legal-page boundaries while retaining blank-page and midchapter checks.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {

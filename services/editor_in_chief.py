@@ -515,6 +515,31 @@ _STRUCTURAL_PAGE_MARKERS = (
 )
 
 
+def _page_content_lines(text: str) -> list[str]:
+    """Read PDF content independently of the running footer's extraction order."""
+    return [line.strip() for line in str(text or "").splitlines()
+            if line.strip() and not re.fullmatch(r".+\s·\s\d+", line.strip())]
+
+
+def _back_matter_heading(text: str) -> bool:
+    lines = _page_content_lines(text)
+    return bool(lines and lines[0].casefold() in {
+        "disclaimer", "sources", "references", "bibliography", "further reading",
+    })
+
+
+def _substantive_chapter_ending(text: str, next_text: str) -> bool:
+    """A deliberate chapter boundary may leave a short but useful closing page.
+
+    Do not exempt tiny orphan fragments, sparse midchapter pages, or pages
+    without rendered-text evidence. Effectively blank pages are checked first.
+    """
+    lines = _page_content_lines(next_text)
+    boundary = bool(lines and re.fullmatch(r"Chapter\s+[1-9]\d*", lines[0], re.I))
+    boundary = boundary or _back_matter_heading(next_text)
+    return boundary and len(" ".join(_page_content_lines(text)).split()) >= 60
+
+
 def _is_structural_page(text: str, page_num: int, total_pages: int) -> bool:
     """Front/back-matter pages are supposed to be light on ink.
 
@@ -525,6 +550,8 @@ def _is_structural_page(text: str, page_num: int, total_pages: int) -> bool:
     """
     t = " ".join(str(text or "").lower().split())
     if any(m in t for m in _STRUCTURAL_PAGE_MARKERS):
+        return True
+    if _back_matter_heading(text):
         return True
     first_line = (str(text or "").strip().splitlines() or [""])[0].strip().lower()
     if first_line == "summary":
@@ -554,6 +581,9 @@ def check_page_quality(page_stats: list[dict[str, Any]], *, blank_ink_pct: float
                 idx = int(s["page"]) - 1
                 text = page_texts[idx] if 0 <= idx < len(page_texts) else ""
                 if _is_structural_page(text, int(s["page"]), total):
+                    continue
+                next_text = page_texts[idx + 1] if 0 <= idx + 1 < len(page_texts) else ""
+                if _substantive_chapter_ending(text, next_text):
                     continue
             out.append(Finding(
                 code="PAGE_SPARSE", category="interior_design",

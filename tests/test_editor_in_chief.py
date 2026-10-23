@@ -404,3 +404,49 @@ class TestExternalHonesty(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSparsePageContext(unittest.TestCase):
+    def _stats(self, ink=5.0):
+        return [{'page': n, 'ink_pct': ink if n == 4 else 18.0,
+                 'has_imagery': False} for n in range(1, 7)]
+
+    def _texts(self, tail=None, next_heading='Chapter 2\nDeclutter Before You Organize'):
+        tail = tail or ('These practical steps return everyday items to their assigned homes. ' * 8)
+        return ['Cover', 'Copyright', 'Body page',
+                'Apartment Organization · 7\n' + tail,
+                'Apartment Organization · 8\n' + next_heading,
+                'Sources']
+
+    def test_substantive_chapter_ending_before_next_chapter_is_not_sparse(self):
+        self.assertEqual(check_page_quality(self._stats(), page_texts=self._texts()), [])
+
+    def test_substantive_final_chapter_ending_before_back_matter_is_not_sparse(self):
+        self.assertEqual(check_page_quality(self._stats(), page_texts=self._texts(
+            next_heading='Disclaimer\nThis guide provides general educational information.')), [])
+
+    def test_short_disclaimer_with_running_footer_is_structural(self):
+        texts = self._texts(tail='Disclaimer\nThis guide provides general educational information. It is not professional advice.')
+        self.assertEqual(check_page_quality(self._stats(1.95), page_texts=texts), [])
+
+    def test_sparse_midchapter_page_still_requires_correction(self):
+        findings = check_page_quality(self._stats(), page_texts=self._texts(
+            next_heading='Maintenance continues with the next set of examples.'))
+        self.assertEqual([f.code for f in findings], ['PAGE_SPARSE'])
+
+    def test_tiny_orphan_before_chapter_still_requires_correction(self):
+        findings = check_page_quality(self._stats(), page_texts=self._texts(tail='One last sentence.'))
+        self.assertEqual([f.code for f in findings], ['PAGE_SPARSE'])
+
+    def test_blank_page_is_never_exempted_by_chapter_boundary(self):
+        findings = check_page_quality(self._stats(.2), page_texts=self._texts())
+        self.assertEqual([f.code for f in findings], ['PAGE_BLANK'])
+
+    def test_discussion_of_disclaimers_is_not_a_legal_page(self):
+        findings = check_page_quality(self._stats(), page_texts=self._texts(
+            tail='Why a disclaimer matters\n' + 'Use clear examples to explain your next practical choice. ' * 8,
+            next_heading='Continue the same chapter with its next example.'))
+        self.assertEqual([f.code for f in findings], ['PAGE_SPARSE'])
+
+    def test_without_rendered_text_sparse_page_still_requires_correction(self):
+        self.assertEqual([f.code for f in check_page_quality(self._stats())], ['PAGE_SPARSE'])
