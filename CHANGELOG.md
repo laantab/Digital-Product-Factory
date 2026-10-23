@@ -1,16 +1,16 @@
-## 1.9.57 — Recognize real chapter endings and legal pages
+## 1.9.57 — Recognize chapter endings and keep household photos on topic
 
 ### What changed
-Rendered page review recognizes standalone back-matter headings despite PDF footer extraction order. A substantive closing page is recognized only when the next rendered page begins a numbered chapter or back matter. Blank pages, tiny orphan fragments and sparse midchapter pages remain findings.
+Rendered page review recognizes standalone back-matter headings despite PDF footer extraction order. A substantive closing page is recognized only when the next rendered page begins a numbered chapter or back matter. Blank pages, tiny orphan fragments and sparse midchapter pages remain findings. Gardening photo routing now requires whole-word horticultural context; ordinary household containers and bedside water bottles inherit gardening context only from a gardening book. Cached canonical gardening briefs are rederived when the chapter belongs to another subject.
 
 ### What was fixed
-Fresh project 23 reached export, but the reviewer classified its short chapter endings on pages 8 and 51 and its legal disclaimer on page 52 as ordinary sparse body pages. Real rendered text reproduces all three false findings. No manuscript, font size, image resolution or quality threshold is changed.
+Fresh project 23 reached export, but the reviewer classified its short chapter endings on pages 8 and 51 and its legal disclaimer on page 52 as ordinary sparse body pages. Real rendered text reproduces all three false findings. The bedroom photo also retried gardening images because “pot” matched inside “spots,” and the saved gardening brief survived retries. No manuscript, font size, image resolution or quality threshold is changed.
 
 ### Do the steps change?
 Resume the saved build after deployment. The unchanged PDF content is checked using its real page boundaries. No manuscript generation or budget increase is needed.
 
 ### Release gate
-Candidate pending full acceptance and live verification. All 63 editor tests pass. Three new positive regressions fail before the repair; five controls retain sparse midchapter, tiny-orphan and blank-page detection. The actual saved 53-page PDF passes the corrected page-context check. The prior release's combined 3,269-case evidence supplies the before-change protected baseline.
+Candidate pending full acceptance and live verification. All 167 targeted editorial/photo/source checks pass. Three page-context and four photo-routing regressions fail before their respective repairs. Five page controls retain sparse midchapter, tiny-orphan and blank-page detection; genuine gardening controls remain green. The actual saved 53-page PDF passes the corrected page-context check. The prior release's combined 3,269-case evidence supplies the before-change protected baseline.
 
 ## 1.9.56 — Keep research signals out of ebook references
 
