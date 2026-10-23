@@ -1,0 +1,109 @@
+{
+  "project_id": 23,
+  "failure": "WEAK_SOURCES: facebook.com",
+  "recovered_quality": "PASS",
+  "chapter_calls": 0,
+  "chapters_before": [
+    {
+      "order": 1,
+      "sha256": "3e8c53a487b90184223c58b203a890c38a3a3a0e4c66c7b7dfd845e43fd56df5"
+    },
+    {
+      "order": 2,
+      "sha256": "2f2e71902eef442d6c589b81adab85177648cc7fee90495e045d9487e462cbc2"
+    },
+    {
+      "order": 3,
+      "sha256": "5f49a8b8ec7932ade070d190fe3d1b143d1d7b533c8fed04aa9e2450964c387d"
+    },
+    {
+      "order": 4,
+      "sha256": "cf42d713542cf60dbd15f159a16372b5032390a2113785c838889645161ffca8"
+    },
+    {
+      "order": 5,
+      "sha256": "037eaf1ac6d30a2ee8797c8a3f1d7cc9766e23c1be454da13d92b1cf8880d660"
+    },
+    {
+      "order": 6,
+      "sha256": "266025009428eefb333167011d04c11541b47ad02479a68b021c31432a382b82"
+    },
+    {
+      "order": 7,
+      "sha256": "0672a379b1bf54fbc382293e61627892637a85d56196940783e7574245341254"
+    },
+    {
+      "order": 8,
+      "sha256": "1c18fcf75554e5d177fba3bb5dd6af824741e4ab8ad31bbeba12bf58df13d5b6"
+    },
+    {
+      "order": 9,
+      "sha256": "d164594fb4483ea60b51e4ef3ca14ae3aef5550ccece504a74f089bc78cf188f"
+    }
+  ],
+  "chapters_after": [
+    {
+      "order": 1,
+      "sha256": "3e8c53a487b90184223c58b203a890c38a3a3a0e4c66c7b7dfd845e43fd56df5"
+    },
+    {
+      "order": 2,
+      "sha256": "2f2e71902eef442d6c589b81adab85177648cc7fee90495e045d9487e462cbc2"
+    },
+    {
+      "order": 3,
+      "sha256": "5f49a8b8ec7932ade070d190fe3d1b143d1d7b533c8fed04aa9e2450964c387d"
+    },
+    {
+      "order": 4,
+      "sha256": "cf42d713542cf60dbd15f159a16372b5032390a2113785c838889645161ffca8"
+    },
+    {
+      "order": 5,
+      "sha256": "037eaf1ac6d30a2ee8797c8a3f1d7cc9766e23c1be454da13d92b1cf8880d660"
+    },
+    {
+      "order": 6,
+      "sha256": "266025009428eefb333167011d04c11541b47ad02479a68b021c31432a382b82"
+    },
+    {
+      "order": 7,
+      "sha256": "0672a379b1bf54fbc382293e61627892637a85d56196940783e7574245341254"
+    },
+    {
+      "order": 8,
+      "sha256": "1c18fcf75554e5d177fba3bb5dd6af824741e4ab8ad31bbeba12bf58df13d5b6"
+    },
+    {
+      "order": 9,
+      "sha256": "d164594fb4483ea60b51e4ef3ca14ae3aef5550ccece504a74f089bc78cf188f"
+    }
+  ],
+  "original_research_retained": true,
+  "manuscript_sha256": "821dfa66133b3ab9a0b0863fb63c9e5dec834423f72c631f7f0f24d80e4064e5",
+  "live_export_verified": false,
+  "acceptance": {
+    "unique_cases": 3269,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "initial_full_run": {
+      "passed": 3268,
+      "failed": 1,
+      "only_failure": "missing release-note steps-change section"
+    },
+    "metadata_rerun": {
+      "passed": 31,
+      "failed": 0
+    },
+    "execution": "pytest 8.4.1; four xdist workers; modules grouped; shared design-fixture suites serialized",
+    "case_set_matches_manifest_collection": true,
+    "single_uninterrupted_green_run": false
+  },
+  "runtime_source_commit": "dcd840ea7a468b78fa7fdf8c4e6f6d331c9d868f",
+  "runtime_source_tree": "c887aa122b5735717a4d9bd3f0827228e659d5c2",
+  "test_report_sha256": {
+    "full": "610ef1247af4a07a847cc96fa467b1d44ce0c4f323c71749dde9a47c52aed9c3",
+    "metadata_rerun": "201aa080ecb2d706db7de22c42d544c201b0b8cc6012fe95ffa9086be13e4edb"
+  }
+}
