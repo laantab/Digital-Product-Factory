@@ -708,15 +708,27 @@ def _is_narrative(sentence: str) -> bool:
 
 
 def _prose_sentences(body: str) -> list[str]:
-    text = re.sub(r"^#{1,6}\s+.*$", " ", str(body or ""), flags=re.M)
-    text = re.sub(r"\s+", " ", text)
-    return [s.strip() for s in _SENTENCE_SPLIT.split(text) if s.strip()]
+    # Paragraphs, headings and list entries are semantic boundaries. Flattening
+    # them first joined a question-introduction to its first bullet, or a
+    # section introduction to prose beneath a different heading.
+    text = re.sub(r"^#{1,6}\s+.*$", "\n\n", str(body or ""), flags=re.M)
+    text = re.sub(r"^\s*(?:[-*+] |\d+[.)] )", "\n\n", text, flags=re.M)
+    sentences: list[str] = []
+    for block in re.split(r"\n\s*\n", text):
+        flat = re.sub(r"\s+", " ", block).strip()
+        sentences.extend(s.strip() for s in _SENTENCE_SPLIT.split(flat) if s.strip())
+    return sentences
 
 
 def _practice_sequence_items(body: str) -> list[str]:
     """Steps the chapter actually tells the reader to perform, verbatim."""
     items: list[str] = []
     for sentence in _prose_sentences(body):
+        if sentence.endswith(("?", ":")):
+            continue
+        if re.match(r"^\w+\s+(?:it|them|this|these|those)\b", sentence, re.I):
+            # A step shown on its own needs to name what the reader acts on.
+            continue
         first = re.sub(r"[^a-z]", "", sentence.split(" ")[0].lower())
         if first in _IMPERATIVE_OPENERS and 18 <= len(sentence) <= 150:
             # The step renderer wraps complete instructions. Applying the
@@ -2497,6 +2509,22 @@ def materialize_visual_plan(visual_plan: dict, *, package_id: str) -> dict[str, 
                 _stamp_aid_from_file(aid, path, ctitle=ctitle, cidx=cidx)
                 aid["source"] = str(aid.get("source") or "pexels")
                 continue
+            # Redraw can recover the defective generated wording already saved
+            # in a project. Never replace an owner's edit or invent instructions.
+            if aid.get("source") == "local_manuscript_practice_sequence" and not aid.get("text_edited"):
+                from services.ebook_release_review import chart_wording_findings, HARD
+
+                problems = chart_wording_findings(aid, page=None, chapter=ctitle)
+                if any(f.level == HARD for f in problems):
+                    replacement = derive_local_aid_from_prose(
+                        cidx, ctitle, str(ch.get("chapter_body") or "")
+                    )
+                    if replacement and not chart_wording_findings(replacement, page=None, chapter=ctitle):
+                        aid.setdefault("text_history", []).append({
+                            "title": aid.get("title"), "items": list(aid.get("items") or []),
+                            "reason": "Recover generated instructions at manuscript boundaries",
+                        })
+                        aid.update({key: replacement[key] for key in ("type", "title", "items", "caption", "source")})
             img = render_aid_png(aid, scale=2.0)
             buf = io.BytesIO()
             img.save(buf, format="PNG", optimize=True)
