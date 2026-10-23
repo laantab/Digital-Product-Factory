@@ -8251,6 +8251,7 @@ function showEbookWorkspaceStage(stageId) {
           <div class="flex flex-wrap gap-2 mt-2">
             <button type="button" class="btn-secondary text-xs" data-ws-replace-photo="${vidAttr}">Try another free photo</button>
             ${sourceButtons}
+            ${a.match_status !== "pass" ? `<button type="button" class="btn-secondary text-xs" data-ws-replace-photo="${vidAttr}" data-ws-replace-source="automatic-free">Repair this visual for free</button>` : ""}
             ${review.ai_edit_enabled ? `<button type="button" class="btn-secondary text-xs" data-ws-generate-ai="${escapeHtml(String(a.visual_id || ""))}">Generate AI alternative</button>` : ""}
             <label class="btn-secondary text-xs cursor-pointer">Upload my own image
               <input type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" class="hidden" data-ws-upload-photo="${escapeHtml(String(a.visual_id || ""))}" />

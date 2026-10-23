@@ -1,3 +1,7 @@
+## v1.9.59 — Free recovery for blocked ebook visuals
+
+- Show the existing free automatic repair action for a photograph that fails its visual brief, including when an old approval is still recorded. This action tries free sources, then the chapter-derived graphic fallback, without paid image generation or weakening approval checks.
+
 ## 1.9.58 — Preserve manuscript boundaries in practice charts (candidate)
 
 ### What changed
