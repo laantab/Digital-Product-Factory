@@ -1,6 +1,16 @@
-## v1.9.59 — Free recovery for blocked ebook visuals
+## 1.9.59 — Recover blocked ebook visuals after an old approval
 
-- Keep Retry Automatically available when the current visual set fails its quality checks, even if an old approval is still recorded. The existing retry preserves completed assets and cover, repairs blocked slots, and restores the required photograph quota; approval checks remain unchanged.
+### What changed
+Retry Automatically remains available when the current visual set fails its checks, even if Visuals still records an old approval. The existing retry preserves completed visuals and the cover, repairs blocked slots, and restores the required photograph count.
+
+### What was fixed
+Project 23 retained an approved Visuals stage while its Chapter 1 photograph failed its current brief. The hidden retry button left no route to the existing chapter-based graphic fallback and photograph recovery. Backend approval checks are unchanged.
+
+### Do the steps change?
+Open Visuals and use Retry Automatically when a saved visual set is blocked. Wait for the repair to finish, inspect and approve the visuals, then resume the existing book. No new manuscript generation is needed.
+
+### Release gate
+Combined exact-case evidence covers all 3,341 acceptance cases with no unresolved failures or skips. The broad run passed 3,330 cases; its two release-note failures pass after correcting this entry. Shared UI protection passed 1,007 cases and initially reported a timing failure and a custom browser timeout under heavy concurrent load; both pass unchanged in a serial rerun. All 31 version checks pass. This is combined run-and-rerun evidence, not one uninterrupted green run. No tests or quality limits were weakened. Live recovery and re-export remain to be verified.
 
 ## 1.9.58 — Preserve manuscript boundaries in practice charts (candidate)
 
