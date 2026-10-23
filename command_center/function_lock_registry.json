@@ -333,9 +333,9 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "UNLOCKED",
-      "last_known_good_commit": "12799f347d383aa0b2569a9b9fef175c4c88f786",
-      "factory_version": "1.9.57",
+      "status": "LOCKED",
+      "last_known_good_commit": "5ecc2c61fc6b7badd076050fee42ded34834bc73",
+      "factory_version": "1.9.58",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
         "tests/test_guided_cover_choice.py",
@@ -354,7 +354,8 @@
         "tests/test_v196_free_image_sources.py",
         "tests/test_factory_ebook_pexels_route.py",
         "tests/test_chapter_photo_queries.py",
-        "tests/test_editor_in_chief.py"
+        "tests/test_editor_in_chief.py",
+        "tests/test_practice_chart_boundaries.py"
       ],
       "shared_code_dependencies": [
         "static/js/app.js",
@@ -375,10 +376,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": "Lonnie Brown \u2014 explicit source repair approval, 2026-10-23",
-      "unlocked_reason": "Repair manuscript question/list boundaries in practice charts and recover cached generated charts without paid regeneration.",
-      "relocked_by": "Codex \u2014 owner-authorized verified page-context and household-photo repair",
-      "relocked_after_tests": "Full pinned acceptance run: 3275 passed, zero failures/errors/skips on candidate tree afabac79abefaa41c71ce97a24c2865f99b74362. The previously unenrolled editor unit suite is now registered and adds 63 passing cases; combined exact-case evidence covers 3338 cases. Runtime source unchanged after full run. See release_evidence/ebook-page-photo-recovery.json.",
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Codex \u2014 owner-authorized practice-chart boundary repair",
+      "relocked_after_tests": "3341 unique acceptance cases covered with zero unresolved failures or skips across the broad run and recorded reruns; final runtime has 434 passing completion checks and 29 passing design/export checks. Combined evidence, not one uninterrupted green run. See release_evidence/ebook-practice-boundaries-verification.json.",
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {

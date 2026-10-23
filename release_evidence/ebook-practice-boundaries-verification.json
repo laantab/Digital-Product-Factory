@@ -1,0 +1,48 @@
+{
+  "runtime_commit": "5ecc2c61fc6b7badd076050fee42ded34834bc73",
+  "unique_cases": 3341,
+  "unresolved": [],
+  "runs": [
+    {
+      "report": "release-parallel.xml",
+      "cases": 3312,
+      "failed": 2,
+      "skipped": 0
+    },
+    {
+      "report": "release-serial.xml",
+      "cases": 29,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "report": "final-protected.xml",
+      "cases": 434,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "report": "preservation-rerun.xml",
+      "cases": 30,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "report": "crossword-rerun.xml",
+      "cases": 1,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "single_uninterrupted_green_run": false,
+  "notes": [
+    "Full initial run required cv2 installation.",
+    "First stability run had 814 passing cases and an unlock-metadata failure; metadata was corrected.",
+    "Broad run had missing required preservation fixture and an unchanged nondeterministic crossword failure; original fixture restored with exact SHA checks, and both cases pass on unchanged reruns.",
+    "Final 434 completion checks and 29 design/export checks run against final runtime source.",
+    "No source changes to crossword, coloring books or planners.",
+    "No remote push, merge, deployment, or new live build has occurred."
+  ],
+  "local_equivalent_runtime_commit": "cece438",
+  "runtime_tree": "9063992b7d7b7e5287d3bf039c01ff6ece6c9197"
+}

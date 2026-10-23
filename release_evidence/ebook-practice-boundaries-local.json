@@ -1,0 +1,22 @@
+{
+  "project_id": 23,
+  "original_zip_sha256": "a7d2702ac3cea016990ebac33bc2178c69b92c90c8616c03448047e041967392",
+  "original_kitchen_items": [
+    "Begin with every item on the countertop.",
+    "Take a quick look at each one and ask three questions: - Do I use this often?",
+    "Keep only true daily or near-daily essentials out.",
+    "Keep zones basic and practical: This area should be close to your main open counter space.",
+    "Place pots, pans, cooking utensils, oven mitts, and spices near the stove.",
+    "Put these in the front of cabinets, in the top drawer, or on the most reachable shelf.",
+    "Try three routines: - Nightly reset: Put away dishes, wipe counters, return stray items to their zones, and empty the sink."
+  ],
+  "corrected_kitchen_items": [
+    "Begin with every item on the countertop.",
+    "Keep only true daily or near-daily essentials out.",
+    "Place pots, pans, cooking utensils, oven mitts, and spices near the stove.",
+    "Choose containers to support the system, not replace it."
+  ],
+  "remaining_wording_findings": [],
+  "production_changed": false,
+  "status": "Local candidate; release checks pending; remote push blocked by approval review."
+}

@@ -10,7 +10,7 @@ A kitchen chart joined “ask three questions” to its first question, mixing q
 New practice charts use the corrected extraction automatically. For an existing generated practice chart, use “Use clearer type and redraw charts”, then rebuild and review the revised PDF and ZIP. Human approval and release checks remain required.
 
 ### Release gate
-Candidate verification is running. Three targeted boundary and saved-chart recovery regressions are enrolled in the acceptance manifest. No deployment or completed full-release verdict is claimed.
+Combined verification covers all 3,341 unique acceptance cases with zero unresolved failures or skips. Final runtime source passed 434 completion checks and 29 design/export checks; all 40 final lock/version checks pass. The initial broad run needed the original preservation fixture restored and an unchanged crossword case rerun. This is not one uninterrupted green run. Three new regressions remain enrolled in both the acceptance manifest and completion lock. No deployment or live re-export is claimed.
 
 ## 1.9.57 — Recognize chapter endings and keep household photos on topic
 
