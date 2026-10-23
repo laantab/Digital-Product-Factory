@@ -1464,8 +1464,14 @@ def assemble_back_matter(book: BookContract) -> tuple[str, str]:
         getattr(book, "audience", ""),
         " ".join(str(getattr(c, "title", "")) for c in (getattr(book, "chapters", None) or [])),
     )
-    if book.citations:
-        sources = "\n".join(f"- {u}" for u in book.citations)
+    # Research discovery may include social/market signals. They remain in
+    # the research record, but cannot become factual references that our own
+    # unchanged manuscript validator rejects. Correction reassembles this
+    # section from the same contract, so filtering here also repairs saved
+    # source-only failures without regenerating any accepted chapter.
+    reference_urls = [u for u in book.citations if not _non_authoritative_sources(u)]
+    if reference_urls:
+        sources = "\n".join(f"- {u}" for u in reference_urls)
     else:
         sources = "Research notes used for this manuscript are listed in the project research brief."
     return disclaimer, sources
