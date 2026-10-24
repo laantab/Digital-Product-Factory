@@ -1,3 +1,9 @@
+## 1.9.62 — Recognize native chapter comparison tables
+
+- Visual completion counts a valid comparison table printed from the chapter's current Markdown, without requiring a duplicate image of that table.
+- Empty tables and fenced example markup do not qualify. Photograph and physical-demonstration requirements remain unchanged.
+- Regression coverage includes the saved playbook's comparison/checklist combination and negative cases.
+
 ## 1.9.61 — Bound workspace ebook project responses
 
 - General project reads omit duplicate workspace preview HTML and cached review thumbnails. Dedicated preview/review routes and stored manuscripts, decisions, PDFs, ZIPs remain unchanged.
