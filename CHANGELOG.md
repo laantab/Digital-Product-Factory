@@ -1,3 +1,17 @@
+## 1.9.62 — Recognize native chapter comparison tables
+
+### What changed
+Visual completion counts a valid comparison table printed from the chapter's current Markdown, without requiring a duplicate image of that table. Empty tables and fenced example markup do not qualify. Photograph and physical-demonstration requirements remain unchanged.
+
+### What was fixed
+A saved ebook with a real comparison table and a separate checklist could be stopped by a false missing-comparison finding. The checker now recognizes the table that the reader actually sees in the interior.
+
+### Do the steps change?
+Resume the saved build, then inspect the finished PDF and its visuals through the existing release review. No manuscript rewrite or additional paid image generation is required for this correction.
+
+### Release gate
+The fast baseline passed 816 tests and the targeted visual checks passed 17 tests. The full acceptance run passed 3,342 tests; its only failure identified missing required headings in these release notes. The release notes were corrected and the complete version-management test file rerun. This is combined run-and-rerun evidence, not one uninterrupted green run. Live deployment and saved-book export verification follow the test gate.
+
 ## 1.9.61 — Bound workspace ebook project responses
 
 - General project reads omit duplicate workspace preview HTML and cached review thumbnails. Dedicated preview/review routes and stored manuscripts, decisions, PDFs, ZIPs remain unchanged.

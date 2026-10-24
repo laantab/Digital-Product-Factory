@@ -204,6 +204,28 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", str(s or "")).strip().lower()
 
 
+def _has_printed_comparison_table(body: str) -> bool:
+    """Count a real chapter table, not a second PNG of the same table.
+
+    Use the interior's Markdown extensions so fenced examples stay code and
+    header-only/empty tables cannot satisfy a comparison requirement.
+    """
+    import markdown
+    from bs4 import BeautifulSoup
+
+    rendered = markdown.markdown(body, extensions=["extra", "sane_lists", "tables"])
+    soup = BeautifulSoup(rendered, "html.parser")
+    for table in soup.find_all("table"):
+        headers = table.find_all("th")
+        if len(headers) < 2 or any(not cell.get_text(strip=True) for cell in headers):
+            continue
+        for row in table.find_all("tr"):
+            cells = row.find_all("td", recursive=False)
+            if len(cells) == len(headers) and all(cell.get_text(strip=True) for cell in cells):
+                return True
+    return False
+
+
 def derive_chapter_requirement(
     chapter_name: str,
     chapter_body: str,
@@ -333,6 +355,12 @@ def validate_visual_plan_typed(
             name, body, book_demonstration_led=book_demo_led)
         aids = list(ch.get("aids") or [])
         categories = [classify_aid_category(a) for a in aids]
+        # The designed interior prints manuscript tables directly. The
+        # planner deliberately avoids drawing a duplicate comparison PNG;
+        # validate that native table instead of reporting it as missing.
+        if (req["requirement_kind"] == REQUIREMENT_COMPARISON
+                and _has_printed_comparison_table(body)):
+            categories.append(CATEGORY_COMPARISON_TABLE)
 
         satisfied = False
         allowed = set(req["allowed_categories"])

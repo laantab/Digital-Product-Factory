@@ -23,6 +23,33 @@ import sys
 import unittest
 from pathlib import Path
 
+
+def test_printed_chapter_comparison_satisfies_requirement_without_duplicate_image():
+    body = 'Compare two approaches.\n\n| Approach | Benefit |\n| --- | --- |\n| Extract | Keeps source locations |\n| Summarize | Condenses the findings |\n'
+    plan = {'chapters': [{'chapter': 'Document comparison', 'aids': []}]}
+    report = validate_visual_plan_typed(plan, content_md=_plain_chapter('Document comparison', body), title='Office Work')
+    assert report['chapter_requirements'][0]['requirement_kind'] == 'comparison'
+    assert report['visual_requirements_met'] is True
+    assert 'comparison_table' in report['chapter_requirements'][0]['asset_categories_present']
+
+
+def test_example_markup_and_empty_tables_do_not_count_as_printed_comparisons():
+    table = '| Approach | Benefit |\n| --- | --- |\n| Extract | Keeps source locations |\n'
+    for body in ('Compare approaches.\n\n```text\n' + table + '```',
+                 'Compare approaches.\n\n| Approach | Benefit |\n| --- | --- |\n',
+                 'Compare approaches.\n\n| Approach | Benefit |\n| --- | --- |\n| | |\n'):
+        report = validate_visual_plan_typed({'chapters': [{'chapter': 'Comparison', 'aids': []}]},
+            content_md=_plain_chapter('Comparison', body), title='Office Work')
+        assert report['visual_requirements_met'] is False
+
+
+def test_printed_table_does_not_replace_required_physical_demonstration():
+    body = 'Show proper posture and grip. Compare positions.\n\n| Position | Cue |\n| --- | --- |\n| Start | Stand tall |\n'
+    report = validate_visual_plan_typed({'chapters': [{'chapter': 'Movement', 'aids': []}]},
+        content_md=_plain_chapter('Movement', body), title='Kettlebell Training', topic='kettlebell exercise')
+    assert report['chapter_requirements'][0]['requirement_kind'] == 'demonstration'
+    assert report['visual_requirements_met'] is False
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
