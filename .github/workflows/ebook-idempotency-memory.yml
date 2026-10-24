@@ -1,0 +1,38 @@
+name: One-button ebook memory and protected fast gate
+
+on:
+  pull_request:
+    paths:
+      - 'database.py'
+      - 'services/ebook_build_orchestrator.py'
+      - 'tests/test_ebook_idempotency_memory.py'
+      - '.github/workflows/ebook-idempotency-memory.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  one-button-memory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FACTORY_TEST_MODE: '1'
+      FACTORY_DB_BACKEND: sqlite
+      OPENAI_API_KEY: ''
+      ANTHROPIC_API_KEY: ''
+      TAVILY_API_KEY: ''
+      PEXELS_API_KEY: ''
+      UNSPLASH_ACCESS_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline test dependencies
+        run: python -m pip install -r requirements.txt pytest==8.4.1
+      - name: Compile modified Python
+        run: python -m py_compile database.py services/ebook_build_orchestrator.py tests/test_ebook_idempotency_memory.py
+      - name: Check memory, idempotency and one-button PDF/ZIP fixtures
+        run: python -m pytest -q tests/test_ebook_idempotency_memory.py tests/test_ebook_creation_modes.py tests/test_ebook_build_browser_routing.py
+      - name: Check protected functions remain locked
+        run: python scripts/fast_gate.py
