@@ -5014,9 +5014,11 @@ def get_project_route(project_id: int):
     project = database.get_project(project_id)
     if not project:
         return _error("Project not found.", 404)
+    from services.ebook_project_response import navigation_project
+
     try:
         return jsonify(
-            _enrich_project_artifact_fields(project, raise_on_conflict=True)
+            navigation_project(_enrich_project_artifact_fields(project, raise_on_conflict=True))
         )
     except ArtifactStateError as exc:
         return _error(str(exc), 409)
