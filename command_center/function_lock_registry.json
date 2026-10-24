@@ -334,7 +334,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "UNLOCKED",
+      "status": "LOCKED",
       "last_known_good_commit": "85c88620c7e41b559898ed56dd124b478e6ee8ee",
       "factory_version": "1.9.60",
       "protected_test_files": [
@@ -380,11 +380,11 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": "GPT-6, owner-authorized one-button ebook memory repair",
-      "unlocked_reason": "Scoped change to ebook_build_orchestrator.find_existing_build to avoid decoding unrelated saved books, PR #88; protected tests must pass before relocking and release.",
-      "relocked_by": null,
-      "relocked_after_tests": null,
-      "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "GPT-6, scoped owner-authorized one-button ebook memory repair PR #88",
+      "relocked_after_tests": "GitHub Actions 40125087039: 816 fast-gate passes and 442 declared protected one-button ebook tests passed; offline PDF/ZIP fixture and browser-routing steps passed. GitHub Actions 40125087123: 7 PostgreSQL account-isolation passes. Registry relock requires final CI rerun.",
+      "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live. Scoped idempotency lookup relocked after CI; no assertion of production PDF/ZIP acceptance or 512 MiB load acceptance."
     },
     "customer_account_isolation": {
       "display_name": "Customer account isolation (staged, not activated)",
