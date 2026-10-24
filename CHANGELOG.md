@@ -1,3 +1,17 @@
+## 1.9.60 — Discard stale previews when recovering ebook visuals
+
+### What changed
+Changing the ebook style or redrawing charts invalidates both the current preview and its legacy fallback. Previous PDF and ZIP downloads remain preserved.
+
+### What was fixed
+A saved book could fail visual approval with “preview HTML is missing rendered figures” because an old preview survived a layout repair. The current manuscript, photographs and cover do not need regeneration.
+
+### Do the steps change?
+For an already affected saved book, select its existing style again to invalidate the old preview, then review the visuals and resume the saved build. Future print redraws clear both preview fields automatically. All visual, preview and export quality checks still apply.
+
+### Release gate
+The recovery regression reproduces the original failure before the fix. Validation and live re-export are pending; this entry does not claim the book is ready for sale.
+
 ## 1.9.59 — Recover blocked ebook visuals after an old approval
 
 ### What changed
