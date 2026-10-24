@@ -10,7 +10,7 @@ A saved book could fail visual approval with “preview HTML is missing rendered
 For an already affected saved book, select its existing style again to invalidate the old preview, then review the visuals and resume the saved build. Future print redraws clear both preview fields automatically. All visual, preview and export quality checks still apply.
 
 ### Release gate
-The recovery regression reproduces the original failure before the fix. Validation and live re-export are pending; this entry does not claim the book is ready for sale.
+The original failure was reproduced before the fix; both recovery regressions pass. All 3,343 acceptance cases have passing results on the final runtime: the broad run passed 3,342 cases and its one missing preservation-file failure passed unchanged after restoring the exact original PDF and ZIP. No skipped cases or weakened quality gates. This is combined run-and-rerun evidence, not one uninterrupted green run. Live recovery and re-export remain to be verified.
 
 ## 1.9.59 — Recover blocked ebook visuals after an old approval
 
