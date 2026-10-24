@@ -55,7 +55,7 @@ def test_false_hits_and_hidden_books_do_not_attach(monkeypatch, tmp_path):
         system_test=False, temporary=False,
     )
     database.create_project(
-        "An Internal Holiday Guide", "ebook",
+        "A Quiet Winter Guide", "ebook",
         {"ebook_build": {"idempotency_key": key}, "hidden_from_customer": True},
         user_saved=True, system_test=False, temporary=False,
     )
@@ -85,3 +85,28 @@ def test_lookup_is_read_only_and_keeps_project_version(monkeypatch, tmp_path):
         after = conn.execute("SELECT data, version FROM projects WHERE id=?", (original["id"],)).fetchone()
     assert before == after
     assert found["data"]["preview_html"] == "<p>Saved</p>"
+
+
+def test_owner_scope_still_applies_before_decoding(monkeypatch, tmp_path):
+    _temporary_db(monkeypatch, tmp_path)
+    from services import project_access
+    key = orch.idempotency_key_for({"topic": "Holiday party planning"})
+    first = database.create_project(
+        "Holiday Planning for Families", "ebook",
+        {"ebook_build": {"idempotency_key": key}, "content": "Owner one"},
+        user_saved=True, system_test=False, temporary=False,
+    )
+    second = database.create_project(
+        "Holiday Planning for Friends", "ebook",
+        {"ebook_build": {"idempotency_key": key}, "content": "Owner two"},
+        user_saved=True, system_test=False, temporary=False,
+    )
+    with sqlite3.connect(database.DB_PATH) as conn:
+        conn.execute("UPDATE projects SET user_id = 101 WHERE id = ?", (first["id"],))
+        conn.execute("UPDATE projects SET user_id = 202 WHERE id = ?", (second["id"],))
+    monkeypatch.setattr(project_access, "ownership_clause", lambda: (" AND user_id = ?", (202,)))
+    found = orch.find_existing_build(key)
+    assert found["id"] == second["id"]
+    assert found["data"]["content"] == "Owner two"
+    monkeypatch.setattr(project_access, "ownership_clause", lambda: (" AND user_id = ?", (303,)))
+    assert orch.find_existing_build(key) is None
