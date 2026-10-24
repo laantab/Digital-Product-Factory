@@ -334,7 +334,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "85c88620c7e41b559898ed56dd124b478e6ee8ee",
       "factory_version": "1.9.60",
       "protected_test_files": [
@@ -380,10 +380,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Codex, owner-authorized stale preview recovery",
-      "relocked_after_tests": "All 3343 acceptance cases have passing results on final runtime tree 7b4b12f61e841ac817e0967e5267614152ea4998: broad run 3342 passed; its only failure was the absent required preservation pair, restored with exact original SHA-256 values and passed unchanged. Two new recovery regressions pass. No skipped cases or weakened gates. See release_evidence/ebook-stale-preview-recovery.json.",
+      "unlocked_by": "GPT-6, owner-authorized one-button ebook memory repair",
+      "unlocked_reason": "Scoped change to ebook_build_orchestrator.find_existing_build to avoid decoding unrelated saved books, PR #88; protected tests must pass before relocking and release.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {
