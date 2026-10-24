@@ -1064,14 +1064,7 @@ def find_existing_build(idem_key: str):
     """An in-flight build for the same request, so a repeat click attaches."""
     import database
 
-    if not idem_key:
-        return None
-    for project in database.list_projects():
-        data = project.get("data") if isinstance(project.get("data"), dict) else {}
-        state = data.get("ebook_build") if isinstance(data.get("ebook_build"), dict) else {}
-        if state.get("idempotency_key") == idem_key:
-            return project
-    return None
+    return database.find_visible_ebook_build_by_key(idem_key)
 
 
 def start_build(fields: dict, *, customer: str = "local"):
