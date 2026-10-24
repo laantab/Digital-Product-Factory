@@ -426,7 +426,9 @@ def _review_release(
 
     # 2. PDF inside the ZIP --------------------------------------------------
     rev.checks_run.append("zip_pdf_identical")
-    zip_visuals: dict[str, bytes] = {}
+    # Keep ZIP member names, not every full-resolution visual's bytes in RAM.
+    # A long illustrated book can contain tens of megabytes of photographs.
+    zip_visuals: dict[str, str] = {}
     if zf is not None:
         names = zf.namelist()
         if "ebook.pdf" not in names:
@@ -439,7 +441,7 @@ def _review_release(
         for n in names:
             m = re.match(r"visuals/(.+)\.(png|jpe?g)$", n)
             if m:
-                zip_visuals[m.group(1)] = zf.read(n)
+                zip_visuals[m.group(1)] = n
 
     if doc is None:
         rev.status = STATUS_CHANGES
@@ -521,9 +523,10 @@ def _review_release(
     # 5. every image in the PDF --------------------------------------------
     rev.checks_run.append("images_on_the_page")
     zip_hashes: dict[str, int] = {}
-    for vid, raw in zip_visuals.items():
+    for vid, member in zip_visuals.items():
         try:
-            with Image.open(io.BytesIO(raw)) as zip_image:
+            # Decode only one archive image at a time; retain its small hash.
+            with Image.open(io.BytesIO(zf.read(member))) as zip_image:
                 _review_pixels(zip_image)
                 zip_hashes[vid] = dhash(zip_image)
         except Exception:  # noqa: BLE001
@@ -579,7 +582,11 @@ def _review_release(
             if kind == "chart":
                 _check_chart(rev, aid, v, img, placed_w)
             else:
-                _check_photo(rev, aid, v, img, placed_w, zip_visuals.get(vid))
+                # Re-read only the matched photo for its approved SHA-256 check.
+                # This preserves the original identity gate and image fidelity.
+                zip_raw = zf.read(zip_visuals[vid]) if zf is not None and vid in zip_visuals else None
+                _check_photo(rev, aid, v, img, placed_w, zip_raw)
+                del zip_raw
                 photos_seen.append((v, h, _colour_signature(img)))
             img.close()
 
