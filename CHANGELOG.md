@@ -1,3 +1,8 @@
+## 1.9.61 — Bound workspace ebook project responses
+
+- General project reads omit duplicate workspace preview HTML and cached review thumbnails. Dedicated preview/review routes and stored manuscripts, decisions, PDFs, ZIPs remain unchanged.
+- Added regression coverage for response size, source preservation, and legacy detail compatibility. Live memory verification remains required.
+
 ## 1.9.60 — Discard stale previews when recovering ebook visuals
 
 ### What changed
