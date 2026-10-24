@@ -335,7 +335,7 @@
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
       "status": "LOCKED",
-      "last_known_good_commit": "85c88620c7e41b559898ed56dd124b478e6ee8ee",
+      "last_known_good_commit": "4c57ace9e3a86ef6ed391d8f86b5878195d5da1e",
       "factory_version": "1.9.60",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
@@ -383,7 +383,7 @@
       "unlocked_by": null,
       "unlocked_reason": null,
       "relocked_by": "GPT-6, scoped owner-authorized one-button ebook memory repair PR #88",
-      "relocked_after_tests": "GitHub Actions 40125087039: 816 fast-gate passes and 442 declared protected one-button ebook tests passed; offline PDF/ZIP fixture and browser-routing steps passed. GitHub Actions 40125087123: 7 PostgreSQL account-isolation passes. Registry relock requires final CI rerun.",
+      "relocked_after_tests": "GitHub Actions 40125087039: 816 fast-gate passes and 442 declared protected one-button ebook tests passed; offline PDF/ZIP fixture and browser-routing steps passed. GitHub Actions 40125087123: 7 PostgreSQL account-isolation passes. Registry relock requires final CI rerun. Last-known-good baseline set to verified code commit 4c57ace; earlier relock attempt failed function-lock integrity because baseline still pointed to pre-change commit.",
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live. Scoped idempotency lookup relocked after CI; no assertion of production PDF/ZIP acceptance or 512 MiB load acceptance."
     },
     "customer_account_isolation": {
