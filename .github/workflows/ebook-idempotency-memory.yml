@@ -6,6 +6,7 @@ on:
       - 'database.py'
       - 'services/ebook_build_orchestrator.py'
       - 'tests/test_ebook_idempotency_memory.py'
+      - 'command_center/function_lock_registry.json'
       - '.github/workflows/ebook-idempotency-memory.yml'
 
 permissions:
@@ -14,7 +15,7 @@ permissions:
 jobs:
   one-button-memory:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       FACTORY_TEST_MODE: '1'
       FACTORY_DB_BACKEND: sqlite
@@ -47,5 +48,17 @@ jobs:
             tests/test_ebook_creation_modes.py::test_automatic_build_reaches_real_pdf_and_zip_without_choice_pauses \
             tests/test_ebook_creation_modes.py::test_recommendation_button_starts_the_complete_build_and_custom_form_offers_six_styles \
             tests/test_ebook_build_browser_routing.py
-      - name: Check protected functions remain locked
+      - name: Check general protected functions and customer paths
         run: python scripts/fast_gate.py
+      - name: Validate every protected one-button ebook regression before relocking
+        timeout-minutes: 30
+        run: |
+          python - <<'PY'
+          import json, subprocess, sys
+          with open('command_center/function_lock_registry.json', encoding='utf-8') as f:
+              entry = json.load(f)['functions']['ebook_one_button_completion']
+          assert entry['status'] in ('UNLOCKED', 'LOCKED')
+          files = entry['protected_test_files']
+          assert len(files) >= 20, 'Protected ebook coverage unexpectedly shrank'
+          sys.exit(subprocess.call([sys.executable, '-m', 'pytest', '-q', *files]))
+          PY
