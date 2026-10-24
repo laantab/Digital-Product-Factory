@@ -1143,6 +1143,41 @@ def list_factory_source_projects() -> list[dict]:
     return _dedupe_customer_projects(projects)
 
 
+
+def find_visible_ebook_build_by_key(idem_key: str) -> dict | None:
+    """Find a previously started one-click build without decoding every book.
+
+    The key is stored in each project's JSON blob, not a separate column.
+    SQLite/Postgres can filter raw TEXT with a parameterized substring search
+    before Python decodes any large previews or manuscripts. A substring hit
+    is only a candidate: exact nested-key and customer visibility checks
+    retain the old list_projects() semantics. No stored record is changed.
+    """
+    if not idem_key:
+        return None
+    from services.project_access import ownership_clause
+    scope, owner_params = ownership_clause()
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id FROM projects "
+            "WHERE user_saved = 1 AND system_test = 0 AND temporary = 0 "
+            f"AND data LIKE ?{scope} ORDER BY updated_at DESC",
+            (f"%{idem_key}%", *owner_params),
+        ).fetchall()
+    finally:
+        conn.close()
+    for row in rows:
+        project = get_project(row["id"])
+        if not project or not is_customer_visible_project(project):
+            continue
+        data = project.get("data")
+        state = data.get("ebook_build") if isinstance(data, dict) else None
+        if isinstance(state, dict) and state.get("idempotency_key") == idem_key:
+            return project
+    return None
+
+
 def get_project(project_id: int) -> dict | None:
     from services.project_access import ownership_clause
     scope, params = ownership_clause()
