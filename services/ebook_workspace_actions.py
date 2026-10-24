@@ -94,6 +94,10 @@ def visuals(data: dict, payload: dict) -> tuple[dict, str]:
         data["ebook_visual_manifest_digest"] = data["ebook_visual_manifest"]["digest"]
         data.setdefault("fields", {}).update(theme_id="modern_practical", readability_profile="clear_large")
         data["export_ready"] = False
+        # A redraw invalidates both names used by preview readers. The saved
+        # PDF/ZIP remain available, but cannot serve as the revised preview.
+        data["ebook_preview_html"] = ""
+        data["preview_html"] = ""
         build = data.setdefault("ebook_build", {})
         build.update(finished=False, failed=False, current_stage="design")
         from services.ebook_build_orchestrator import clear_pause

@@ -1,0 +1,16 @@
+{
+  "runtime_commit": "85c88620c7e41b559898ed56dd124b478e6ee8ee",
+  "runtime_tree": "7b4b12f61e841ac817e0967e5267614152ea4998",
+  "unique_acceptance_cases": 3343,
+  "broad_passed": 3342,
+  "broad_failed": [
+    "tests.test_warm_wellness_template.RevisionIdentityAndIsolation.test_preserved_project_351_package_is_untouched_if_present"
+  ],
+  "restored_reference_rerun_passed": 1,
+  "regression_cases_passed": 2,
+  "unresolved": [],
+  "single_uninterrupted_green_run": false,
+  "source_changed_after_full_run": false,
+  "paid_manuscript_calls": 0,
+  "live_reexport_verified": false
+}

@@ -237,7 +237,10 @@ def select_and_stage_theme(data: dict, theme_id: str) -> dict:
     data = select_theme(data, theme_id)
     set_stage_status(ws, "design", STATUS_AWAITING, note=f"Theme {theme_id} selected")
     cleared = invalidate_after(ws, "design", reason="Theme selected")
-    data = _clear_export_fields(data, cleared)
+    # A preview can already be marked Not started while legacy HTML remains.
+    # Selecting a style always invalidates that HTML, even if the rail has
+    # no further status transitions left for invalidate_after() to report.
+    data = _clear_export_fields(data, ["preview", *cleared])
     _append_history(ws, "select_theme", theme_id=theme_id)
     _recompute_next_action(ws)
     return sync_document_from_workspace(data, sync_manuscript=False)
@@ -246,6 +249,9 @@ def select_and_stage_theme(data: dict, theme_id: str) -> dict:
 def _clear_export_fields(data: dict, cleared: list[str]) -> dict:
     if "preview" in cleared or "preflight" in cleared or "export" in cleared:
         data["ebook_preview_html"] = ""
+        # Readers fall back to this legacy field. Keeping it revives the old
+        # preview during visual recovery even though its stage was invalidated.
+        data["preview_html"] = ""
         data["ebook_export_identity"] = None
         data["ebook_design_preflight"] = None
         data["export_ready"] = False

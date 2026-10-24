@@ -334,8 +334,8 @@
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
       "status": "LOCKED",
-      "last_known_good_commit": "d90ef3809ffde3f4db3108513aa1e60833559bf0",
-      "factory_version": "1.9.59",
+      "last_known_good_commit": "85c88620c7e41b559898ed56dd124b478e6ee8ee",
+      "factory_version": "1.9.60",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
         "tests/test_guided_cover_choice.py",
@@ -355,7 +355,8 @@
         "tests/test_factory_ebook_pexels_route.py",
         "tests/test_chapter_photo_queries.py",
         "tests/test_editor_in_chief.py",
-        "tests/test_practice_chart_boundaries.py"
+        "tests/test_practice_chart_boundaries.py",
+        "tests/test_ebook_visual_pipeline.py"
       ],
       "shared_code_dependencies": [
         "static/js/app.js",
@@ -372,14 +373,16 @@
         "services/project_access.py",
         "services/ebook_visual_editorial.py",
         "services/ebook_visual_match.py",
-        "services/ebook_factory_pipeline.py"
+        "services/ebook_factory_pipeline.py",
+        "services/ebook_design_workspace.py",
+        "services/ebook_workspace_actions.py"
       ],
       "fast_gate": false,
       "full_gate": true,
       "unlocked_by": null,
       "unlocked_reason": null,
-      "relocked_by": "Codex, owner-authorized ebook completion",
-      "relocked_after_tests": "All declared protected suites covered by 3330 passing broad runtime cases and 1007 protected passes; timing and custom browser failures under concurrent load both passed unchanged serially (2 passed). UI suite: 251 passed; two release-note failures resolved by all 31 version checks. Final registry/version checks recorded in release evidence.",
+      "relocked_by": "Codex, owner-authorized stale preview recovery",
+      "relocked_after_tests": "All 3343 acceptance cases have passing results on final runtime tree 7b4b12f61e841ac817e0967e5267614152ea4998: broad run 3342 passed; its only failure was the absent required preservation pair, restored with exact original SHA-256 values and passed unchanged. Two new recovery regressions pass. No skipped cases or weakened gates. See release_evidence/ebook-stale-preview-recovery.json.",
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live."
     },
     "customer_account_isolation": {

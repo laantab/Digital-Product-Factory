@@ -289,6 +289,47 @@ class EbookVisualPipelineTests(unittest.TestCase):
             approve_stage(data, "preview")
         self.assertIn("visual", str(ctx.exception).lower())
 
+    def test_theme_change_discards_legacy_preview_before_visual_reapproval(self):
+        from services.ebook_photo_cover import attach_licensed, select_layout
+        from services.ebook_design_workspace import select_and_stage_theme
+
+        data = approve_visuals_local(_manuscript_ready())
+        data = attach_licensed(data, "event_reception_night", project_id=None)
+        data = select_layout(data, "printed_moment", project_id=None)
+        data = approve_stage(data, "cover")
+        manuscript = data["content"]
+        photos = copy.deepcopy(data["visual_plan"])
+        cover = copy.deepcopy(data["cover_design"])
+        # This is the live recovery state: the current preview was invalidated,
+        # but a previous export still occupies the legacy fallback field.
+        data["ebook_preview_html"] = ""
+        data["preview_html"] = "<html><body>Previous export without current figures</body></html>"
+        data["pdf_bytes"] = b"previous-download-preserved"
+        data = select_and_stage_theme(data, "modern_practical")
+        data = approve_visuals_local(data)
+        self.assertEqual(data["preview_html"], "")
+        self.assertEqual(data["content"], manuscript)
+        self.assertEqual(data["visual_plan"], photos)
+        self.assertEqual(data["cover_design"], cover)
+        self.assertEqual(data["pdf_bytes"], b"previous-download-preserved")
+        self.assertFalse(data["export_ready"])
+
+    def test_print_redraw_does_not_reuse_previous_preview_for_visual_approval(self):
+        from services.ebook_workspace_actions import visuals
+
+        data = approve_visuals_local(_manuscript_ready())
+        manuscript = data["content"]
+        data["ebook_preview_html"] = "<html><body>Previous export</body></html>"
+        data["preview_html"] = data["ebook_preview_html"]
+        data["pdf_bytes"] = b"previous-download-preserved"
+        data, _ = visuals(data, {"action": "improve-print"})
+        data = approve_visuals_local(data)
+        self.assertEqual(data["ebook_preview_html"], "")
+        self.assertEqual(data["preview_html"], "")
+        self.assertEqual(data["content"], manuscript)
+        self.assertEqual(data["pdf_bytes"], b"previous-download-preserved")
+        self.assertFalse(data["export_ready"])
+
     def test_locked_cannot_prepare_visuals(self):
         data = _manuscript_ready()
         data["artifact_state"] = ArtifactState.LOCKED.value
