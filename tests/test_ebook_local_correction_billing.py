@@ -15,17 +15,21 @@ from services.ebook_manuscript_engine import chapter_fn_from_full_manuscript
 from services.ebook_manuscript_fixtures import build_event_photo_strong_manuscript
 
 
-def test_free_local_correction_does_not_charge_again(monkeypatch):
+@pytest.mark.parametrize("failed_order", [4, 10])
+def test_free_local_correction_does_not_charge_again(monkeypatch, failed_order):
     project = workspace.upsert_acceptance_project(
         database, preserve_live_manuscript=False
     )
     pid = project["id"]
+    starting_ledger = database.get_project(pid)["data"]["ebook_workspace"]["paid_call_ledger"]
+    starting_spent = float(starting_ledger["spent_usd"])
+    starting_remaining = float(starting_ledger["remaining_usd"])
     good = chapter_fn_from_full_manuscript(build_event_photo_strong_manuscript())
     calls = []
 
     def fake_chapter(book, chapter):
         calls.append(chapter.order)
-        if chapter.order == 10 and calls.count(10) == 1:
+        if chapter.order == failed_order and calls.count(failed_order) == 1:
             # Simulated provider metadata only; no real paid request.
             return {
                 "ebook": f"## {chapter.title}\n\nToo thin.\n",
@@ -48,15 +52,15 @@ def test_free_local_correction_does_not_charge_again(monkeypatch):
         pytest.fail("bounded manuscript build never reached approval")
 
     assert state["percent"] == 40
-    assert Counter(calls) == {**{i: 1 for i in range(1, 10)}, 10: 2}
+    assert Counter(calls) == {i: (2 if i == failed_order else 1) for i in range(1, 11)}
     saved = database.get_project(pid)["data"]["ebook_workspace"]
     assert workspace.stage_status(saved, "manuscript") == workspace.STATUS_APPROVED
     assert len(saved["accepted_chapters"]) == 10
 
     ledger = saved["paid_call_ledger"]
-    assert float(ledger["spent_usd"]) == pytest.approx(workspace.CHAPTER_UNIT_USD)
+    assert float(ledger["spent_usd"]) == pytest.approx(starting_spent + workspace.CHAPTER_UNIT_USD)
     assert float(ledger["remaining_usd"]) == pytest.approx(
-        float(ledger["budget_cap_usd"]) - workspace.CHAPTER_UNIT_USD
+        starting_remaining - workspace.CHAPTER_UNIT_USD
     )
     corrections = [
         row for row in ledger["calls"]
