@@ -37,7 +37,8 @@ jobs:
         run: python -m py_compile services/ebook_project_workspace.py tests/test_ebook_fixture_correction_offline.py
       - name: Prove fixture repair test fails against unmodified main
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Immutable pre-fix PR #94 baseline; never use a moving main.
+          BASE_SHA: 68ba3f92d5519501d61534538727d35166ea53b4
         run: |
           python - <<'PY'
           import os, pathlib, shutil, subprocess, sys
