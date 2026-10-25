@@ -1102,3 +1102,72 @@ def test_z_recording_an_asset_does_not_touch_the_project_row(factory):
     after = database.get_project(pid)
     assert after["data"]["pdf_bytes"] == before["data"]["pdf_bytes"]
     assert after["data"]["_row_version"] == before["data"]["_row_version"]
+
+
+def test_l_asset_only_ebook_pdf_and_zip_cannot_bypass_download_quality_gate(
+    factory, monkeypatch
+):
+    """A verified checksum is not a substitute for the final output gate.
+
+    Repro: the disk is empty after a restart but the approved asset is still
+    available. The customer-facing route must consult the same download
+    validator used for disk exports before serving PDF or ZIP bytes.
+    """
+    import io
+    import zipfile
+
+    import app as app_module
+    from services.quality.download_pipeline_agent import DownloadResult
+
+    exports = factory["exports"]
+    package = "asset_only_gate_probe"
+    project = _make_project(
+        name="Asset-only Gate Ebook",
+        ptype="ebook",
+        data={"package_id": package, "product_type": "ebook", "pdf_available": True},
+    )
+    pid = project["id"]
+    pdf = _real_pdf_bytes()
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as archive:
+        archive.writestr("ebook.pdf", pdf)
+
+    monkeypatch.setattr(app_module, "EXPORTS_DIR", str(exports))
+    monkeypatch.setattr("services.storage.compat.refresh_stale_export",
+                        lambda *_args, **_kwargs: None)
+    gate_calls = []
+
+    def blocked_gate(*, route, filename, file_path, package_id):
+        gate_calls.append((filename, package_id, Path(file_path).is_file()))
+        return None, DownloadResult(
+            status="blocked",
+            status_code=403,
+            message="Rejected by final output gate",
+            error_response={"error": "download_blocked", "message": "Rejected by final output gate"},
+        )
+
+    monkeypatch.setattr(
+        "services.quality.download_pipeline_agent.pipeline_download", blocked_gate
+    )
+    for filename, payload, kind in (
+        ("ebook.pdf", pdf, "pdf"),
+        ("package.zip", zip_buffer.getvalue(), "zip"),
+    ):
+        key = export_object_key(pid, f"{package}/{filename}")
+        get_storage().put(key, payload)
+        database.record_asset(
+            pid, kind, key, byte_size=len(payload),
+            checksum=sha256_hex(payload), approved=True,
+        )
+        assert not (exports / package / filename).exists()
+        response = app_module.app.test_client().get(f"/download/{package}/{filename}")
+        assert response.status_code == 403, (
+            f"{filename} bypassed the final output gate after disk loss: "
+            f"status={response.status_code}"
+        )
+        assert response.get_json()["error"] == "download_blocked"
+
+    assert gate_calls == [
+        ("ebook.pdf", package, True),
+        ("package.zip", package, True),
+    ]
