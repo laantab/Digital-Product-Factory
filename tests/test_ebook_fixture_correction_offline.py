@@ -38,8 +38,9 @@ def test_fixture_mode_correction_never_calls_live_chapter_provider(monkeypatch):
     def fixture_chapter(book, chapter):
         calls.append(chapter.order)
         if chapter.order == 10 and calls.count(10) == 1:
-            return {"ebook": f"## {chapter.title}\n\nToo thin.\n"}
-        return valid_chapter(book, chapter)
+            return {"ebook": f"## {chapter.title}\n\nToo thin.\n", "provider": "fixture", "billable_calls": 0}
+        result = valid_chapter(book, chapter)
+        return {**result, "provider": "fixture", "billable_calls": 0}
 
     def forbidden_live_provider(*_args, **_kwargs):
         raise AssertionError(
