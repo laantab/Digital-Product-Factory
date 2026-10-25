@@ -6,6 +6,7 @@ on:
       - 'services/ebook_project_workspace.py'
       - 'tests/test_ebook_fixture_correction_offline.py'
       - 'tests/test_ebook_accepted_chapter_revalidation.py'
+      - 'tests/test_ebook_manuscript_correction_recovery.py'
       - '.github/workflows/ebook-fixture-correction-offline.yml'
 
 permissions:
