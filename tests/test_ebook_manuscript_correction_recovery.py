@@ -125,7 +125,15 @@ def test_orchestrator_auto_corrects_and_advances_past_manuscript(monkeypatch):
     percents: list[int] = []
     status = {"failed": False, "finished": False, "percent": 30}
     for _ in range(20):  # generous safety cap: 10 chapters + one repair + margin
+        calls_before = len(call_log)
         status = orch.advance_build(pid)
+        # A rejected chapter must NOT be generated and then repaired in the
+        # same HTTP request: both calls may be slow, defeating the per-request
+        # timeout bound. Correction belongs to the next durable checkpoint.
+        assert len(call_log) - calls_before <= 1, (
+            "one /advance generated and repaired a rejected chapter together: "
+            f"{call_log[calls_before:]}"
+        )
         assert status["failed"] is False, status
         percents.append(status["percent"])
         if status["percent"] > 30:
