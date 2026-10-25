@@ -6,6 +6,7 @@ import copy
 import hashlib
 import io
 import json
+import os
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
@@ -78,6 +79,11 @@ def test_automatic_build_reaches_real_pdf_and_zip_without_choice_pauses(monkeypa
         archive = client.get(status['downloads']['zip'])
         assert pdf.status_code == 200 and pdf.data.startswith(b'%PDF')
         assert archive.status_code == 200 and archive.data.startswith(b'PK')
+        # Validate the bytes the customer downloaded, not only stored flags.
+        with zipfile.ZipFile(io.BytesIO(archive.data)) as bundle:
+            assert bundle.testzip() is None
+            assert {'ebook.pdf', 'ebook.html'} <= set(bundle.namelist())
+            assert bundle.read('ebook.pdf') == pdf.data
         assert data['editor_in_chief']['verdict'] == 'EDITOR-IN-CHIEF PASS'
         assert data['editor_in_chief']['pdf_sha256'] == hashlib.sha256(pdf.data).hexdigest()
         assert data['editor_in_chief']['zip_sha256'] == hashlib.sha256(archive.data).hexdigest()
@@ -86,6 +92,26 @@ def test_automatic_build_reaches_real_pdf_and_zip_without_choice_pauses(monkeypa
             assert document.metadata['title'] == data['title']
             assert document.metadata['author'] == 'Fixture Author'
             assert document.get_toc()
+            page_count = len(document)
+            assert page_count >= 2
+        # CI may request reviewable, byte-identical offline fixture outputs.
+        # Ordinary tests leave no artifacts; never copy production data here.
+        evidence_root = os.environ.get('EBOOK_ACCEPTANCE_ARTIFACT_DIR')
+        if evidence_root:
+            output = Path(evidence_root) / mode
+            output.mkdir(parents=True, exist_ok=True)
+            (output / 'ebook.pdf').write_bytes(pdf.data)
+            (output / 'package.zip').write_bytes(archive.data)
+            (output / 'manifest.json').write_text(json.dumps({
+                'offline_fixture': True,
+                'not_sellable_customer_content': True,
+                'title': data['title'],
+                'mode': mode,
+                'pages': page_count,
+                'pdf_sha256': hashlib.sha256(pdf.data).hexdigest(),
+                'zip_sha256': hashlib.sha256(archive.data).hexdigest(),
+                'editor_verdict': data['editor_in_chief']['verdict'],
+            }, indent=2), encoding='utf-8')
         with patch.dict(orch.STAGE_RUNNERS, {s: lambda *_: pytest.fail('completed book rebuilt') for s in orch.STAGES}):
             assert orch.advance_build(pid)['finished']
     finally:
