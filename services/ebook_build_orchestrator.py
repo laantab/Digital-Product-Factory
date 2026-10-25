@@ -623,6 +623,15 @@ def _run_manuscript(data: dict, pid: int) -> dict:
             _mark_stage_still_working(data, out.get("result") or {}, verb="Writing")
             return data
         ws = data.get("ebook_workspace") if isinstance(data.get("ebook_workspace"), dict) else {}
+        if stage_status(ws, "manuscript") == STATUS_NEEDS_CORRECTION:
+            # A chapter just failed QA. The generation call already used this
+            # HTTP request's chapter budget; immediately calling correction
+            # would make a second potentially slow provider call in the same
+            # request, defeating MANUSCRIPT_CHAPTERS_PER_ADVANCE=1. The draft,
+            # accepted chapters and findings were persisted above. Next
+            # /advance resumes directly in the correction branch below.
+            _mark_stage_still_working(data, out.get("result") or {}, verb="Reviewing")
+            return data
 
     if stage_status(ws, "manuscript") == STATUS_NEEDS_CORRECTION:
         # Stage attempts also count normal chapter checkpoints, so their high
