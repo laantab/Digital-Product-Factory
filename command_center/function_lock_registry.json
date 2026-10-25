@@ -334,8 +334,8 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "UNLOCKED",
-      "last_known_good_commit": "4c57ace9e3a86ef6ed391d8f86b5878195d5da1e",
+      "status": "LOCKED",
+      "last_known_good_commit": "5ef6dc809e346566f678b5cefaec66eef39c3b28",
       "factory_version": "1.9.60",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
@@ -380,10 +380,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": "GPT-6, owner-authorized targeted ebook QA timeout repair PR #96",
-      "unlocked_reason": "Reproduced 2 provider calls [10,10] in one /advance on rejected chapter; isolate correction in next durable checkpoint and run all protected regressions before relocking.",
-      "relocked_by": null,
-      "relocked_after_tests": null,
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "GPT-6, owner-authorized one-button QA timeout repair PR #96",
+      "relocked_after_tests": "GitHub Actions run 40194965247: immutable baseline reproduced double provider call on rejected chapter; 38 focused manuscript recovery tests, 816 general stability tests, and 599 protected ebook/PDF/ZIP tests passed. Relock commit requires final CI rerun; no production PDF/ZIP acceptance claimed.",
       "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live. Scoped idempotency lookup relocked after CI; no assertion of production PDF/ZIP acceptance or 512 MiB load acceptance."
     },
     "customer_account_isolation": {
