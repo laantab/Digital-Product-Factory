@@ -3239,6 +3239,7 @@ def execute_correct_manuscript(
     ]
     ws["chapter_pipeline"] = {
         "chapter_calls": pipeline.get("chapter_calls"),
+        "billable_chapter_calls": pipeline.get("billable_chapter_calls"),
         "failed_orders": pipeline.get("failed_orders"),
         "skipped_ungenerated": pipeline.get("skipped_ungenerated"),
         "preserved_orders": [c.order for c in accepted_keep],
@@ -3251,7 +3252,8 @@ def execute_correct_manuscript(
     # flagged chapter was fixed, and nothing attempted actually failed.
     if pipeline.get("skipped_ungenerated") and not pipeline.get("failed_orders"):
         chapter_calls = int(pipeline.get("chapter_calls") or 0)
-        charge = round(min(chapter_calls * CHAPTER_UNIT_USD, auth_max, remaining), 4)
+        billable_calls = int(pipeline.get("billable_chapter_calls", chapter_calls) or 0)
+        charge = round(min(billable_calls * CHAPTER_UNIT_USD, auth_max, remaining), 4)
         ledger["spent_usd"] = round(spent + charge, 4)
         ledger["remaining_usd"] = round(cap - float(ledger["spent_usd"]), 4)
         ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + chapter_calls
@@ -3312,7 +3314,8 @@ def execute_correct_manuscript(
     chapters = manuscript_to_chapters(cleaned)
 
     chapter_calls = int((ws.get("chapter_pipeline") or {}).get("chapter_calls") or 0)
-    charge = round(min(chapter_calls * CHAPTER_UNIT_USD, auth_max, remaining), 4)
+    billable_calls = int(pipeline.get("billable_chapter_calls", chapter_calls) or 0)
+    charge = round(min(billable_calls * CHAPTER_UNIT_USD, auth_max, remaining), 4)
     ledger["spent_usd"] = round(spent + charge, 4)
     ledger["remaining_usd"] = round(cap - float(ledger["spent_usd"]), 4)
     ledger["paid_calls"] = int(ledger.get("paid_calls") or 0) + chapter_calls
