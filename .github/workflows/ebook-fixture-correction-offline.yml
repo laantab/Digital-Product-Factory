@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'services/ebook_project_workspace.py'
+      - 'services/ebook_build_orchestrator.py'
       - 'tests/test_ebook_fixture_correction_offline.py'
       - 'tests/test_ebook_accepted_chapter_revalidation.py'
       - 'tests/test_ebook_manuscript_correction_recovery.py'
@@ -36,7 +37,27 @@ jobs:
       - name: Install Chromium for protected browser tests
         run: python -m playwright install --with-deps chromium
       - name: Compile source and regression
-        run: python -m py_compile services/ebook_project_workspace.py tests/test_ebook_fixture_correction_offline.py tests/test_ebook_accepted_chapter_revalidation.py
+        run: python -m py_compile services/ebook_project_workspace.py services/ebook_build_orchestrator.py tests/test_ebook_fixture_correction_offline.py tests/test_ebook_accepted_chapter_revalidation.py tests/test_ebook_manuscript_correction_recovery.py
+      - name: Prove rejected chapter double-call on immutable pre-fix baseline
+        env:
+          BASE_SHA: 3bf10676a739d9c8fc7533a2a8991166b3463763
+        run: |
+          python - <<'PY'
+          import os, pathlib, shutil, subprocess, sys
+          base = pathlib.Path(os.environ['RUNNER_TEMP']) / 'qa-reject-double-call-baseline'
+          subprocess.run(['git', 'worktree', 'add', '--detach', str(base), os.environ['BASE_SHA']], check=True)
+          path = 'tests/test_ebook_manuscript_correction_recovery.py'
+          shutil.copyfile(path, base / path)
+          test = path + '::test_orchestrator_auto_corrects_and_advances_past_manuscript'
+          proc = subprocess.run(
+              [sys.executable, '-m', 'pytest', '-q', test],
+              cwd=base, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+          )
+          assert proc.returncode != 0 and (
+              'one /advance generated and repaired a rejected chapter together: [10, 10]' in proc.stdout
+          ), proc.stdout
+          print('Confirmed: pre-fix build generated and repaired chapter 10 in one request.')
+          PY
       - name: Prove fixture repair test fails against unmodified main
         env:
           # Immutable pre-fix PR #94 baseline; never use a moving main.
