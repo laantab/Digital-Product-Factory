@@ -3768,6 +3768,48 @@ def download_export_route(package_id: str, filename: str):
         # Nothing has been migrated yet, so today this never fires.
         served = _verified_export_asset(package_id, filename)
         if served is not None:
+            # A checksum-approved stored object is not an exemption from the
+            # Final Output Gate. When an instance restarts with an empty
+            # export directory, validate PDF/ZIP bytes against the SAME gate
+            # as disk-backed downloads before returning anything to the user.
+            # A short-lived local file keeps the gate's existing project,
+            # digest, page-count, and ZIP checks intact; it is never written
+            # into the customer's approved export directory or database.
+            # Limit this recovery hardening to ebook exports. Other product
+            # types (notably coloring-book recovery) have distinct, protected
+            # download contracts and must not be changed by an ebook fix.
+            owning_project = database.find_project_by_package(package_id)
+            owning_data = (owning_project or {}).get("data") or {}
+            is_ebook_export = (
+                str(owning_data.get("product_type") or "").strip().lower() == "ebook"
+                or str((owning_project or {}).get("type") or "").strip().lower() == "ebook"
+            )
+            if is_ebook_export and filename.lower().endswith((".pdf", ".zip")):
+                import tempfile
+                from services.quality.download_pipeline_agent import pipeline_download
+
+                with tempfile.TemporaryDirectory(prefix="factory-export-gate-") as scratch:
+                    staged_path = os.path.join(scratch, filename)
+                    with open(staged_path, "wb") as staged_file:
+                        staged_file.write(served)
+                    _, result = pipeline_download(
+                        route="/download/<package_id>/<filename>",
+                        filename=filename,
+                        file_path=staged_path,
+                        package_id=package_id,
+                    )
+                if result.status == "blocked":
+                    return jsonify(result.error_response or {
+                        "error": "download_blocked",
+                        "message": result.message,
+                        "violations": result.violations,
+                    }), result.status_code or 403
+                if result.status == "repaired":
+                    if not result.served_bytes:
+                        return _error("Export validation did not produce a file.", 403)
+                    return _send_artifact_bytes(result.served_bytes, filename)
+                if result.status != "passed":
+                    return _error("Export validation did not pass.", 403)
             return _send_artifact_bytes(served, filename)
         if coloring_preview:
             return _error(coloring_preview_missing_message(filename), 404)
