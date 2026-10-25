@@ -3775,7 +3775,16 @@ def download_export_route(package_id: str, filename: str):
             # A short-lived local file keeps the gate's existing project,
             # digest, page-count, and ZIP checks intact; it is never written
             # into the customer's approved export directory or database.
-            if filename.lower().endswith((".pdf", ".zip")):
+            # Limit this recovery hardening to ebook exports. Other product
+            # types (notably coloring-book recovery) have distinct, protected
+            # download contracts and must not be changed by an ebook fix.
+            owning_project = database.find_project_by_package(package_id)
+            owning_data = (owning_project or {}).get("data") or {}
+            is_ebook_export = (
+                str(owning_data.get("product_type") or "").strip().lower() == "ebook"
+                or str((owning_project or {}).get("type") or "").strip().lower() == "ebook"
+            )
+            if is_ebook_export and filename.lower().endswith((".pdf", ".zip")):
                 import tempfile
                 from services.quality.download_pipeline_agent import pipeline_download
 
