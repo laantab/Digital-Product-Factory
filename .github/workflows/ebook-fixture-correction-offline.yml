@@ -9,6 +9,7 @@ on:
       - 'tests/test_ebook_fixture_correction_offline.py'
       - 'tests/test_ebook_accepted_chapter_revalidation.py'
       - 'tests/test_ebook_manuscript_correction_recovery.py'
+      - 'tests/test_ebook_creation_modes.py'
       - '.github/workflows/ebook-fixture-correction-offline.yml'
 
 permissions:
@@ -84,6 +85,8 @@ jobs:
         run: python scripts/fast_gate.py
       - name: Verify protected ebook and PDF ZIP customer paths
         timeout-minutes: 35
+        env:
+          EBOOK_ACCEPTANCE_ARTIFACT_DIR: ${{ runner.temp }}/ebook-acceptance
         run: |
           python - <<'PY'
           import json, subprocess, sys
@@ -94,3 +97,11 @@ jobs:
           assert len(files) >= 20, 'Protected regression coverage unexpectedly shrank'
           sys.exit(subprocess.call([sys.executable, '-m', 'pytest', '-q', *files]))
           PY
+
+      - name: Retain verified offline ebook PDF and ZIP downloads
+        uses: actions/upload-artifact@v4
+        with:
+          name: ebook-offline-pdf-zip-${{ github.run_id }}
+          path: ${{ runner.temp }}/ebook-acceptance/
+          if-no-files-found: error
+          retention-days: 7
