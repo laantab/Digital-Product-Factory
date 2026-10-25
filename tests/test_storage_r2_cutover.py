@@ -1171,3 +1171,54 @@ def test_l_asset_only_ebook_pdf_and_zip_cannot_bypass_download_quality_gate(
         ("ebook.pdf", package, True),
         ("package.zip", package, True),
     ]
+
+
+def test_l_asset_only_ebook_pdf_and_zip_pass_gate_without_changing_bytes(
+    factory, monkeypatch
+):
+    """The disk-loss recovery route preserves the exact approved bytes."""
+    import io
+    import zipfile
+
+    import app as app_module
+    from services.quality.download_pipeline_agent import DownloadResult
+
+    package = "asset_only_valid_probe"
+    project = _make_project(
+        name="Asset-only Valid Ebook",
+        ptype="ebook",
+        data={"package_id": package, "product_type": "ebook", "pdf_available": True},
+    )
+    pid = project["id"]
+    pdf = _real_pdf_bytes()
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as archive:
+        archive.writestr("ebook.pdf", pdf)
+
+    monkeypatch.setattr(app_module, "EXPORTS_DIR", str(factory["exports"]))
+    monkeypatch.setattr("services.storage.compat.refresh_stale_export",
+                        lambda *_args, **_kwargs: None)
+    validated = []
+
+    def passing_gate(*, route, filename, file_path, package_id):
+        assert package_id == package
+        validated.append((filename, Path(file_path).read_bytes()))
+        return None, DownloadResult(status="passed")
+
+    monkeypatch.setattr(
+        "services.quality.download_pipeline_agent.pipeline_download", passing_gate
+    )
+    payloads = {"ebook.pdf": pdf, "package.zip": zip_buffer.getvalue()}
+    for filename, payload in payloads.items():
+        key = export_object_key(pid, f"{package}/{filename}")
+        get_storage().put(key, payload)
+        database.record_asset(
+            pid, "pdf" if filename.endswith(".pdf") else "zip", key,
+            byte_size=len(payload), checksum=sha256_hex(payload), approved=True,
+        )
+        response = app_module.app.test_client().get(f"/download/{package}/{filename}")
+        assert response.status_code == 200, response.data[:120]
+        assert response.data == payload
+        assert not (factory["exports"] / package / filename).exists()
+
+    assert validated == list(payloads.items())
