@@ -37,7 +37,9 @@ jobs:
         run: python -m py_compile services/ebook_project_workspace.py tests/test_ebook_local_correction_billing.py
       - name: Prove new correction-billing test fails against unmodified main
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Pin the pre-PR #93 defect: main is now fixed, so comparing with
+          # the moving PR base would falsely fail every future correction PR.
+          BASE_SHA: 0c2e3b54ee3e6993583751f4c3889050046c0553
         run: |
           python - <<'PY'
           import os, pathlib, shutil, subprocess, sys

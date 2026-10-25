@@ -1,0 +1,72 @@
+name: Ebook Safe Mode correction and protected regressions
+
+on:
+  pull_request:
+    paths:
+      - 'services/ebook_project_workspace.py'
+      - 'tests/test_ebook_fixture_correction_offline.py'
+      - '.github/workflows/ebook-fixture-correction-offline.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  fixture-correction-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      FACTORY_TEST_MODE: '1'
+      FACTORY_DB_BACKEND: sqlite
+      OPENAI_API_KEY: ''
+      ANTHROPIC_API_KEY: ''
+      TAVILY_API_KEY: ''
+      PEXELS_API_KEY: ''
+      UNSPLASH_ACCESS_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline dependencies
+        run: python -m pip install -r requirements.txt pytest==8.4.1 playwright==1.56.0
+      - name: Install Chromium for protected browser tests
+        run: python -m playwright install --with-deps chromium
+      - name: Compile source and regression
+        run: python -m py_compile services/ebook_project_workspace.py tests/test_ebook_fixture_correction_offline.py
+      - name: Prove fixture repair test fails against unmodified main
+        env:
+          # Immutable pre-fix PR #94 baseline; never use a moving main.
+          BASE_SHA: 68ba3f92d5519501d61534538727d35166ea53b4
+        run: |
+          python - <<'PY'
+          import os, pathlib, shutil, subprocess, sys
+          base = pathlib.Path(os.environ['RUNNER_TEMP']) / 'fixture-correction-baseline'
+          subprocess.run(['git', 'worktree', 'add', '--detach', str(base), os.environ['BASE_SHA']], check=True)
+          path = 'tests/test_ebook_fixture_correction_offline.py'
+          shutil.copyfile(path, base / path)
+          proc = subprocess.run(
+              [sys.executable, '-m', 'pytest', '-q', path],
+              cwd=base, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+          )
+          assert proc.returncode != 0 and 'test_fixture_mode_correction_never_calls_live_chapter_provider' in proc.stdout, proc.stdout
+          assert 'AssertionError' in proc.stdout, proc.stdout
+          print('Confirmed: baseline fixture-mode correction does not finish offline.')
+          PY
+      - name: Verify offline fixture correction and manuscript recovery
+        run: python -m pytest -q tests/test_ebook_fixture_correction_offline.py tests/test_ebook_manuscript_correction_recovery.py tests/test_ebook_fixture_dual_gate.py
+      - name: Verify general protected product paths
+        run: python scripts/fast_gate.py
+      - name: Verify protected ebook and PDF ZIP customer paths
+        timeout-minutes: 35
+        run: |
+          python - <<'PY'
+          import json, subprocess, sys
+          with open('command_center/function_lock_registry.json', encoding='utf-8') as f:
+              registry = json.load(f)['functions']
+          names = ('ebook', 'pdf_zip_export', 'ebook_one_button_completion')
+          files = list(dict.fromkeys(path for name in names for path in registry[name]['protected_test_files']))
+          assert len(files) >= 20, 'Protected regression coverage unexpectedly shrank'
+          sys.exit(subprocess.call([sys.executable, '-m', 'pytest', '-q', *files]))
+          PY
