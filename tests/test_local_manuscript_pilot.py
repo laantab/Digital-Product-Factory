@@ -114,6 +114,73 @@ def test_local_chapters_are_zero_billable():
     assert pipeline["providers_used"] == ["local"]
 
 
+def test_local_provider_obeys_one_new_chapter_per_advance_without_paid_calls():
+    """Regression: free chapters must not bypass the HTTP request time bound.
+
+    The dollar-based max_chapter_calls intentionally ignores free local calls.
+    The independent max_new_chapters limit must still bound request duration.
+    """
+    book = _book(8)
+    generated = []
+    first = run_chapter_pipeline(
+        book,
+        generate_chapter_fn=_local_gen(record=generated),
+        max_chapter_calls=1,
+        max_new_chapters=1,
+    )
+    assert generated == [1]
+    assert [c.order for c in first["accepted_chapters"]] == [1]
+    assert first["skipped_ungenerated"] == list(range(2, 9))
+    assert first["billable_chapter_calls"] == 0
+    assert first["assembled_complete"] is False
+
+    second_calls = []
+    second = run_chapter_pipeline(
+        book,
+        generate_chapter_fn=_local_gen(record=second_calls),
+        accepted_chapters=first["accepted_chapters"],
+        max_chapter_calls=1,
+        max_new_chapters=1,
+    )
+    assert second_calls == [2], "chapter 1 must remain accepted without regeneration"
+    assert [c.order for c in second["accepted_chapters"]] == [1, 2]
+    assert second["billable_chapter_calls"] == 0
+    assert second["skipped_ungenerated"] == list(range(3, 9))
+
+
+def test_eight_chapter_failure_preserves_three_accepted_and_skips_later_chapters():
+    """Offline reproduction of the chapter-4 rejection pattern in issue #91."""
+    saved = []
+    calls = []
+
+    def checkpoint(chapters):
+        saved[:] = list(chapters)
+
+    first = run_chapter_pipeline(
+        _book(8),
+        generate_chapter_fn=_local_gen(fail_orders={4}, record=calls),
+        on_chapter_accepted=checkpoint,
+    )
+    assert [c.order for c in saved] == [1, 2, 3]
+    assert first["failed_orders"] == [4]
+    assert first["skipped_ungenerated"] == [5, 6, 7, 8]
+    assert first["assembled_complete"] is False
+    assert first["billable_chapter_calls"] == 0
+    assert not any(order >= 5 for order in calls)
+
+    retry_calls = []
+    resumed = run_chapter_pipeline(
+        _book(8),
+        generate_chapter_fn=_local_gen(record=retry_calls),
+        accepted_chapters=saved,
+        max_new_chapters=1,
+    )
+    assert retry_calls == [4], "only the failed chapter is retried in this advance"
+    assert [c.order for c in resumed["accepted_chapters"]] == [1, 2, 3, 4]
+    assert resumed["skipped_ungenerated"] == [5, 6, 7, 8]
+    assert resumed["billable_chapter_calls"] == 0
+
+
 def test_legacy_provider_accounting_is_unchanged():
     """A caller that reports no billable_calls must still be charged per call."""
     pipeline = run_chapter_pipeline(_book(3), generate_chapter_fn=_openai_gen())

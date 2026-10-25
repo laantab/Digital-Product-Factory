@@ -2053,6 +2053,7 @@ def run_chapter_pipeline(
     back_matter: str = "",
     stop_on_failure: bool = True,
     max_chapter_calls: int | None = None,
+    max_new_chapters: int | None = None,
     prior_manuscript_md: str = "",
     findings_by_order: dict[int, list[str]] | None = None,
     on_chapter_accepted: Callable[[list[ParsedChapter]], None] | None = None,
@@ -2069,6 +2070,11 @@ def run_chapter_pipeline(
     way through loses every chapter produced in this call. The callback is
     deliberately best-effort: a persistence failure must not destroy a chapter
     that was just successfully written.
+
+    ``max_chapter_calls`` limits billable provider calls; free local calls do
+    not consume it. ``max_new_chapters`` independently limits distinct new
+    chapters attempted in this invocation, including free local generation,
+    so a web request cannot accidentally write the entire book at once.
     """
     if generate_chapter_fn is None:
         raise ValueError(
@@ -2085,6 +2091,7 @@ def run_chapter_pipeline(
     repair = set(repair_orders or [])
     produced: list[ParsedChapter] = []
     chapter_calls = 0
+    new_chapters_started = 0
     # Provider calls the Factory meter should charge for. A locally generated
     # chapter reports 0; an OpenAI chapter reports 1. Counted separately from
     # chapter_calls, which stays a count of generation attempts.
@@ -2105,6 +2112,12 @@ def run_chapter_pipeline(
             kept.accepted = True
             produced.append(kept)
             continue
+        # A request-duration bound counts chapter attempts even when local
+        # generation costs $0. Keep it independent from the paid-call cap
+        # below, which intentionally ignores free local calls.
+        if max_new_chapters is not None and new_chapters_started >= max(0, int(max_new_chapters)):
+            skipped_ungenerated.append(contract.order)
+            continue
         # The cap is a spending bound, so it counts BILLABLE calls. Local
         # generation is free and therefore not limited by a dollar budget it
         # never consumes. For a paid provider the two counters are identical,
@@ -2112,6 +2125,7 @@ def run_chapter_pipeline(
         if max_chapter_calls is not None and billable_chapter_calls >= max_chapter_calls:
             skipped_ungenerated.append(contract.order)
             continue
+        new_chapters_started += 1
         work = copy.copy(contract)
         work.unresolved_findings = list(findings_map.get(contract.order) or [])
         work.prior_chapter_body = str(prior_bodies.get(contract.order) or "")
