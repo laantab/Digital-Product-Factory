@@ -29,6 +29,7 @@ def test_fixture_mode_correction_never_calls_live_chapter_provider(monkeypatch):
 
     project = upsert_acceptance_project(database, preserve_live_manuscript=False)
     pid = project["id"]
+    initial_spent = float(project["data"]["ebook_workspace"]["paid_call_ledger"]["spent_usd"])
     valid_chapter = chapter_fn_from_full_manuscript(
         build_event_photo_strong_manuscript()
     )
@@ -62,4 +63,4 @@ def test_fixture_mode_correction_never_calls_live_chapter_provider(monkeypatch):
     ws = saved["ebook_workspace"]
     assert stage_status(ws, "manuscript") == STATUS_APPROVED
     assert len(ws["accepted_chapters"]) == 10
-    assert float(ws["paid_call_ledger"]["spent_usd"]) == 0.0
+    assert float(ws["paid_call_ledger"]["spent_usd"]) == initial_spent
