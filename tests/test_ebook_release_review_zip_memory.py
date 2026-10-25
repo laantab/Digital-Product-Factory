@@ -97,3 +97,96 @@ def test_photo_identity_gate_still_compares_exact_approved_zip_bytes():
     aid["sha256"] = hashlib.sha256(b"different approved file").hexdigest()
     rejected = review_release(data, pdf, package)
     assert any(f.code == "PHOTO_NOT_APPROVED_FILE" for f in rejected.findings)
+
+
+def test_57_page_review_has_bounded_native_peak_rss(tmp_path):
+    """Guard MuPDF/native allocations, which tracemalloc cannot measure.
+
+    This runs a realistic illustrated 57-page PDF/ZIP review in a fresh
+    process on Linux, separate from pytest's resident memory. It uses
+    deterministic local files and makes no provider calls.
+    """
+    import json
+    import subprocess
+    import sys
+
+    import pytest
+
+    if sys.platform != "linux":
+        pytest.skip("ru_maxrss is compared in Linux KiB")
+
+    pdf_path = tmp_path / "ebook.pdf"
+    zip_path = tmp_path / "package.zip"
+    photo_paths = []
+    with fitz.open() as doc:
+        for index in range(57):
+            page = doc.new_page()
+            page.insert_text((72, 82), f"Winter chapter page {index + 1}", fontsize=16)
+            if index < 12:
+                # Unique, uncompressible images exercise the real native
+                # image-decoding path, rather than tiny repeated icons.
+                raw = os.urandom(600 * 600 * 3)
+                photo = Image.frombytes("RGB", (600, 600), raw)
+                output = io.BytesIO()
+                photo.save(output, format="PNG", compress_level=0)
+                photo.close()
+                image_bytes = output.getvalue()
+                page.insert_image(fitz.Rect(72, 125, 425, 425), stream=image_bytes)
+                image_path = tmp_path / f"photo-{index}.png"
+                image_path.write_bytes(image_bytes)
+                photo_paths.append(image_path)
+                del raw, image_bytes
+        doc.save(str(pdf_path), garbage=4, deflate=True)
+
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.write(pdf_path, "ebook.pdf")
+        for photo_path in photo_paths:
+            archive.write(photo_path, "visuals/" + photo_path.name)
+
+    # The child measures only the reviewer, not construction of the fixture.
+    child = """
+import gc
+import json
+import resource
+import sys
+from services.ebook_release_review import review_release
+
+with open(sys.argv[1], 'rb') as stream:
+    pdf = stream.read()
+with open(sys.argv[2], 'rb') as stream:
+    package = stream.read()
+gc.collect()
+baseline = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+review = review_release({}, pdf, package)
+peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+print(json.dumps({
+    'baseline_kib': baseline,
+    'peak_kib': peak,
+    'checks': review.checks_run,
+    'errors': [finding.code for finding in review.findings
+               if finding.code in ('PDF_UNOPENABLE', 'ZIP_UNOPENABLE',
+                                   'ZIP_PDF_DIFFERS')],
+}))
+"""
+    env = dict(os.environ)
+    env.update({
+        "FACTORY_TEST_MODE": "1",
+        "OPENAI_API_KEY": "",
+        "ANTHROPIC_API_KEY": "",
+        "TAVILY_API_KEY": "",
+        "PEXELS_API_KEY": "",
+        "UNSPLASH_ACCESS_KEY": "",
+    })
+    result = subprocess.run(
+        [sys.executable, "-c", child, str(pdf_path), str(zip_path)],
+        cwd=str(__import__("pathlib").Path(__file__).resolve().parents[1]),
+        env=env, capture_output=True, text=True, timeout=120, check=True,
+    )
+    metrics = json.loads(result.stdout.strip().splitlines()[-1])
+    assert not metrics["errors"], metrics
+    assert "files_open" in metrics["checks"]
+    assert "zip_pdf_identical" in metrics["checks"]
+    # Linux ru_maxrss is KiB. The standalone 512-MiB web instance also needs
+    # space for Gunicorn, Flask, request buffers and concurrent requests.
+    assert metrics["peak_kib"] < 420 * 1024, metrics
+    assert metrics["peak_kib"] - metrics["baseline_kib"] < 260 * 1024, metrics
