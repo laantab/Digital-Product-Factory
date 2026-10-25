@@ -3124,7 +3124,15 @@ def execute_correct_manuscript(
     if correct_fn is not None and correct_chapter_fn is None:
         raise ValueError(ONESHOT_WORKSPACE_BLOCKED)
     if correct_chapter_fn is None:
-        from services.ebook import generate_one_chapter as correct_chapter_fn
+        # Match generation's dual-gated Safe Mode route. A fixture chapter
+        # rejected by real QA must be repaired offline as well; production
+        # continues to use the original live chapter provider unchanged.
+        from services.external_calls import ebook_fixture_mode
+
+        if ebook_fixture_mode():
+            from services.ebook import fixture_one_chapter as correct_chapter_fn
+        else:
+            from services.ebook import generate_one_chapter as correct_chapter_fn
 
     set_stage_status(ws, "manuscript", STATUS_IN_PROGRESS, note="Correcting manuscript")
     author = str(ws.get("author") or data.get("author_brand") or "").strip()
