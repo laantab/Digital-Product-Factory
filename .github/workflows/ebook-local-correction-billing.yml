@@ -1,0 +1,71 @@
+name: Local manuscript correction billing and protected regressions
+
+on:
+  pull_request:
+    paths:
+      - 'services/ebook_project_workspace.py'
+      - 'tests/test_ebook_local_correction_billing.py'
+      - '.github/workflows/ebook-local-correction-billing.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-correction-billing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      FACTORY_TEST_MODE: '1'
+      FACTORY_DB_BACKEND: sqlite
+      OPENAI_API_KEY: ''
+      ANTHROPIC_API_KEY: ''
+      TAVILY_API_KEY: ''
+      PEXELS_API_KEY: ''
+      UNSPLASH_ACCESS_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline dependencies
+        run: python -m pip install -r requirements.txt pytest==8.4.1 playwright==1.56.0
+      - name: Install Chromium for protected browser tests
+        run: python -m playwright install --with-deps chromium
+      - name: Compile source and regression
+        run: python -m py_compile services/ebook_project_workspace.py tests/test_ebook_local_correction_billing.py
+      - name: Prove new correction-billing test fails against unmodified main
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python - <<'PY'
+          import os, pathlib, shutil, subprocess, sys
+          base = pathlib.Path(os.environ['RUNNER_TEMP']) / 'correction-billing-baseline'
+          subprocess.run(['git', 'worktree', 'add', '--detach', str(base), os.environ['BASE_SHA']], check=True)
+          path = 'tests/test_ebook_local_correction_billing.py'
+          shutil.copyfile(path, base / path)
+          proc = subprocess.run(
+              [sys.executable, '-m', 'pytest', '-q', path],
+              cwd=base, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+          )
+          assert proc.returncode != 0 and 'test_free_local_correction_does_not_charge_again' in proc.stdout, proc.stdout
+          assert 'AssertionError' in proc.stdout, proc.stdout
+          print('Confirmed: baseline incorrectly charges for local correction.')
+          PY
+      - name: Verify zero-charge local correction and existing recovery
+        run: python -m pytest -q tests/test_ebook_local_correction_billing.py tests/test_local_manuscript_pilot.py tests/test_ebook_manuscript_correction_recovery.py tests/test_ebook_correction_estimate.py
+      - name: Verify general protected product paths
+        run: python scripts/fast_gate.py
+      - name: Verify protected ebook and PDF ZIP customer paths
+        timeout-minutes: 35
+        run: |
+          python - <<'PY'
+          import json, subprocess, sys
+          with open('command_center/function_lock_registry.json', encoding='utf-8') as f:
+              registry = json.load(f)['functions']
+          names = ('ebook', 'pdf_zip_export', 'ebook_one_button_completion')
+          files = list(dict.fromkeys(path for name in names for path in registry[name]['protected_test_files']))
+          assert len(files) >= 20, 'Protected regression coverage unexpectedly shrank'
+          sys.exit(subprocess.call([sys.executable, '-m', 'pytest', '-q', *files]))
+          PY
