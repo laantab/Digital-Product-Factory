@@ -395,10 +395,15 @@ def test_findings_trigger_the_existing_correction_path_and_reviews_the_result(
 
     project = _make("Recovery Test Book", _project_data())
     status = orch.advance_build(project["id"])
+    assert calls == ["generate"], "generation and correction must be separate requests"
+    assert status["failed"] is False
+    assert status["percent"] == 30
+    saved = database.get_project(project["id"])["data"]
+    assert saved["content"], "rejected draft must be checkpointed before correction"
 
+    status = orch.advance_build(project["id"])
     assert calls == ["generate", "correct", "approve:manuscript"], (
-        "correction must run automatically, and the result must be reviewed by "
-        "approve_stage before the build is allowed to advance"
+        "the next request must correct and review the preserved draft"
     )
     assert status["failed"] is False
     assert status["percent"] == 40
@@ -422,8 +427,15 @@ def test_qa_rejection_does_not_erase_already_persisted_manuscript_content(
     project = _make("Preservation Test Book", _project_data())
     pid = project["id"]
     status = orch.advance_build(pid)
+    assert calls == ["generate"], "failed generation must checkpoint before correction"
+    assert status["failed"] is False
+    assert status["percent"] == 30
 
-    assert status["failed"] is False, "one failed attempt, below the ceiling, must not be final"
+    # A separate request attempts correction. Its failure must not erase the
+    # draft or accepted chapters saved in the preceding request.
+    status = orch.advance_build(pid)
+    assert calls == ["generate", "correct"]
+    assert status["failed"] is False, "one failed correction below the ceiling is recoverable"
     assert status["retrying"] is True
 
     row = database.get_project(pid)
