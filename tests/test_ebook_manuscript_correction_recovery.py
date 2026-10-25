@@ -161,13 +161,12 @@ def test_orchestrator_auto_corrects_and_advances_past_manuscript(monkeypatch):
 
 
 def test_slow_chapter_generation_never_blocks_one_advance_call_for_the_whole_book(monkeypatch):
-    """The exact production symptom, reproduced with real timing.
+    """Prove a slow manuscript generates at most one chapter per advance.
 
-    A web server's request timeout does not know a slow manuscript is
-    legitimate -- it only measures how long ONE request took. This gives
-    every chapter a real, measurable delay and proves no single
-    advance_build() call ever waits for more than about one chapter's
-    worth of that delay, no matter how many chapters remain.
+    A wall-clock threshold is unreliable on shared CI runners: database and
+    PDF fixture overhead can vary even when generation is correctly bounded.
+    Count provider invocations inside each advance instead, which directly
+    detects the original whole-manuscript-in-one-request regression.
     """
     import time
 
@@ -189,24 +188,19 @@ def test_slow_chapter_generation_never_blocks_one_advance_call_for_the_whole_boo
     accepted_counts: list[int] = []
     status = {"percent": 30}
     for _ in range(20):
+        calls_before = len(call_log)
         started = time.perf_counter()
         status = orch.advance_build(pid)
         call_durations.append(time.perf_counter() - started)
+        assert len(call_log) - calls_before <= 1, (
+            "one /advance request must not generate multiple chapters; "
+            f"observed calls={call_log[calls_before:]}, durations={call_durations}"
+        )
         assert status["failed"] is False, status
         row = database.get_project(pid)
         accepted_counts.append(len(row["data"]["ebook_workspace"].get("accepted_chapters") or []))
         if status["percent"] > 30:
             break
-
-    # A single unbounded call would need ~10 * per_chapter_delay seconds for
-    # a fresh book; a bounded call needs about one chapter's worth, however
-    # many chapters remain. This margin comfortably separates the two.
-    unbounded_threshold = 4 * per_chapter_delay
-    for i, duration in enumerate(call_durations):
-        assert duration < unbounded_threshold, (
-            f"advance_build call {i + 1} took {duration:.3f}s -- a single call "
-            f"must not wait for more than roughly one chapter's generation time"
-        )
 
     # Persisted checkpoints between advances: the accepted count only ever
     # goes up, one chapter at a time, and survives between separate calls.

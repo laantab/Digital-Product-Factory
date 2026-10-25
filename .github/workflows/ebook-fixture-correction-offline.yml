@@ -5,6 +5,8 @@ on:
     paths:
       - 'services/ebook_project_workspace.py'
       - 'tests/test_ebook_fixture_correction_offline.py'
+      - 'tests/test_ebook_accepted_chapter_revalidation.py'
+      - 'tests/test_ebook_manuscript_correction_recovery.py'
       - '.github/workflows/ebook-fixture-correction-offline.yml'
 
 permissions:
@@ -34,7 +36,7 @@ jobs:
       - name: Install Chromium for protected browser tests
         run: python -m playwright install --with-deps chromium
       - name: Compile source and regression
-        run: python -m py_compile services/ebook_project_workspace.py tests/test_ebook_fixture_correction_offline.py
+        run: python -m py_compile services/ebook_project_workspace.py tests/test_ebook_fixture_correction_offline.py tests/test_ebook_accepted_chapter_revalidation.py
       - name: Prove fixture repair test fails against unmodified main
         env:
           # Immutable pre-fix PR #94 baseline; never use a moving main.
@@ -55,7 +57,7 @@ jobs:
           print('Confirmed: baseline fixture-mode correction does not finish offline.')
           PY
       - name: Verify offline fixture correction and manuscript recovery
-        run: python -m pytest -q tests/test_ebook_fixture_correction_offline.py tests/test_ebook_manuscript_correction_recovery.py tests/test_ebook_fixture_dual_gate.py
+        run: python -m pytest -q tests/test_ebook_fixture_correction_offline.py tests/test_ebook_manuscript_correction_recovery.py tests/test_ebook_fixture_dual_gate.py tests/test_ebook_accepted_chapter_revalidation.py
       - name: Verify general protected product paths
         run: python scripts/fast_gate.py
       - name: Verify protected ebook and PDF ZIP customer paths
