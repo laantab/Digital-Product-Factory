@@ -2741,6 +2741,7 @@ def execute_generate_manuscript(
         accepted_chapters=stored_accepted,
         stop_on_failure=True,
         max_chapter_calls=max_calls,
+        max_new_chapters=max_chapters_per_call,
         on_chapter_accepted=_persist_accepted,
     )
     _save_editorial_revisions(ws, pipeline.get("chapters") or [])
@@ -3225,6 +3226,7 @@ def execute_correct_manuscript(
         repair_orders=failed_orders,
         stop_on_failure=True,
         max_chapter_calls=max_calls,
+        max_new_chapters=max_chapters_per_call,
         prior_manuscript_md=existing,
         findings_by_order=findings_map,
         on_chapter_accepted=_persist_repaired,
