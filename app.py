@@ -3788,10 +3788,10 @@ def download_export_route(package_id: str, filename: str):
                 if asset_record else None
             )
             if owning_project is None:
-                # Do not serve a verified blob whose owning project cannot be
-                # resolved within this request's account scope.
-                return _error("Export ownership could not be verified.", 404)
-            owning_data = owning_project.get("data") or {}
+                # Keep the previous metadata fallback for non-ebook and legacy
+                # paths; this repair must not alter coloring/puzzle downloads.
+                owning_project = database.find_project_by_package(package_id)
+            owning_data = (owning_project or {}).get("data") or {}
             is_ebook_export = (
                 str(owning_data.get("product_type") or "").strip().lower() == "ebook"
                 or str((owning_project or {}).get("type") or "").strip().lower() == "ebook"
