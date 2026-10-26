@@ -1284,3 +1284,32 @@ def test_l_stored_ebook_export_directory_alias_must_still_run_quality_gate(facto
         ("ebook.pdf", directory, True),
         ("package.zip", directory, True),
     ]
+
+
+def test_l_stored_coloring_alias_retains_existing_download_behavior(factory, monkeypatch):
+    """The ebook-only owner repair must not route coloring PDFs into ebook QA."""
+    import app as app_module
+
+    directory = "coloring_alias_unmodified_contract"
+    project = _make_project(
+        name="Protected Coloring Book", ptype="coloring_book",
+        data={"package_id": "different_coloring_package", "product_type": "coloring_book"},
+    )
+    pdf = _real_pdf_bytes()
+    key = export_object_key(project["id"], f"{directory}/ebook.pdf")
+    get_storage().put(key, pdf)
+    database.record_asset(project["id"], "pdf", key, byte_size=len(pdf),
+                          checksum=sha256_hex(pdf), approved=True)
+    monkeypatch.setattr(app_module, "EXPORTS_DIR", str(factory["exports"]))
+    monkeypatch.setattr("services.storage.compat.refresh_stale_export",
+                        lambda *_args, **_kwargs: None)
+
+    def unexpected_ebook_gate(**_kwargs):
+        pytest.fail("Coloring download was sent through ebook-only asset gate")
+
+    monkeypatch.setattr("services.quality.download_pipeline_agent.pipeline_download",
+                        unexpected_ebook_gate)
+    response = app_module.app.test_client().get(f"/download/{directory}/ebook.pdf")
+    assert response.status_code == 200
+    assert response.data == pdf
+    assert not (factory["exports"] / directory / "ebook.pdf").exists()
