@@ -1222,3 +1222,65 @@ def test_l_asset_only_ebook_pdf_and_zip_pass_gate_without_changing_bytes(
         assert not (factory["exports"] / package / filename).exists()
 
     assert validated == list(payloads.items())
+
+
+def test_l_stored_ebook_export_directory_alias_must_still_run_quality_gate(factory, monkeypatch):
+    """An approved export asset can name a directory unlike project.package_id.
+
+    Asset ownership is identified by projects/<id>/exports/<directory>/<file>.
+    The package-id lookup may miss this project; that must not let PDF/ZIP
+    bypass the ebook final output gate after an ephemeral disk loss.
+    """
+    import io
+    import zipfile
+
+    import app as app_module
+    from services.quality.download_pipeline_agent import DownloadResult
+
+    directory = "stored_ebook_alias_gate_probe"
+    project = _make_project(
+        name="Alias Ebook", ptype="ebook",
+        data={"package_id": "different_canonical_package", "product_type": "ebook"},
+    )
+    pid = project["id"]
+    assert database.find_project_by_package(directory) is None
+    pdf = _real_pdf_bytes()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as archive:
+        archive.writestr("ebook.pdf", pdf)
+
+    monkeypatch.setattr(app_module, "EXPORTS_DIR", str(factory["exports"]))
+    monkeypatch.setattr("services.storage.compat.refresh_stale_export",
+                        lambda *_args, **_kwargs: None)
+    calls = []
+
+    def reject_gate(*, route, filename, file_path, package_id):
+        calls.append((filename, package_id, Path(file_path).is_file()))
+        return None, DownloadResult(
+            status="blocked", status_code=403,
+            message="Final output gate rejected alias export",
+            error_response={"error": "download_blocked"},
+        )
+
+    monkeypatch.setattr("services.quality.download_pipeline_agent.pipeline_download",
+                        reject_gate)
+    for filename, payload, kind in (
+        ("ebook.pdf", pdf, "pdf"),
+        ("package.zip", buf.getvalue(), "zip"),
+    ):
+        key = export_object_key(pid, f"{directory}/{filename}")
+        get_storage().put(key, payload)
+        database.record_asset(pid, kind, key, byte_size=len(payload),
+                              checksum=sha256_hex(payload), approved=True)
+        assert not (factory["exports"] / directory / filename).exists()
+        response = app_module.app.test_client().get(f"/download/{directory}/{filename}")
+        assert response.status_code == 403, (
+            f"{filename} bypassed the quality gate for an asset-owned alias: "
+            f"{response.status_code}"
+        )
+        assert response.get_json()["error"] == "download_blocked"
+
+    assert calls == [
+        ("ebook.pdf", directory, True),
+        ("package.zip", directory, True),
+    ]
