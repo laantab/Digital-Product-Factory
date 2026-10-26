@@ -3778,8 +3778,20 @@ def download_export_route(package_id: str, filename: str):
             # Limit this recovery hardening to ebook exports. Other product
             # types (notably coloring-book recovery) have distinct, protected
             # download contracts and must not be changed by an ebook fix.
-            owning_project = database.find_project_by_package(package_id)
-            owning_data = (owning_project or {}).get("data") or {}
+            # The stored asset's key is authoritative for export ownership.
+            # A directory in /download/ can differ from the package ID saved
+            # in project metadata, so the package-id lookup can miss a real
+            # ebook and accidentally skip its PDF/ZIP final output gate.
+            asset_record = database.find_asset_by_export_path(package_id, filename)
+            owning_project = (
+                database.get_project(asset_record["project_id"])
+                if asset_record else None
+            )
+            if owning_project is None:
+                # Do not serve a verified blob whose owning project cannot be
+                # resolved within this request's account scope.
+                return _error("Export ownership could not be verified.", 404)
+            owning_data = owning_project.get("data") or {}
             is_ebook_export = (
                 str(owning_data.get("product_type") or "").strip().lower() == "ebook"
                 or str((owning_project or {}).get("type") or "").strip().lower() == "ebook"
