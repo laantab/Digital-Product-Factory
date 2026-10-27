@@ -11,6 +11,9 @@ The server continues from saved work. A completed book has a verified current
 PDF and ZIP. A blocked book gives one actionable reason, preserves its work,
 and does not spend indefinitely. Automatic mode delegates production decisions;
 manual mode retains explicit review stops. Neither mode bypasses quality gates.
+Automatic approvals record their reviewer/policy identity and evidence; they
+must not pretend a person inspected an image by setting human-acceptance flags.
+Uncertainty remains a repair or a specific review blocker, never an invented pass.
 
 ## Findings from current code
 
@@ -32,6 +35,15 @@ manual mode retains explicit review stops. Neither mode bypasses quality gates.
 * Trigger failure preserves a queued row but does not itself guarantee later
   dispatch. A durable dispatcher/reconciler is needed for delivery guarantees
   across initial trigger outages and exhausted task retries.
+* `builder_actions.perform_pending` removes a requested action before performing
+  and saving it. If execution fails, it returns an error and permits normal build
+  advancement. This protects against duplicate calls but can lose a correction.
+  A repair controller must not inherit that at-most-once loss window.
+* Job and stage leases have different recovery windows (180 and 900 seconds).
+  A retried task can encounter a still-live lease and return after three
+  unclaimable probes. A surviving RUNNING stage record can also cause repeated
+  no-progress advances. Crash recovery must reconcile both windows without
+  burning job attempts in a tight loop or overriding a healthy worker.
 
 Render's documented retry contract confirms that a task which returns normally
 is successful; exception, timeout and instance failure activate configured retries:
@@ -39,23 +51,53 @@ https://render.com/docs/workflows-defining#retry-logic.
 
 ## Execution contract
 
+Before the first paid generation, validate the complete build plan: reachable
+worker configuration, storage capability, required free-image sources, supported
+layout/components and authorized budget. Reserve portions of the existing total
+budget for final review and bounded repair rather than allowing manuscript work
+to consume everything. This never increases the owner's spending authorization.
+Create a chapter/component contract before authoring: purpose, expected sections,
+instructional components and source requirements. Validate each component when it
+is created, before later stages depend on it.
+
 1. The database records the request before any task is submitted. A single
    leased worker owns a book. Browser polling is read-only.
 2. Each stage writes its artifact identity, input digest, validation report and
    checkpoint before advancing. Reopening a book must not regenerate accepted
    chapters or replace a valid export.
+   Claims and requested actions must also identify the target revision/input
+   digest; an obsolete worker cannot overwrite a newer edit or certify its files.
 3. Worker outcomes are explicit: complete, waiting for a choice, quality blocked,
    temporary interruption, deadline continuation, or already owned by another
    worker. Only temporary interruption and deadline continuation invoke bounded
    automatic retry. No retry resets stage or spend limits.
+   Lease contention/no-progress waits use persisted next-attempt timing and
+   fencing, not rapid job reclaims. A stale stage lock is reconciled against
+   its revision and worker ownership before another attempt is permitted.
 4. A periodic reconciler checks durable queued jobs and expired leases, starts
    eligible work through the existing trigger claim, and records dispatch
    failures. It never reopens succeeded or quality-blocked jobs. Deployment of
    the reconciler must be independently verified; a queued row alone is not
    evidence of an active builder.
+   Preferred first deployment: a lightweight dispatch-only supervisor in the
+   existing always-on web service, restarted at process boot. It queries bounded,
+   indexed job metadata and submits workflow tasks; it never loads manuscripts,
+   renders pages or calls a generator. Use durable disposition/next-attempt fields
+   to distinguish runnable work from review holds and exhausted dispatch retries.
+   Multiple web processes must share the existing conditional trigger claim.
+   Legacy jobs with unknown intent remain held until explicitly continued.
+   This needs no new paid service, but must pass memory and restart tests on the
+   actual web service. If the web service is entirely unavailable, dispatch waits
+   for its recovery; existing Render task retries remain independent of it.
 5. Every failure records stage, revision, reason code, last successful checkpoint,
    attempt count, next permitted action and last actual worker contact. Customer
    status must distinguish running, scheduled, waiting and blocked.
+6. Corrections use durable intent plus acknowledgement after their output has
+   been saved and verified. Persist a request identity, revision and result.
+   Replaying a completed request returns that result. An interrupted action
+   cannot silently advance over the unchanged input. Provider idempotency or a
+   reconciled spending reservation is required before retrying a paid action;
+   an uncertain paid outcome stops for reconciliation instead of charging again.
 
 ## Quality repair contract
 
@@ -85,6 +127,13 @@ no generic “try again” loop, automatic approval of uncertainty, or weakened 
 
 ## Final evidence contract
 
+Render a candidate output set in a revision-specific staging namespace. Build the
+ZIP from that PDF's exact bytes, inspect the candidate pair, and publish their
+immutable identities before atomically switching the active download pointers.
+Keep the prior verified output set and approvals available if staging, review,
+publication or the final pointer update fails. Never overwrite the only verified
+pair in place while attempting a correction.
+
 Completion requires the same current revision throughout:
 
 * all required chapters and assets present and validated;
@@ -107,10 +156,13 @@ commercial success. Do not label a book sale-ready without final artifact review
 1. Close the worker-outcome/retry gap with regression tests showing a released
    interruption retries and completes without the browser. Verify that genuine
    quality failures and customer decisions never enter that retry path.
-2. Add durable dispatch reconciliation and owner-visible blocked/retry state.
+2. Add durable dispatch reconciliation, acknowledged correction intents and
+   owner-visible blocked/retry state.
    Prove initial dispatch failure, process death, expired lease, duplicate start,
-   provider timeout, deadline handoff and exhausted retry behavior.
-3. Add the finding-to-repair loop for the existing supported correction actions,
+   provider timeout, deadline handoff, correction-before-save interruption,
+   concurrent revision edit and exhausted retry behavior.
+3. Add up-front capability/budget and structured-component validation, then the
+   finding-to-repair loop for the existing supported correction actions,
    with persisted input digests and stall limits. Prove preservation of accepted
    content and spend caps. Add unsupported finding types only with artifact tests.
 4. Unify completion reporting around final artifact evidence and record the

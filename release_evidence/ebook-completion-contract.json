@@ -1,0 +1,46 @@
+{
+  "recorded_at_utc": "2026-10-27T06:50:39.348411+00:00",
+  "status": "candidate_verified_not_released",
+  "base_commit": "30fd93cc74504e88fab53c730eb870829e6ff287",
+  "verified_runtime_commit": "39dc0b5f72b90bfac8772cd96f5056fd161a1730",
+  "verified_runtime_tree": "d287e3be91e4ffc3117fbb019132209b34282061",
+  "version": "1.9.63",
+  "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/102",
+  "validation": {
+    "baseline_execution_passed": 84,
+    "baseline_stability_passed": 820,
+    "baseline_protected_ebook_passed": 442,
+    "post_focused_passed": 142,
+    "post_stability_passed": 820,
+    "post_protected_ebook_passed": 448,
+    "new_regressions": 6,
+    "reproduced_failures_before_fix": 3,
+    "paid_provider_calls": 0,
+    "production_writes": 0,
+    "full_release_gate": "not_run",
+    "live_download_acceptance": "not_run",
+    "post_relock_checks_passed": 40
+  },
+  "initial_environment_issue": "Missing test Chromium caused the first protected baseline attempt to error; that run was stopped. Browser runtime restored; complete baseline rerun passed all 442 cases. No assertions weakened.",
+  "implemented": [
+    "Recoverable queued worker interruptions and deadlines activate existing bounded workflow retry.",
+    "New zero-provider final export review records engine, contract and Factory version with current file hashes."
+  ],
+  "remaining": [
+    "Durable dispatch reconciliation and timed job/stage lease recovery without attempt churn.",
+    "Acknowledge correction intents only after verified save, with idempotency and uncertain paid-outcome reconciliation.",
+    "Up-front capability/budget/component validation and bounded finding-to-repair controller.",
+    "Atomic publication of a verified revision-specific PDF/ZIP pair and unified completion evidence.",
+    "Full release gate, deployment verification, saved-book recovery and fresh-book live acceptance."
+  ],
+  "log_sha256": {
+    "baseline-fast.log": "531a6e2c6cd3f7cb134d26ba71ad2add74323e077f1ef7d18cb7fcf83982e4ad",
+    "baseline-execution.log": "85aad4a69b6cf702232ccc80e1f9b15edfca23f8ae1b6018516d7ead5d8c5b2e",
+    "baseline-protected-retry.log": "7918c2e39f1ee6dfa8c6cdb669348d343c52ac628f8d8d8b8e167008bc75eda1",
+    "retry-before.log": "6b2aecbfc5e11e5f5ca9f48592cd9fb521630d0b4aae312c3fb5e6944565c6fd",
+    "review-version-before.log": "3e659773358fd84d4ffbfe3cf8157a8d7cf76b9d033df9548740231c5db72b47",
+    "continuation-after.log": "fb6d85b55060196d96bcaa076e349e8b8be3b1e59455a11687cde3ea1636f949",
+    "protected-after.log": "ad4e1bd7accd4a10b88165975feae414d0b081acd647e2677086c9337ea57124",
+    "fast-after.log": "a851dff711ff40d95121da129ffff9b44d4d36da704fc67f7ef1d2c7c862b6ac"
+  }
+}

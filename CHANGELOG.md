@@ -10,7 +10,7 @@ An unfinished book could remain queued after its worker stopped, because the tas
 The intended recovery requires no extra Resume click for these interruptions. Genuine quality failures and customer choices still stop safely. Existing reviews are not retroactively certified, retry and spending limits are unchanged, and this does not implement automatic repair of every editorial finding.
 
 ### Release gate
-The unchanged baseline passed 820 stability tests, 84 execution checks and all 442 protected ebook checks. Two continuation regressions and one provenance regression failed before the change. Candidate verification follows; full release and live acceptance are required before claiming deployment or one-button completion. See docs/EBOOK_COMPLETION_SOLUTION.md for the remaining delivery contract.
+The unchanged baseline passed 820 stability tests, 84 execution checks and all 442 protected ebook checks. Two continuation regressions and one provenance regression failed before the change. Post-change verification passed all 448 protected ebook checks, 820 stability checks and 142 focused checks. Full release and live acceptance remain required before claiming deployment or one-button completion. See docs/EBOOK_COMPLETION_SOLUTION.md for the remaining delivery contract.
 
 ## 1.9.62 — Recognize native chapter comparison tables
 

@@ -334,9 +334,9 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "UNLOCKED",
-      "last_known_good_commit": "5ef6dc809e346566f678b5cefaec66eef39c3b28",
-      "factory_version": "1.9.60",
+      "status": "LOCKED",
+      "last_known_good_commit": "39dc0b5f72b90bfac8772cd96f5056fd161a1730",
+      "factory_version": "1.9.63",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
         "tests/test_guided_cover_choice.py",
@@ -380,11 +380,11 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": "Codex, Lonnie-authorized ebook completion solution",
-      "unlocked_reason": "Close the workflow continuation gap and record final-review provenance; baseline 442 protected checks passed.",
-      "relocked_by": null,
-      "relocked_after_tests": null,
-      "notes": "New scope-specific protection. The broader Ebook entry remains PROTECTED; this entry does not assert every ebook feature has been verified live. Scoped idempotency lookup relocked after CI; no assertion of production PDF/ZIP acceptance or 512 MiB load acceptance."
+      "unlocked_by": null,
+      "unlocked_reason": null,
+      "relocked_by": "Codex, Lonnie-authorized completion contract candidate",
+      "relocked_after_tests": "Candidate 39dc0b5: 442 baseline and 448 post-change protected ebook checks passed; 820 baseline and 820 post-change stability checks passed; 142 focused checks passed. No full release or live completion claimed.",
+      "notes": "Scoped worker continuation and final-export review provenance candidate. All existing ebook protected cases retained. Durable dispatch, correction acknowledgement, lease reconciliation, targeted repair and live final-download acceptance remain required; see docs/EBOOK_COMPLETION_SOLUTION.md."
     },
     "customer_account_isolation": {
       "display_name": "Customer account isolation (staged, not activated)",
