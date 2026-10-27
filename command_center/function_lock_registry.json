@@ -334,7 +334,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "39dc0b5f72b90bfac8772cd96f5056fd161a1730",
       "factory_version": "1.9.63",
       "protected_test_files": [
@@ -380,10 +380,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Codex, Lonnie-authorized completion contract candidate",
-      "relocked_after_tests": "Candidate 39dc0b5: 442 baseline and 448 post-change protected ebook checks passed; 820 baseline and 820 post-change stability checks passed; 142 focused checks passed. No full release or live completion claimed.",
+      "unlocked_by": "Codex, owner-authorized ebook completion",
+      "unlocked_reason": "Repair observed home-organization scene briefs and free search priority so abstract chapter-title words do not select model houses or paper boxes; retain all quality and spend gates.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "Scoped worker continuation and final-export review provenance candidate. All existing ebook protected cases retained. Durable dispatch, correction acknowledgement, lease reconciliation, targeted repair and live final-download acceptance remain required; see docs/EBOOK_COMPLETION_SOLUTION.md."
     },
     "customer_account_isolation": {

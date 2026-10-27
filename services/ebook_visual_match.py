@@ -973,6 +973,54 @@ def _chapter_scene_brief_from_text(
     )
 
 
+HOME_ORGANIZATION_SCENES = frozenset({
+    "a compact living room with usable household storage",
+    "a small kitchen with clear working counters",
+})
+
+
+def _home_organization_brief(aid: dict[str, Any], *, chapter: str, book_title: str,
+                             book_topic: str) -> VisualBrief | None:
+    """Concrete room scenes for introductory organization and counter-clearing.
+
+    Abstract headings and negated 'perfect photo' captions are not objects a
+    camera can show. Other chapter families keep their existing brief logic.
+    """
+    heading = _norm(chapter)
+    context = _norm(f"{book_title} {book_topic} {chapter}")
+    kitchen = 'kitchen' in heading and 'counter' in heading and any(
+        word in heading for word in ('clear', 'clutter', 'essential'))
+    introductory_home = (bool(re.search(r'\b(?:home|house|apartment)\b', context))
+        and bool(re.search(r'\borgani[sz](?:ation|ing|e)\b', context))
+        and any(word in heading for word in
+                ('mindset', 'start small', 'getting started', 'introduction', 'what organization')))
+    if not kitchen and not introductory_home:
+        return None
+    if kitchen:
+        subject = "a small kitchen with clear working counters"
+        queries = ['small kitchen clear countertop cabinets', 'tidy compact kitchen interior',
+                   'small kitchen uncluttered worktop']
+        subjects = ['kitchen']; actions = ['clear', 'clean', 'tidy', 'uncluttered']
+        settings = ['kitchen']; objects = [['countertop', 'counter', 'worktop'], ['cabinet', 'cabinets']]
+    else:
+        subject = "a compact living room with usable household storage"
+        queries = ['small living room sofa storage shelves', 'compact living room bookcase interior',
+                   'small apartment living room organized']
+        subjects = ['living room']; actions = ['storage', 'shelf', 'shelves', 'shelving', 'bookcase', 'basket']
+        settings = ['living room', 'apartment interior']; objects = [['sofa', 'couch', 'armchair'], actions]
+    return _new_brief(
+        chapter_number=int(aid.get('chapter_index') or 0), chapter_title=chapter,
+        required_subject=subject, required_action='usable organized storage in a real room',
+        required_setting='a real household room interior',
+        required_objects=[group[0] for group in objects],
+        forbidden_settings=['model house', 'toy house', 'moving boxes', 'close-up object photograph'],
+        business_purpose=str(aid.get('caption') or aid.get('description') or chapter),
+        search_queries=queries, subject_tokens=subjects, action_tokens=actions, setting_tokens=settings,
+        object_token_groups=objects, forbidden_tokens=['watermark', 'advertisement', 'model house',
+            'scale model', 'toy house', 'moving boxes', 'close-up', 'close up'],
+        generic_tokens=[], isolated_keywords=list(_ISOLATED_SCENE_WORDS), purpose=PURPOSE_CHAPTER_SCENE)
+
+
 def _generic_photo_brief(
     aid: dict[str, Any],
     *,
@@ -1034,6 +1082,10 @@ def _generic_photo_brief(
             chapter_title=chapter_title,
             business_purpose=purpose_text,
         )
+    home = _home_organization_brief(aid, chapter=chapter_title,
+                                    book_title=book_title, book_topic=book_topic)
+    if home is not None:
+        return home
     garden_blob = _norm(f"{chapter_title} {title} {caption}")
     # Household containers, a bedside water bottle and flat "spots" are
     # not gardening briefs. Require whole-word horticultural context;
@@ -1085,6 +1137,14 @@ def _stored_brief_matches_purpose(existing: dict[str, Any], derived: VisualBrief
     stored_purpose = _purpose_from_stored_brief(existing)
     if stored_purpose != derived.purpose:
         return False
+    if ((existing.get('required_subject') in HOME_ORGANIZATION_SCENES)
+            != (derived.required_subject in HOME_ORGANIZATION_SCENES)):
+        return False
+    if derived.required_subject in HOME_ORGANIZATION_SCENES:
+        if (existing.get('required_subject') != derived.required_subject
+                or existing.get('object_token_groups') != derived.object_token_groups
+                or existing.get('action_tokens') != derived.action_tokens):
+            return False
     # A cached scene brief can retain the same purpose while describing the
     # wrong domain. Retire the canonical gardening brief when fresh chapter
     # evidence no longer supports it (and vice versa).

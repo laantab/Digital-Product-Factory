@@ -2,11 +2,13 @@
 
 ### What changed
 Recoverable workflow exits and deadline continuations request the existing bounded Render retry instead of returning normal success. New final quality reviews record their engine, contract and Factory version alongside the reviewed PDF and ZIP hashes and timestamp.
-The release review now links each chart to its saved heading and items. Saving uses the existing free correction action, then requests the existing chart redraw before continuing layout and quality checks. A failed redraw can be retried without submitting the saved words twice. Manuscript and photograph generation are unchanged.
+The release review now links each chart to its saved heading and items. Saving uses the existing free correction action, then requests the existing chart redraw before continuing layout and quality checks. A failed redraw can be retried without submitting the saved words twice. Manuscript and paid image generation are unchanged.
+Introductory home-organization and clear-counter kitchen scenes now use concrete room, furniture and storage requirements. Stale abstract briefs are retired, and their concrete free-photo searches run before the old chapter-caption searches. Physical image, mismatch, source and spend checks remain enabled.
 
 ### What was fixed
 An unfinished book could remain queued after its worker stopped, because the task returned its error summary normally and Render never retried it. Review records also lacked the version evidence needed to identify which editor checked a downloaded book.
 The chart correction backend existed without a review-screen control, leaving owners unable to correct editorial chart findings through the website.
+An abstract home-organization heading was being treated as a list of visible objects such as "start", "what" and "really". Free replacements selected a model house and a paper box instead of a usable room scene. Those examples are now regression cases rather than approved substitutes.
 
 ### Do the steps change?
 The intended recovery requires no extra Resume click for these interruptions. Genuine quality failures and customer choices still stop safely. Existing reviews are not retroactively certified, retry and spending limits are unchanged, and this does not implement automatic repair of every editorial finding.

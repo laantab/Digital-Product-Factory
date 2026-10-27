@@ -64,5 +64,16 @@
     "release_gate": "pending for expanded candidate",
     "production_changes": 0,
     "new_paid_provider_calls": 0
+  },
+  "home_scene_checkpoint": {
+    "recorded_at_utc": "2026-10-27T16:30:39.517594+00:00",
+    "production_actions": "Two authorized free photo replacement requests; manuscript bytes preserved; staged images not approved; previous verified PDF/ZIP unchanged.",
+    "observed_defect": "Abstract title words became required visual objects. First free candidate was a model house; second was a paper box and failed the visual gate.",
+    "source_fix": "Concrete room scenes for introductory home organization and clear-counter kitchens; retire stale brief; prioritize concrete free searches. Other scene families retain their routing.",
+    "regressions_before": "All four initial new cases failed before implementation.",
+    "focused_after": "163 passed across photo matching, Pexels routing, chapter searches, editorial standard and source authority. Additional scope-boundary case added; final focused rerun pending.",
+    "release_gate": "Earlier 79f8380 full run deliberately interrupted at 27% when the live photo defect was found; no completed verdict. Restart required on final expanded source.",
+    "new_paid_provider_calls": 0,
+    "book_quality_approved": false
   }
 }
