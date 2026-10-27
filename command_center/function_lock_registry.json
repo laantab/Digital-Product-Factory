@@ -357,7 +357,9 @@
         "tests/test_chapter_photo_queries.py",
         "tests/test_editor_in_chief.py",
         "tests/test_practice_chart_boundaries.py",
-        "tests/test_ebook_visual_pipeline.py"
+        "tests/test_ebook_visual_pipeline.py",
+        "tests/test_chart_text_editor.py",
+        "tests/test_ebook_print_clarity.py"
       ],
       "shared_code_dependencies": [
         "static/js/app.js",
@@ -376,12 +378,13 @@
         "services/ebook_visual_match.py",
         "services/ebook_factory_pipeline.py",
         "services/ebook_design_workspace.py",
-        "services/ebook_workspace_actions.py"
+        "services/ebook_workspace_actions.py",
+        "services/ebook_design_system.py"
       ],
       "fast_gate": false,
       "full_gate": true,
       "unlocked_by": "Codex, owner-authorized ebook completion",
-      "unlocked_reason": "Repair observed home-organization scene briefs and free search priority so abstract chapter-title words do not select model houses or paper boxes; retain all quality and spend gates.",
+      "unlocked_reason": "Repair observed concrete room-scene briefs, expose existing saved chart corrections, and keep section headings with their first paragraph; retain quality, account, spend and generator guards.",
       "relocked_by": null,
       "relocked_after_tests": null,
       "notes": "Scoped worker continuation and final-export review provenance candidate. All existing ebook protected cases retained. Durable dispatch, correction acknowledgement, lease reconciliation, targeted repair and live final-download acceptance remain required; see docs/EBOOK_COMPLETION_SOLUTION.md."

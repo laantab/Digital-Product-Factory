@@ -842,6 +842,7 @@ h1, h2, h3, h4, .chapter-title, .book-title, .chapter-num, .section-heading {{
   font-family: {t.font_heading};
   color: {t.color_primary};
   page-break-after: avoid;
+  -pdf-keep-with-next: true;
   page-break-inside: avoid;
 }}
 h1, .book-title {{ font-size: {t.h1_size_pt}pt; margin: 0 0 0.55em; line-height: 1.2; }}

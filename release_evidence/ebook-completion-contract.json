@@ -75,5 +75,14 @@
     "release_gate": "Earlier 79f8380 full run deliberately interrupted at 27% when the live photo defect was found; no completed verdict. Restart required on final expanded source.",
     "new_paid_provider_calls": 0,
     "book_quality_approved": false
+  },
+  "pagination_checkpoint": {
+    "recorded_at_utc": "2026-10-27T16:44:23.885582+00:00",
+    "finding": "Rendered production PDF has orphaned section headings. Three page-boundary regression fixtures failed before adding the renderer-supported keep-with-next instruction.",
+    "validation": "Focused print, template and designed-export tests in progress. Full release must restart on final source.",
+    "source_vs_render_hash_investigation": "The six themed chart PNGs differ from the approved-source hashes by design, as documented in existing code and tests. All six actual chart images were compared pixel-for-pixel across production PDF, HTML and ZIP and match. The three photograph PNGs match source hashes byte-for-byte. No artifact corruption inferred.",
+    "durable_remote_task": "No connected Codex environments are registered; no remote task created. Source and checkpoints persist on PR102.",
+    "book_quality_approved": false,
+    "new_paid_provider_calls": 0
   }
 }
