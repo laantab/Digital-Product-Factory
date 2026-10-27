@@ -82,3 +82,67 @@ def test_every_earlier_wording_is_kept_across_repeated_edits():
     aid = _aid(data, "v_ch4")
     assert [h["items"] for h in aid["text_history"]] == [CH7_AS_SHIPPED, first]
     assert aid["previous_text"]["items"] == first and aid["items"] == CH7_CORRECTED
+
+
+def _editor_html(monkeypatch, aid=None):
+    import app as application
+    data = _data()
+    if aid is not None:
+        data['visual_plan']['chapters'][0]['aids'] = [aid]
+    monkeypatch.setattr(application, '_ebook_workspace_project_or_404',
+                        lambda pid: ({'id': pid, 'data': data}, None))
+    return application.app.test_client().get('/ebook-workspace/7/edit-chart/v_ch4')
+
+
+def test_chart_editor_loads_saved_words_and_refuses_photo_or_unknown_chart(monkeypatch):
+    response = _editor_html(monkeypatch)
+    assert response.status_code == 200
+    assert CH7_AS_SHIPPED[0] in response.get_data(as_text=True)
+    import app as application
+    assert application.app.test_client().get('/ebook-workspace/7/edit-chart/absent').status_code == 404
+    assert application.app.test_client().get('/ebook-workspace/7/edit-chart/v_ch1').status_code == 400
+
+
+@pytest.mark.parametrize('failure', ['', 'edit', 'redraw'])
+def test_browser_saves_chart_before_redraw_and_keeps_errors_recoverable(monkeypatch, failure):
+    import json
+    from playwright.sync_api import expect, sync_playwright
+    response = _editor_html(monkeypatch)
+    assert response.status_code == 200
+    seen = []
+    state = {'redraw_failed': False}
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        page = browser.new_page()
+        def route(r):
+            if r.request.method == 'GET':
+                return r.fulfill(status=200, content_type='text/html', body=response.get_data(as_text=True))
+            payload = r.request.post_data_json
+            seen.append(payload)
+            action = payload['action']
+            failed = failure == 'edit' and action == 'edit-chart'
+            if failure == 'redraw' and action == 'improve-print' and not state['redraw_failed']:
+                failed = state['redraw_failed'] = True
+            return r.fulfill(status=400 if failed else 200, content_type='application/json',
+                             body=json.dumps({'ok': not failed, 'error': 'Correction refused.'} if failed else
+                                             {'ok': True, 'queued': action == 'improve-print'}))
+        page.route('**/*', route)
+        try:
+            page.goto('http://factory.test/ebook-workspace/7/edit-chart/v_ch4')
+            page.get_by_label('Chart heading').fill('Your nightly reset')
+            page.get_by_label('Chart items').fill('Return dishes to the kitchen.\nWipe the main counter or table.')
+            page.get_by_role('button', name='Save and redraw chart').click()
+            if failure:
+                expect(page.get_by_role('status')).to_contain_text('Correction refused.')
+                if failure == 'redraw':
+                    page.get_by_role('button', name='Retry redraw').click()
+                    page.wait_for_url('**/?view=ebook-build&project_id=7')
+            else:
+                page.wait_for_url('**/?view=ebook-build&project_id=7')
+            assert seen[0] == {'action': 'edit-chart', 'visual_id': 'v_ch4', 'title': 'Your nightly reset',
+                               'items': ['Return dishes to the kitchen.', 'Wipe the main counter or table.']}
+            assert [x['action'] for x in seen] == (['edit-chart'] if failure == 'edit' else
+                    ['edit-chart', 'improve-print', 'improve-print'] if failure == 'redraw' else
+                    ['edit-chart', 'improve-print'])
+        finally:
+            browser.close()

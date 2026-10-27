@@ -37,6 +37,7 @@ def accounts(monkeypatch):
 @pytest.mark.parametrize('route', [
     '/projects/{id}', '/ebook-workspace/{id}', '/ebook/build/{id}/status',
     '/ebook-workspace/{id}/edit-manuscript', '/ebook-workspace/{id}/full-preview',
+    '/ebook-workspace/{id}/edit-chart/v_ch4',
     '/ebook-workspace/{id}/previous-exports/0123456789abcdef/ebook.pdf',
 ])
 def test_foreign_project_routes_are_not_found_and_leave_every_byte_unchanged(accounts, route):
@@ -63,6 +64,20 @@ def test_owned_read_still_works_and_legacy_is_admin_only(accounts):
     assert clients[0].get(f"/projects/{projects[0]['id']}").status_code == 200
     assert clients[0].get(f"/projects/{legacy['id']}").status_code == 404
     assert clients[2].get(f"/projects/{legacy['id']}").status_code == 200
+
+
+def test_owned_chart_editor_is_available_without_exposing_another_accounts_words(accounts):
+    _, projects, _, clients = accounts
+    project = projects[0]
+    data = copy.deepcopy(project['data'])
+    data['visual_plan'] = {'chapters': [{'aids': [{'visual_id': 'nightly', 'type': 'workflow',
+        'title': 'Private nightly routine', 'items': ['Return dishes to the kitchen.', 'Clear the table.']}]}]}
+    database.update_project(project['id'], None, data)
+    path = f"/ebook-workspace/{project['id']}/edit-chart/nightly"
+    response = clients[0].get(path)
+    assert response.status_code == 200
+    assert 'Private nightly routine' in response.get_data(as_text=True)
+    assert clients[1].get(path).status_code == 404
 
 
 @pytest.mark.parametrize('payload', [

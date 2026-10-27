@@ -42,5 +42,27 @@
     "continuation-after.log": "fb6d85b55060196d96bcaa076e349e8b8be3b1e59455a11687cde3ea1636f949",
     "protected-after.log": "ad4e1bd7accd4a10b88165975feae414d0b081acd647e2677086c9337ea57124",
     "fast-after.log": "a851dff711ff40d95121da129ffff9b44d4d36da704fc67f7ef1d2c7c862b6ac"
+  },
+  "takeover_checkpoint": {
+    "recorded_at_utc": "2026-10-27T16:14:59.842846+00:00",
+    "production_commit": "30fd93cc74504e88fab53c730eb870829e6ff287",
+    "actual_production_downloads": {
+      "pdf_bytes": 10652676,
+      "pdf_pages": 56,
+      "pdf_sha256": "089dcdcb8f58b0bf052daef890f8aad8bfdcf986bc990cbec0b329fffc619d2b",
+      "zip_bytes": 25499141,
+      "zip_sha256": "17411f3b05d30e0abc247ef47f760fe88fb4d237896fa8efda0b921cff04e9f3",
+      "zip_crc_passed": true,
+      "embedded_pdf_equals_separate_download": true
+    },
+    "quality_approved": false,
+    "editorial_blocker": "Saved maintenance chart mixes nightly tasks and seasonal guidance; review also recommends two photo changes. Do not acknowledge these as repaired.",
+    "new_candidate_change": "Expose saved chart words through the existing owner-scoped review endpoint; use existing edit-chart then improve-print actions. No manuscript or provider generator changes.",
+    "chart_ui_before": "New chart page regression failed with HTTP 404.",
+    "chart_ui_after": "11 chart backend/browser cases passed; subsequent ownership/chart run 19 passed, 31 deselected.",
+    "shared_route_baseline": "53 invite, persistence and account cases passed after installing test Chromium.",
+    "release_gate": "pending for expanded candidate",
+    "production_changes": 0,
+    "new_paid_provider_calls": 0
   }
 }
