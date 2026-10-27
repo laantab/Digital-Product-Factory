@@ -36,7 +36,9 @@ log = logging.getLogger("factory.workflow")
 from render import Retry, TaskContext, Workflows      # noqa: E402
 
 from services.jobs import mode                         # noqa: E402
-from services.jobs.workflow_runner import run_build    # noqa: E402
+from services.jobs.workflow_runner import (           # noqa: E402
+    BuildContinuationRequired, run_build,
+)
 
 #: Compute for one book. `flex` is up to 1 CPU and 4 GB, started on demand
 #: and billed for what it uses — eight times the memory the 512 MB web
@@ -67,6 +69,11 @@ def build_ebook(ctx: TaskContext, project_id: int) -> dict:
     log.info("workflow task starting for project %s", project_id)
     summary = run_build(int(project_id))
     log.info("workflow task finished for project %s: %s", project_id, summary)
+    if summary.get("retryable"):
+        # A normally returned error dictionary is task success to Render.
+        # Raising invokes TASK_RETRY and resumes the existing durable job;
+        # no enqueue, attempt reset or additional provider authorization.
+        raise BuildContinuationRequired("Ebook has unfinished saved work; automatic continuation required.")
     return summary
 
 

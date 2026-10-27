@@ -55,6 +55,10 @@ RETRY_SLEEP_SECONDS = 5
 MAX_UNCLAIMABLE = 3
 
 
+class BuildContinuationRequired(RuntimeError):
+    """Activate the task's bounded retry without resetting saved work or limits."""
+
+
 def builder_version() -> str:
     """The VERSION this builder is running, or "unknown".
 
@@ -95,7 +99,8 @@ def run_build(project_id: int, *, budget_seconds: int | None = None,
 
     summary = {"project_id": project_id, "owner": owner, "claims": 0,
                "units": 0, "finished": False, "failed": False,
-               "paused": False, "reason": "", "builder_version": builder_version()}
+               "paused": False, "retryable": False, "reason": "",
+               "builder_version": builder_version()}
     log.info("builder version %s driving project %s",
              summary["builder_version"], project_id)
 
@@ -104,6 +109,7 @@ def run_build(project_id: int, *, budget_seconds: int | None = None,
     except Exception:                                  # noqa: BLE001
         log.exception("could not prepare the jobs table")
         summary["reason"] = "the jobs table is unavailable"
+        summary["retryable"] = True
         return summary
 
     # The trigger writes the job before asking for a task, so one should
@@ -145,7 +151,8 @@ def run_build(project_id: int, *, budget_seconds: int | None = None,
 
     while True:
         if time.monotonic() >= deadline:
-            summary["reason"] = "out of time; the next trigger resumes it"
+            summary["reason"] = "run deadline reached; saved work requires continuation"
+            summary["retryable"] = True
             return summary
 
         outcome = executor.run_project(
@@ -190,6 +197,12 @@ def run_build(project_id: int, *, budget_seconds: int | None = None,
         if outcome.get("failed"):
             summary["failed"] = True
             summary["reason"] = str(outcome.get("error") or "failed")
+            # An unexpected executor interruption releases its row to QUEUED.
+            # A final quality failure instead marks it FAILED. Returning both
+            # normally used to turn an interrupted task into SDK success.
+            job = store.get_for_project(project_id) or {}
+            summary["retryable"] = (job.get("status") == store.QUEUED
+                                    and int(job.get("attempts") or 0) < store.MAX_ATTEMPTS)
             return summary
         if outcome.get("paused"):
             summary["paused"] = True

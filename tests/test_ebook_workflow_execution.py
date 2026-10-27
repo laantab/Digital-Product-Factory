@@ -714,3 +714,85 @@ def test_the_task_entrypoint_is_thin_and_delegates(monkeypatch):
     assert "run_build" in text
     assert "advance_build" not in text, "the entrypoint must not drive the build"
     assert "app.start()" in text
+
+
+def _task_entrypoint(monkeypatch):
+    """Exercise the real task boundary without a Render account or request."""
+    import importlib.util
+    import sys
+    import types
+    from pathlib import Path
+
+    class Workflows:
+        def task(self, **kwargs):
+            return lambda function: function
+
+    monkeypatch.setitem(sys.modules, "render", types.SimpleNamespace(
+        Retry=lambda **kwargs: kwargs, TaskContext=object, Workflows=Workflows))
+    spec = importlib.util.spec_from_file_location(
+        "_factory_task_contract", Path(__file__).resolve().parents[1] / "workflow_task.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_task_boundary_retries_an_interruption_then_finishes_saved_work(monkeypatch):
+    """A QUEUED row plus a normally returned error never invokes SDK retry."""
+    import services.ebook_build_orchestrator as real
+
+    calls = []
+    def advance(pid):
+        calls.append(pid)
+        if len(calls) == 1:
+            raise ConnectionError("temporary transport interruption")
+        return {"finished": True, "failed": False, "percent": 100}
+
+    monkeypatch.setattr(real, "advance_build", advance)
+    project = _project("Recover Without A Resume Click")
+    store.enqueue(project["id"])
+    entry = _task_entrypoint(monkeypatch)
+    with pytest.raises(RuntimeError, match="unfinished"):
+        entry.build_ebook(None, project["id"])
+    job = store.get_for_project(project["id"])
+    assert job["status"] == store.QUEUED
+    assert job["attempts"] == 1
+    result = entry.build_ebook(None, project["id"])
+    assert result["finished"] is True
+    assert len(calls) == 2
+    assert store.get_for_project(project["id"])["attempts"] == 2
+    entry.build_ebook(None, project["id"])
+    assert len(calls) == 2, "redelivery must not rebuild or charge again"
+
+
+def test_task_boundary_requests_retry_when_deadline_leaves_saved_work(monkeypatch):
+    from services.jobs import workflow_runner
+    _install(monkeypatch, _Orchestrator(units_to_finish=1000))
+    project = _project("Deadline Continuation")
+    store.enqueue(project["id"])
+    entry = _task_entrypoint(monkeypatch)
+    monkeypatch.setattr(entry, "run_build", lambda pid: workflow_runner.run_build(
+        pid, budget_seconds=workflow_runner.DEADLINE_MARGIN_SECONDS))
+    with pytest.raises(RuntimeError, match="unfinished"):
+        entry.build_ebook(None, project["id"])
+    assert store.get_for_project(project["id"])["status"] == store.QUEUED
+
+
+@pytest.mark.parametrize("kind", ["quality", "choice", "finished"])
+def test_task_boundary_does_not_retry_terminal_or_customer_outcomes(monkeypatch, kind):
+    fake = _Orchestrator(units_to_finish=1,
+                         fail_at=1 if kind == "quality" else None,
+                         paused_at=1 if kind == "choice" else None)
+    _install(monkeypatch, fake)
+    project = _project("Respect " + kind)
+    store.enqueue(project["id"])
+    entry = _task_entrypoint(monkeypatch)
+    result = entry.build_ebook(None, project["id"])
+    assert not result.get("retryable")
+    assert len(fake.calls) == 1
+    if kind == "quality":
+        assert result["failed"]
+        assert store.get_for_project(project["id"])["status"] == store.FAILED
+    elif kind == "choice":
+        assert result["paused"]
+    else:
+        assert result["finished"]

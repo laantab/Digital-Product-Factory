@@ -14,7 +14,12 @@ def review_exported_ebook(data: dict, *, package_dir: str) -> dict:
     Missing outputs or an unavailable reviewer can never inherit an old PASS.
     Temporary page renders and PDF handles are released on success and failure.
     """
+    from services.factory_version import get_version
+
     result = {"verdict": "EDITOR-IN-CHIEF — REVIEW ERROR",
+              "review_engine": "editor_in_chief_ebook",
+              "review_contract_version": "ebook-final-v1",
+              "factory_version": get_version(),
               "reviewed_at": datetime.now(timezone.utc).isoformat(),
               "pdf_sha256": "", "zip_sha256": ""}
     try:
