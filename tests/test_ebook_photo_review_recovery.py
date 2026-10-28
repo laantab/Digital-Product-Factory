@@ -61,7 +61,7 @@ def test_accept_recovers_verified_local_file_before_evaluation(photo, monkeypatc
     assert aid['user_accepted'] and aid['seen_full_size']
 
 
-@pytest.mark.parametrize('refused', [False, True])
+@pytest.mark.parametrize('refused', [False, True, 'hard-rejection'])
 def test_browser_saves_only_after_photo_load_and_reports_refusal(photo, refused):
     import json
     from playwright.sync_api import sync_playwright, expect
@@ -76,8 +76,12 @@ def test_browser_saves_only_after_photo_load_and_reports_refusal(photo, refused)
                 return r.fulfill(content_type='image/png', body=path.read_bytes())
             if r.request.method == 'POST':
                 seen.append(r.request.post_data_json)
-                return r.fulfill(status=400 if refused else 200, content_type='application/json',
-                                 body=json.dumps({'ok': not refused, 'error': 'Photo rejected.'}))
+                return r.fulfill(status=400 if refused is True else 200, content_type='application/json',
+                                 body=json.dumps({'ok': refused is not True, 'error': 'Photo rejected.',
+                                   'message': 'Photo rejected.' if refused else 'Accepted.',
+                                   'workspace': {'design': {'visual_review': {'assets': [
+                                     {'visual_id': 'v_ch5', 'user_accepted': not refused,
+                                      'match_status': 'reject' if refused else 'pass'}]}}}}))
             return r.fulfill(content_type='text/html', body=html)
         page.route('**/*', route)
         page.goto('http://factory.test/ebook-workspace/7/review-photo/v_ch5')
