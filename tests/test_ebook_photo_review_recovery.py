@@ -49,6 +49,7 @@ def test_review_preserves_project_access_boundary(photo, monkeypatch):
 
 
 def test_accept_recovers_verified_local_file_before_evaluation(photo, monkeypatch):
+    from services import ebook_workspace_actions as wsa
     _, path, aid, data = photo
     aid['asset_path'] = '/builder/missing/visuals/v_ch5.png'
     monkeypatch.setattr(vp, 'local_visual_path', lambda *a, **kw: str(path))
@@ -56,7 +57,7 @@ def test_accept_recovers_verified_local_file_before_evaluation(photo, monkeypatc
     inspected = []
     monkeypatch.setattr(vp, 'stamp_plan_photo_matches',
                         lambda plan: inspected.append(plan['chapters'][0]['aids'][0]['asset_path']))
-    vp.accept_photo_aid(data, 'v_ch5')
+    wsa.visuals(data, {'action': 'accept-photo', 'visual_id': 'v_ch5'})
     assert inspected == [str(path)]
     assert aid['user_accepted'] and aid['seen_full_size']
 
