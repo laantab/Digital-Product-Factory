@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 51965)
-Total output lines: 4015
-
 ## 1.9.64 — Save chapter photograph choices after full-size review
 
 ### What changed
@@ -768,7 +765,2049 @@ Complete 211-file acceptance run passed: 2,976 tests, zero failures, errors or s
 ### What changed
 
 - Corrects a defined set of English spelling, repeated-article, modal-verb and subject-verb errors without another AI call.
-- Preserves quotations, links, code, tables and headings. Original…21965 tokens truncated…
+- Preserves quotations, links, code, tables and headings. Original and proposed chapter drafts, hashes and change lists are retained with project checkpoints.
+- Rechecks edited chapters against their content contracts and rolls back edits that introduce new findings. Accepted chapters are not regenerated.
+- Adds advisory sentence-length and estimated reading-level findings; these cannot create a manuscript approval loop.
+- Exposes saved copy edits in the ebook workspace response and checks residual rule-based language findings during final review.
+- Generation/correction prompts now explicitly request grammar, punctuation and clarity editing while preserving facts and sources.
+- Coverage is explicitly limited: this is not comprehensive grammar checking, external plagiarism verification or factual verification. The existing structural repair and export gates remain necessary.
+
+### What was fixed
+
+The manuscript pipeline previously checked required content without a distinct copy-editing pass. New chapters now receive reversible rule-based language edits before acceptance.
+
+### Do customer steps change?
+
+No additional step is required during writing. Editing runs automatically on new or repaired chapters. Previously accepted chapters are preserved.
+
+### Release gate
+
+The full 210-file run completed with 2,967 passing checks, zero errors or skips, and one changelog-heading failure. Only documentation was corrected afterward; all 61 version/documentation/copy-editor checks passed on the follow-up run. No paid calls were permitted.
+
+## 1.9.18 — 2026-10-08
+
+**Slow chapters keep their background worker until writing finishes.**
+
+### What changed
+
+- The ebook worker renews its job lease during chapter writing, rather than only between chapters. The short crash-recovery lease remains in place.
+
+### What was fixed
+
+- A chapter taking longer than three minutes could let another worker claim the book while the first worker was still writing. Lease renewal now continues during the provider call. If renewal fails, the worker stops after that call and does not mark the job finished.
+
+### Do your steps change?
+
+No. Saved chapters and existing review choices are preserved.
+
+### Release gate
+
+The slow-provider regression failed before the repair and passes afterward. The complete enforced release gate passed: 2,963 tests, zero failures, zero errors and zero skips across all 209 acceptance files. Paid API calls were blocked. The five real-browser customer-path checks also passed after restoring Chromium in the test environment.
+
+## 1.9.17 — 2026-10-08
+
+**Chapter writing continues until the manuscript is ready, and Continue reopens failed stages.**
+
+### What changed
+
+- The background ebook worker honors a requested review pause only once the stage is complete. Incomplete chapters continue across worker claims.
+
+### What was fixed
+
+- A planned manuscript review could stop the worker after one chapter-writing unit, leaving the build at 30%.
+- Continue reset the job retry counter but left a failed manuscript stage exhausted. It now resets that failed stage too, retaining completed work. Automatic polling and active workers do not reset stages.
+
+### Do your steps change?
+
+No. Continue uses the saved project. Completed chapters are preserved, and picture, cover and manuscript review choices remain in place.
+
+### Release gate
+
+The complete enforced release gate passed: 2,960 tests, zero failures, zero errors and zero skips across all 209 acceptance files. Paid API calls were blocked. This verifies the repair; deployment and the current stopped book are checked separately.
+
+## 1.9.16 — 2026-10-07
+
+**Generate Project prepares the ebook automatically, with one title-and-cover choice.**
+
+### What changed
+
+- Generate Project continues an existing draft through research, title, outline, chapters and checked visuals without stage-by-stage clicks.
+- Refused photos get bounded free replacement attempts; the existing quality gate still blocks unsuitable pictures.
+- Choose the title and a readable full-bleed cover on one screen. A title change redraws the cover previews using the same photo, preserving the manuscript.
+- Use This Title and Cover continues through design, preview, preflight and PDF/ZIP export. Finished and protected products are not regenerated.
+
+### What was fixed
+
+- Research polling stops when the user moves on, ignores late responses and reports a timeout clearly. Failed or cancelled background work no longer produces a success message.
+
+### Do your steps change?
+
+Yes. In the ebook workspace, click Generate Project once. The Factory prepares
+the book up to a combined title-and-cover choice. Choose your title and cover,
+then click Use This Title and Cover to continue to PDF and ZIP downloads.
+Individual workspace controls and the older Build My Ebook path remain available.
+
+### Release gate
+
+The original reference PDF and ZIP have been restored and their checksums
+verified. See PR #33 for the completed validation results. No paid API calls.
+
+## 1.9.15 — 2026-09-28
+
+**Plant puzzles use plant words, and the Editor-in-Chief review never gets stuck.**
+
+### What changed
+
+- Crossword and Word Search now have their own word lists and clues for
+  three plant topics: "House plants" (64 words), "Herb garden" (51) and
+  "Garden plants" (62). Capital letters, extra spaces, hyphens and
+  run-together spellings all work ("HERB GARDEN", "Garden-Plants",
+  "Houseplants"). "Herb gardening" now uses the herb list too.
+- A Create From Topic puzzle book never adds filler words. Word Search
+  used to fill a short book with generic words (WORD, FIND, PUZZLE, FUN).
+  Crossword could rebuild a book from an unrelated list (a "Garden Plants"
+  book came back with ELEPHANT, TORNADO and WHALE). Both now make the book
+  a little smaller instead and say so.
+- The Editor-in-Chief review screen now keeps the review it made. Opening
+  it again shows that review at once. Accept, Reject and "I have read the
+  editorial notes" update the result straight away instead of re-checking
+  the whole book each time.
+- If the review cannot finish, the screen says so and shows a Try again
+  button. Your earlier decisions are kept.
+
+### What was fixed
+
+- "House plants", "Herb garden" and "Garden plants" gave flower-part
+  words (PETAL, SEPAL, POLLEN, XYLEM) that have nothing to do with the
+  topic, or Crossword refused the topic. Both now make real puzzles.
+- A Word Search book that had to use fewer words per puzzle failed its
+  own check ("has 8 word(s) but 10 were requested"). It now builds.
+- The review screen could stay on "Reviewing the PDF and ZIP..." forever
+  with no buttons when the website answered with an error. Every Accept or
+  Reject also started the full review again, which made that more likely.
+- The "Approve all acceptable visuals" button on the review screen opened
+  the dashboard instead of the book's Visuals step.
+- The browser customer-path test no longer fails on a computer that cannot
+  reach the internet. It now uses local copies of the page's styles and
+  scripts and checks exactly the same things.
+
+### Do your steps change?
+
+No.
+
+### Does anything look different in a book I already made?
+
+No. Finished books, PDFs and ZIPs are not touched. A review made before
+this version is run once more the first time you open it. A new puzzle
+book for a short topic may have fewer puzzles, or fewer words in each
+puzzle, than you asked for, instead of filler words.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
+## 1.9.14 — 2026-09-28
+
+**Continue really continues a stuck ebook instead of repeating the old failure.**
+
+### What changed
+
+- When you press Continue on an ebook that stopped, every new try is now
+  treated as new work. Before, the tries after Continue reused the old
+  tries' records, so the Factory repeated the old result 60 times in a few
+  minutes, did nothing, and stopped again.
+
+### What was fixed
+
+- "Container Gardening" (the step-by-step container book) stopped at 30%
+  on the manuscript step. After Continue, all 60 tries replayed the
+  September 17 corrections instead of correcting the two chapters that
+  still need it, so the book could never move on. Each Continue now starts
+  a fresh set of tries.
+
+### Do your steps change?
+
+No. Continue works the way it always said it did.
+
+### Does anything look different in a book I already made?
+
+No. Finished books are not touched.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
+## 1.9.13 — 2026-09-27
+
+**Page numbers you can read on paper, in every product.**
+
+### What changed
+
+- Every page number the Factory prints now follows one standard: 10 pt,
+  bold, near-black. That covers ebooks in all six templates, planners in
+  all six themes, coloring books, math worksheets, spelling worksheets and
+  Publishing Studio PDFs.
+- Page sizes, which pages are numbered and how they are counted are exactly
+  as before. Numbers stay in the same place, with three small exceptions
+  that stop them touching other text (below).
+
+### What was fixed
+
+- Each product picked its own page-number style, and most were hard to read
+  in print: planners used 9.5 pt in the theme colour (faint on the burgundy
+  and green themes), coloring books 9 pt regular, math worksheets 8 pt light
+  grey, spelling worksheets 9 pt grey, Publishing Studio 9 pt grey or blue.
+  Ebooks were 11 pt since 1.9.12. They now all come from one place.
+- A coloring page with a caption printed the page number on top of the
+  caption. The number now moves to the right-hand margin of the same line
+  when there is a caption.
+- A math worksheet with a very long title could print "Page 1 of 2" over the
+  title. The counter now moves up just enough to clear it.
+- In Publishing Studio PDFs the number printed glued to the brand name
+  ("Lonnie Brown2"). A separator now keeps them apart.
+- On spelling worksheets the section line moves down 2 pt when it carries
+  the page counter, so the larger counter stays clear of the heading.
+
+### Do your steps change?
+
+No. Build or export as usual.
+
+### Does anything look different in a book I already made?
+
+Only if it is exported again: its page numbers change. Nothing is charged.
+Books already exported keep their files until you export them again.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
+## 1.9.12 — 2026-09-27
+
+**A tidier copyright page and page numbers you can read.**
+
+### What changed
+
+- The copyright page is now a short, tight block: the book title, then
+  "Copyright © year Author. All rights reserved.", then the usual
+  no-reproduction line, all in one small, dark type size. The old
+  "Title: X. Author: Y." sentence and the large gaps are gone.
+- Page numbers in the footer are larger (11 pt instead of 9 pt), bold and
+  near-black on every template. Before, they printed small and grey.
+- Nothing else about the book changes: same writing, pictures, charts and
+  running title.
+
+### What was fixed
+
+- Every template asked for a darker page number in its style rules, but the
+  PDF maker ignored those rules, so all six templates printed a small grey
+  number. The number's size and colour are now set where the PDF maker
+  always honours them, and a test checks the printed PDF on all six.
+
+### Do your steps change?
+
+No. Export the book again to get the new copyright page and page numbers.
+
+### Does anything look different in a book I already made?
+
+Only after it is exported again: its copyright page and page numbers change.
+Nothing is charged.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
+## 1.9.11 — 2026-09-25
+
+**The Editor-in-Chief reviews the finished PDF and ZIP before you can approve a book.**
+
+### What changed
+
+- A new review screen checks the book you will actually sell: the exported
+  PDF and ZIP, against the manuscript, the picture plan, the approved pictures
+  and the template. It says Ready for approval or Changes required, shows
+  every picture with its PDF page and chapter, and lists what to correct,
+  grouped so you fix each thing once.
+- Approve Product only works after this review has passed for that exact PDF.
+- An AI review of whether charts and photos fit their chapters is optional and
+  shows its cost before it runs. If you decline it, each picture shows "Needs
+  your review" on the contact sheet; you accept or reject it yourself. Nothing
+  unchecked is ever shown as passed.
+- When a book is exported again, its previous PDF and ZIP are kept and can be
+  downloaded from the book's earlier versions. If the old files cannot be kept
+  safely, the new export does not replace them.
+- You can correct the words in a chart (its heading and items). The book's
+  writing is never changed, earlier wording is kept, and the next Continue
+  redraws the chart at no cost.
+
+### What was fixed
+
+- Books could be marked finished with charts too small to read, charts that
+  mixed labels with questions or used sentence fragments, repeated photos, or
+  a PDF that did not match the one in the ZIP. The review now refuses these.
+- On the live site, the coloring-book "$" remover removed nothing: it only knew
+  fonts found on Windows computers. It now uses the Factory's own fonts.
+
+### Do your steps change?
+
+Yes: open the Editor-in-Chief review before approving a finished book.
+
+### Does anything look different in a book I already made?
+
+No. The book itself is unchanged; it is reviewed before approval.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
+## 1.9.10 — 2026-09-25
+
+**Charts you can read.**
+
+### What changed
+
+- Every chart the Factory draws now prints its words at 8 pt or larger on
+  the PDF page. Step and checklist charts show one full-width row per step,
+  bar charts use larger labels and values, and nothing is cut short.
+- The Editor-in-Chief now measures the text inside each chart at its printed
+  size and refuses a book with a chart below 8 pt. The one-click build checks
+  the same thing before your pictures can be approved.
+
+### What was fixed
+
+- Charts printed their words at about 5 to 6 pt, too small to read.
+- Step charts left out every step after the sixth.
+- Checklists could show "[ ]" in front of each item.
+
+### Do your steps change?
+
+No.
+
+### Does anything look different in a book I already made?
+
+Only when it is built again: its charts are redrawn larger. Photos and
+writing are unchanged.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
+## 1.9.8 — 2026-09-25
+
+**Pilot fixes: your real books always show, and a waiting book always offers Continue.**
+
+### What changed
+
+- A book that has been waiting more than 15 minutes now says "Paused" and
+  shows a Continue button, instead of spinning "Picking this back up" forever.
+
+### What was fixed
+
+- A book that was exported again kept offering its old PDF and ZIP, and the
+  download safety check then refused them. Downloads now use the newest
+  checked copy.
+- Books whose titles contain everyday words such as "Test", "QA",
+  "Workflow", "Seed" or "Internal" (for example "SAT Test Prep" or "Seed
+  Starting for Beginners") were hidden from Saved Projects and from Continue.
+  They now show. Records marked as internal tests are still hidden.
+- Three old automated checks failed on any computer except one folder. They
+  now check the real rule everywhere. No safety check was loosened.
+
+### Do your steps change?
+
+No.
+
+### Does anything look different in a book I already made?
+
+No. Books that were hidden only because of a word in their title now appear
+in Saved Projects.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
+## 1.9.7 — 2026-09-25
+
+**Missing pictures are shown honestly, and accepting a picture tells the truth.**
+
+### What changed
+
+- Nothing new to learn. The picture sheet is now more honest about which
+  chapters still need a picture and which pictures cannot be used.
+
+### What was fixed
+
+- A chapter photo that could not be found used to be replaced by a card
+  showing the chapter's own title, marked as done. A photo slot now stays
+  "missing" until a real picture is there, so the picture sheet says plainly
+  which chapter still needs one.
+- Pressing accept on a picture the checker had refused (printed words,
+  watermark, too small, a copy of another chapter's picture) still said
+  "accepted". It now says the picture cannot be used and asks you to replace it.
+- The website can accept a real photo that exists only in storage (the
+  builder's copy is gone after each run). The test for this used a picture
+  full of words and so always failed; it now uses a real photo and passes.
+
+### Do your steps change?
+
+No.
+
+### Does anything look different in a book I already made?
+
+No. Existing pictures and saved books are untouched.
+
+### Release gate
+
+See the pull request for exact results. No paid calls.
+
+---
+
+## 1.9.6 — 2026-09-25
+
+**Two more free picture sources, and one picture check before your PDF.**
+
+### What changed
+
+- When the Factory cannot find a good Pexels photo for a chapter, it now tries
+  Unsplash, then Pixabay. Pexels is still tried first. Paid AI pictures are
+  still only a last resort, only with your permission, and only within the
+  book's budget.
+- The picture review screen shows where each picture came from and who took
+  it, with links. Each picture has "Try Pexels", "Try Unsplash" and "Try
+  Pixabay" buttons (only for the sources that are switched on).
+- Each source's own rules are followed: Unsplash pictures are shown from
+  Unsplash and each chosen picture is reported to Unsplash as a download;
+  Pixabay searches are remembered for 24 hours and chosen pictures are saved
+  by the Factory instead of linked.
+- Unsplash and Pixabay pictures are never used as a book cover.
+- **The one-click build now stops once for your pictures.** After the
+  pictures are chosen you see every one on a single sheet, with its chapter
+  and where it came from. Replace any picture, then press **Approve All
+  Visuals** once and the build carries on by itself to the PDF and ZIP.
+  While it waits, nothing runs and nothing is spent.
+
+### What was fixed
+
+- A chapter picture that Pexels could not supply used to stay missing, which
+  blocked the book's PDF and ZIP. Two more free sources now get a chance
+  before the book is held up.
+- The one-click build used to approve its own pictures. You now approve them.
+
+### How to switch the new sources on
+
+Add the Unsplash access key (and, optionally, the app name you registered
+with Unsplash) and the Pixabay key to both Render services and to the
+Factory's settings file on the PC. Without a key, that source is simply
+skipped.
+
+### Do your steps change?
+
+Yes, one: press **Approve All Visuals** when the picture sheet appears.
+
+### Does anything look different in a book I already made?
+
+No. Existing Pexels pictures and saved books are untouched.
+
+### Release gate
+
+Fast Stability Gate 700 passed. New tests: 14 for the picture sources and 7
+for the picture pause. Full release gate compared with 1.9.5 in the same
+environment: no new failures. No paid calls.
+
+---
+
+## 1.9.5 — 2026-09-24
+
+**The same word search book now rebuilds to the same puzzles.**
+
+### What changed
+
+- Word search books are reproducible, the same way crossword books became
+  reproducible in 1.9.2. The Factory works out where the puzzle engine should
+  start from the book's own settings instead of leaving it to the clock.
+- `docs/WORD_SEARCH_REPRODUCIBILITY.md` is new: how to reproduce the old
+  behaviour, how to verify the fix, and exactly which settings decide the
+  puzzles.
+
+### What was fixed
+
+- **A saved word search book used to come back different every time you
+  rebuilt it.** Open a saved book, change the subtitle, rebuild, and you got
+  different grids and an answer key that no longer matched the puzzles you had
+  already checked. Building one unchanged book three times produced three
+  different books, measured on the live code. Same book and same settings now
+  always produce the same puzzles; change the theme, the difficulty, the grid
+  size, the number of puzzles or the word list and the puzzles change with it.
+
+### Does anything look different in a book I already made?
+
+A book you already downloaded is untouched. If you rebuild a saved word search,
+the puzzles settle on one fixed set from now on — which may differ from the
+last copy you happened to download, because until now every rebuild was a
+different book.
+
+### Do your steps change?
+
+No.
+
+### Release gate
+
+Ebook protected suite green before and after. New file
+`tests/test_a_pale_photograph_still_gets_a_cover.py`, 7 tests; disabling the
+one-line guard it protects makes 2 of them fail, so it is not a formality. No
+paid calls. Spending unchanged at 26 paid calls / $4.10.
+
+---
+
+## 1.9.4 — 2026-09-24
+
+**What a hard look at 1.9.3 found before it shipped.**
+
+### What changed
+
+Three reviews were run against 1.9.3 before it was allowed out: the covers were
+judged as a reader sees them on real bright and dark photographs, the path a
+customer takes when a cover is refused was walked end to end, and the code was
+audited adversarially against the claims made for it. The audit found a real
+regression in 1.9.3, fixed below, and two smaller things worth doing.
+
+1.9.3 and 1.9.4 were reviewed together and merged together; 1.9.3 was never
+released on its own. Three separate reviews were run against it — one on the
+covers as a reader sees them, one on what happens to a customer when a cover is
+refused, and one adversarial engineering audit. The audit found a real
+regression, and it is the reason this entry exists.
+
+### What was fixed
+
+- **A pale photograph lost every cover.** Giving dark type its own shading in
+  1.9.3 meant that on an *already* pale photograph — fog, snow, an overcast
+  sky, a white studio backdrop — the shading washed the picture out until the
+  Factory no longer considered it a photograph, and refused all three layouts.
+  Measured: at brightness 244 and above, all three passed before 1.9.3 and all
+  three were refused by it. You would have been told to choose another photo
+  for a picture that was fine. The Factory now checks that its own shading has
+  not washed the picture out, and uses the other direction instead. Those same
+  photographs now pass with the weakest line between 4.7:1 and 15.3:1.
+- **A line of type that could not be measured was quietly ignored.** If any
+  line on a cover could not be measured against the photograph, it was skipped
+  and the rest of the cover could still pass. An unmeasured line is now the
+  same as an unreadable one: the cover is refused. A missing check reading as a
+  pass is the exact shape of the defect 1.9.3 set out to fix.
+
+### What got faster and smaller
+
+- Building a cover over a difficult photograph went from 20.2 to 13.1 seconds,
+  and over an ordinary one from 1.9 to 1.6 seconds, by turning the colour
+  calculation into a lookup table and judging a block of type on a sample
+  rather than on every pixel. The measured contrast figures move by less than
+  0.02 as a result.
+- The Factory now keeps only the best attempt at a cover rather than all six,
+  which took the worst-case memory for one cover from 194 MB back to 160 MB.
+
+### Does anything look different in a book I already made?
+
+No. Fifteen covers over dark photographs were rebuilt and compared byte for
+byte against the version now live: all fifteen identical.
+## 1.9.3 — 2026-09-23
+
+**Book covers are readable over any photograph, and the check that says so can
+now fail.**
+
+### What changed
+
+- Every cover layout now picks its type colour by measuring the photograph
+  underneath it, instead of switching on a single brightness number. The
+  author line measures its own patch of the picture rather than borrowing the
+  title's colour.
+- The shading behind the type moves away from the type instead of always
+  darkening, and is pushed harder when it needs to be. If one direction cannot
+  make a cover readable, the other is tried.
+- `docs/COVER_READABILITY.md` is new: what was wrong, what is promised, the
+  before-and-after measurements, and how to reproduce them.
+
+### What was fixed
+
+- **Your cover could come out unreadable and the Factory would call it fine.**
+  Over a bright photograph the subtitle on one layout measured 2.56:1 against
+  the picture and the title on another measured 3.61:1, where the accessibility
+  standard asks for 4.5:1. Your name on the front measured about 1.4:1 on every
+  layout, over every photograph — very nearly invisible. The same fixtures now
+  measure between 5:1 and 12:1.
+- **The quality check could not fail.** It decided whether the type stood out
+  by counting bright and dark pixels in the title area of the finished cover —
+  but the white letters were the bright pixels and the shadow drawn behind
+  every letter was the dark ones. It was measuring the text against itself, so
+  it passed everything. It now measures the type against the photograph, before
+  the type is drawn, and refuses a cover it cannot read.
+
+### Does anything look different in a book I already made?
+
+A cover you already downloaded is untouched. If you rebuild one over a bright
+or mid-tone photograph, the type will come back dark instead of white where
+that reads better, and your name will be legible. Over a dark photograph
+nothing changes — those covers were always fine.
+
+### Do your steps change?
+
+No. One thing is new: a cover can now be refused. If a photograph cannot carry
+readable type in one layout, that layout is marked as failing and you choose
+another layout or another photograph. That is the check doing its job.
+
+### What happens when a cover is refused
+
+You see two covers instead of three. The one that failed is simply not offered,
+so there is nothing to click that does not work, and the step stays "Choose a
+cover". If every layout were refused — which takes an unusual photograph — the
+step becomes "Choose another photo" and says so in plain words. A cover you
+picked before this release that now fails sends you back to the picker rather
+than sitting there looking approved.
+
+### Release gate
+
+Fast Stability Gate: 48 files, 674 passed, 0 failures. Ebook protected suite:
+136 passed before the change, 136 after. Two new files:
+`tests/test_a_cover_is_readable_over_any_photograph.py`, 10 tests, including
+the one that pins the root cause — white type on a white page must be refused —
+and `tests/test_a_refused_cover_still_leaves_a_way_forward.py`, 8 tests proving
+a refusal never strands you.
+No paid calls: every fixture is generated in-process and the real-photograph
+check uses Pexels, which is free. Spending is unchanged at 26 paid calls /
+$4.10.
+Word Search's protected suite: 85 passed before the change, and again after
+with the new file. New file `tests/test_word_search_rebuilds_identically.py`,
+11 tests, 5 of which fail on 390aaf8 and pass here, so the suite is not a
+formality. Function lock: word_search unlocked, changed, tested and relocked
+under the two-commit procedure. No paid calls — puzzle generation is local.
+Spending unchanged at 26 paid calls / $4.10.
+
+---
+
+## 1.9.2 — 2026-09-23
+
+**The same crossword book now rebuilds to the same puzzles.**
+
+### What changed
+
+- Crossword books are now reproducible. The Factory works out where the puzzle
+  engine should start from the book's own settings instead of leaving it to the
+  clock, so rebuilding a saved book gives you the book you saved.
+- `docs/CROSSWORD_REPRODUCIBILITY.md` is new. It shows how to reproduce the old
+  behaviour on v1.9.1, how to verify the fix, exactly which settings decide the
+  puzzles, and what is deliberately *not* promised.
+
+### What was fixed
+
+- **A saved crossword book used to come back different every time you rebuilt
+  it.** Open a saved book, correct a typo in the subtitle, rebuild it, and you
+  got a different set of puzzles and a different answer key from the one you had
+  already proof-read. The cause was one missing setting: the Factory never told
+  the puzzle engine where to start, so the engine started from the clock.
+  Building one unchanged book three times produced three different books,
+  measured on the live code. The Factory now works out a starting point from the
+  book's own settings, so the same book and the same settings always produce the
+  same puzzles. Change the theme, the difficulty, the grid size, the number of
+  puzzles or the word list and you get puzzles that match the change, as you
+  would expect. `docs/CROSSWORD_REPRODUCIBILITY.md` shows how to reproduce both
+  the old behaviour and the fix.
+- **The free cover check runs again.** `Check the cover over a real photo`
+  failed instantly for two reasons: it read the wrong field from the Pexels
+  search result, and it assembled the photograph record by hand instead of
+  calling the same function the customer path uses, so the record failed
+  verification. Both are fixed, and the tool now builds its three covers from a
+  throwaway copy of the live version rather than from whatever branch happens to
+  be open in the Factory folder.
+
+### What this does not change
+
+- The PDF file itself is still not byte-identical between two builds: a PDF
+  carries a creation timestamp. The promise is the same book, not the same
+  bytes.
+- Word Search has the same missing setting and is **not** fixed here. It is a
+  separate locked function and needs its own unlock, its own protected tests and
+  its own relock. It is written down in `docs/CROSSWORD_REPRODUCIBILITY.md` so
+  it is not lost.
+
+### Does anything look different in a book I already made?
+
+Only if you rebuild it. A crossword book you already downloaded is untouched.
+If you reopen a saved crossword and rebuild it, the puzzles will settle on one
+fixed set from now on -- which may differ from the last copy you happened to
+download, because until now every rebuild was a different book. From this
+release onward it stays the same every time.
+
+### Do your steps change?
+
+No. Build and rebuild exactly as before.
+
+### Release gate
+
+Fast Stability Gate: 47 files, 664 passed, 0 failures. Full acceptance manifest
+(187 files) run against this branch and against 53a41c9 in the same
+environment: the same five pre-existing failures on both, none of them new.
+Protected suites for Crossword and the two locked functions that share
+`services/product.py`: 139 passed before the change, 163 after. Five of the
+eleven new reproducibility tests fail on 53a41c9 and pass here, so the suite is
+not a formality. No paid calls: puzzle generation is local and the cover check
+uses Pexels, which is free. Spending is unchanged at 26 paid calls / $4.10.
+
+---
+
+## 1.9.1 — 2026-09-23
+
+**The launch-readiness repairs, in one release.**
+
+### What changed
+
+- The Fast Stability Gate now runs every test the Factory's own registry says
+  it protects. Sixteen of those test files were missing from it, so a change
+  could pass the gate and still have broken something the registry claimed was
+  covered. One more is deliberately left out, with its reason written down: it
+  drives a real browser and takes minutes, so it runs in the full release gate
+  instead.
+- There is a backup and recovery guide at `docs/BACKUP_AND_RECOVERY.md`, written
+  to be followed rather than studied. It says plainly that `/admin/backup-db` is
+  not a backup, because it copies the database next to itself on the same disk.
+- Two new double-click files in `tools/`. **Factory Release Manager** checks,
+  tests, compares against the live site, pushes, and opens the pull request,
+  then tells you the one thing left to do; it cannot merge, deploy, spend money
+  or touch your settings file. **Check the cover over a real photo** builds the
+  three cover designs over a real photograph so the covers can be judged
+  properly. Both are free to run.
+
+### What was fixed
+
+- **Your book no longer disappears because of its own title.** A book called
+  "Test Kitchen Favourites", "The QA Handbook" or "Debug Your Life" was marked
+  as a test record the moment it was created and hidden from your Saved
+  Projects, with no message and no way back. Those are ordinary words in a real
+  book title. The Factory now decides from what it wrote about a record, not
+  from what you called your book.
+- **Signing in is no longer free to guess at.** The sign-in page accepted
+  unlimited attempts. Too many failures from one place is now refused for a
+  while, and the message says how long to wait. Someone failing on purpose
+  cannot lock you out of your own account.
+- **A colouring book preview picture no longer goes missing** on a service that
+  starts with an empty disk. The download already recovered the file from
+  storage; the preview did not.
+
+### Does anything look different in a book I already made?
+
+- No. Nothing about how a book is written, designed, rendered or exported
+  changed in this release. (The repair that made numbered steps print 1, 2, 3
+  in all six templates shipped in 1.9.0, not here.)
+- Books already hidden by the old title rule keep their settings, because
+  guessing a second time could just as easily hide something that should stay
+  hidden. Run `python scripts/review_hidden_books.py` to see which ones are
+  affected — it only looks. `--unhide <id>` brings back the one you name.
+
+### Do your steps change?
+
+- No. One new thing is available if you want it: you can run the Factory Release
+  Manager instead of following the release steps by hand.
+
+### Release gate
+
+- Full gate against the live site: no new failures. The Fast Stability Gate
+  covers 46 files after this release, up from 22 — the sixteen protected files
+  it was missing, plus the new checks that came with this release.
+- Spending is unchanged at 26 paid calls / $4.10. Nothing in this release makes
+  a paid call.
+
+---
+
+## 1.9.0 — 2026-09-22
+
+**Six templates that make six different-looking books.**
+
+### What changed
+
+- Choosing a template now changes the book itself, not just its colours.
+  Each of the six has its own chapter opening, headings, callouts,
+  checklists, quotations, captions, picture placement, table treatment,
+  contents page and page furniture.
+- The chooser preview now shows all of those parts, so you can see what you
+  are picking before you pick it.
+- Checklists print a real mark, and numbered steps print their numbers, in
+  every template. Four of the six were printing a numbered procedure as a
+  plain bullet list, so a set of steps arrived with no order to follow.
+
+### What was fixed
+
+- Type can no longer be printed in a colour too faint to read. Every colour
+  the Factory prints is now measured against what is behind it, and darkened
+  only as far as it has to be. Two templates were printing text that was
+  effectively invisible on paper.
+- Tables now have visible structure in every template.
+- Nothing is printed across the page number at the bottom of a page. The
+  text area now stops where the page-number strip begins, instead of
+  running into it, so the last line of a full page is never printed
+  through the number. Pages hold a line or two less as a result.
+- A wide table is rebuilt as a stack of cards so it stays readable on a
+  portrait page. In Bold Creator the row labels on those cards were being
+  printed in the template's own dark ink on a block of that same dark ink,
+  so pages of planning figures arrived as numbers with nothing to say what
+  they were. The card's own colours now win over the table treatment, and
+  every card label is measured against the panel it sits on.
+
+- A title with a dash in it can have a cover again. "Container Gardening -
+  A Beginner's Guide" was refused by all three cover layouts, and the message
+  blamed the photograph and told you to pick a different one. The photograph
+  was never the problem: the dash was being glued to the next word.
+
+### Safety repairs found in the launch audit
+
+- Two admin web addresses had no sign-in at all. One copied the whole customer
+  database; the other deleted projects permanently. Anyone holding the beta
+  invite code — which every pilot customer has — could reach them. Both now
+  require an admin account, and the delete also refuses to exist unless a
+  separate token is set on the host.
+- The live site now refuses traffic instead of serving itself to everyone when
+  no access control is configured. Before, an unset or mistyped invite code
+  silently opened the whole Factory with nothing in a log to say so. Running it
+  open to everyone is still allowed — it just has to be chosen, with
+  FACTORY_OPEN_ACCESS=1. The Factory on your own computer is unaffected.
+- Permission to make a paid picture belonged to the whole program rather than
+  to the one build that was approved, so anything running at the same time —
+  a save, an export, a quality recheck — could have spent money on that
+  build's approval. Permission is now held by the one request that was given it.
+
+### Does anything look different in a book I already made?
+
+- Yes, slightly, and deliberately. Re-exporting an existing book picks up
+  these repairs, so a few colours are a shade deeper where they were too
+  faint to read: Bright Workbook's amber (measured 2.15:1 against the page,
+  which is unreadable), Minimal Professional's teal, and Warm Wellness's
+  terracotta and muted grey. Bright Workbook's chapter opening changed from
+  a tab to a stacked label, because its tab had become indistinguishable
+  from Modern Business's chapter opening. Checklists and numbered steps
+  print one marker instead of two.
+- Every template's version number was raised to record that its printed
+  output changed. Nothing you have saved was altered, and every saved book
+  still opens, still resolves its template, and still downloads.
+
+### Do your steps change?
+
+- No. The Factory works the same way; there is more to choose from.
+
+### Cost
+
+- No paid calls. Templates, previews and contrast checks are all local.
+
+### Release gate
+
+- Two new suites: a structural gate over the six templates, and a rendering
+  gate that builds a real book in every template and inspects the finished
+  PDF — contrast of every word against what is painted behind it, no text
+  below the readable minimum, visible tables, nothing over the footer, one
+  marker per row, and no two books rendering alike. Both are in the stability
+  gate. Full comparison gate with no new failures.
+
+---
+
+## 1.8.14 — 2026-09-22
+
+**A finished book says it is finished.**
+
+### What changed
+
+- The finished PDF and ZIP are now fetched from saved storage when the
+  machine checking them does not have them on its own disk. Only real PDF
+  and ZIP files are accepted; a book with no files is still reported
+  unfinished.
+
+### What was fixed
+
+- A book whose PDF and ZIP were built and downloadable stayed at 90% and
+  never showed as complete, because the website was looking for the files on
+  its own disk instead of where they were saved.
+
+### Do your steps change?
+
+- No.
+
+### Cost
+
+- No paid calls. Reading a saved file costs nothing.
+
+### Release gate
+
+- Focused tests for the repair plus the full stability gate, with no new
+  failures against main.
+
+---
+
+## 1.8.13 — 2026-09-22
+
+**Your approved cover follows the work to whatever machine is doing it.**
+
+### What changed
+
+- The saved images of an approved cover are now fetched back when the
+  machine doing the work does not have them, the same way the photograph
+  itself is.
+- Two different problems no longer share one message. "Please choose another
+  photo" is now said only when the cover layouts really did fail their
+  quality checks. When the images simply could not be fetched, the Factory
+  says so and tells you nothing is wrong with your photograph.
+
+### What was fixed
+
+- An approved cover was refused at the final check with advice to replace a
+  photograph that was perfectly good.
+
+### Do your steps change?
+
+- No. Nothing about the way you use the Factory changes.
+
+### Cost
+
+- No paid calls. Fetching saved images costs nothing.
+
+### Release gate
+
+- Focused tests for the repair plus the full stability gate, with no new
+  failures against main.
+
+---
+
+## 1.8.12 — 2026-09-22
+
+**Your cover photograph is saved where any machine can find it.**
+
+### What changed
+
+- The photograph a cover is made from is now saved to storage the moment it
+  is registered, the same way the finished cover already was.
+- When the machine doing the work does not have that photograph, it fetches
+  it back: from storage first, and for a free Pexels photograph from the
+  original it was registered from. It is accepted only if it is the very
+  same file, so a photograph that has changed is refused rather than quietly
+  swapped in.
+
+### What was fixed
+
+- A book reached the final check and stopped with "Cover photograph is
+  missing", because the photograph only ever existed on a machine that had
+  since been recycled.
+
+### Do your steps change?
+
+- No. Nothing about the way you use the Factory changes.
+
+### Cost
+
+- No paid calls. Pexels photographs are free, and fetching a saved file
+  costs nothing.
+
+### Release gate
+
+- Focused tests for the repair plus the full stability gate, with no new
+  failures against main.
+
+---
+
+## 1.8.11 — 2026-09-22
+
+**The builder can finish a book whose files it did not make itself.**
+
+### What changed
+
+- When the final quality check re-makes the book, it now fetches the
+  approved cover and the interior pictures from saved storage if they are
+  not on the machine doing the work.
+
+### What was fixed
+
+- A book stopped at 80% with "We couldn't complete this step automatically"
+  because the approved cover file had been made on a different machine,
+  which had since been recycled. The cover was safely saved all along; the
+  final check simply never went and got it.
+
+### Do your steps change?
+
+- No. Nothing about the way you use the Factory changes. A book that had
+  stopped at the final check can simply be continued.
+
+### Cost
+
+- No paid calls. Fetching a file that was already saved costs nothing, and
+  no writing, pictures or cover are made again.
+
+### Release gate
+
+- Focused tests for the repair plus the full stability gate, with no new
+  failures against main.
+
+---
+
+## 1.8.10 — 2026-09-22
+
+**The final quality check uses the same heading rule as the release check.**
+
+### What changed
+
+- A section heading that appears once in several chapters, with different
+  text under each one, is now accepted by the final quality check (for
+  example a "Try this" or "Planning example" section in every chapter). The
+  release check already accepted this; the two checks now agree.
+
+### What was fixed
+
+- Container Gardening for Beginners passed every step through the preview
+  and was then refused at the final quality check: "duplicate heading:
+  5. Water deeply". That step appears in two different procedures, and the
+  book also has its own planning example in eight chapters. Each of those
+  sections has its own text (at most a quarter of the words in common).
+
+### Still refused
+
+- The same chapter title twice; any heading repeated inside one chapter;
+  repeated filler labels such as "Chapter Takeaway"; and repeated sections
+  whose text is nearly copied (80% or more of the words shared).
+
+### Do your steps change?
+
+No.
+
+### Release gate
+
+8 new checks, including the book's real layout, where each heading sits in
+its own box. They confirm distinct sections pass and copied ones still fail.
+The existing recurring-heading and customer-facing checks all still pass.
+No paid calls.
+
+## 1.8.9 — 2026-09-22
+
+**Picture plans pass the Factory's own quality check.**
+
+### What changed
+
+- When one kind of chapter chart would fill more than 55% of a book's
+  pictures, the Factory now swaps the weakest extra ones for free Pexels
+  photographs while planning, the same way it already adds photographs to
+  reach the minimum. Photos you already approved, and charts with real
+  substance, are never touched.
+
+### What was fixed
+
+- Container Gardening for Beginners could never leave the pictures step:
+  "5 of 9 visuals are the same kind (workflow). That repetition reads as a
+  template." The planner met the photograph minimum but let one chart style
+  fill 5 of 9 chapters, and every rebuild made the same plan. The quality
+  rule is unchanged; the planner now makes a plan that passes it.
+
+### Do your steps change?
+
+No. A book may get one more free Pexels photo to review.
+
+### Release gate
+
+7 new checks, including this book's exact mix (3 photos, 5 workflows, 1
+checklist): it now comes out at 4 photos, 4 workflows and 1 checklist,
+approved photos unchanged. A balanced book is left exactly as it was, and
+nothing changes when photos cannot be fetched. No paid calls.
+
+## 1.8.8 — 2026-09-22
+
+**Approving a photo works again.**
+
+### What changed
+
+- Nothing you click is different.
+
+### What was fixed
+
+- Pressing "accept" on a photo, or approving the pictures, said
+  "Photograph file is missing" even though the photo was showing on the
+  review screen. The review screen fetched the photo from the Factory's
+  shared storage, but accept and approve looked only on the website's own
+  disk, which never holds the builder's pictures. They now fetch the book's
+  stored pictures first, the same way the builder and the review screen do.
+  This is what stopped Container Gardening for Beginners at the photo review.
+
+### Do your steps change?
+
+No. Accepting and approving photos now simply work. They are free: they only
+read pictures the Factory already stored.
+
+### Release gate
+
+6 new checks that recreate the live problem: pictures made on the builder,
+the builder's disk gone, and the website accepting and approving them. The
+same checks fail on the previous version with the exact live error message.
+A photo that storage genuinely does not have still fails honestly, and
+nothing is charged. No paid calls.
+
+## 1.8.7 — 2026-09-21
+
+**Free Images and Covers by Default.**
+
+### What changed
+
+- A picture budget saved when a book was created no longer authorizes paid
+  AI pictures or AI covers on its own.
+- AI pictures and AI covers now need a separate authorization that names
+  who gave it and sets its own maximum amount. Without it, the amount
+  available for AI pictures is $0.
+- Free options are always tried first: Pexels photos, then a photo the book
+  has already approved for one of its chapters. AI is reached only if none
+  of those works and a separate authorization exists.
+- Prior spending history is unchanged. Nothing already recorded is reset or
+  removed; an authorization only notes where picture spending stood when it
+  was given.
+
+### What was fixed
+
+- A book created with "pictures authorized" could spend on its own at the
+  cover step if four Pexels candidates did not fit the cover layout.
+  Container Gardening for Beginners was set up that way and could have spent
+  up to $0.48 without anyone being asked.
+
+### Do your steps change?
+
+No. Pictures come from the Factory's own charts and Pexels photos, and the
+cover from Pexels or your approved chapter photos, at no cost. There is
+nothing new to click. There is no screen yet for giving a paid-picture
+authorization, so paid AI pictures stay off.
+
+### Release gate
+
+12 new checks, including one built from Container Gardening for Beginners'
+exact settings: no paid picture is allowed, no charge is recorded, the cover
+uses an approved chapter photo before any AI, and an authorization is named,
+capped, dated, can be withdrawn, and never resets spending history. Four
+older checks were updated to give an explicit authorization where they test
+paid pictures. No paid calls.
+
+## 1.8.6 — 2026-09-21
+
+**A sign-in screen.**
+
+### What changed
+
+- New page at /auth/signin with two small forms: "Sign in" and "Create an
+  account". Once signed in it shows your email and role, a link back to the
+  Factory, and a "Sign out" button.
+- The very first account created becomes the admin, as before.
+
+### What was fixed
+
+- 1.8.5 added accounts but no screen to use them, so the only way to make
+  the admin account was a command on the server. Now it is done in the
+  browser.
+
+### Do your steps change?
+
+Yes, once: open digitalproductfactorypro.com/auth/signin and create your
+account under "Create an account". Do this first, before sharing the invite
+code with anyone else, because the first account becomes the admin. Book
+building is unchanged, and the invite code still protects every page,
+including this one.
+
+### Release gate
+
+10 new checks: the page is served, is never cached or shown inside another
+site, echoes nothing it is sent, keeps the secret out of web addresses, and
+the sign-in and sign-up routes still refuse plain form posts from other
+sites. The page lives in routes/auth.py, so app.py and the invite-protection
+lock are untouched. No paid calls.
+
+## 1.8.5 — 2026-09-21
+
+**Real logins, and a safe link to Pin Factory Pro.**
+
+### What changed
+
+- The Factory now has user accounts: register, log in and log out, with an
+  admin role. Sign-in secrets are scrambled with bcrypt before they are
+  stored and are never shown or logged.
+- Projects can now record which account owns them. Nothing existing was
+  moved: every project keeps working exactly as before, and ownership is only
+  assigned when the owner runs `scripts/migrate_phase_a.py --owner-email ...`.
+- New Pin Factory Pro link at /pin-factory/text, image, export, microtools and
+  health, for logged-in users only.
+
+### What was fixed
+
+- **Pin Factory Pro could be told the wrong user.** The first version of the
+  link trusted a user id sent by the browser and fell back to "anonymous".
+  It now uses only the logged-in account, strips any user id the browser
+  tries to send, never sends a request without the private Pin Factory key,
+  never passes Pin Factory's cookies or internal address back to the browser,
+  and refuses redirects.
+- On Windows the link's path check let "/etc/passwd" through; it now checks
+  paths the same way on every computer.
+
+### Do your steps change?
+
+Not for building books. The invite code still works exactly as before. To use
+the Pin Factory link you will need to log in; create your admin account with
+`python scripts\create_admin.py you@example.com` (you type your sign-in
+secret privately). The link stays switched off until PIN_FACTORY_BASE_URL and
+PIN_FACTORY_INTERNAL_KEY are set.
+
+### Release gate
+
+37 new login and Pin Factory checks. The Fast Stability Gate passes, the
+invite-protection lock was unlocked and relocked the approved way
+(3a5c6b0 then ed6dfe4), and the full gate shows no new failures against main.
+No paid calls were made.
+
+## 1.8.4 — 2026-09-21
+
+**The builder's pictures and finished files reach the website.**
+
+### What changed
+
+- Pictures the builder makes, and the finished PDF and ZIP, are now saved
+  to the storage both machines share, and read back from it wherever needed.
+
+### What was fixed
+
+- **The website showed none of the pictures.** Container Gardening for
+  Beginners reached the pictures step on the builder, but the website showed
+  0 of 9 pictures. The builder was meant to copy each picture to shared
+  storage, but a missing label meant it never copied a single one. Every
+  picture made while a book is being built is now copied, under that book.
+- **Pictures went missing between runs.** The builder's disk is wiped at the
+  end of every run, and the website never had the files at all. Both now
+  fetch a picture from shared storage when it is not on their own disk, so
+  the picture review screen can show them and a later run can keep using them.
+- **The finished PDF and ZIP stayed on the builder.** They are now copied to
+  shared storage as soon as they are made, so the download buttons work.
+
+### Do your steps change?
+
+No. After this update you can open the picture review screen and approve or
+swap the Chapter 3 photo, which needs a person to check it.
+
+### Release gate
+
+Eleven new checks, with a storage stand-in that has no disk behind it, so a
+file can only arrive through storage. The old code reproduces the live
+problem exactly (0 pictures published, 0 visible on the website). The full
+suite was run; the remaining failures are the same ones the current live code
+already has on this test machine. No paid calls were made.
+
+## 1.8.3 — 2026-09-20
+
+**Continue really does pick your book back up.**
+
+### What changed
+
+- Clicking Continue on a stuck book now gives it a fresh set of tries.
+
+### What was fixed
+
+- **Continue gave a stuck book to the builder, and the builder said no.**
+  Every book gets 60 tries before the Factory stops retrying it on its own.
+  "Container Gardening for Beginners" had used all 60. Clicking Continue
+  asked the builder to carry on (that was the 1.8.2 fix), but it never gave
+  the book a fresh set of tries, so the builder turned it away every time.
+  Now your Continue click, and only your click, starts the count again. The
+  automatic checking the screen does while you wait never resets it, so a
+  book still can't retry forever on its own. No paid work was done while
+  the book was stuck.
+
+- The Resume Build button had the same gap for a book that was waiting in
+  line, and is fixed the same way.
+
+### Do your steps change?
+
+No. Click Continue exactly as before.
+
+### Release gate
+
+Nine new checks, which fail without the fix. The builder and resume test
+suites pass. No paid calls were made while testing.
+
+## 1.8.2 — 2026-09-19
+
+- Continue where you left off now asks the builder to do the work, instead
+  of quietly waiting for nobody.
+
+---
+
+## 1.8.1 — 2026-09-18
+
+**Finishing the job 1.8.0 started: the pictures move too.**
+
+### What was fixed
+
+- **The step-by-step screen was still building books inside the website.**
+  1.8.0 moved the one-click Build My Ebook button onto the separate builder
+  machine and left every other button behind. On the evening of 18 September
+  a test book built through the step-by-step screen failed: writing the
+  chapters took longer than the website is allowed to spend on one request,
+  and a few minutes later the website ran out of memory and restarted. The
+  builder was never asked to do anything all evening. Now every step that
+  does real work — writing chapters, correcting them, preparing visuals,
+  replacing a photograph, asking for a different image, building the cover,
+  uploading your own cover photograph, choosing a design, building the
+  preview, and the quality check — is done by the builder.
+
+- **Your pictures come back.** The website and the builder are two separate
+  machines that do not share a hard disk. Covers and photographs the builder
+  makes are now saved somewhere both machines can reach, so they appear on
+  your screen instead of going missing.
+
+### What changed
+
+- **The screen no longer freezes on a long step.** Each button now starts
+  the work and then shows progress, with the same "You can leave this page"
+  promise the one-click build already makes.
+
+- **The builder stops and waits for you after every step.** It used to be
+  able to wait only after the manuscript. Now it pauses wherever you are, so
+  a single click can never run ahead and spend your budget on choices you
+  have not made yet. Approving a step is what lets it carry on.
+
+- **Nothing can be forgotten again.** Every button on the site is now listed
+  with a note saying whether it does real work or not, and a test refuses to
+  let a new one be added without that decision being made. This is what was
+  missing in 1.8.0: the gap existed because nothing forced anyone to look.
+
+### Does anything about the steps change?
+
+No. The steps are the same steps, in the same order, and each one still
+waits for you to approve it before the next one runs. What changed is which
+machine does the work, and that a long step now shows progress instead of
+freezing the page.
+
+On your own PC nothing changes at all, and if the live site is switched
+back, everything behaves exactly as it did before.
+
+### Cost
+
+No change to what a book costs. The safety checks on spending are untouched:
+a request that would have been refused before is still refused, and still
+refused before anything is started or charged for. The builder machine is
+still only paid for while it is actually working.
+
+### Release gate
+
+The Fast Stability Gate and the full Windows release gate were both run.
+Six new zero-cost test files were added and registered in the acceptance
+manifest, including one that refuses to let a new button be added to the
+site without someone deciding whether it does real work. No paid provider
+was called anywhere in the new tests.
+
+### Still to do
+
+- Seven older buttons that also do heavy work — finished-file export, the
+  older ebook tools, and the KDP packaging — still run in the website. They
+  work on older records rather than a step-by-step project, so there is
+  nothing on the builder for them to join yet. They are listed and labelled
+  so they are not lost.
+
+---
+
+## 1.8.0 — 2026-09-17
+
+**The builder is its own machine, not a thread in the website.**
+
+### What changed
+
+- **Writing a book no longer happens inside the website.** When a customer
+  clicks Build or Continue, the Factory writes down that the book must be
+  finished and hands the work to a separate machine that starts up just for
+  that book. The website goes straight back to answering pages.
+- **Nothing changes until it is switched on.** Out of the box this release
+  behaves exactly like 1.7.29, and on a local PC it always will. The new
+  way of working is turned on by one setting on the live site, and turned
+  off again by deleting it.
+
+### What was fixed
+
+- **One customer's book could take the whole site down.** A real build
+  ("Container Gardening for Beginners") used more memory than the website
+  was allowed, because the book was being written inside the same program
+  that serves pages. Now a book gets its own machine with about eight times
+  the memory, which starts when the book starts and shuts down when it is
+  finished.
+- **Clicking Continue five times no longer starts five builds.** Impatience
+  used to be able to set several copies of the same book going at once. The
+  Factory now refuses all but the first.
+- **A book that is already finished is never built a second time.** If the
+  hosting platform retries a job it thinks went wrong, the Factory checks
+  first and hands back the finished book instead of making another one.
+- **Progress screens can never move a build along by accident.** Looking at
+  a book, refreshing a page, or an old browser tab left open cannot make the
+  website start writing.
+
+### Does anything about the steps change?
+
+No. The steps are the same, the quality checks are the same and the prices
+are the same. A book that was part-way through carries on from exactly where
+it stopped. The only difference is which machine does the writing.
+
+### Cost
+
+The new machine is only paid for while a book is actually being written, and
+costs nothing when the Factory is idle.
+
+### Release gate
+
+Code and tests complete. The paid hosting has not been created yet, so this
+version is not live.
+
+---
+
+## 1.7.29 — 2026-09-17
+
+**A book could get stuck asking to be approved over and over. It can now
+repair itself and move on.**
+
+### What changed
+
+- **A book that gets stuck at the manuscript step now fixes itself.**
+  Before, some books reached a point where the Factory kept saying the
+  manuscript still needed work, kept saying it was correcting it, and yet
+  nothing ever changed. The only way out was for someone to go in behind
+  the scenes and reset the book by hand. That loop is closed.
+
+### What was fixed
+
+- **Chapters approved under the old rules were never re-checked under the
+  new ones.** When the Factory's quality rules improve, chapters written
+  before the change can fall below the new standard. The approval check
+  noticed this every time. The repair step did not — it only looked at a
+  list of chapters marked "already fine" and trusted it, so it never sent
+  the outdated chapters back to be rewritten. Approval refused the book,
+  the repair had nothing to do, and the two disagreed forever.
+- **Only the chapters that actually fail are rewritten.** Nothing else in
+  the book is touched, so a stuck book costs one or two chapter repairs
+  to rescue, not a whole rewrite.
+
+### Does anything about the steps change?
+
+No. The steps are the same, the prices are the same, and a book that was
+already moving through them is unaffected. The only difference is that a
+book which used to get stuck now keeps going.
+
+### Release gate
+
+Run the full Windows release gate before releasing this. The defect is
+covered by `tests/test_ebook_accepted_chapter_revalidation.py`, which
+reproduces the stuck book end to end and fails on the previous release.
+
+---
+
+## 1.7.28 — 2026-09-16
+
+**Every download on the live site was being refused. They work again.**
+
+### What changed
+
+- **Your Download PDF and Download ZIP buttons work on the live site
+  again.** Nothing about how products are made, priced or presented has
+  changed — this release repairs a lookup that was refusing to hand over
+  files it should have handed over.
+
+### What was fixed
+
+- **"Download blocked" on files that were perfectly fine.** Every PDF and
+  ZIP download on the live site returned an error saying the package was
+  not linked to your saved project — even though it was, and even though
+  the file was sitting there ready to send. The same download worked
+  correctly on a local copy of the Factory, which is why it went
+  unnoticed.
+- **The cause was the live site's database answering in a different
+  shape.** The code that looks up "which project does this download
+  belong to?" read each database row by position rather than by name.
+  The local database hands rows back in a form where that happens to
+  work; the live database hands them back in a form where it quietly
+  produces nonsense. The lookup then decided every package belonged to no
+  project, and the safety check correctly refused to send a file it had
+  been told was orphaned. The check was right; what it was told was
+  wrong.
+- **There were two copies of that lookup**, both with the same mistake,
+  and one of them had never checked the newer kind of package id at all.
+  There is now one shared lookup, used by both, that behaves identically
+  on either database.
+- **A row that cannot be read is now reported instead of ignored.** The
+  original code hid the failure inside a catch-all that discarded the
+  error, which is why this survived a whole release without anyone
+  seeing a single message about it.
+
+### Does anything about the steps change?
+
+No. Same screens, same buttons, same prices. Your Download PDF and
+Download ZIP buttons simply work again.
+
+The safety check that refuses genuinely orphaned packages is unchanged
+and still refuses them. Only the lookup feeding it was repaired.
+
+### Release gate
+
+Twenty-four new checks. They run the real lookup and the real download
+route against BOTH database row shapes — including the live site's shape,
+reproduced exactly, so this can never again be a defect that only appears
+in production. They also prove a genuinely orphaned package is still
+refused, so the fix cannot be mistaken for weakening the guard. Full
+Windows release gate: green, with no paid API calls.
+
+---
+
+## 1.7.27 — 2026-09-16
+
+**The Factory now finishes a whole ebook on its own: nine chapters, a designed interior, a cover, a 31-page PDF and a ZIP, with the browser closed.**
+
+### What changed
+
+- **Your book is now *required* to contain the things a designed interior
+  is made from.** Every third chapter is asked for a real checklist and
+  every third for a numbered procedure, on different chapters, leaving the
+  rest free for a photograph. Before this, the Factory asked for a table
+  only if your outline happened to use the word "table" — so whether your
+  book could be designed at all depended on whether the writing model
+  volunteered extra structure nobody had requested.
+- **Checklists and procedures now vary in length through the book**, so
+  three of them do not read as three copies of one box.
+
+### What was fixed
+
+- **A finished book could not be designed, and said so in jargon.**
+  "Container Gardening for Beginners" was written, passed every writing
+  check with no complaints, and then stopped dead at "Only 1 kind(s) of
+  visual across 9: photo." One part of the Factory demanded three kinds of
+  visual; another part had asked the writer for none. They now agree.
+- **A repair instruction the writer could not act on.** When a chapter was
+  missing its checklist or its procedure, the writer was handed the words
+  "Missing required workflow: chapter-workflow" — an internal name, not an
+  instruction. One chapter was rewritten six times and got longer and
+  wordier each time. The instruction now spells out the exact format, the
+  way the table instruction already did.
+- **An internal name could be printed in your book.** A writing model
+  handed "chapter-workflow" duly printed "chapter-workflow" as a heading
+  above the list it had just written. The final quality check caught it,
+  but only after the writing was approved, leaving the book stuck with no
+  way forward. Those names are now stripped before they can reach a page.
+- **A finished book said "Paused".** The progress bar reached 100% and
+  read "Your ebook is ready" while the indicator beside it said "Paused",
+  because the two were reading different things. They now read the same
+  one.
+
+### Does anything about the steps change?
+
+No new steps and no price change. Books will contain more checklists and
+step-by-step procedures than before, which is what makes a designed
+interior possible — and what a practical how-to book should have had all
+along.
+
+### Release gate
+
+Thirty-six new checks, most of them guarding one rule learned the hard
+way: a requirement is only real if the thing demanded is the same thing
+the checker accepts AND the same thing the interior can draw. They assert
+that agreement directly, in all three places. Full Windows release gate:
+green, with no paid API calls.
+
+---
+
+## 1.7.26 — 2026-09-15
+
+**A finished book could be thrown away over a source that was never wrong, and a retry could never actually retry. Both are fixed.**
+
+### What changed
+
+- **A nine-chapter book that was already written now gets published
+  instead of discarded.** Nothing about how the Factory writes, designs
+  or prices a book has changed — these are all cases where finished work
+  was being thrown away by a check that was wrong, or by a retry that
+  quietly did nothing.
+
+### What was fixed
+
+- **"earthbox.com" was read as the social site "x.com".** The check for
+  weak sources asked whether a banned web address appeared anywhere in
+  your sources list, as plain text. "earthbo(x.com)" contains it. So
+  "Container Gardening for Beginners" — which cited EarthBox, the planter
+  maker, exactly the sort of place a container-gardening book should cite
+  — was told its sources were not trustworthy, and could never be
+  approved. Web addresses are now matched properly, as addresses.
+  linux.com, dropbox.com, netflix.com and equinox.com were unusable as
+  sources for the same reason.
+- **A retry now actually retries.** Each step carried a fixed reference
+  that was recorded the first time it ran, and every later attempt was
+  treated as a repeat of that first one: it returned the old answer
+  instantly, did no work and saved nothing. So a book needing a second
+  correction pass could never get one, in its whole life. The nine good
+  chapters of "Container Gardening" were written, then sixty attempts
+  were used up in about a minute without a single one doing anything,
+  and the book was declared unfinishable.
+- **The Continue button now actually hands your book to the Factory.**
+  It cleared the stuck step and then gave the work to nobody, so if you
+  clicked Continue and closed the tab — which the screen invites you to
+  do — nothing happened. The promise "you can leave this page" was false
+  on the one path that exists to rescue a stalled book.
+- **A book that had used up its attempts could get stuck "being picked
+  back up" forever.** Reopening it put it back in the queue but left the
+  used-up count in place, and nothing will pick up a book in that state.
+  Pressing Continue yourself now clears it; automatic retries still stop
+  where they always did.
+- **A source used for market research is no longer mislabelled.** The
+  same address-matching mistake showed a legitimate research source as a
+  "Social signal" in the evidence behind your idea score.
+
+### Does anything about the steps change?
+
+No. Same screens, same buttons, same prices. The difference is that a
+book which has genuinely been written now reaches you, and pressing
+Continue on a stalled book now actually restarts it — including when you
+close the tab straight afterwards.
+
+The quality checks themselves are unchanged. Quora, Reddit, Pinterest,
+Facebook, X and the rest are still refused as sources when a book
+genuinely cites them.
+
+### Release gate
+
+Sixty-eight new checks across three areas: web addresses must be matched
+as addresses and never as plain text (every banned site is still caught
+when truly cited, and hosts that merely end in one are not), a repeat of
+the same attempt must still be charged once while a genuine retry must be
+allowed to do real work, and Continue must leave a runnable job behind
+even when the queue is broken. One long-standing order-dependent failure
+between two existing test files was also fixed at its cause: a test that
+left projects behind in the shared test database. Full Windows release
+gate: green, with no paid API calls.
+
+---
+
+## 1.7.25 — 2026-09-15
+
+**You can now see at a glance whether the Factory is actually working on your book — and if it has stopped, it says so and offers a button.**
+
+### What changed
+
+- **A live activity light sits beside the progress bar.** It spins only
+  when something is genuinely working on your book, and it says what is
+  happening: Working, Retrying a step, Picking this back up, Paused, or
+  Finished.
+- **If nothing is running, the screen says "This book is paused"** and
+  gives you a Continue button, instead of an animation over a build that
+  has stopped.
+- **The promise on the screen now matches reality.** It used to say to
+  pick the book up from Saved Projects — a list that deliberately shows
+  only finished products, so an unfinished book was never in it. It now
+  points at "Continue where you left off", where the book actually is.
+
+### What was fixed
+
+- **An indicator that always animates is worse than none**, because it
+  cannot tell "working" from "abandoned" — and that is the one thing you
+  need to know. This one is driven by two real facts: how long ago your
+  book last saved real progress, and whether something currently holds
+  the job. If neither is true it stops spinning and turns amber.
+- **A worker that died is no longer mistaken for one that is busy.** If
+  the Factory was interrupted, its claim on your book expires, and the
+  screen reports paused rather than pretending.
+
+### Does anything about the steps change?
+
+No extra steps. The same screen, with the truth added to it. In normal
+use you should never see the paused state at all — the Factory finishes
+books on its own now. It exists for the day something goes wrong, so that
+you are told instead of left watching.
+
+### Release gate
+
+Thirteen new checks, most of them written to make the spinner STOP: no
+recent progress and no active worker must read as paused, an expired
+claim must not look like work in progress, a missing or malformed
+timestamp must never be treated optimistically, and the paused case must
+be handled before the spinning one. Full Windows release gate: green,
+with no paid API calls.
+
+---
+
+## 1.7.24 — 2026-09-15
+
+**"You can leave this page" is now true. The Factory finishes your ebook itself, instead of relying on your browser staying open.**
+
+### What changed
+
+- **The Factory now finishes your book on its own.** Until now the page
+  you were watching was quietly doing the work: it asked the Factory for
+  one chapter, then the next, then the next. Close the tab and the book
+  simply stopped — which is exactly what happened to a real book at
+  "Writing your chapters (5 of 9)".
+- **Starting a book now records a lasting instruction to finish it.** That
+  instruction is written down, not held in the page or in memory, so it
+  survives closing the tab, refreshing, losing your connection, and the
+  Factory itself being restarted or updated.
+- **If the Factory is interrupted mid-chapter, it picks the book back up
+  by itself.** No tidy-up has to happen first and nobody has to press
+  anything — a recovery that depends on a clean shutdown is no recovery
+  at all, so this one does not.
+- **Finished chapters are never rewritten.** The part that decides what to
+  write is completely unchanged; only who asks it to keep going is
+  different. A book stopped after chapter five carries on at chapter six.
+- **A book is never finished twice**, so no duplicate PDF, ZIP or
+  chapters.
+
+### What was fixed
+
+- **The real cause of the stuck book.** Work stopping when a browser tab
+  closed was never a timing problem or a provider problem — it was that
+  nothing on the Factory's side was responsible for finishing the job.
+  Now something is.
+
+### Does anything about the steps change?
+
+Yes, in the way that matters: start a book, close the tab, and come back
+later to find it further along or finished. Everything else — the
+chapters, the quality checks, the cover, the design, the PDF and ZIP — is
+untouched.
+
+### Honest limitation
+
+The Factory finishes books while it is awake. If the whole service is
+idle or stopped, work pauses safely and resumes when it wakes; nothing is
+lost. Removing that last gap needs a dedicated always-on helper, which is
+the next infrastructure step.
+
+If anything about this needs undoing, one setting switches it straight
+back to the old behaviour.
+
+### Release gate
+
+Twenty-eight new checks: two workers can never claim the same book, a
+book whose worker died is picked up again once its claim expires, a
+crashed attempt is retried rather than abandoned, a finished book is
+never finished twice, one long book cannot hog the Factory, and the
+switch-off works. Full Windows release gate: green, with no paid API
+calls.
+
+---
+
+## 1.7.23 — 2026-09-15
+
+**Fixes the worst possible bug: an ebook that stopped halfway and could not be found again from any screen.**
+
+### What changed
+
+- **A book that is still being written now appears in "Continue where you
+  left off"** from the moment it starts, instead of only once it reaches
+  the later design stages.
+
+### What was fixed
+
+- **A half-finished ebook could become unreachable.** A live book stopped
+  at "Writing your chapters (5 of 9)" and there was no way back to it —
+  not from Saved Projects, not from the continue list, not by reopening
+  the browser. The five finished chapters were safe in storage the whole
+  time; there was simply no door left open to them.
+- **Why it happened.** The "Continue where you left off" list only
+  recognised books that had got as far as the design stages. A book still
+  writing its chapters had not created that record yet, so the list
+  skipped it. Saved Projects could not help either, because it lists
+  finished, downloadable products and this book had no PDF yet. And the
+  only other memory — the browser's own — is wiped the moment the tab is
+  closed. Three separate doors, all shut.
+- **A book being written is now recognised in its own right**, with no
+  dependence on the browser remembering anything.
+
+### Does anything about the steps change?
+
+Yes, and for the better: an ebook you start now stays reachable from
+"Continue where you left off" for its whole life, not just near the end.
+Nothing else changes, no finished chapter is ever rewritten, and no
+product is regenerated.
+
+### Honest limitation
+
+This makes a stopped book **findable and resumable**. It does not yet
+make it keep building after you close the tab — the writing is still
+driven by the open page. Making "you can leave this page" completely
+true needs the background worker, which is the next infrastructure step.
+
+### Release gate
+
+Sixteen new checks covering the exact live failure: a five-of-nine
+manuscript is recognised as resumable, finished and failed books are not
+offered, already-written chapters are never discarded, the check writes
+nothing at all, and the listing stays behind the private-beta gate. Full
+Windows release gate: green, with no paid API calls.
+
+---
+
+## 1.7.22 — 2026-09-15
+
+**Fixes the fault that stopped the first attempt to move to the new database. The live site was never at risk and was already safely back on the old one.**
+
+### What changed
+
+- **Translating between the two databases now happens in the one place
+  every part of the Factory shares**, instead of being handled separately
+  by each part that creates its own tables.
+- Settings that only mean something to the old database are skipped
+  rather than passed on and rejected.
+
+### What was fixed
+
+- **The billing tables were still being created using an instruction the
+  new database does not understand.** The first switch-over attempt
+  failed at start-up with a syntax error, and the live site rolled
+  straight back to the old database as designed. Nothing was lost and no
+  customer data was affected.
+- **The real mistake was fixing only half the problem last time.** The
+  earlier work taught the *main* records table to speak the new
+  database's language, but each part of the Factory that creates its own
+  tables was left to fend for itself — so billing failed, and the next
+  one would have too.
+- **The translation now happens in the one place every part of the
+  Factory shares.** Any section can go on writing tables the way it
+  always has; if the new database is in use, the wording is corrected on
+  the way through. No future table can repeat this failure.
+- **Settings that only mean something to the old database are now quietly
+  skipped** rather than sent onward and rejected. Failing a start-up over
+  a tuning hint would be absurd.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. The old database is
+still in use and still holds everything; the new one is not switched on.
+
+### Release gate
+
+Seventeen new checks, including one that reproduces the exact start-up
+that failed live and would have caught it beforehand. It was confirmed to
+genuinely fail when the fix is removed — a test that cannot fail proves
+nothing. Full Windows release gate: green, with no paid API calls.
+
+---
+
+## 1.7.21 — 2026-09-15
+
+**The Factory can now actually run on the new professional database — but only when told to, in two separate steps. Nothing has switched yet.**
+
+### What changed
+
+- **Two separate settings are now required to move the Factory onto the
+  new database**, and this is the most important safety decision in the
+  whole change. One setting says *where* the new database is. A second,
+  separate setting says *use it*.
+- **Why it matters:** if the Factory switched the moment the database was
+  connected, then simply linking it would have pointed the live site at a
+  brand-new, completely empty database. Every customer's Saved Projects
+  would have appeared to vanish and every download would have failed —
+  with an empty list as the only clue that anything was wrong. Keeping
+  the two apart means the new database can be created, filled and checked
+  while customers carry on using the old one, and the actual switch is
+  one deliberate act that is undone by deleting one setting.
+- **A short set of commands** to back up, create, copy, check and report —
+  including one that says which database the Factory is really using,
+  rather than assuming.
+
+### What was fixed
+
+- **A wrong-database hazard, caught by its own test.** The switch
+  originally accepted *any* database address. That would have let the
+  Factory try to reach a completely different kind of database with the
+  wrong software. It now requires the address to genuinely be the new
+  database's.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. Both settings are
+absent, so the Factory runs exactly as before, and the existing database
+file is never deleted — it stays as the way back.
+
+### Release gate
+
+Twenty-five new checks. Most prove the switch CANNOT happen by accident:
+neither setting alone moves anything, only an exact value counts, a
+wrong-database address is refused, and if the check itself fails the
+Factory stays on the old database rather than falling over. Full Windows
+release gate: green, with no paid API calls.
+
+---
+
+## 1.7.20 — 2026-09-15
+
+**Groundwork for moving the Factory's records to a stronger database — with a checker that proves nothing was lost. Nothing has moved yet.**
+
+### What changed
+
+- **The Factory can now speak to a professional database (PostgreSQL) as
+  well as the simple file-based one it uses today.** This is preparation
+  for the bigger change that lets products be built in the background
+  instead of while a customer waits.
+- **Nothing changes until it is switched on.** With the new setting
+  absent — which is how every copy of the Factory runs right now — the
+  Factory behaves exactly as before. Switching it on without the required
+  software fails loudly rather than quietly doing something unexpected.
+- **A copy tool and, more importantly, a proof tool.** The copy tool moves
+  every saved product and file record across. The proof tool then
+  compares the two databases record by record and field by field, and
+  reports every single difference it finds.
+
+### What was fixed
+
+- Nothing was broken. This is new groundwork.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory today.
+
+### Release gate
+
+Twenty-five new checks. Most of them deliberately try to make the proof
+tool FAIL — a checker that always says "fine" would be worthless. It is
+required to catch a missing record, a secretly altered field, a lost
+version number, and an unexpected extra record. It also must never write
+to the original database, which stays as the way back.
+
+Rehearsed against the real Factory database: 114 saved products and 73
+file records copied and compared with zero differences, and the original
+left untouched.
+
+---
+
+## 1.7.19 — 2026-09-15
+
+**A new read-only check that answers the one question that matters when cloud storage is switched on: which copy is the Factory actually using?**
+
+### What changed
+
+- **`readcheck` reports, for every moved PDF, whether the Factory read it
+  from cloud storage or from the original copy** — and confirms the bytes
+  are identical either way. The existing check proved the cloud copies
+  were intact; this proves which one the product-building code actually
+  picks up, which is a different and more useful thing once cloud reading
+  is switched on.
+- **It also proves the safety net still works, on real data, without
+  breaking anything.** It temporarily pretends — inside its own run only —
+  that cloud storage is down, that the file is missing, that it is
+  corrupted, and that it is the wrong size. In all four cases the Factory
+  must fall back to the original copy and produce the right bytes. No real
+  stored file is touched, moved, changed or deleted.
+- **It only reads.** It does not copy, delete, rebuild a product, alter a
+  saved project, or contact any paid service.
+
+### What was fixed
+
+- Nothing was broken. This closes the last blind spot before switching
+  cloud reading on: there was no way to confirm which copy was being used.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory.
+
+### Release gate
+
+Five new checks: the right copy is chosen with cloud reading off, the
+right copy is chosen with it on, all four safety-net situations fall back
+correctly, the check itself writes nothing whatsoever, and — importantly —
+it reports FAILURE if an original copy has gone missing, because the
+safety net is only real while the original is still there. Full Windows
+release gate: green, with no paid API calls.
+
+---
+
+## 1.7.18 — 2026-09-15
+
+**One short command now does the whole live-site PDF copy safely: check, back up, copy, check again — and stops at the first sign of trouble.**
+
+### What changed
+
+- **`migrate` became a single guarded operation** instead of a bare copy.
+  In order: it checks the situation is safe, takes a backup and proves it
+  is identical, re-checks that nothing moved underneath it, copies each
+  PDF while verifying every one, checks them all again afterwards, and
+  reports a plain PASS or FAIL.
+- **It refuses to start unless everything is right**: the database must be
+  on the live site's permanent disk, all four cloud-storage settings must
+  be present, cloud reading must still be switched off, and no record may
+  be malformed. If any of those is wrong it stops before touching
+  anything — it does not even take the backup.
+- **No backup, no migration.** If the backup cannot be proven
+  byte-for-byte identical to the original, nothing is copied at all.
+- **It stops at the first failure** rather than carrying on.
+
+### What was fixed
+
+- **Two backups taken in the same second no longer collide.** The rule
+  that a backup may never overwrite an earlier one was right, but it
+  meant a legitimate second attempt within the same second was refused.
+  Backups now get a numbered suffix instead, so nothing is ever lost and
+  nothing is ever blocked.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. Original PDFs are never
+deleted, exported files are never touched, saved products are never
+rewritten, and cloud reading stays switched off.
+
+### Release gate
+
+Nine new checks, most of them about refusing: no backup means no
+migration, incomplete settings mean no migration, cloud reading already
+on means no migration, a database in the wrong place means no migration,
+and one malformed record stops the whole run. Full Windows release gate:
+green, with no paid API calls.
+
+---
+
+## 1.7.17 — 2026-09-15
+
+**The "what's the situation?" command now also reports how storage is configured — without ever showing a secret value.**
+
+### What changed
+
+- **The read-only status command now says whether cloud storage is
+  switched on**, whether all four cloud-storage settings are present, and
+  where the exported files live and how many there are. This matters
+  because it is the only way to see, from the live site itself, whether
+  it is set up the way we think it is.
+- **It reports presence, never values.** For each setting it says only
+  "yes, this is set" or "no, this is missing". A secret value can never
+  appear on screen, in a log, or in a report.
+
+### What was fixed
+
+- Nothing was broken. This closes a blind spot: there was no safe way to
+  confirm the live site's storage configuration from the live site.
+
+### Does anything about the steps change?
+
+No. Nothing changes for anyone using the Factory. The command still only
+looks — it copies nothing, changes nothing, and deletes nothing.
+
+### Release gate
+
+Two new checks, both about secrecy: four deliberately planted fake
+credentials must not appear anywhere in the output, and the command must
+correctly report whether cloud storage is switched on. Full Windows
+release gate: green, with no paid API calls.
+
+---
+
+## 1.7.16 — 2026-09-14
+
+**A few typed words can now start the live site's PDF copying. Still nothing has been copied, and nothing changes for anyone using the Factory.**
+
+### What changed
+
+- **The copying work can now be run by typing a short command** on the
+  live site's own command line, instead of through the private web
+  address added in 1.7.15. The hosting plan does have a command line
+  after all, and its window mangles anything long that is pasted in — so
   the commands are now a few words each.
 - **The safe option is the default.** Typing the command with no extra
   words only *looks*: it reports what it would copy and changes nothing.
