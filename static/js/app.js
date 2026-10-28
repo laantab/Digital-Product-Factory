@@ -8255,7 +8255,7 @@ function showEbookWorkspaceStage(stageId) {
             <label class="btn-secondary text-xs cursor-pointer">Upload my own image
               <input type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" class="hidden" data-ws-upload-photo="${escapeHtml(String(a.visual_id || ""))}" />
             </label>
-            <button type="button" class="btn-secondary text-xs" data-ws-keep-photo="${escapeHtml(String(a.visual_id || ""))}">Keep current visual</button>
+            <a class="btn-secondary text-xs" href="/ebook-workspace/${encodeURIComponent(ws.project_id)}/review-photo/${encodeURIComponent(String(a.visual_id || ""))}">Review full-size photo and save choice</a>
           </div>
         </details>` : ""}
         ${missing ? `<p class="text-xs text-amber-800 mt-2">This chapter visual still needs attention.</p>` : ""}
