@@ -10,7 +10,7 @@ Keep current visual only displayed a message and did not save a choice. Review a
 Open Edit a Visual, review the full-size photograph, save the choice, and return to Visuals to continue the saved book. Hard photo rejections, project ownership, manuscript, cover and paid-provider restrictions remain enforced.
 
 ### Release gate
-Six focused route, ownership, image-integrity, recovery and browser regressions passed. Required protected and full release checks are in progress. Live saved-book PDF and ZIP verification is required before claiming the book is finished.
+Combined release verification covered all 3377 collected tests with no unresolved failures, errors or skips: 2,260 passed in the first segment; the version check passed after correcting the checkout pointer; 1144 remaining checks passed. This is combined run evidence, not an uninterrupted green run. Fifteen focused photo-review checks and both GitHub workflows passed. Live saved-book PDF and ZIP verification is required before claiming the book is finished.
 
 ## 1.9.63 — Resume interrupted ebook workers and expose chart corrections (candidate)
 
