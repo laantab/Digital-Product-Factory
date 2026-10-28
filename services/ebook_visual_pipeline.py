@@ -2664,6 +2664,7 @@ def validate_visual_readiness(data: dict, *, html: str | None = None) -> VisualV
             if source_l in {"unsplash", "pixabay"} and not (page_url and str(aid.get("photographer") or "").strip()):
                 findings.append(f"Visual {vid} photograph is missing its source page or photographer.")
                 continue
+            aid["asset_path"] = path
             report = evaluate_photo_aid(aid)
             aid.update(apply_match_report(aid, report))
             block = photo_blocks_approval(aid)
@@ -3144,6 +3145,9 @@ def _preview_data_uri(path: str, max_w: int = 1200) -> str:
 def visual_review_payload(data: dict) -> dict[str, Any]:
     from services.image_sources import credit_for, image_sources_status
 
+    # Website and builder have separate disks. Recover verified bytes before
+    # evaluating scene evidence against the local image path.
+    localize_visual_plan(data)
     plan = data.get("visual_plan") if isinstance(data.get("visual_plan"), dict) else {}
     if isinstance(plan, dict):
         stamp_plan_photo_matches(plan)
@@ -3575,6 +3579,7 @@ def mark_photo_full_size_viewed(data: dict, visual_id: str) -> dict:
 def accept_photo_aid(data: dict, visual_id: str) -> dict:
     """User explicitly accepts the current photograph after seeing it. Does not approve Visuals."""
     _assert_mutable(data, "accept photograph")
+    localize_visual_plan(data)
     aid = _find_aid(data, visual_id)
     if aid is None or not is_photo_aid(aid):
         raise ValueError("Photograph not found.")
