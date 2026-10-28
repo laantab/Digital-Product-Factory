@@ -12,12 +12,14 @@ from services import ebook_visual_pipeline as vp
 @pytest.fixture
 def photo(tmp_path, monkeypatch):
     import app as application
-    path = tmp_path / 'photo.png'
+    path = tmp_path / 'ebook-7' / 'visuals' / 'v_ch5.png'
+    path.parent.mkdir(parents=True)
     Image.new('RGB', (1200, 800), '#82949b').save(path)
     aid = {'visual_id': 'v_ch5', 'type': 'photo', 'chapter': 'Kitchen',
            'chapter_index': 5, 'asset_path': str(path),
            'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
-    data = {'visual_plan': {'chapters': [{'aids': [aid]}]}}
+    data = {'package_id': 'ebook-7', 'visual_plan': {'chapters': [{'aids': [aid]}]}}
+    monkeypatch.setattr(vp, 'EXPORTS_DIR', str(tmp_path))
     monkeypatch.setattr(application, '_ebook_workspace_project_or_404',
                         lambda pid: ({'id': pid, 'data': data}, None))
     return application.app.test_client(), path, aid, data
@@ -46,6 +48,34 @@ def test_review_preserves_project_access_boundary(photo, monkeypatch):
                         lambda pid: (None, ('Not found', 404)))
     assert client.get('/ebook-workspace/8/review-photo/v_ch5').status_code == 404
     assert client.get('/ebook-workspace/8/visual-photo/v_ch5').status_code == 404
+
+
+def test_photo_review_refuses_paths_outside_the_book_and_symlinks(photo, tmp_path):
+    client, path, aid, _ = photo
+    external = tmp_path / 'private.png'
+    external.write_bytes(path.read_bytes())
+    aid['asset_path'] = str(external)
+    assert client.get('/ebook-workspace/7/visual-photo/v_ch5').status_code == 404
+    aid['asset_path'] = str(path)
+    path.unlink()
+    path.symlink_to(external)
+    assert client.get('/ebook-workspace/7/visual-photo/v_ch5').status_code == 404
+
+
+def test_legacy_package_requires_an_asset_owned_by_this_project(photo, monkeypatch, tmp_path):
+    import app as application
+    client, path, aid, data = photo
+    legacy = tmp_path / 'legacy-book' / 'visuals' / 'v_ch5.png'
+    legacy.parent.mkdir(parents=True)
+    legacy.write_bytes(path.read_bytes())
+    data['package_id'] = 'legacy-book'
+    aid['asset_path'] = str(legacy)
+    monkeypatch.setattr(application.database, 'get_asset_by_key', lambda key: None)
+    assert client.get('/ebook-workspace/7/visual-photo/v_ch5').status_code == 404
+    monkeypatch.setattr(application.database, 'get_asset_by_key', lambda key: {'project_id': 8, 'checksum': aid['sha256']})
+    assert client.get('/ebook-workspace/7/visual-photo/v_ch5').status_code == 404
+    monkeypatch.setattr(application.database, 'get_asset_by_key', lambda key: {'project_id': 7, 'checksum': aid['sha256']})
+    assert client.get('/ebook-workspace/7/visual-photo/v_ch5').status_code == 200
 
 
 def test_accept_recovers_verified_local_file_before_evaluation(photo, monkeypatch):
