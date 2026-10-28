@@ -20,6 +20,9 @@ accept.addEventListener('click',async()=>{
     const response=await fetch(`/ebook-workspace/${PID}/visuals`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'accept-photo',visual_id:VID})});
     const result=await response.json();
     if(!response.ok||result.ok===false)throw new Error(result.error||result.message||'The photograph could not be accepted.');
+    const assets=result.workspace?.design?.visual_review?.assets||[];
+    const saved=assets.find(a=>String(a.visual_id)===VID);
+    if(!saved?.user_accepted||saved.match_status!=='pass')throw new Error(result.message||'The photograph did not pass review. Return to Visuals to replace it.');
     status.textContent='Photograph choice saved. Return to Visuals to continue the book.';
   }catch(error){status.textContent='Saving was not confirmed. '+error.message;accept.disabled=false;}
 });
