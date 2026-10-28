@@ -1,3 +1,23 @@
+## 1.9.63 — Resume interrupted ebook workers and expose chart corrections (candidate)
+
+### What changed
+Recoverable workflow exits and deadline continuations request the existing bounded Render retry instead of returning normal success. New final quality reviews record their engine, contract and Factory version alongside the reviewed PDF and ZIP hashes and timestamp.
+The release review now links each chart to its saved heading and items. Saving uses the existing free correction action, then requests the existing chart redraw before continuing layout and quality checks. A failed redraw can be retried without submitting the saved words twice. Manuscript and paid image generation are unchanged.
+Introductory home-organization and clear-counter kitchen scenes now use concrete room, furniture and storage requirements. Stale abstract briefs are retired, and their concrete free-photo searches run before the old chapter-caption searches. Physical image, mismatch, source and spend checks remain enabled.
+Section headings use the PDF renderer's keep-with-next instruction so they stay with their first supporting paragraph at page boundaries.
+
+### What was fixed
+An unfinished book could remain queued after its worker stopped, because the task returned its error summary normally and Render never retried it. Review records also lacked the version evidence needed to identify which editor checked a downloaded book.
+The chart correction backend existed without a review-screen control, leaving owners unable to correct editorial chart findings through the website.
+An abstract home-organization heading was being treated as a list of visible objects such as "start", "what" and "really". Free replacements selected a model house and a paper box instead of a usable room scene. Those examples are now regression cases rather than approved substitutes.
+Standard CSS break avoidance did not stop the PDF renderer stranding section headings at the foot of a page. Three rendered page-boundary regressions reproduced the problem before the correction.
+
+### Do the steps change?
+The intended recovery requires no extra Resume click for these interruptions. Genuine quality failures and customer choices still stop safely. Existing reviews are not retroactively certified, retry and spending limits are unchanged, and this does not implement automatic repair of every editorial finding.
+
+### Release gate
+The unchanged baseline passed 820 stability tests, 84 execution checks and all 442 protected ebook checks. Two continuation regressions and one provenance regression failed before the change. Post-change verification passed all 448 protected ebook checks, 820 stability checks and 142 focused checks. Full release and live acceptance remain required before claiming deployment or one-button completion. See docs/EBOOK_COMPLETION_SOLUTION.md for the remaining delivery contract.
+
 ## 1.9.62 — Recognize native chapter comparison tables
 
 ### What changed

@@ -685,6 +685,7 @@ class TestGardeningTopicBoundaries(unittest.TestCase):
         self.assertNotIn('vegetables', brief.required_subject)
         self.assertFalse(any('garden' in q for q in brief.search_queries))
 
+
     def test_household_containers_do_not_imply_gardening(self):
         aid = self._aid('Everyday Containers', 'Use containers to organize your household essentials')
         brief = build_visual_brief(aid, title='Home Organization')
@@ -710,3 +711,68 @@ class TestGardeningTopicBoundaries(unittest.TestCase):
         brief = build_visual_brief(aid, title='Small-Space Home Organization for Beginners')
         self.assertNotIn('vegetables', brief.required_subject)
         self.assertFalse(any('garden' in q for q in brief.search_queries))
+
+def _home_intro_aid():
+    return {'visual_id': 'intro', 'type': 'photo', 'chapter_index': 1,
+            'chapter': 'Start Small: What Organization Really Means in a Small Home',
+            'title': 'Start Small: What Organization Really Means in a Small Home: chapter scene',
+            'caption': 'Organization in a small home is not about creating a perfect space that always looks ready for a photo'}
+
+
+def test_home_organization_introduction_uses_a_real_room_and_storage_brief():
+    brief = build_visual_brief(_home_intro_aid(), title='Small-Space Home Organization for Beginners')
+    assert 'living room' in brief.required_subject
+    assert brief.search_queries[0] == 'small living room sofa storage shelves'
+    assert not {'what', 'really', 'start'} & set(brief.required_objects)
+    raw = _noisy_jpeg()
+    good = score_photo_against_brief(brief, image_bytes=raw,
+        alt='A compact living room interior with a sofa and organized shelves for storage.')
+    assert good.status == MATCH_PASS, good.as_dict()
+    for alt in ['A small decorative wooden house on a welcome mat surrounded by moving boxes indoors.',
+                'Close-up shot of a small brown paper box on a wooden shelf with books in the background.']:
+        assert score_photo_against_brief(brief, image_bytes=raw, alt=alt).status != MATCH_PASS
+
+
+def test_home_organization_retires_the_saved_abstract_title_word_brief():
+    aid = _home_intro_aid()
+    aid['visual_brief'] = {'purpose': 'chapter_scene', 'required_subject': aid['title'],
+        'required_objects': ['start', 'small', 'what', 'organization', 'really'],
+        'subject_tokens': ['start', 'small', 'what'], 'search_queries': ['small-space home start small']}
+    brief = build_visual_brief(aid, title='Small-Space Home Organization for Beginners')
+    assert 'living room' in brief.required_subject
+    aid['visual_brief'] = brief.as_dict()
+    # Asset validation has only the chapter and saved brief, not the full book.
+    assert build_visual_brief(aid).as_dict() == brief.as_dict()
+
+
+def test_clear_counter_kitchen_brief_requires_the_working_room():
+    aid = {'chapter_index': 5, 'chapter': 'The Kitchen: Clear Counters and Easy-Access Essentials',
+           'title': 'Kitchen chapter scene', 'caption': 'A small kitchen works better when it is set up for the way you actually cook, eat, and clean'}
+    brief = build_visual_brief(aid, title='Small-Space Home Organization for Beginners')
+    assert brief.search_queries[0] == 'small kitchen clear countertop cabinets'
+    raw = _noisy_jpeg()
+    good = score_photo_against_brief(brief, image_bytes=raw,
+        alt='A clean small kitchen interior with a clear countertop and cabinets.')
+    assert good.status == MATCH_PASS, good.as_dict()
+    wrong = score_photo_against_brief(brief, image_bytes=raw,
+        alt='Close-up view of jars and bottles on a kitchen counter.')
+    assert wrong.status != MATCH_PASS
+
+
+def test_free_search_prioritizes_the_concrete_home_scene_over_the_abstract_caption(monkeypatch):
+    from services import ebook_factory_pipeline as factory
+    seen = []
+    monkeypatch.setattr(factory, '_search_stock', lambda provider, query: seen.append(query) or [])
+    monkeypatch.setattr(factory, '_stock_provider_order', lambda providers: ['pexels'])
+    factory.fill_photo_aid_from_pexels(_home_intro_aid(), package_id='home-scene-test',
+                                     title='Small-Space Home Organization for Beginners', providers=['pexels'])
+    assert seen[0] == 'small living room sofa storage shelves'
+
+
+def test_specific_household_and_gardening_chapters_do_not_inherit_an_intro_scene():
+    aid = _home_intro_aid()
+    aid['visual_brief'] = build_visual_brief(aid, title='Home Organization').as_dict()
+    aid.update(chapter='Bedroom Storage', title='Bedside storage', caption='Keep bedside essentials in a drawer.')
+    assert 'living room' not in build_visual_brief(aid, title='Home Organization').required_subject
+    aid.update(chapter='Balcony Vegetable Garden', title='Growing tomatoes on a patio', caption='Grow herbs in pots.')
+    assert 'vegetables' in build_visual_brief(aid, title='Home Organization').required_subject

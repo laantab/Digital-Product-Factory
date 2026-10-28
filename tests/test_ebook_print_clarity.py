@@ -127,6 +127,25 @@ def test_a_photo_caption_stays_on_the_photographs_pdf_page(tmp_path):
     assert caption_pages == image_pages
 
 
+@pytest.mark.parametrize('height', [580, 600, 620])
+def test_section_heading_stays_with_its_first_supporting_sentence(height):
+    import fitz
+    from services.ebook_design_system import theme_css
+    from services.pdf_export import _html_to_pdf_xhtml2pdf
+    heading = 'A section that needs its first paragraph'
+    sentence = 'This supporting sentence belongs with the heading.'
+    html = f'''<html><head><style>{theme_css('modern_practical')}</style></head><body>
+      <pdf:spacer height="{height}pt"/><h3>{heading}</h3>
+      <p>{sentence} The rest of the paragraph explains the practical action in enough detail
+      to fill several lines on a normal book page.</p></body></html>'''
+    with fitz.open(stream=_html_to_pdf_xhtml2pdf(html), filetype='pdf') as doc:
+        text = [' '.join(page.get_text().split()) for page in doc]
+    heading_pages = [i for i, page in enumerate(text) if heading in page]
+    sentence_pages = [i for i, page in enumerate(text) if sentence in page]
+    assert len(heading_pages) == 1
+    assert heading_pages == sentence_pages
+
+
 def test_review_controls_target_the_clicked_visual_when_two_share_a_page():
     import base64
     import io

@@ -558,7 +558,12 @@ def fill_photo_aid_from_pexels(
         # The chapter's own text describes the scene; its heading does not.
         body=str(out.get("chapter_body") or ""),
     )
-    queries = extra + [q for q in queries if q not in extra]
+    from services.ebook_visual_match import HOME_ORGANIZATION_SCENES
+    if brief.required_subject in HOME_ORGANIZATION_SCENES:
+        # A corrected scene must be searched before the stale abstract caption.
+        queries = queries + [q for q in extra if q not in queries]
+    else:
+        queries = extra + [q for q in queries if q not in extra]
     fallback = topic_pexels_query(
         title=title,
         topic=topic,

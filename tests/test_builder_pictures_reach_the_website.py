@@ -204,7 +204,12 @@ class FinishedFilesReachTheWebsiteTests(_StorageCase):
         pkg = f"ebook-v184-{uuid.uuid4().hex[:12]}"
         d = Path(self.builder_root) / pkg
         d.mkdir(parents=True)
-        (d / "ebook.pdf").write_bytes(b"%PDF-1.4 finished book" * 50)
+        from reportlab.pdfgen import canvas
+
+        pdf = canvas.Canvas(str(d / "ebook.pdf"))
+        pdf.drawString(72, 720, "Container Gardening for Beginners")
+        pdf.drawString(72, 690, "A practical guide to growing plants in small spaces.")
+        pdf.save()
         (d / "package.zip").write_bytes(b"PK\x03\x04 finished zip" * 50)
         (d / "notes.txt").write_bytes(b"not a customer download")
         return pkg, {n: str(d / n) for n in ("ebook.pdf", "package.zip", "notes.txt")}
@@ -224,11 +229,16 @@ class FinishedFilesReachTheWebsiteTests(_StorageCase):
         from services.ebook_build_orchestrator import _publish_export_files
 
         pkg, files = self._package()
+        database.update_project(self.pid, None, {
+            "title": "Container Gardening for Beginners",
+            "product_type": "ebook",
+            "package_id": pkg,
+        })
         _publish_export_files(self.pid, self.builder_root, files)
         shutil.rmtree(self.builder_root)
         with patch.object(app_module, "EXPORTS_DIR", self.website_root):
             resp = app_module.app.test_client().get(f"/download/{pkg}/ebook.pdf")
-        self.assertEqual(resp.status_code, 200, resp.get_data(as_text=True)[:300])
+        self.assertEqual(resp.status_code, 200, resp.get_data()[:300])
         self.assertTrue(resp.get_data().startswith(b"%PDF"))
 
     def test_inline_mode_publishes_nothing(self):

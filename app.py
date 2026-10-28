@@ -2302,13 +2302,37 @@ def ebook_approve_product_route(project_id: int):
 
 
 @app.get("/ebook-workspace/<int:project_id>/release-review")
-def ebook_release_review_page(project_id: int):
+@app.get("/ebook-workspace/<int:project_id>/edit-chart/<visual_id>")
+def ebook_release_review_page(project_id: int, visual_id: str | None = None):
     project, err = _ebook_workspace_project_or_404(project_id)
     if err:
         return err
+    if visual_id is not None:
+        return _ebook_chart_editor_page(project, visual_id)
     title = str((project.get("data") or {}).get("title") or project.get("name") or "Ebook")
     return RELEASE_REVIEW_PAGE.replace("__PID__", str(int(project_id))).replace(
         "__TITLE__", title.replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _ebook_chart_editor_page(project: dict, visual_id: str):
+    """Expose the existing free chart action without replacing the manuscript."""
+    project_id = int(project['id'])
+    data = project.get("data") or {}
+    from services.ebook_visual_pipeline import is_photo_aid
+    from services.quality.artifact_state import ArtifactStateError
+    try:
+        _require_content_mutation_allowed(data, action="edit chart text")
+    except ArtifactStateError as exc:
+        return _error(str(exc), 409)
+    for chapter in (data.get("visual_plan") or {}).get("chapters") or []:
+        for aid in chapter.get("aids") or []:
+            if str(aid.get("visual_id") or "") != visual_id:
+                continue
+            if is_photo_aid(aid):
+                return _error("That is a photo, not a chart.", 400)
+            return render_template("ebook_chart_editor.html", project_id=project_id,
+                                   visual_id=visual_id, aid=aid)
+    return _error("That chart is not in this book.", 404)
 
 
 RELEASE_REVIEW_PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8>
@@ -2361,6 +2385,7 @@ needs_human_review:'Needs your review',accepted_by_owner:'Accepted by you'};
 document.getElementById('sheet').innerHTML=(d.visuals||[]).map((v,index)=>`<div class="card ${esc(v.status)}">
 <img src="${v.thumb||''}" alt=""><b>PDF page ${v.page}</b> &middot; ${esc(v.kind)}<br>${esc(v.chapter||'Cover')}<br>
 <button type=button onclick="enlargeVisual(${index})">View clearly</button><br>
+${v.kind==='chart'&&v.visual_id?`<a class=btn href="/ebook-workspace/${PID}/edit-chart/${encodeURIComponent(v.visual_id)}">Edit chart text</a><br>`:''}
 ${v.kind==='photo'?`<button type=button onclick="qualityAction('replace',${index})">Restore original resolution</button><br>`:''}
 ${label[v.status]||esc(v.status)}${v.status==='needs_human_review'?`<br><button onclick="decide(${v.page},'accept')">Accept</button><button onclick="decide(${v.page},'reject')">Reject</button>`:''}
 ${v.status==='accepted_by_owner'?`<br><button onclick="decide(${v.page},'undo')">Undo</button>`:''}</div>`).join('');

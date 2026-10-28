@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Edit chart text</title>
+  <style>
+    body {font-family:system-ui,sans-serif;color:#111827;background:#f5f5f4;margin:0;padding:24px}
+    main {max-width:760px;margin:auto;background:white;border-radius:12px;padding:24px}
+    h1 {margin-top:0} label {display:block;font-weight:600;margin:20px 0 6px}
+    input,textarea {box-sizing:border-box;width:100%;padding:12px;font:inherit;border:1px solid #9ca3af;border-radius:6px}
+    button,a {display:inline-block;margin:16px 12px 0 0} button {padding:12px 16px;font:inherit;background:#111827;color:white;border:0;border-radius:6px;cursor:pointer}
+    button:disabled {opacity:.5} [role=status] {white-space:pre-wrap;margin-top:18px} [hidden] {display:none}
+  </style>
+</head>
+<body><main>
+  <h1>Edit chart text</h1>
+  <p>Correct this chart using the chapter's information. Saving redraws the charts and continues the book's layout and quality checks. Your manuscript and photographs are kept. This correction makes no paid provider calls.</p>
+  <form id="editor">
+    <label for="heading">Chart heading</label>
+    <input id="heading" maxlength="180" required value="{{ aid.title or '' }}">
+    <label for="items">Chart items</label>
+    <p id="itemsHelp">Enter 2–8 items, one per line. Keep each item under 220 characters.</p>
+    <textarea id="items" rows="14" required aria-describedby="itemsHelp">{{ (aid.get('items') or [])|join('\n') }}</textarea>
+    <button id="save" type="submit">Save and redraw chart</button>
+  </form>
+  <button id="retry" type="button" hidden>Retry redraw</button>
+  <a href="/ebook-workspace/{{ project_id }}/release-review">Back to review</a>
+  <p role="status" id="status" aria-live="polite"></p>
+</main>
+<script>
+const PID={{ project_id|tojson }}, VID={{ visual_id|tojson }};
+const status=document.getElementById('status'), save=document.getElementById('save'), retry=document.getElementById('retry');
+let busy=false, saved=false;
+async function action(payload) {
+  const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),90000);
+  try {
+    const response=await fetch(`/ebook-workspace/${PID}/visuals`,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal});
+    let result;try {result=await response.json();}catch(e){throw new Error('The server did not return a result. Reopen the review to check the saved state.');}
+    if(!response.ok||result.ok===false) throw new Error(result.error||result.message||'The correction was refused.');
+    return result;
+  } finally {clearTimeout(timer);}
+}
+async function redraw() {
+  status.textContent='Chart words saved. Preparing the revised layout…';
+  await action({action:'improve-print'});
+  location.href=`/?view=ebook-build&project_id=${PID}`;
+}
+async function submit(event) {
+  if(event) event.preventDefault();if(busy)return;
+  busy=true;save.disabled=true;retry.disabled=true;retry.hidden=true;
+  try {
+    if(!saved) {
+      const items=document.getElementById('items').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      if(items.length<2||items.length>8||items.some(s=>s.length>220)) throw new Error('Enter 2–8 items, each under 220 characters.');
+      status.textContent='Saving chart words…';
+      await action({action:'edit-chart',visual_id:VID,title:document.getElementById('heading').value.trim(),items});
+      saved=true;document.getElementById('heading').disabled=true;document.getElementById('items').disabled=true;
+    }
+    await redraw();
+  } catch(error) {
+    status.textContent=(saved?'Chart words are saved. Redraw is not confirmed. ':'Saving was not confirmed. ')+
+      (error.name==='AbortError'?'The request timed out. Reopen the review to check its state.':error.message);
+    // A saved correction is never submitted twice when retrying the redraw.
+    retry.hidden=!saved;save.disabled=saved;
+  } finally {busy=false;if(!saved)save.disabled=false;retry.disabled=false;}
+}
+document.getElementById('editor').addEventListener('submit',submit);
+retry.addEventListener('click',()=>submit());
+</script></body></html>

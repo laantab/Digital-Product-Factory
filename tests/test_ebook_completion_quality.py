@@ -80,6 +80,22 @@ def test_reviewer_failure_cannot_leave_an_old_pass_or_mark_a_book_ready(export_c
     assert rendered and all(not Path(p).exists() for p in rendered)
 
 
+def test_final_review_identifies_the_engine_version_and_actual_files(export_candidate):
+    from services.ebook_completion_quality import review_exported_ebook
+    from services.factory_version import get_version
+
+    data, package = export_candidate
+    with patch("services.editor_in_chief_ebook.review_ebook", return_value=ReviewReport(
+            verdict=VERDICT_PASS, overall=10, checks_run=["rendered_page_analysis"])):
+        report = review_exported_ebook(data, package_dir=str(package))
+    assert report["review_engine"] == "editor_in_chief_ebook"
+    assert report["review_contract_version"] == "ebook-final-v1"
+    assert report["factory_version"] == get_version()
+    assert report["reviewed_at"]
+    assert report["pdf_sha256"] == hashlib.sha256((package / "ebook.pdf").read_bytes()).hexdigest()
+    assert report["zip_sha256"] == hashlib.sha256((package / "package.zip").read_bytes()).hexdigest()
+
+
 def test_missing_pdf_cannot_be_editorially_ready(export_candidate):
     data, package = export_candidate
     (package / "ebook.pdf").unlink()

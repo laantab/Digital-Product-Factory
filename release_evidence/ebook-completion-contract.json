@@ -1,0 +1,88 @@
+{
+  "recorded_at_utc": "2026-10-27T06:50:39.348411+00:00",
+  "status": "candidate_verified_not_released",
+  "base_commit": "30fd93cc74504e88fab53c730eb870829e6ff287",
+  "verified_runtime_commit": "39dc0b5f72b90bfac8772cd96f5056fd161a1730",
+  "verified_runtime_tree": "d287e3be91e4ffc3117fbb019132209b34282061",
+  "version": "1.9.63",
+  "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/102",
+  "validation": {
+    "baseline_execution_passed": 84,
+    "baseline_stability_passed": 820,
+    "baseline_protected_ebook_passed": 442,
+    "post_focused_passed": 142,
+    "post_stability_passed": 820,
+    "post_protected_ebook_passed": 448,
+    "new_regressions": 6,
+    "reproduced_failures_before_fix": 3,
+    "paid_provider_calls": 0,
+    "production_writes": 0,
+    "full_release_gate": "not_run",
+    "live_download_acceptance": "not_run",
+    "post_relock_checks_passed": 40
+  },
+  "initial_environment_issue": "Missing test Chromium caused the first protected baseline attempt to error; that run was stopped. Browser runtime restored; complete baseline rerun passed all 442 cases. No assertions weakened.",
+  "implemented": [
+    "Recoverable queued worker interruptions and deadlines activate existing bounded workflow retry.",
+    "New zero-provider final export review records engine, contract and Factory version with current file hashes."
+  ],
+  "remaining": [
+    "Durable dispatch reconciliation and timed job/stage lease recovery without attempt churn.",
+    "Acknowledge correction intents only after verified save, with idempotency and uncertain paid-outcome reconciliation.",
+    "Up-front capability/budget/component validation and bounded finding-to-repair controller.",
+    "Atomic publication of a verified revision-specific PDF/ZIP pair and unified completion evidence.",
+    "Full release gate, deployment verification, saved-book recovery and fresh-book live acceptance."
+  ],
+  "log_sha256": {
+    "baseline-fast.log": "531a6e2c6cd3f7cb134d26ba71ad2add74323e077f1ef7d18cb7fcf83982e4ad",
+    "baseline-execution.log": "85aad4a69b6cf702232ccc80e1f9b15edfca23f8ae1b6018516d7ead5d8c5b2e",
+    "baseline-protected-retry.log": "7918c2e39f1ee6dfa8c6cdb669348d343c52ac628f8d8d8b8e167008bc75eda1",
+    "retry-before.log": "6b2aecbfc5e11e5f5ca9f48592cd9fb521630d0b4aae312c3fb5e6944565c6fd",
+    "review-version-before.log": "3e659773358fd84d4ffbfe3cf8157a8d7cf76b9d033df9548740231c5db72b47",
+    "continuation-after.log": "fb6d85b55060196d96bcaa076e349e8b8be3b1e59455a11687cde3ea1636f949",
+    "protected-after.log": "ad4e1bd7accd4a10b88165975feae414d0b081acd647e2677086c9337ea57124",
+    "fast-after.log": "a851dff711ff40d95121da129ffff9b44d4d36da704fc67f7ef1d2c7c862b6ac"
+  },
+  "takeover_checkpoint": {
+    "recorded_at_utc": "2026-10-27T16:14:59.842846+00:00",
+    "production_commit": "30fd93cc74504e88fab53c730eb870829e6ff287",
+    "actual_production_downloads": {
+      "pdf_bytes": 10652676,
+      "pdf_pages": 56,
+      "pdf_sha256": "089dcdcb8f58b0bf052daef890f8aad8bfdcf986bc990cbec0b329fffc619d2b",
+      "zip_bytes": 25499141,
+      "zip_sha256": "17411f3b05d30e0abc247ef47f760fe88fb4d237896fa8efda0b921cff04e9f3",
+      "zip_crc_passed": true,
+      "embedded_pdf_equals_separate_download": true
+    },
+    "quality_approved": false,
+    "editorial_blocker": "Saved maintenance chart mixes nightly tasks and seasonal guidance; review also recommends two photo changes. Do not acknowledge these as repaired.",
+    "new_candidate_change": "Expose saved chart words through the existing owner-scoped review endpoint; use existing edit-chart then improve-print actions. No manuscript or provider generator changes.",
+    "chart_ui_before": "New chart page regression failed with HTTP 404.",
+    "chart_ui_after": "11 chart backend/browser cases passed; subsequent ownership/chart run 19 passed, 31 deselected.",
+    "shared_route_baseline": "53 invite, persistence and account cases passed after installing test Chromium.",
+    "release_gate": "pending for expanded candidate",
+    "production_changes": 0,
+    "new_paid_provider_calls": 0
+  },
+  "home_scene_checkpoint": {
+    "recorded_at_utc": "2026-10-27T16:30:39.517594+00:00",
+    "production_actions": "Two authorized free photo replacement requests; manuscript bytes preserved; staged images not approved; previous verified PDF/ZIP unchanged.",
+    "observed_defect": "Abstract title words became required visual objects. First free candidate was a model house; second was a paper box and failed the visual gate.",
+    "source_fix": "Concrete room scenes for introductory home organization and clear-counter kitchens; retire stale brief; prioritize concrete free searches. Other scene families retain their routing.",
+    "regressions_before": "All four initial new cases failed before implementation.",
+    "focused_after": "163 passed across photo matching, Pexels routing, chapter searches, editorial standard and source authority. Additional scope-boundary case added; final focused rerun pending.",
+    "release_gate": "Earlier 79f8380 full run deliberately interrupted at 27% when the live photo defect was found; no completed verdict. Restart required on final expanded source.",
+    "new_paid_provider_calls": 0,
+    "book_quality_approved": false
+  },
+  "pagination_checkpoint": {
+    "recorded_at_utc": "2026-10-27T16:44:23.885582+00:00",
+    "finding": "Rendered production PDF has orphaned section headings. Three page-boundary regression fixtures failed before adding the renderer-supported keep-with-next instruction.",
+    "validation": "Focused print, template and designed-export tests in progress. Full release must restart on final source.",
+    "source_vs_render_hash_investigation": "The six themed chart PNGs differ from the approved-source hashes by design, as documented in existing code and tests. All six actual chart images were compared pixel-for-pixel across production PDF, HTML and ZIP and match. The three photograph PNGs match source hashes byte-for-byte. No artifact corruption inferred.",
+    "durable_remote_task": "No connected Codex environments are registered; no remote task created. Source and checkpoints persist on PR102.",
+    "book_quality_approved": false,
+    "new_paid_provider_calls": 0
+  }
+}
