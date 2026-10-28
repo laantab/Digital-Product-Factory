@@ -3579,7 +3579,6 @@ def mark_photo_full_size_viewed(data: dict, visual_id: str) -> dict:
 def accept_photo_aid(data: dict, visual_id: str) -> dict:
     """User explicitly accepts the current photograph after seeing it. Does not approve Visuals."""
     _assert_mutable(data, "accept photograph")
-    localize_visual_plan(data)
     aid = _find_aid(data, visual_id)
     if aid is None or not is_photo_aid(aid):
         raise ValueError("Photograph not found.")
