@@ -1,3 +1,17 @@
+## 1.9.64 — Save chapter photograph choices after full-size review
+
+### What changed
+The ebook Visuals screen links each photograph to a full-size review page. Use this photograph saves through the existing acceptance action and confirms the saved match status before reporting success. Full-size images load separately rather than being embedded in the workspace response.
+
+### What was fixed
+Keep current visual only displayed a message and did not save a choice. Review and acceptance now recover verified image files from storage before evaluating their local paths, so a website disk path cannot falsely block a photograph that exists on the builder.
+
+### Do the steps change?
+Open Edit a Visual, review the full-size photograph, save the choice, and return to Visuals to continue the saved book. Hard photo rejections, project ownership, manuscript, cover and paid-provider restrictions remain enforced.
+
+### Release gate
+Combined release verification covered all 3377 collected tests with no unresolved failures, errors or skips: 2,260 passed in the first segment; the version check passed after correcting the checkout pointer; 1144 remaining checks passed. This is combined run evidence, not an uninterrupted green run. Fifteen focused photo-review checks and both GitHub workflows passed. Live saved-book PDF and ZIP verification is required before claiming the book is finished.
+
 ## 1.9.63 — Resume interrupted ebook workers and expose chart corrections (candidate)
 
 ### What changed

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Review chapter photograph</title>
+<style>body{font:17px system-ui,sans-serif;color:#111827;background:#f5f5f4;margin:24px}main{max-width:1200px;margin:auto}img{display:block;width:100%;height:auto;background:white}button,a{display:inline-block;margin:16px 12px 0 0;padding:12px;font:inherit}button{background:#111827;color:white;border:0;border-radius:6px}button:disabled{opacity:.5}[role=status]{white-space:pre-wrap}</style></head>
+<body><main><h1>Chapter {{ aid.chapter_index }}: {{ aid.chapter }}</h1>
+<p>Check that this photograph illustrates the chapter before saving your choice.</p>
+<img id="photo" src="/ebook-workspace/{{ project_id }}/visual-photo/{{ visual_id|urlencode }}" alt="{{ aid.alt or aid.caption or aid.title }}">
+<p>{{ aid.attribution or '' }}</p>
+<button type="button" id="accept" disabled>Use this photograph</button>
+<a href="/?view=ebook-workspace&amp;project_id={{ project_id }}&amp;stage=visuals">Back to Visuals</a>
+<p id="status" role="status" aria-live="polite">Loading full-size photograph…</p>
+</main><script>
+const PID={{ project_id|tojson }}, VID={{ visual_id|tojson }};
+const photo=document.getElementById('photo'),accept=document.getElementById('accept'),status=document.getElementById('status');
+function loaded(){if(photo.naturalWidth>0){accept.disabled=false;status.textContent='Review the photograph, then save your choice.';}}
+photo.addEventListener('load',loaded);photo.addEventListener('error',()=>{status.textContent='Photograph could not load. Return to Visuals to replace it.';});loaded();
+accept.addEventListener('click',async()=>{
+  accept.disabled=true;status.textContent='Saving photograph choice…';
+  try{
+    const response=await fetch(`/ebook-workspace/${PID}/visuals`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'accept-photo',visual_id:VID})});
+    const result=await response.json();
+    if(!response.ok||result.ok===false)throw new Error(result.error||result.message||'The photograph could not be accepted.');
+    const assets=result.workspace?.design?.visual_review?.assets||[];
+    const saved=assets.find(a=>String(a.visual_id)===VID);
+    if(!saved?.user_accepted||saved.match_status!=='pass')throw new Error(result.message||'The photograph did not pass review. Return to Visuals to replace it.');
+    status.textContent='Photograph choice saved. Return to Visuals to continue the book.';
+  }catch(error){status.textContent='Saving was not confirmed. '+error.message;accept.disabled=false;}
+});
+</script></body></html>
