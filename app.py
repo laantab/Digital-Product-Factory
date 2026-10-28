@@ -1787,6 +1787,33 @@ def ebook_workspace_cover_image_route(project_id: int):
         return _error(str(exc), 500)
 
 
+@app.get("/ebook-workspace/<int:project_id>/review-photo/<visual_id>")
+@app.get("/ebook-workspace/<int:project_id>/visual-photo/<visual_id>")
+def ebook_workspace_visual_photo_route(project_id: int, visual_id: str):
+    """Owner-scoped, lazy photo review; never generates an image."""
+    from services.ebook_visual_pipeline import is_photo_aid, local_visual_path, required_aids, _visual_file_matches
+    from services.ebook_project_workspace import assert_no_paid_side_effects_on_read
+
+    assert_no_paid_side_effects_on_read()
+    project, err = _ebook_workspace_project_or_404(project_id)
+    if err:
+        return err
+    data = project.get("data") or {}
+    aid = next((a for a in required_aids(data.get("visual_plan") or {})
+                if str(a.get("visual_id") or "") == visual_id), None)
+    if aid is None or not is_photo_aid(aid):
+        return _error("That photograph is not in this book.", 404)
+    path = local_visual_path(aid, project_id=project_id)
+    if not path or not _visual_file_matches(path, aid):
+        return _error("That photograph is unavailable. Return to Visuals to replace it.", 404)
+    if "/visual-photo/" in request.path:
+        response = send_file(path, mimetype="image/png")
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    return render_template("ebook_photo_review.html", project_id=project_id,
+                           visual_id=visual_id, aid=aid)
+
+
 @app.get("/ebook-workspace/<int:project_id>/cover-photo")
 def ebook_workspace_cover_photo_route(project_id: int):
     """Read-only registered cover photograph. Never generates or downloads."""
