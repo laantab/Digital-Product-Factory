@@ -720,14 +720,34 @@ def _prose_sentences(body: str) -> list[str]:
     return sentences
 
 
+def instruction_requires_context(text: str) -> bool:
+    """An extracted instruction must name its object and finish its list.
+
+    Share this check with final review so saved automatic charts also trigger
+    the existing redraw recovery. Demonstratives followed by a named object
+    ("Check these cabinet hinges") are complete instructions.
+    """
+    text = str(text or "").strip()
+    if text.endswith((":", "…", "...")) or re.search(r":\s*[-*+]\s+", text):
+        return True
+    return bool(re.match(
+        r"^\w+\s+(?:(?:it|them)\b|(?:this|these|those)(?:[.,;:!?]?$|\s+"
+        r"(?:in|on|at|near|into|under|over|next|beside|behind|above|below|"
+        r"before|after|together|away|back|out|here|there|as|for|with|until)\b))",
+        text, re.I,
+    ))
+
+
 def _practice_sequence_items(body: str) -> list[str]:
     """Steps the chapter actually tells the reader to perform, verbatim."""
     items: list[str] = []
     for sentence in _prose_sentences(body):
-        if sentence.endswith(("?", ":")):
-            continue
-        if re.match(r"^\w+\s+(?:it|them|this|these|those)\b", sentence, re.I):
+        if sentence.endswith("?") or instruction_requires_context(sentence):
             # A step shown on its own needs to name what the reader acts on.
+            continue
+        # Prose can define a position or routine in a preceding sentence.
+        # Retain its original conservative reference guard when extracting.
+        if re.match(r"^\w+\s+(?:it|them|this|these|those)\b", sentence, re.I):
             continue
         first = re.sub(r"[^a-z]", "", sentence.split(" ")[0].lower())
         if first in _IMPERATIVE_OPENERS and 18 <= len(sentence) <= 150:

@@ -335,8 +335,8 @@
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
       "status": "LOCKED",
-      "last_known_good_commit": "dc693a0859374c679bbb489e3b323f3a3b8b757b",
-      "factory_version": "1.9.64",
+      "last_known_good_commit": "1a54da9d1c95f92616ab60043c86bb99648b8afc",
+      "factory_version": "1.9.65",
       "protected_test_files": [
         "tests/test_ebook_creation_modes.py",
         "tests/test_guided_cover_choice.py",
@@ -380,15 +380,16 @@
         "services/ebook_factory_pipeline.py",
         "services/ebook_design_workspace.py",
         "services/ebook_workspace_actions.py",
-        "services/ebook_design_system.py"
+        "services/ebook_design_system.py",
+        "services/ebook_release_review.py"
       ],
       "fast_gate": false,
       "full_gate": true,
       "unlocked_by": null,
       "unlocked_reason": null,
-      "relocked_by": "Codex, owner-authorized ebook photo review repair",
-      "relocked_after_tests": "Combined release verification covered all 3377 collected tests with no unresolved failures, errors or skips: 2,260 passed in the first segment; the version check passed after correcting the checkout pointer; 1144 remaining checks passed. This is combined run evidence, not an uninterrupted green run. Fifteen focused photo review checks and both GitHub workflows passed. Live project 23 export still requires verification.",
-      "notes": "Scoped worker continuation and final-export review provenance candidate. All existing ebook protected cases retained. Durable dispatch, correction acknowledgement, lease reconciliation, targeted repair and live final-download acceptance remain required; see docs/EBOOK_COMPLETION_SOLUTION.md. Relocked after full protected regression pass on af01409; live revised-book acceptance and complete one-button redesign verification remain outstanding."
+      "relocked_by": "Codex \u2014 scoped chart repair",
+      "relocked_after_tests": "All 611 protected cases across 34 ebook files passed. Final scoped run: 682 passed, one pre-commit version check failure resolved by the committed 56-case metadata rerun. Full release remains blocked; see release_evidence/ebook-chart-context-candidate.json.",
+      "notes": "Scoped worker continuation and final-export review provenance candidate. All existing ebook protected cases retained. Durable dispatch, correction acknowledgement, lease reconciliation, targeted repair and live final-download acceptance remain required; see docs/EBOOK_COMPLETION_SOLUTION.md. Relocked after full protected regression pass on af01409; live revised-book acceptance and complete one-button redesign verification remain outstanding. Chart context repair protected at 1a54da9d1c95f92616ab60043c86bb99648b8afc. This is candidate source protection, not verified live one-button completion; missing original preservation artifacts and a complete full release run still block deployment."
     },
     "customer_account_isolation": {
       "display_name": "Customer account isolation (staged, not activated)",
