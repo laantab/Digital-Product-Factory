@@ -89,6 +89,12 @@ def test_inline_list_introduction_cannot_become_a_new_practice_step():
     assert not any("Try three routines" in item for item in aid["items"])
 
 
+def test_practice_prose_retains_its_original_context_reference_guard():
+    reference = "Hold this position for ten seconds."
+    aid = vp.derive_local_aid_from_prose(1, "Clear Counters", BODY + "\n\n" + reference)
+    assert reference not in aid["items"]
+
+
 def test_named_actions_and_complete_colon_labels_remain_valid():
     aid = {"title": "Kitchen reference", "items": [
         "Put plates on the most reachable shelf.",

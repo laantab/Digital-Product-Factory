@@ -745,6 +745,10 @@ def _practice_sequence_items(body: str) -> list[str]:
         if sentence.endswith("?") or instruction_requires_context(sentence):
             # A step shown on its own needs to name what the reader acts on.
             continue
+        # Prose can define a position or routine in a preceding sentence.
+        # Retain its original conservative reference guard when extracting.
+        if re.match(r"^\w+\s+(?:it|them|this|these|those)\b", sentence, re.I):
+            continue
         first = re.sub(r"[^a-z]", "", sentence.split(" ")[0].lower())
         if first in _IMPERATIVE_OPENERS and 18 <= len(sentence) <= 150:
             # The step renderer wraps complete instructions. Applying the
