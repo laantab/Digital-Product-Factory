@@ -1,0 +1,72 @@
+{
+  "status": "candidate_protected_verified_release_blocked",
+  "version": "1.9.65",
+  "runtime_commit": "1a54da9d1c95f92616ab60043c86bb99648b8afc",
+  "base_commit": "720d46a0d8c4e26f814a221b1729722d4cf358ab",
+  "scope": [
+    "services/ebook_visual_pipeline.py",
+    "services/ebook_release_review.py"
+  ],
+  "pre_change_union": {
+    "passed": 1263,
+    "pytest": "9.2.0",
+    "unittest_subtests_passed": 1097
+  },
+  "original_focused_run": {
+    "passed": 72
+  },
+  "final_practice_regressions": {
+    "passed": 10,
+    "original_failing_cases": 5,
+    "additional_prose_guard_regression_reproduced": true
+  },
+  "final_scoped_run": {
+    "passed": 682,
+    "failed": 1,
+    "failures": [
+      "test_version_management.py::test_the_checker_runs_and_passes_on_the_current_tree"
+    ],
+    "failure_context": "Production changes were not yet committed when the version check executed. No assertion was changed. The committed source passes the metadata rerun.",
+    "protected_files": 34,
+    "protected_cases_passed": 611,
+    "protected_missing_files": []
+  },
+  "committed_metadata_rerun": {
+    "passed": 56,
+    "failed": 0
+  },
+  "prior_candidate_full_release": {
+    "runtime_commit": "04d3f740fa508f50205f922bc75baa5cdd81d3a8",
+    "status": "interrupted_execution_environment",
+    "recorded_passes": 3376,
+    "recorded_failures": [
+      "test_warm_wellness_template.py::RevisionIdentityAndIsolation::test_preserved_project_351_package_is_untouched_if_present",
+      "test_ebook_creation_modes.py::test_browser_one_build_click_enters_finished_product_with_the_right_mode[ai_recommended]"
+    ],
+    "unfinished_case": "test_ebook_real_browser_customer_path.py::EbookRealBrowserCustomerPathTests::test_21_step_container_gardening_customer_path",
+    "final_junit_available": false,
+    "browser_isolated_rerun": {
+      "passed": 1,
+      "seconds": 105.79
+    }
+  },
+  "full_release_pass": false,
+  "live_one_button_completion_verified": false,
+  "paid_provider_calls": 0,
+  "production_writes": 0,
+  "customer_artifacts_modified": false,
+  "blocked_by": [
+    "Exact original Room-by-Room preservation PDF and ZIP absent; saved alternative PDF does not match the required reference.",
+    "No completed passing full acceptance run for final source.",
+    "Live fresh-book and production download verification remain outstanding."
+  ],
+  "source_sha256": {
+    "services/ebook_visual_pipeline.py": "0d053c67ba73e4427981ae639f975004f15dd22edb7edef8a1bc7a0007169612",
+    "services/ebook_release_review.py": "a069bc6cc9d15e5606e99a7dc91eb78c8e940dbd4fda30b34a2af7dab991f079"
+  },
+  "case_identity_sha256": "63252337120093ee91c1d9915e68b889fc2768d421828a6e67e378061ca50807",
+  "final_lock_and_metadata_checks": {
+    "passed": 69,
+    "failed": 0
+  }
+}

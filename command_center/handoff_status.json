@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-21T00:42:52.545627+00:00",
-  "current_task": "v1.9.53 ebook quality source verified; merge PR75 and verify website and builder deployments.",
-  "stopped_at": "All 3260 acceptance checks passed; corrected local customer PDF and ZIP passed review. Deployment still requires independent verification.",
-  "next_step": "Merge PR75 after metadata checks, verify exact merge commit on website and VERSION 1.9.53 on builder. Preserve production project11 and completed project20; corrected customer files are a separate copy.",
+  "updated_at": "2026-10-31T01:23:09.657108+00:00",
+  "current_task": "Candidate v1.9.65 chart-context repair protected in draft PR104; release blocked.",
+  "stopped_at": "All 611 protected ebook cases passed; 56 committed metadata checks passed. Interrupted broader run is not a full pass. Exact original preservation PDF and ZIP remain absent.",
+  "next_step": "Obtain the exact original Room-by-Room preservation PDF and ZIP, verify their existing expected hashes without substituting a newer export, rerun the unchanged full release gate, then verify deployment and live downloads.",
   "next_claude": "code",
   "open_issues": [
     {
@@ -394,5 +394,19 @@
     "reference_authorized": true,
     "evidence": "release_evidence/v1.9.52-full-release.json",
     "deployment_status": "Verify PR74 and both Render resources; no customer build has been resumed by this verification."
+  },
+  "ebook_chart_context_repair": {
+    "candidate_version": "1.9.65",
+    "pull_request": "https://github.com/laantab/Digital-Product-Factory/pull/104",
+    "runtime_commit": "1a54da9d1c95f92616ab60043c86bb99648b8afc",
+    "status": "protected_candidate_release_blocked",
+    "focused_passed": 72,
+    "version_checks_passed": 31,
+    "paid_calls": 0,
+    "production_changes": false,
+    "full_acceptance": "Not passed: original preservation pair missing; prior broad run interrupted.",
+    "practice_checks_passed": 10,
+    "protected_cases_passed": 611,
+    "protected_files": 34
   }
 }
