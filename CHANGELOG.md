@@ -1,3 +1,9 @@
+## 1.9.65 — Reject incomplete chart instructions (candidate)
+
+Final ebook review now rejects unresolved instruction references such as “Put these in…” and unfinished list introductions. The same check prevents new practice charts from extracting those fragments. Saved automatic practice charts can use the existing free redraw recovery from approved chapter text, retaining their previous wording in history. Owner edits remain intact; a chart without a safe source replacement remains blocked.
+
+Five new failing regressions reproduced the gaps before correction. Full release and live acceptance are pending; this entry does not claim the one-button generator is complete. No paid generation or customer-data changes.
+
 ## 1.9.64 — Save chapter photograph choices after full-size review
 
 ### What changed

@@ -277,6 +277,8 @@ def _content_words(text: str) -> set[str]:
 
 def chart_wording_findings(aid: dict, *, page: int | None, chapter: str) -> list[Finding]:
     """Deterministic chart-text checks: mixed formats, fragments, repetition."""
+    from services.ebook_visual_pipeline import instruction_requires_context
+
     items = [_plain(x) for x in (aid.get("items") or []) if _plain(x)]
     title = _plain(aid.get("title") or "chart")
     group = f"Rewrite the chart text in {chapter or 'this chapter'}"
@@ -293,13 +295,14 @@ def chart_wording_findings(aid: dict, *, page: int | None, chapter: str) -> list
             "A chart presented as one sequence mixes two formats, so the reader cannot tell what to do.",
             "Rewrite every item in one format (for example, each factor followed by its question), "
             "one item per idea, using the chapter's own wording.", group))
-    frags = [i for i in items if i.lower().startswith(_FRAGMENT_OPENERS)]
+    frags = [i for i in items if i.lower().startswith(_FRAGMENT_OPENERS)
+             or instruction_requires_context(i)]
     if frags:
         out.append(Finding(
             "CHART_SENTENCE_FRAGMENTS", HARD, page, chapter,
             f'"{title}": ' + "; ".join(f'"{f[:60]}"' for f in frags[:3]),
-            "These items begin with a word that points back to text the chart does not show, "
-            "so out of the chapter they are fragments, not instructions.",
+            "These items rely on missing context or introduce a list the chart does not show, "
+            "so they do not stand alone as instructions.",
             "Replace each with a complete instruction that stands on its own, taken from the chapter.",
             group))
     seen: list[tuple[str, set[str]]] = []

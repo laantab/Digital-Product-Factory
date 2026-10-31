@@ -334,7 +334,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "dc693a0859374c679bbb489e3b323f3a3b8b757b",
       "factory_version": "1.9.64",
       "protected_test_files": [
@@ -384,10 +384,10 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "unlocked_by": null,
-      "unlocked_reason": null,
-      "relocked_by": "Codex, owner-authorized ebook photo review repair",
-      "relocked_after_tests": "Combined release verification covered all 3377 collected tests with no unresolved failures, errors or skips: 2,260 passed in the first segment; the version check passed after correcting the checkout pointer; 1144 remaining checks passed. This is combined run evidence, not an uninterrupted green run. Fifteen focused photo review checks and both GitHub workflows passed. Live project 23 export still requires verification.",
+      "unlocked_by": "Codex \u2014 owner-authorized ebook repair",
+      "unlocked_reason": "Reject context-dependent chart instructions and repair saved automatic charts without replacing owner edits.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "Scoped worker continuation and final-export review provenance candidate. All existing ebook protected cases retained. Durable dispatch, correction acknowledgement, lease reconciliation, targeted repair and live final-download acceptance remain required; see docs/EBOOK_COMPLETION_SOLUTION.md. Relocked after full protected regression pass on af01409; live revised-book acceptance and complete one-button redesign verification remain outstanding."
     },
     "customer_account_isolation": {
