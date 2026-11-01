@@ -1,8 +1,34 @@
 """Bound concurrent list reads; never alter stored products or export files."""
 from functools import wraps
 from threading import RLock
+import gc
+import sys
 
 _lock = RLock()
+
+
+def _release_temporary_memory():
+    """Release dead artifact objects and unused native heap pages.
+
+    Serializing expensive reads bounds concurrent allocations but leaves
+    freed image/PDF/JSON buffers in libc's arenas between requests. On the
+    512 MiB website that retained heap can make the next read kill the
+    process. Trim only free pages; live products and their checks stay intact.
+    Other allocators/platforms keep the portable garbage collection step.
+    """
+    gc.collect()
+    if sys.platform.startswith("linux"):
+        try:
+            import ctypes
+
+            trim = ctypes.CDLL(None).malloc_trim
+            trim.argtypes = [ctypes.c_size_t]
+            trim.restype = ctypes.c_int
+            trim(0)
+        except (AttributeError, OSError):
+            # Memory reclamation is optional on non-glibc Linux systems.
+            # It must never hide the listing's actual result or exception.
+            pass
 
 
 def serialized_listing(function):
@@ -11,7 +37,11 @@ def serialized_listing(function):
         # Production has one threaded web worker. Avoid several simultaneous
         # full-artifact validations consuming its 512 MiB memory allowance.
         with _lock:
-            return function(*args, **kwargs)
+            _release_temporary_memory()
+            try:
+                return function(*args, **kwargs)
+            finally:
+                _release_temporary_memory()
     return guarded
 
 

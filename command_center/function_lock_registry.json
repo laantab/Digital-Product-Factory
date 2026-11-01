@@ -289,7 +289,8 @@
         "tests/test_artifact_state_revision_primitives.py",
         "tests/test_saved_products_bounded_loading.py",
         "tests/test_saved_product_open_recovery.py",
-        "tests/test_ebook_project_response_memory.py"
+        "tests/test_ebook_project_response_memory.py",
+        "tests/test_saved_listing_memory_reclaim.py"
       ],
       "shared_code_dependencies": [
         "database.py",

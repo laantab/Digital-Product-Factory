@@ -1,3 +1,17 @@
+## 1.9.66 — Release temporary memory after saved-product listings
+
+### What changed
+Saved Projects and in-progress ebook listings collect temporary objects and return unused native heap pages before and after their existing serialized reads. Platforms without glibc retain portable cleanup.
+
+### What was fixed
+Serializing list requests limited concurrency but did not reclaim retained image/PDF/JSON heap pages between requests. Production recorded three 512 MiB out-of-memory kills while the owner was loading Saved Projects. A native-buffer stress regression retained about 64 MB before this repair.
+
+### Do the steps change?
+No. Use Saved Projects normally. Product records, visibility rules, ownership, file verification, quality gates and downloads are unchanged. This cleanup is not a certification of the full one-button generator.
+
+### Release gate
+Existing 54 Saved Projects protections passed before the change. Two new memory regressions failed against the original implementation. Final validation and deployment evidence are recorded in the release handoff.
+
 ## 1.9.65 — Reject incomplete chart instructions (candidate)
 
 ### What changed
