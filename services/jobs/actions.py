@@ -176,14 +176,16 @@ def record_action(project_id: int, action: dict) -> bool:
 
 
 def _resume_failed_build(project_id: int) -> None:
-    """Explicit Continue must reopen the stage, not only the job counter.
+    """Explicit Continue must reopen stopped work, not only the job counter.
 
     A live worker owns its state. Ordinary polling and healthy stages never
     call resume_build, which would reset their stage claim and retry keys.
+    Old saved books can carry a completed hold or a final stage failure
+    without a matching top-level failed flag; both need the same resume.
     """
     from datetime import datetime, timezone
     import database
-    from services.ebook_build_orchestrator import resume_build
+    from services.ebook_build_orchestrator import resume_build, held_after, next_incomplete_stage, FAILED_FINAL
     from services.jobs import store
 
     store.init_jobs_table()
@@ -193,8 +195,11 @@ def _resume_failed_build(project_id: int) -> None:
             > datetime.now(timezone.utc).isoformat()):
         return
     project = database.get_project(project_id)
-    state = ((project or {}).get("data") or {}).get("ebook_build") or {}
-    if state.get("failed"):
+    data = (project or {}).get("data") or {}
+    state = data.get("ebook_build") or {}
+    next_stage = next_incomplete_stage(data)
+    record = (state.get("stages") or {}).get(next_stage) or {}
+    if state.get("failed") or held_after(data, state) or record.get("status") == FAILED_FINAL:
         resume_build(project_id)
 
 

@@ -1,3 +1,17 @@
+## 1.9.67 — Continue saved ebooks and verify both final downloads
+
+### What changed
+Continue releases a completed step's review hold and resumes the next incomplete stage. A held book shows Paused immediately, including after a recent resume. Opening a saved book remains read-only. Explicit Continue also recovers a failed stage whose old top-level failure flag was missing.
+
+### What was fixed
+A book with approved visuals remained at 70% because its old step-by-step hold never cleared. A separate transient storage rate limit prevented the new ZIP from replacing its preserved predecessor, while the build still reported 100%. Final-file publication now retries with bounded backoff and refuses completion until both required downloads are saved.
+
+### Do the steps change?
+Use Continue on the existing book. Completed chapters and approvals remain saved. Picture/cover choices, paid authorization, previous-export preservation, checksum validation, and final quality checks remain enforced.
+
+### Release gate
+Six new failing regressions reproduced recovery and publication gaps; an additional boundary test preserves an unfinished step's hold. Baseline, final release and production verification results are recorded in the release handoff.
+
 ## 1.9.66 — Release temporary memory after saved-product listings
 
 ### What changed

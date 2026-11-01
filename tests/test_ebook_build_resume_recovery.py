@@ -393,3 +393,37 @@ def test_the_unrelated_saved_projects_resume_list_is_untouched():
     assert "list_unfinished_ebook_workspaces" in (ROOT / "database.py").read_text(encoding="utf-8")
     assert "loadEbookResumeList" in APP_JS
     assert "RESUME_STAGE_LABELS" in APP_JS
+
+
+def test_continue_releases_a_completed_visual_hold_without_rewriting_the_book(monkeypatch):
+    done = {"research", "title", "outline", "manuscript", "visuals", "cover", "design"}
+    data = _project_data(done, {"paused_after": "visuals", "failed": False})
+    data["ebook_workspace"]["accepted_chapters"] = [{"text": "Keep this exact manuscript."}]
+    project = _make("Held at seventy percent", data)
+    before = database.get_project(project["id"])["data"]["ebook_workspace"]
+    calls = []
+    for stage in ALL_STAGES:
+        monkeypatch.setitem(orch.STAGE_RUNNERS, stage, lambda d, p: calls.append(p))
+    status = orch.resume_build(project["id"])
+    after = database.get_project(project["id"])["data"]
+    assert not status["held_after"]
+    assert not after["ebook_build"]["paused_after"]
+    assert after["ebook_workspace"] == before
+    assert calls == []
+
+
+def test_resume_does_not_release_a_step_that_has_not_finished():
+    project = _make("Visual work still pending", _project_data(
+        {"research", "title", "outline", "manuscript"}, {"paused_after": "visuals"}))
+    orch.resume_build(project["id"])
+    assert database.get_project(project["id"])["data"]["ebook_build"]["paused_after"] == "visuals"
+
+
+def test_a_completed_hold_is_paused_even_when_resume_just_updated_the_timestamp():
+    from datetime import datetime, timezone
+    data = _project_data({"research", "title", "outline", "manuscript", "visuals"},
+                         {"paused_after": "visuals", "updated_at": datetime.now(timezone.utc).isoformat()})
+    project = _make("Held progress is not working", data)
+    activity = orch.activity_for(project["id"], data)
+    assert activity["spinning"] is False
+    assert activity["state"] == orch.ACTIVITY_STALLED

@@ -263,3 +263,33 @@ class RuntimeFontProvenanceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_continue_resumes_a_held_book_but_opening_it_alone_does_not():
+    """Execute the shipped Continue handler; never start a provider or browser."""
+    import subprocess
+    function = _function_body(APP_JS, "async function openEbookBuild(projectId, opts)")
+    script = r'''
+const assert = require('assert');
+let _ebookBuildRun = 0, calls = [], held = true;
+const _ebookBuildRemember = () => {};
+const go = () => {};
+const document = {getElementById: () => ({innerHTML: ''})};
+const spinner = () => '';
+const api = async () => ({held_after: held ? 'visuals' : '', paused_after: held ? 'visuals' : '', finished: false, failed: false});
+const renderEbookBuild = () => {};
+const resumeEbookBuild = async id => calls.push(['resume', id]);
+const _ebookBuildLoop = async id => calls.push(['advance', id]);
+''' + function + r'''
+(async () => {
+  await openEbookBuild(16, {continued: true});
+  assert.deepStrictEqual(calls, [['resume',16]]);
+  calls = [];
+  await openEbookBuild(16, {viewOnly: true});
+  assert.deepStrictEqual(calls, []);
+  calls = []; held = false;
+  await openEbookBuild(16, {continued: true});
+  assert.deepStrictEqual(calls, [['advance',16]]);
+})().catch(error => {console.error(error); process.exitCode=1;});
+'''
+    subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
