@@ -21,4 +21,15 @@ Reconstruct an isolated ebook engine with durable per-stage work, bounded recove
 Commit and push each verified milestone to this branch. Confirm the remote commit before describing it as backed up. Do not depend on a temporary checkout or local commit alone. Keep a current status record with exact checks and blockers. Never commit customer files, secrets, generated books, or runtime databases.
 
 ## Current status
-Baseline branch created remotely. Missing replacement source has not been recovered. Reconstructed engine implementation and live completion are pending.
+Durable-job foundation reconstructed. New failure-injection suite: 21 passed
+in 3.62 seconds. Covers restart reuse, request conflicts, tenant isolation,
+prerequisite barriers, concurrent claims, subsecond stale-worker fencing,
+crash retry exhaustion, input/output corruption, invalid-output rejection,
+verified versioned repair memory, code-owned repair allowlists, persistent
+backoff, handler/validator deadlines, process exits and exception redaction.
+
+The new package is not imported by the live app. No providers or production
+systems were called. This adapter is SQLite-only; hosted SQL parity is pending.
+Supplied-text workflow, UI, downloads and fresh-topic generation are not yet
+implemented in this reconstruction. The existing Factory fast baseline is
+running separately; no full-release pass is claimed for this candidate.
