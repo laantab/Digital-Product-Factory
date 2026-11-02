@@ -234,7 +234,7 @@ def test_structured_paragraph_output_preserves_all_model_paragraphs():
 def test_response_shapes_bound_paragraph_growth_and_title_tokens(provider):
     schema=local_text.chapter_schema("A realistic chapter",450)
     paragraphs=schema["properties"]["paragraphs"]
-    assert paragraphs["maxItems"]==8 and paragraphs["items"]["maxLength"]==1100
+    assert paragraphs["maxItems"]==8 and paragraphs["items"]["maxLength"]==3000
     assert local_text.chapter_schema("A longer chapter",1800)["properties"]["paragraphs"]["maxItems"]>=18
     local_text.titles_handler({"spec":topic_spec()},"")
     calls=[body for path,body in provider["calls"] if path=="/api/generate"]
@@ -292,6 +292,8 @@ def test_partial_expansion_checkpoints_survive_restart_before_chapter_completion
 @pytest.mark.parametrize("defect",[
     "When I worked with a volunteer group, we always used a weekly task list.",
     "The next sentence contains unexpected text: This坦白,",
+    "By regularly reflecting on what is working and what isn‘",
+    "This structured approach to",
 ])
 def test_independent_prose_guards_reject_model_approved_defects(monkeypatch,defect):
     chapter=developed_chapter("Choose one clear working area")
@@ -374,3 +376,20 @@ def test_real_worker_editorial_repair_never_combines_model_operations(provider,t
     assert books.units.get("alice",saved["units"]["chapter:0"])["attempts"]==1
     assert books.units.get("alice",saved["units"]["review:0"])["attempts"]==3
     assert books.units.get("alice",saved["units"]["review:0"])["max_attempts"]==5
+
+
+def test_incomplete_editorial_candidate_can_be_copyedited_then_rechecked(monkeypatch):
+    chapter=developed_chapter('Choose one clear working area')
+    broken={**chapter,'text':chapter['text']+'\n\nBy regularly reflecting on what is working and what isn‘'}
+    report={'checks':{key:False for key in local_text.CHECKS},'issues':local_text.generated_issues(broken)}
+    calls=[]
+    def generate(*args,**kwargs):
+        calls.append(args)
+        return chapter
+    monkeypatch.setattr(local_text,'generate',generate)
+    with pytest.raises(Repairable) as result:
+        local_text.review_handler({'spec':topic_spec(),'chapter':broken,'_recovery':{'chapter':broken,'report':report}},'apply_editorial_feedback')
+    assert result.value.code=='EDITORIAL_RECHECK'
+    assert result.value.candidate['chapter']==chapter
+    assert result.value.candidate['awaiting_review'] is True
+    assert len(calls)==1

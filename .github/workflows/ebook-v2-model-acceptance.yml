@@ -79,6 +79,9 @@ jobs:
             ${{ runner.temp }}/studio-acceptance/failure.json
             ${{ runner.temp }}/studio-acceptance/manuscript.md
             ${{ runner.temp }}/studio-acceptance/ebook.pdf
+            ${{ runner.temp }}/studio-acceptance/package.zip
+            ${{ runner.temp }}/studio-acceptance/print-pack.zip
+            ${{ runner.temp }}/studio-acceptance/cover.jpg
             ${{ runner.temp }}/studio-acceptance/ebook.epub
             ${{ runner.temp }}/studio-acceptance/manuscript.docx
             ${{ runner.temp }}/studio-acceptance/page-*.png

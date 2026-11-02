@@ -104,7 +104,7 @@ def chapter_schema(title,minimum=650):
     return {"type":"object","additionalProperties":False,"required":["title","paragraphs"],
         "properties":{"title":{"type":"string","enum":[title]},
             "paragraphs":{"type":"array","minItems":3,"maxItems":max(8,(minimum+99)//100),
-                "items":{"type":"string","minLength":20,"maxLength":1100}}}}
+                "items":{"type":"string","minLength":20,"maxLength":3000}}}}
 
 
 def as_chapter(value):
@@ -173,14 +173,14 @@ def expand(chapter,spec,repair,constraint=""):
     extra=max(180,spec["min_words"]-len(chapter["text"].split())+100)
     schema={"type":"object","additionalProperties":False,"required":["new_paragraphs"],
         "properties":{"new_paragraphs":{"type":"array","minItems":2,"maxItems":4,
-            "items":{"type":"string","minLength":20,"maxLength":1100}}}}
+            "items":{"type":"string","minLength":20,"maxLength":3000}}}}
     covered=[re.split(r"(?<=[.!?])\s+",p.strip())[0][:200] for p in chapter["text"].split("\n\n")][-8:]
     addition=generate("Chapter title: "+json.dumps(chapter["title"])+". Reader outcome: "+spec["outcome"]
         +". The saved chapter already covers these ideas: "+json.dumps(covered)+". "+constraint
         +"\nNow write ONLY new material: a different worked hypothetical scenario or practical exercise, "
         "at least "+str(extra)+" additional words. Do not repeat the covered ideas or return the saved "
         "chapter. The new_paragraphs field must contain ONLY the newly written paragraphs. Do not invent "
-        "statistics, measurements or citations.",schema,repair,max_tokens=2400)
+        "statistics, measurements or citations. Finish every paragraph with a complete sentence.",schema,repair,max_tokens=2400)
     paragraphs=addition.get("new_paragraphs")
     if not isinstance(paragraphs,list) or not all(isinstance(p,str) for p in paragraphs):raise Repairable("INVALID_RESPONSE")
     existing={re.sub(r"\W+"," ",p.lower()).strip() for p in chapter["text"].split("\n\n")}
@@ -237,7 +237,7 @@ def draft_handler(payload,repair):
     else:
         chapter=as_chapter(generate("Draft this useful nonfiction chapter in developed plain paragraphs. "
             "Include a concrete hypothetical example and a practical exercise. No chat markers, internal "
-            "field labels or Markdown. Aim for "+str(spec["min_words"]+150)+" words. Brief: "+json.dumps(brief(spec))
+            "field labels or Markdown. Finish every paragraph with a complete sentence; keep paragraphs concise. Aim for "+str(spec["min_words"]+150)+" words. Brief: "+json.dumps(brief(spec))
             +". Approved plan: "+json.dumps(payload["plan"])+". Write only: "+json.dumps(item),
             chapter_schema(item["title"],spec["min_words"]),repair,max_tokens=min(5000,spec["min_words"]*3+600)))
     result={"chapter":chapter,"source":"local_partial_draft"}
@@ -282,6 +282,13 @@ def generated_issues(chapter):
                  r"<\|(?:im_|end_|start_|eot_)|\bexample_sentence_\d+\s*[\"']?\s*:",value,re.I):
         return ["Internal model markup or JSON field labels were found in the prose. Rewrite as ordinary book content."]
     issues=[]
+    # Token-limited fields can end mid-sentence even when the response envelope
+    # says done. Do not turn that fragment into an approved finished chapter.
+    for paragraph in re.split(r"\n\s*\n",value):
+        ending=paragraph.strip().rstrip("\"'\u2018\u2019\u201c\u201d)]}")
+        if ending and not ending.endswith((".","!","?")):
+            issues.append("A paragraph ends without a completed sentence; finish the thought before approval.")
+            break
     if re.search(r"[\u3400-\u4dbf\u4e00-\u9fff]",value):
         issues.append("Unexpected CJK text in this English manuscript; rewrite the affected sentence in English.")
     if re.search(r"\b(?:when I (?:worked|coached|helped|managed)|in my (?:experience|practice)|my (?:clients|patients))\b",value,re.I):
@@ -297,7 +304,7 @@ def review_handler(payload,repair):
     spec=payload["spec"];previous=payload.get("_recovery",{})
     awaiting=previous.get("awaiting_review") is True
     chapter=previous.get("chapter",payload["chapter"]) if awaiting else payload["chapter"]
-    if generated_issues(chapter):raise Repairable("MODEL_ARTIFACT",{"chapter":chapter,"report":{
+    if generated_issues(chapter) and not (repair and previous.get("report") and not awaiting):raise Repairable("MODEL_ARTIFACT",{"chapter":chapter,"report":{
         "checks":{key:False for key in CHECKS},"issues":generated_issues(chapter)}})
     if repair and previous.get("report") and not awaiting:
         chapter=previous.get("chapter",chapter)

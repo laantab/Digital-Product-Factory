@@ -1,0 +1,61 @@
+{
+  "run_id": 41516165140,
+  "source_commit": "666e35fd747db9c5530f0cea683645f9a68d6e27",
+  "review_result": "REJECTED",
+  "pages_inspected": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26
+  ],
+  "layout_review": "Contact sheets show cover, contents, chapter starts and nonempty pages; no obvious clipping. Text defects prevent acceptance.",
+  "paragraph_limit_findings": [
+    {
+      "chapter": 1,
+      "characters": 1100,
+      "ending": "what is working and what isn\u2018"
+    },
+    {
+      "chapter": 2,
+      "characters": 1099,
+      "ending": "members see their contributions'"
+    },
+    {
+      "chapter": 6,
+      "characters": 1100,
+      "ending": "among the team"
+    },
+    {
+      "chapter": 8,
+      "characters": 1100,
+      "ending": "This structured approach to"
+    }
+  ],
+  "available_file_hashes_match_summary": true,
+  "epub_and_docx_crc_pass": true,
+  "package_zip_not_in_original_artifact": true,
+  "production_changed": false,
+  "paid_calls": 0
+}

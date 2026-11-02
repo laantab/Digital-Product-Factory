@@ -22,7 +22,14 @@
       "status": "success",
       "artifact_id": 13178970874,
       "artifact_name": "studio-local-model-engineering-evidence",
-      "human_review": "pending"
+      "human_review": "REJECTED: unfinished paragraph endings in chapters 1, 2, 6 and 8; three paragraphs hit 1100 characters and one hit 1099.",
+      "bytes_verified": [
+        "ebook.pdf SHA-256 and 26 nonempty pages",
+        "EPUB SHA-256 and ZIP CRC",
+        "Word SHA-256 and ZIP CRC",
+        "Markdown SHA-256"
+      ],
+      "package_note": "Original artifact omitted package.zip, print-pack.zip and cover.jpg. Workflow now retains them for future acceptance; previous package integrity cannot be independently rechecked."
     },
     "full_release": {
       "status": "not_certified",
@@ -32,9 +39,14 @@
   },
   "next_actions": [
     {
-      "id": "review_model_artifacts",
+      "id": "verify_paragraph_repair",
       "status": "pending",
-      "action": "Download run 41516165140 evidence; review manuscript and every rendered page; verify actual output bytes."
+      "action": "Wait for final candidate Studio CI; then request fresh eight-chapter acceptance by updating its request JSON. Inspect repaired manuscript, all pages and actual ZIP. Do not certify old technically green book."
+    },
+    {
+      "id": "review_new_model_artifacts",
+      "status": "pending",
+      "action": "Review the next successful real-model output; keep the old model book rejected."
     },
     {
       "id": "resolve_full_release",
@@ -53,6 +65,11 @@
     }
   ],
   "completion": "not complete",
-  "blocker": "Local execution service unavailable in current session; GitHub operations remain available.",
-  "resume_rule": "Fetch current state and resume first unfinished action without requesting routine approval."
+  "blocker": "Previous local full-release logs were lost. Execution is available again in a fresh workspace; both prior failures must be reproduced. Fresh-model artifact review rejected incomplete paragraphs.",
+  "resume_rule": "Fetch current state and resume first unfinished action without requesting routine approval.",
+  "recovery_progress": {
+    "execution": "restored in fresh workspace",
+    "source_fix": "Raise bounded paragraph field capacity from 1100 to 3000, request complete sentences and reject unfinished paragraphs independently; permit bounded editorial correction before independent recheck.",
+    "tests": "Frozen final writing candidate: 33 passed, 1 browser test deselected, 45.63 seconds; 103 Studio/protection cases collected. GitHub CI required for browser and protection checks."
+  }
 }
