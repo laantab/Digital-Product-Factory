@@ -353,6 +353,8 @@ def test_real_worker_editorial_repair_never_combines_model_operations(provider,t
     provider["reject_first_review"]=True
     books=Books(tmp_path/"studio.sqlite",tmp_path/"objects");books.initialize()
     books.record_worker("fixture-provider",local_text=True)
+    import time
+    clock=[time.time()];books.units.clock=lambda:clock[0]
     book=books.create("alice","single-operation-editorial-001",topic_spec())
     for _ in range(100):
         book=books.get("alice",book["id"]);view=books.status("alice",book["id"])
@@ -363,6 +365,7 @@ def test_real_worker_editorial_repair_never_combines_model_operations(provider,t
             assert book["state"]=="RUNNING"
             before=len([path for path,_ in provider["calls"] if path=="/api/generate"])
             books.advance("alice",book["id"])
+            clock[0]+=1  # Advance persisted retry time without slowing the protocol test.
             after=len([path for path,_ in provider["calls"] if path=="/api/generate"])
             assert after-before<=1
     else:pytest.fail("Bounded editorial correction did not finish")
