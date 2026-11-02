@@ -1,0 +1,69 @@
+name: Book Studio Windows and Linux customer paths
+
+on:
+  pull_request:
+    paths:
+      - 'services/ebook_v2/**'
+      - 'templates/ebook_v2.html'
+      - 'tests/test_ebook_v2*'
+      - 'requirements-ebook-v2.txt'
+      - '.github/workflows/ebook-v2-studio.yml'
+  push:
+    branches:
+      - 'rebuild/ebook-engine-v2-20261102'
+    paths:
+      - '.github/workflows/ebook-v2-studio.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-studio:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.12'
+          - os: windows-latest
+            python: '3.14'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      FACTORY_TEST_MODE: '1'
+      FACTORY_DB_BACKEND: sqlite
+      DATABASE_URL: ''
+      OPENAI_API_KEY: ''
+      ANTHROPIC_API_KEY: ''
+      TAVILY_API_KEY: ''
+      PEXELS_API_KEY: ''
+      UNSPLASH_ACCESS_KEY: ''
+      UNSPLASH_API_KEY: ''
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install only Studio and test dependencies
+        run: python -m pip install -r requirements-ebook-v2.txt pytest==8.4.1 playwright==1.52.0
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Check inline application JavaScript
+        run: |
+          python -c "from pathlib import Path; s=Path('templates/ebook_v2.html').read_text(encoding='utf-8'); Path('studio-ui.js').write_text(s.split('<script>')[1].split('</script>')[0],encoding='utf-8')"
+          node --check studio-ui.js
+      - name: Verify isolated customer paths and protection contracts
+        run: python -m pytest -q tests/test_ebook_v2_recovery.py tests/test_ebook_v2_books.py tests/test_ebook_v2_customer_path.py tests/test_ebook_v2_topics.py tests/test_function_lock_registry_integrity.py tests/test_function_lock_enforcement.py tests/test_version_management.py --junitxml=studio-junit.xml
+      - name: Require all 128 cases with no failures errors or skips
+        run: python -c "import xml.etree.ElementTree as E; r=E.parse('studio-junit.xml').getroot(); s=list(r.iter('testsuite')); assert sum(int(x.get('tests','0')) for x in s)==128; assert not any(int(x.get(k,'0')) for x in s for k in ('failures','errors','skipped'))"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-junit-${{ matrix.os }}-${{ matrix.python }}
+          path: studio-junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
