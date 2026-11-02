@@ -931,9 +931,11 @@ def _publish_export_files(pid: int, exports_root: str, files: dict) -> int:
     serves a verified stored copy when there is no file on its own disk, so
     publishing here is all the website needs. Inline mode does not publish
     (publishing_enabled is off), so local Windows development is unchanged.
-    Never raises; returns how many files were published.
+    Retries temporary publication failures. In workflow mode both required
+    downloads must reach storage before the export stage can complete.
     """
     published = 0
+    missing_required = {"ebook.pdf", "package.zip"}
     try:
         from services.ebook_package import is_allowed_download
         from services.storage.publish import publish_file, publishing_enabled
@@ -946,12 +948,25 @@ def _publish_export_files(pid: int, exports_root: str, files: dict) -> int:
             ext = os.path.splitext(str(name))[1].lower()
             ctype = _EXPORT_CONTENT_TYPES.get(ext, "application/octet-stream")
             kind = "export_pdf" if ext == ".pdf" else ("export_zip" if ext == ".zip" else "export_file")
-            if publish_file(int(pid), exports_root, full, kind=kind, content_type=ctype):
+            saved = False
+            for attempt in range(3):
+                try:
+                    saved = publish_file(int(pid), exports_root, full, kind=kind, content_type=ctype)
+                except Exception:  # storage outages retain the same bounded retry
+                    log.exception("could not publish export %s for project %s", name, pid)
+                if saved:
+                    break
+                if attempt < 2:
+                    time.sleep(attempt + 1)
+            if saved:
                 published += 1
+                missing_required.discard(str(name))
             else:
                 log.error("export %s for project %s was not published", name, pid)
     except Exception:                                  # noqa: BLE001
         log.exception("could not publish the finished files for project %s", pid)
+    if missing_required:
+        raise RuntimeError("The final downloads could not both be saved. Resume to retry the export.")
     return published
 
 
@@ -1335,6 +1350,11 @@ def resume_build(project_id: int) -> dict:
         database.update_project(project_id, None, data)
         return status_payload(data, project_id)
 
+    # Continue releases only a completed step's hold. An unfinished paid
+    # step still stops at its existing review/authorization boundary.
+    if held_after(data, state):
+        clear_pause(data)
+
     rec = _stage_record(state, stage)
     if rec.get("status") != COMPLETE:
         rec["status"] = NOT_STARTED
@@ -1425,6 +1445,10 @@ def activity_for(project_id: int, data: dict, *, retrying: bool = False) -> dict
     if state.get("failed") or state.get("finished"):
         return {"state": ACTIVITY_FAILED, "spinning": False,
                 "label": "Stopped", "idle_seconds": idle_for}
+
+    if held_after(data, state):
+        return {"state": ACTIVITY_STALLED, "spinning": False,
+                "label": "Paused", "idle_seconds": idle_for}
 
     job = None
     try:

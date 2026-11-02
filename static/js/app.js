@@ -7760,6 +7760,10 @@ async function openEbookBuild(projectId, opts) {
   if (runToken !== _ebookBuildRun) return;
   renderEbookBuild({ ...status, view_only: !!(opts && opts.viewOnly) });
   if (opts && opts.viewOnly) return;
+  if (opts && opts.continued && status.held_after) {
+    await resumeEbookBuild(projectId);
+    return;
+  }
   if (!status.finished && !status.failed && !status.awaiting_cover_choice && !status.awaiting_picture_approval && !status.paused_after) {
     await _ebookBuildLoop(projectId, runToken, { continued: !!(opts && opts.continued), status });
   }

@@ -1,0 +1,48 @@
+{
+  "version": "1.9.67",
+  "runtime_commit": "4e1fadc20fc499239e92f4a0d38e9f4db8fb4926",
+  "runtime_tree": "3619d700087738003ca9cc3f57b563d0cf248f6f",
+  "full_release": {
+    "sha256": "ca3d417c43a09e509cdea25a27609e13b6bb56bbf8407397516ed2984832c40d",
+    "totals": {
+      "tests": 3393,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "exact_collection_match": true,
+    "duplicates": 0,
+    "missing": 0,
+    "extra": 0,
+    "seconds": 892.667
+  },
+  "gate_exit_code": 0,
+  "parallelism": {
+    "workers": 4,
+    "distribution": "loadfile",
+    "pytest_xdist": "3.8.0",
+    "all_collections_identical": true
+  },
+  "dependency_fingerprint": "da90abba1b210b4ab83f8d0e1b1ca0059da67f69a4093f34dec12d3f7c4a9c9f",
+  "baseline_fast_passed": 822,
+  "baseline_protected_passed": 803,
+  "focused_final_passed": 95,
+  "ci_runtime_head": {
+    "one-button-memory": "success",
+    "fixture-correction-offline": "success"
+  },
+  "paid_provider_calls": 0,
+  "production_recovery": {
+    "project": 16,
+    "pdf_pages": 60,
+    "pdf_bytes": 10186790,
+    "pdf_sha256": "172dc4d600bc73a94ff669062c808d09245e0bef8d439fbf369d39bd41f80358",
+    "zip_bytes": 27686371,
+    "zip_sha256": "75086fb9cb176a0e3f2d641322833a0c43f0007871d67cbbb82e0e7d5ccbf8c1",
+    "zip_crc": "PASS",
+    "embedded_pdf_equals_standalone": true,
+    "manuscript_preserved": true,
+    "scope": "Saved-book recovery on1.9.66 before this deployment; fresh production topic-to-book run remains unverified."
+  },
+  "deployment": "pending"
+}

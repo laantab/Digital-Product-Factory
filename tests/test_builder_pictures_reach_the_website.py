@@ -241,6 +241,29 @@ class FinishedFilesReachTheWebsiteTests(_StorageCase):
         self.assertEqual(resp.status_code, 200, resp.get_data()[:300])
         self.assertTrue(resp.get_data().startswith(b"%PDF"))
 
+    def test_a_temporary_zip_publication_failure_is_retried_before_finishing(self):
+        from services.ebook_build_orchestrator import _publish_export_files
+        _, files = self._package()
+        calls = []
+        def publish(pid, root, path, **kwargs):
+            calls.append(Path(path).name)
+            return Path(path).name != "package.zip" or calls.count("package.zip") == 3
+        with patch("services.storage.publish.publish_file", side_effect=publish), \
+             patch("services.ebook_build_orchestrator.time.sleep") as wait:
+            self.assertEqual(_publish_export_files(self.pid, self.builder_root, files), 2)
+        self.assertEqual(calls.count("ebook.pdf"), 1)
+        self.assertEqual(calls.count("package.zip"), 3)
+        self.assertEqual([c.args[0] for c in wait.call_args_list], [1, 2])
+
+    def test_a_missing_published_zip_cannot_silently_finish_the_book(self):
+        from services.ebook_build_orchestrator import _publish_export_files
+        _, files = self._package()
+        with patch("services.storage.publish.publish_file", return_value=False), \
+             patch("services.ebook_build_orchestrator.time.sleep"):
+            with self.assertRaises(RuntimeError):
+                _publish_export_files(self.pid, self.builder_root, files)
+        self.assertEqual(self.driver.objects, {})
+
     def test_inline_mode_publishes_nothing(self):
         from services.ebook_build_orchestrator import _publish_export_files
 

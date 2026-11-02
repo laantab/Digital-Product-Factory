@@ -190,6 +190,19 @@ class AdvanceHandsOffTests(unittest.TestCase):
         self.assertEqual(after["ebook_workspace"], before["ebook_workspace"])
         self.assertEqual(len(self.started), 1)
 
+    def test_continue_recovers_an_orphaned_failed_stage_even_without_failed_flag(self):
+        self._exhaust_manuscript()
+        data = database.get_project(self.pid)["data"]
+        data["ebook_build"]["failed"] = False
+        database.update_project(self.pid, None, data)
+        with _workflow_env():
+            response = self.client.post("/ebook/build/%s/advance" % self.pid,
+                                        json={"continue": True})
+        self.assertEqual(response.status_code, 200)
+        stage = database.get_project(self.pid)["data"]["ebook_build"]["stages"]["manuscript"]
+        self.assertEqual(stage["status"], "NOT_STARTED")
+        self.assertEqual(stage["attempts"], 0)
+
     def test_polling_does_not_reset_a_failed_stage(self):
         self._exhaust_manuscript()
         with _workflow_env():
