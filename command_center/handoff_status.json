@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-31T01:23:09.657108+00:00",
-  "current_task": "Candidate v1.9.65 chart-context repair protected in draft PR104; release blocked.",
-  "stopped_at": "All 611 protected ebook cases passed; 56 committed metadata checks passed. Interrupted broader run is not a full pass. Exact original preservation PDF and ZIP remain absent.",
-  "next_step": "Obtain the exact original Room-by-Room preservation PDF and ZIP, verify their existing expected hashes without substituting a newer export, rerun the unchanged full release gate, then verify deployment and live downloads.",
+  "updated_at": "2026-11-02T15:44:56.932711+00:00",
+  "current_task": "Reconstruct isolated ebook engine on rebuild/ebook-engine-v2-20261102; supplied-text milestone passed.",
+  "stopped_at": "38 focused tests and9 metadata checks passed;826 existing fast baseline passed. Real independent worker shutdown/restart and authenticated browser downloads passed. Full replacement remains unfinished.",
+  "next_step": "Verify this tested milestone is on GitHub, then connect local-only fresh-topic writing. Preserve legacy source and data; no production cutover.",
   "next_claude": "code",
   "open_issues": [
     {

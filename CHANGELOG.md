@@ -1,3 +1,19 @@
+## 1.9.68 — Reconstructed Book Studio supplied-text milestone (candidate)
+
+### What changed
+Added a separate local Book Studio that saves supplied manuscripts, checks each
+chapter independently, renders a PDF and matching complete ZIP, requires page
+review, and serves authenticated owner-scoped downloads. A separate worker
+continues after browser closure and reuses saved chapters after shutdown.
+Missing-worker preflight refuses before creating a book attempt. Verified
+repair memory is bounded by code-owned policies and versioned validators.
+
+### Release boundary
+This candidate does not replace the live Factory or certify fresh-topic writing.
+The supplied-text milestone passed38 focused reconstruction cases and9 registry
+checks; the existing Factory baseline passed826. Expanded/full release and
+production acceptance remain pending. No paid calls or production changes.
+
 ## 1.9.67 — Continue saved ebooks and verify both final downloads
 
 ### What changed

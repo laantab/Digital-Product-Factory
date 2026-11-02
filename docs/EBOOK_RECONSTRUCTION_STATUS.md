@@ -21,15 +21,20 @@ Reconstruct an isolated ebook engine with durable per-stage work, bounded recove
 Commit and push each verified milestone to this branch. Confirm the remote commit before describing it as backed up. Do not depend on a temporary checkout or local commit alone. Keep a current status record with exact checks and blockers. Never commit customer files, secrets, generated books, or runtime databases.
 
 ## Current status
-Durable-job foundation reconstructed. New failure-injection suite: 21 passed
-in 3.62 seconds. Covers restart reuse, request conflicts, tenant isolation,
-prerequisite barriers, concurrent claims, subsecond stale-worker fencing,
-crash retry exhaustion, input/output corruption, invalid-output rejection,
-verified versioned repair memory, code-owned repair allowlists, persistent
-backoff, handler/validator deadlines, process exits and exception redaction.
+The isolated supplied-manuscript milestone is implemented. Focused reconstruction
+suite: 38 passed in18.21seconds. Real browser + independent CLI worker acceptance
+stopped the worker after a saved chapter, closed the browser, restarted the
+worker, reopened the saved book and downloaded matching PDF/ZIP files. The first
+chapter remained at one attempt. Actual HTTP downloads passed authentication,
+ownership, signatures, CRC, embedded PDF equality and SHA256 header checks.
+All four pages of a separate supplied-text acceptance PDF were visually reviewed.
 
-The new package is not imported by the live app. No providers or production
-systems were called. This adapter is SQLite-only; hosted SQL parity is pending.
-Supplied-text workflow, UI, downloads and fresh-topic generation are not yet
-implemented in this reconstruction. The existing Factory fast baseline is
-running separately; no full-release pass is claimed for this candidate.
+Existing Factory fast baseline: 826 passed in378.08seconds before new registry
+coverage. This is not the final expanded gate or full release evidence. No paid
+provider calls or production changes. Source is isolated; app.py is unchanged.
+See release_evidence/ebook_v2_supplied_milestone.json and docs/BOOK_STUDIO_LOCAL.md.
+
+Fresh-topic writing, independent editorial checks, photographs, chapter editing,
+retained versions, EPUB/DOCX and KDP preparation remain to reconstruct. Hosted
+SQL/R2, Windows execution and deployment have not been verified. This milestone
+is deliberately not called the completed replacement generator.
