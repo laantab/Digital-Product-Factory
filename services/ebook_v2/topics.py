@@ -41,7 +41,7 @@ def policies():
     return {"titles":Policy("titles-2",text.titles_handler,text.titles_valid,common,timeout=deadline,retry_delay=5),
         "outline":Policy("outline-2",text.outline_handler,text.outline_valid,common,timeout=deadline,retry_delay=5),
         "writing":Policy("writing-6",text.chapter_handler,text.chapter_valid,chapters,timeout=deadline,retry_delay=5),
-        "editorial":Policy("editorial-8",text.review_handler,text.review_valid,reviews,timeout=deadline,retry_delay=5),
+        "editorial":Policy("editorial-9",text.review_handler,text.review_valid,reviews,timeout=deadline,retry_delay=5),
         "draft":Policy("draft-4",text.draft_handler,text.partial_valid,drafts,timeout=deadline,retry_delay=5),
         "expand":Policy("expand-4",text.expansion_handler,text.expansion_valid,drafts,timeout=deadline,retry_delay=5),
         "assemble":Policy("assemble-2",text.assembly_handler,text.chapter_valid,{},timeout=20,retry_delay=0)}
@@ -74,7 +74,9 @@ def advance(books,book):
         if name not in unit_map:
             policy=books.policies[stage].version
             fingerprint=digest({"stage":stage,"policy":policy,"payload":payload,"parents":parents})[:16]
-            unit_map[name]=books.units.enqueue(owner,book["id"]+":"+name+":"+fingerprint,stage,policy,payload,parents,max_attempts=5 if stage=="editorial" else 3)
+            # Nine attempts cover two bounded review/correction/recheck cycles,
+            # including retained short corrections that each need expansion.
+            unit_map[name]=books.units.enqueue(owner,book["id"]+":"+name+":"+fingerprint,stage,policy,payload,parents,max_attempts=9 if stage=="editorial" else 3)
             changed=True
             return None
         row=books.units.get(owner,unit_map[name])

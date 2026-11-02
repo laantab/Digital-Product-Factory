@@ -56,6 +56,22 @@
   "available_file_hashes_match_summary": true,
   "epub_and_docx_crc_pass": true,
   "package_zip_not_in_original_artifact": true,
+  "follow_up_run": {
+    "run_id": 41537196386,
+    "source_commit": "532bee07f90e73b2bec3b2e25d69e168e46e6f89",
+    "result": "FAILED_BEFORE_EXPORT",
+    "artifact_id": 13186053580,
+    "chapters_checked": 2,
+    "chapters_total": 8,
+    "words_saved": 2311,
+    "failed_unit": {
+      "stage": "editorial",
+      "attempts": 5,
+      "error": "SHORT_CHAPTER"
+    },
+    "correction": "Keep the local-only editorial process bounded while allowing two correction, expansion and independent-recheck cycles.",
+    "human_review": "Not possible because the run stopped before export; no manuscript PDF or package ZIP was produced."
+  },
   "production_changed": false,
   "paid_calls": 0
 }
