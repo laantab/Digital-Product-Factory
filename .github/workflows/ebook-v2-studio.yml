@@ -8,11 +8,6 @@ on:
       - 'tests/test_ebook_v2*'
       - 'requirements-ebook-v2.txt'
       - '.github/workflows/ebook-v2-studio.yml'
-  push:
-    branches:
-      - 'rebuild/ebook-engine-v2-20261102'
-    paths:
-      - '.github/workflows/ebook-v2-studio.yml'
   workflow_dispatch:
 
 permissions:
@@ -57,13 +52,51 @@ jobs:
           python -c "from pathlib import Path; s=Path('templates/ebook_v2.html').read_text(encoding='utf-8'); Path('studio-ui.js').write_text(s.split('<script>')[1].split('</script>')[0],encoding='utf-8')"
           node --check studio-ui.js
       - name: Verify isolated customer paths and protection contracts
-        run: python -m pytest -q tests/test_ebook_v2_recovery.py tests/test_ebook_v2_books.py tests/test_ebook_v2_customer_path.py tests/test_ebook_v2_topics.py tests/test_function_lock_registry_integrity.py tests/test_function_lock_enforcement.py tests/test_version_management.py --junitxml=studio-junit.xml
-      - name: Require all 128 cases with no failures errors or skips
-        run: python -c "import xml.etree.ElementTree as E; r=E.parse('studio-junit.xml').getroot(); s=list(r.iter('testsuite')); assert sum(int(x.get('tests','0')) for x in s)==128; assert not any(int(x.get(k,'0')) for x in s for k in ('failures','errors','skipped'))"
+        run: python -m pytest -q tests/test_ebook_v2_recovery.py tests/test_ebook_v2_books.py tests/test_ebook_v2_customer_path.py tests/test_ebook_v2_topics.py tests/test_function_lock_registry_integrity.py tests/test_function_lock_enforcement.py --junitxml=studio-junit.xml
+      - name: Require all 97 Studio and protection cases with no failures errors or skips
+        run: python -c "import xml.etree.ElementTree as E; r=E.parse('studio-junit.xml').getroot(); s=list(r.iter('testsuite')); assert sum(int(x.get('tests','0')) for x in s)==97; assert not any(int(x.get(k,'0')) for x in s for k in ('failures','errors','skipped'))"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: studio-junit-${{ matrix.os }}-${{ matrix.python }}
           path: studio-junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  factory-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FACTORY_TEST_MODE: '1'
+      FACTORY_DB_BACKEND: sqlite
+      DATABASE_URL: ''
+      OPENAI_API_KEY: ''
+      ANTHROPIC_API_KEY: ''
+      TAVILY_API_KEY: ''
+      PEXELS_API_KEY: ''
+      UNSPLASH_ACCESS_KEY: ''
+      UNSPLASH_API_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install full Factory test dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Verify all legacy version contracts
+        run: python -m pytest -q tests/test_version_management.py --junitxml=factory-version-junit.xml
+      - name: Require all 31 version cases with no skips
+        run: python -c "import xml.etree.ElementTree as E; r=E.parse('factory-version-junit.xml').getroot(); s=list(r.iter('testsuite')); assert sum(int(x.get('tests','0')) for x in s)==31; assert not any(int(x.get(k,'0')) for x in s for k in ('failures','errors','skipped'))"
+      - name: Verify the complete protected fast gate
+        run: python scripts/fast_gate.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-version-junit
+          path: factory-version-junit.xml
           if-no-files-found: ignore
           retention-days: 7
