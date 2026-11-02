@@ -107,3 +107,14 @@ against the same approved source.78 focused/registry checks passed47.94sec.
 The local launcher installs python-docx1.2.0 in its own environment. Legacy
 Factory runtime requirements remain unchanged; test setup includes the new
 dependency through requirements-dev.txt. Final whole-Factory release is pending.
+
+## Owner editing and retained editions
+A finished or reviewable edition can now supply the actual approved manuscript
+to an authenticated editor. Saving creates a separate linked edition, preserving
+the original request, chapter jobs and export bytes. Original project settings
+are never rewritten. Revised text receives structural checks and explicit owner
+approval rather than an unrequested AI rewrite. Edit keys are idempotent; revision
+checks reject stale decisions. Edition history and downloads remain owner-scoped.
+The real browser edits a saved book, downloads its revised PDF, and confirms the
+original PDF and completed chapter attempt count remain unchanged.79 focused
+and protection checks passed54.49sec before additional topic-edit assertions.

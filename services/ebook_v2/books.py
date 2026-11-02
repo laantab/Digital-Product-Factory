@@ -64,6 +64,12 @@ class Books:
                 conn.execute("ALTER TABLE ebook_v2_workers ADD COLUMN local_text INTEGER NOT NULL DEFAULT 0")
             conn.execute("CREATE TABLE IF NOT EXISTS ebook_v2_topics (book_id TEXT PRIMARY KEY REFERENCES ebook_v2_books(id),data TEXT NOT NULL,sha TEXT NOT NULL)")
 
+            conn.execute("""CREATE TABLE IF NOT EXISTS ebook_v2_editions (
+                book_id TEXT PRIMARY KEY REFERENCES ebook_v2_books(id),
+                parent_id TEXT NOT NULL REFERENCES ebook_v2_books(id),
+                root_id TEXT NOT NULL REFERENCES ebook_v2_books(id),
+                number INTEGER NOT NULL,created REAL NOT NULL,UNIQUE(root_id,number))""")
+
     def record_worker(self,worker_id,local_text=False):
         with self.units.transaction() as conn:
             conn.execute("INSERT INTO ebook_v2_workers (id,seen,local_text) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET seen=excluded.seen,local_text=excluded.local_text",

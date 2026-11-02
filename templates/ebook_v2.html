@@ -31,8 +31,33 @@ if(book.state==='WAITING_TITLE'){message.textContent+='\nChoose your title.';for
 if(book.state==='WAITING_OUTLINE'){message.textContent+='\nReview the chapter plan.';const list=document.createElement('ol');for(const chapter of book.outline){const item=document.createElement('li');item.textContent=chapter.title+' — '+chapter.purpose;list.append(item);}actions.append(list);choice('Approve chapter plan','outline',true);}
 if(book.state==='WAITING_COVER'){message.textContent+='\nChoose the cover and interior design.';for(const [theme,label] of Object.entries({wellness:'Warm Wellness',editorial:'Editorial Blue',practical:'Practical Guide'}))choice(label,'cover',theme);}
 if(book.state==='REVIEW'){message.textContent+='\nReview your pages before approving this edition.';preview.hidden=false;preview.src='/api/books/'+book.id+'/files/ebook.pdf?preview=1';button('Approve this edition','approve');}
+if(['REVIEW','READY'].includes(book.state)){const edit=document.createElement('button');edit.textContent='Edit manuscript and view editions';edit.onclick=()=>showEditor(book.id);actions.append(edit);}
 if(book.state==='READY'){message.textContent+='\nYour reviewed edition is ready to download.';preview.hidden=false;preview.src='/api/books/'+book.id+'/files/ebook.pdf?preview=1';for(const name of book.files){let a=document.createElement('a');a.className='download';a.textContent={'ebook.pdf':'Download PDF','package.zip':'Download complete ZIP','manuscript.md':'Editable manuscript','ebook.epub':'Download EPUB','cover.jpg':'Download cover','manuscript.docx':'Editable Word manuscript'}[name]||name;a.href='/api/books/'+book.id+'/files/'+name;actions.append(a);}}
 }
+async function showEditor(id){try{
+const saved=await api('/api/books/'+id+'/editable');
+actions.replaceChildren();const editor=document.createElement('form');
+const fields={};for(const name of ['title','author','theme','manuscript']){
+const label=document.createElement('label');label.textContent=name==='manuscript'?'Chapters — start each with ## and its title':name;
+const input=document.createElement(name==='manuscript'?'textarea':name==='theme'?'select':'input');input.name=name;
+if(name==='theme'){for(const value of ['wellness','editorial','practical']){const option=document.createElement('option');option.value=value;option.textContent=value;input.append(option);}}
+input.value=name==='manuscript'?saved.spec.chapters.map(ch=>'## '+ch.title+'\n\n'+ch.text).join('\n\n'):saved.spec[name];
+if(name==='manuscript'){input.rows=22;input.style.width='100%';}label.append(input);editor.append(label);fields[name]=input;
+}
+const note=document.createElement('p');note.textContent='Save creates a separate edition for your review. Your previous edition and downloads are retained.';editor.append(note);
+const save=document.createElement('button');save.textContent='Save new edition';editor.append(save);
+const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Return to current edition';cancel.onclick=()=>open(id);editor.append(cancel);
+editor.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{
+const parts=fields.manuscript.value.split(/^## (.+)\s*$/m);if(parts.length<5)throw Error('Supply at least two chapters with ## headings');
+const chapters=[];for(let i=1;i<parts.length-1;i+=2)chapters.push({title:parts[i].trim(),text:parts[i+1].trim()});
+const spec={title:fields.title.value,author:fields.author.value,theme:fields.theme.value,chapters};
+const fingerprint=JSON.stringify({id,spec});let request=JSON.parse(sessionStorage.getItem('studio-edit')||'null');
+if(!request||request.fingerprint!==fingerprint){request={fingerprint,key:crypto.randomUUID()};sessionStorage.setItem('studio-edit',JSON.stringify(request));}
+const book=await api('/api/books/'+id+'/edit',{revision:saved.revision,request_key:request.key,spec});await listing();await open(book.id);
+}catch(e){error(e);save.disabled=false;}};actions.append(editor);
+const versions=document.createElement('p');versions.textContent='Saved editions';actions.append(versions);
+for(const edition of saved.editions){const button=document.createElement('button');button.textContent='Edition '+edition.number+' — '+edition.state;button.onclick=()=>open(edition.id);actions.append(button);}
+}catch(e){error(e);}}
 function button(label,action){let b=document.createElement('button');b.textContent=label;b.onclick=async()=>{b.disabled=true;try{render(await api('/api/books/'+current.id+'/'+action,{revision:current.revision}));await listing();schedule();}catch(e){error(e);b.disabled=false;}};actions.append(b);}
 function choice(label,action,value){const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{b.disabled=true;try{render(await api('/api/books/'+current.id+'/decision',{revision:current.revision,action,value}));await listing();schedule();}catch(e){error(e);b.disabled=false;}};actions.append(b);}
 function schedule(){clearTimeout(timer);if(current&&['RUNNING','WAITING_SERVICE'].includes(current.state)){const version=generation,id=current.id;timer=setTimeout(async()=>{try{const book=await api('/api/books/'+id);if(version===generation){render(book);schedule();}}catch(e){error(e);if(version===generation)schedule();}},1500);}}

@@ -91,6 +91,17 @@ def test_topic_pipeline_choices_and_validated_exports(provider,tmp_path,mode):
     assert len(calls)==6  # titles, outline, two distinct chapters and two reviews
     assert all(call["stream"] is False and call["think"] is False and isinstance(call["format"],dict) for call in calls)
     assert all(path in {"/api/tags","/api/show","/api/generate"} for path,_ in provider["calls"])
+    from services.ebook_v2.editions import editable,edit
+    saved=editable(books,"alice",book_id)
+    saved["spec"]["title"]="Owner revised title"
+    edited=edit(books,"alice",book_id,saved["revision"],"topic-edit-request-001",saved["spec"])
+    before=len(provider["calls"])
+    for _ in range(20):
+        edited=books.advance("alice",edited["id"])
+        if edited["state"]=="REVIEW":break
+    assert edited["state"]=="REVIEW"
+    assert len(provider["calls"])==before
+    assert books.download("alice",book_id,"ebook.pdf")[0]==pdf
 
 
 def test_cloud_model_metadata_is_refused_before_generation(provider):

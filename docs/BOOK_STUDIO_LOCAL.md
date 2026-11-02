@@ -77,3 +77,12 @@ the repaired output passes validation.
 
 The actual small CPU-model pilot is engineering evidence with stated limits,
 not a benchmark of the owner's8B model/GPU or a publication-ready product.
+
+## Editable manuscripts and retained editions
+Finished books include PDF, EPUB, editable Word and Markdown manuscripts, a
+cover JPEG, and a ZIP containing matching copies. In Review or Ready, choose
+Edit manuscript and view editions. Save new edition keeps the original book
+and downloads, checks the exact revised text, and requires approval before the
+new downloads are released. Existing AI chapter work is retained in the original
+book; owner edits do not trigger automatic rewriting. Saved editions can be
+reopened from the same editor. Two tabs cannot silently overwrite one another.

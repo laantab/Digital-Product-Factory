@@ -160,6 +160,21 @@ def test_browser_shutdown_worker_restart_and_saved_book_download(live):
             with zipfile.ZipFile(io.BytesIO(package)) as archive:
                 assert archive.testzip() is None and archive.read("ebook.pdf")==pdf
             assert pdf.startswith(b"%PDF-")
+            page.get_by_role("button",name="Edit manuscript and view editions").click()
+            page.locator('#actions [name="title"]').fill("A revised acceptance edition")
+            editor=page.locator('#actions [name="manuscript"]')
+            editor.fill(editor.input_value()+"\n\nThis revised author paragraph belongs only to the new edition.")
+            page.get_by_role("button",name="Save new edition",exact=True).click()
+            page.get_by_role("button",name="Approve this edition",exact=True).wait_for(state="visible",timeout=30000)
+            page.get_by_role("button",name="Approve this edition",exact=True).click()
+            revised_link=page.get_by_role("link",name="Download PDF",exact=True)
+            revised_link.wait_for(state="visible",timeout=15000)
+            with page.expect_download() as download:revised_link.click()
+            revised_pdf=Path(download.value.path()).read_bytes()
+            assert revised_pdf!=pdf
+            assert books.download("1",book_id,"ebook.pdf")[0]==pdf
+            assert books.units.get("1",first_id)["attempts"]==1
+            assert len(books.listing("1"))==2
             assert errors==[]
             context.close();browser.close()
     finally:stop(process)

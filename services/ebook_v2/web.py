@@ -74,11 +74,20 @@ def create_app(books):
     @app.get("/api/books/<book_id>")
     def status(book_id):return jsonify(books.status(str(current_user.id),book_id))
 
+    @app.get("/api/books/<book_id>/editable")
+    def editable(book_id):
+        from .editions import editable
+        return jsonify(editable(books,str(current_user.id),book_id))
+
     @app.post("/api/books/<book_id>/<action>")
     def decide(book_id,action):
         actions={"approve":books.approve,"resume":books.resume}
         body=request.get_json()
         if not isinstance(body,dict):raise ValueError("Send a valid book decision")
+        if action=="edit":
+            from .editions import edit
+            book=edit(books,str(current_user.id),book_id,body.get("revision"),body.get("request_key"),body.get("spec"))
+            return jsonify(books.status(str(current_user.id),book["id"])),202
         if action=="decision":books.decide(str(current_user.id),book_id,body.get("revision"),body.get("action"),body.get("value"))
         elif action in actions:actions[action](str(current_user.id),book_id,body.get("revision"))
         else:raise LookupError("Action not found")

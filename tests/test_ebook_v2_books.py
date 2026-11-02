@@ -159,3 +159,32 @@ def test_word_manuscript_is_editable_and_preserves_approved_text(engine):
     with zipfile.ZipFile(io.BytesIO(package)) as archive:assert archive.read("manuscript.docx")==data
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         assert b"pBdr" not in archive.read("word/styles.xml")
+
+
+def test_edit_creates_new_reviewable_edition_and_preserves_original_downloads(engine):
+    from services.ebook_v2.editions import editable,edit,history
+    original=reviewed(engine);original=engine.approve("alice",original["id"],original["revision"])
+    original_pdf=engine.download("alice",original["id"],"ebook.pdf")[0]
+    saved=editable(engine,"alice",original["id"])
+    revised=saved["spec"];revised["title"]="Revised desk organization guide"
+    revised["chapters"][0]["text"]+="\n\nThis new author edit must appear only in the revised edition."
+    book=edit(engine,"alice",original["id"],saved["revision"],"edit-request-0001",revised)
+    assert edit(engine,"alice",original["id"],saved["revision"],"edit-request-0001",revised)["id"]==book["id"]
+    assert engine.get("alice",original["id"])["spec"]==spec()
+    assert engine.download("alice",original["id"],"ebook.pdf")[0]==original_pdf
+    for _ in range(20):
+        book=engine.advance("alice",book["id"])
+        if book["state"]=="REVIEW":break
+    assert book["state"]=="REVIEW"
+    new_pdf=engine.download("alice",book["id"],"ebook.pdf",preview=True)[0]
+    with fitz.open(stream=new_pdf,filetype="pdf") as document:
+        assert "This new author edit" in " ".join(page.get_text() for page in document)
+    assert new_pdf!=original_pdf
+    assert [row["number"] for row in history(engine,"alice",book["id"])]==[1,2]
+    with pytest.raises(LookupError):editable(engine,"bob",original["id"])
+    with pytest.raises(Conflict):edit(engine,"alice",original["id"],saved["revision"],"edit-request-0002",revised)
+    altered=dict(revised,title="Different payload")
+    with pytest.raises(InputConflict):edit(engine,"alice",original["id"],saved["revision"],"edit-request-0001",altered)
+    restarted=Books(engine.units.path,engine.root)
+    assert len(history(restarted,"alice",book["id"]))==2
+    assert restarted.download("alice",original["id"],"ebook.pdf")[0]==original_pdf
