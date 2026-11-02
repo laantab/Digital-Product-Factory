@@ -59,3 +59,29 @@ and client as children of the same exec orchestrator; separate exec loopbacks
 are isolated. Current real-model harness:/tmp/factory_v2_fresh_8b_topic.py.
 Actual original preservation PDF/ZIP are restored, ignored by git and hash
 verified. Keep these exact bytes for the full gate; never substitute newer PDFs.
+
+## Remote continuation after execution loss
+The local execution environment became unavailable. Runtime source through
+8b8b2e4e0083e8ec630b92021d0fd6f4a6f2221b was already backed up. The last
+observed local eight-chapter 8B pilot had744words saved and was reviewing
+chapter1; its final result is unknown. Do not claim it finished or is running.
+
+GitHub PR107 is draft. CI run41498734431 passed97Studio/protection cases on
+Windows/Python3.14 and Linux/Python3.12,31version cases and914fast-gate cases.
+The model job in that run failed during setup because the official asset is
+tar.zst, not tgz. The URL and pinned checksum are now verified against the
+official release. Existing fast-gate workflows now install python-docx as a
+test dependency. No application runtime files changed in those CI fixes.
+
+The prior explicit acceptance criteria also require six distinct templates and
+one AI operation per processing step. VERSION1.9.70 separates copyediting from
+independent recheck and checkpoints the pending review. Its fixed editorial
+budget is five attempts; two new tests must pass in CI before acceptance.
+There are still only three templates. Do not call the complete rebuild finished.
+
+Fresh model acceptance now has its own workflow, triggered by changing
+release_evidence/ebook_v2_model_acceptance_request.json. Request it only after
+the next runtime candidate and its checks are ready; no request file exists
+yet. This avoids rerunning an expensive fresh book for every intermediate
+source checkpoint. The former955d660 model run is baseline evidence only.
+No customer artifacts, runtime databases or credentials were committed.

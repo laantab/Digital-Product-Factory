@@ -1,3 +1,27 @@
+## 1.9.70 — One local AI operation per editorial processing step (candidate)
+
+### What changed
+Editorial correction now saves its revised chapter before scheduling independent
+review in a separate processing step. Each step performs at most one local AI
+operation. The complete editorial unit has a fixed maximum of five attempts.
+
+### What was fixed
+A repair previously copiedited and reviewed in one worker invocation. That
+violated the agreed operation boundary and could lose correction work if the
+later review timed out. Corrected candidates now retain their checksum and
+explicit pending-review state; only a passing independent review can complete.
+
+### Do the steps change?
+No additional customer decision is introduced. Title and cover choices remain
+the automatic workflow's decisions. Completed chapters and prior editions are
+preserved. No paid fallback or production change is introduced.
+
+### Release gate
+Two new regressions verify separate copyedit/recheck calls and the operation
+count observed by a real worker against a local protocol fixture. Windows/Linux
+verification is required before this candidate is accepted. Six distinct
+templates and the complete fresh production customer path remain unfinished.
+
 ## 1.9.69 — Saved image work and clearer local writing recovery (candidate)
 
 ### What changed

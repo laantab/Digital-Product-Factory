@@ -1,0 +1,86 @@
+name: Fresh local Book Studio model acceptance
+
+on:
+  push:
+    branches:
+      - 'rebuild/ebook-engine-v2-20261102'
+    paths:
+      - 'release_evidence/ebook_v2_model_acceptance_request.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fresh-local-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    env:
+      FACTORY_TEST_MODE: '1'
+      FACTORY_DB_BACKEND: sqlite
+      DATABASE_URL: ''
+      OPENAI_API_KEY: ''
+      ANTHROPIC_API_KEY: ''
+      TAVILY_API_KEY: ''
+      PEXELS_API_KEY: ''
+      UNSPLASH_ACCESS_KEY: ''
+      UNSPLASH_API_KEY: ''
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_NO_CLOUD: '1'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_CONTEXT_LENGTH: '8192'
+      FACTORY_V2_OLLAMA_MODEL: 'qwen3:8b'
+      FACTORY_V2_OLLAMA_URL: 'http://127.0.0.1:11434'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile the engineering acceptance harness
+        run: python -m py_compile scripts/verify_ebook_v2_local.py
+      - name: Install isolated Studio dependencies
+        run: python -m pip install -r requirements-ebook-v2.txt
+      - name: Install checksum verified official CPU runtime
+        shell: bash
+        run: |
+          curl -fL --retry 3 https://github.com/ollama/ollama/releases/download/v0.40.13/ollama-linux-amd64.tar.zst -o "$RUNNER_TEMP/ollama.tar.zst"
+          echo "c9490e0f520be21271d969e6703f012268b1d39f8b70dd58854e5bfef7a75bb6  $RUNNER_TEMP/ollama.tar.zst" | sha256sum -c -
+          if ! command -v zstd > /dev/null; then sudo apt-get update; sudo apt-get install -y zstd; fi
+          mkdir -p "$RUNNER_TEMP/ollama"
+          echo "OLLAMA_MODELS=$RUNNER_TEMP/ollama-models" >> "$GITHUB_ENV"
+          tar --zstd -xf "$RUNNER_TEMP/ollama.tar.zst" -C "$RUNNER_TEMP/ollama" --exclude='lib/ollama/cuda*' --exclude='lib/ollama/rocm*' --exclude='lib/ollama/vulkan*'
+          rm "$RUNNER_TEMP/ollama.tar.zst"
+      - name: Start local service and install the free model
+        shell: bash
+        run: |
+          nohup "$RUNNER_TEMP/ollama/bin/ollama" serve > "$RUNNER_TEMP/ollama.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --noproxy '*' -fsS http://127.0.0.1:11434/api/tags > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --noproxy '*' -fsS http://127.0.0.1:11434/api/tags > /dev/null
+          "$RUNNER_TEMP/ollama/bin/ollama" pull qwen3:8b
+      - name: Verify a fresh eight chapter book without operator repairs
+        run: python scripts/verify_ebook_v2_local.py --data "${{ runner.temp }}/studio-acceptance" --chapters 8 --min-words 650 --deadline 5400
+      - name: Report local service diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/ollama.log" ]; then tail -n 120 "$RUNNER_TEMP/ollama.log"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-local-model-engineering-evidence
+          path: |
+            ${{ runner.temp }}/studio-acceptance/summary.json
+            ${{ runner.temp }}/studio-acceptance/status.json
+            ${{ runner.temp }}/studio-acceptance/failure.json
+            ${{ runner.temp }}/studio-acceptance/manuscript.md
+            ${{ runner.temp }}/studio-acceptance/ebook.pdf
+            ${{ runner.temp }}/studio-acceptance/ebook.epub
+            ${{ runner.temp }}/studio-acceptance/manuscript.docx
+            ${{ runner.temp }}/studio-acceptance/page-*.png
+          if-no-files-found: ignore
+          retention-days: 7

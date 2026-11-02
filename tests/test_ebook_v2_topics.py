@@ -47,7 +47,11 @@ def provider(monkeypatch):
             if "titles" in schema["properties"]:result={"titles":["A Clear Desk","Room for Useful Work","The Desk Reset Guide"]}
             elif "chapters" in schema["properties"]:
                 result={"chapters":[{"title":ch["title"],"purpose":"A distinct practical step for a useful desk arrangement"} for ch in supplied()["chapters"]]}
-            elif "checks" in schema["properties"]:result={"checks":{key:True for key in local_text.CHECKS},"issues":[]}
+            elif "checks" in schema["properties"]:
+                state["review_count"]=state.get("review_count",0)+1
+                rejected=state.get("reject_first_review") and state["review_count"]==1
+                result={"checks":{key:not rejected for key in local_text.CHECKS},
+                    "issues":["Clarify which volunteer owns the next action."] if rejected else []}
             elif "new_paragraphs" in schema["properties"]:
                 state["addition_count"]=state.get("addition_count",0)+1
                 source=[p for ch in supplied()["chapters"] for p in ch["text"].split("\n\n")]
@@ -325,3 +329,45 @@ def test_local_memory_exhaustion_is_identified_without_blind_retries(provider):
     with pytest.raises(Repairable) as failure:local_text.generate("Outline a useful book",local_text.PLAN_SCHEMA)
     assert failure.value.code=="LOCAL_CAPACITY"
     assert "LOCAL_CAPACITY" not in policies()["outline"].repairs
+
+
+def test_copyedit_and_independent_recheck_are_separate_single_call_steps(monkeypatch):
+    chapter=developed_chapter("Choose one clear working area")
+    calls=[]
+    def generate(prompt,schema,repair="",**kwargs):
+        calls.append(prompt)
+        if "checks" in schema["properties"]:return {"checks":{key:True for key in local_text.CHECKS},"issues":[]}
+        return chapter
+    monkeypatch.setattr(local_text,"generate",generate)
+    previous={"chapter":chapter,"report":{"checks":{key:False for key in local_text.CHECKS},
+        "issues":["Clarify the next action."]}}
+    with pytest.raises(Repairable) as pending:
+        local_text.review_handler({"chapter":chapter,"spec":topic_spec(),"_recovery":previous},"apply_editorial_feedback")
+    assert len(calls)==1 and pending.value.code=="EDITORIAL_RECHECK"
+    assert pending.value.candidate["awaiting_review"] is True
+    reviewed=local_text.review_handler({"chapter":chapter,"spec":topic_spec(),"_recovery":pending.value.candidate},"review_saved_revision")
+    assert len(calls)==2 and local_text.review_valid(reviewed)
+
+
+def test_real_worker_editorial_repair_never_combines_model_operations(provider,tmp_path):
+    provider["reject_first_review"]=True
+    books=Books(tmp_path/"studio.sqlite",tmp_path/"objects");books.initialize()
+    books.record_worker("fixture-provider",local_text=True)
+    book=books.create("alice","single-operation-editorial-001",topic_spec())
+    for _ in range(100):
+        book=books.get("alice",book["id"]);view=books.status("alice",book["id"])
+        if book["state"]=="WAITING_TITLE":books.decide("alice",book["id"],book["revision"],"title",view["titles"][0])
+        elif book["state"]=="WAITING_COVER":books.decide("alice",book["id"],book["revision"],"cover","editorial")
+        elif book["state"]=="READY":break
+        else:
+            assert book["state"]=="RUNNING"
+            before=len([path for path,_ in provider["calls"] if path=="/api/generate"])
+            books.advance("alice",book["id"])
+            after=len([path for path,_ in provider["calls"] if path=="/api/generate"])
+            assert after-before<=1
+    else:pytest.fail("Bounded editorial correction did not finish")
+    from services.ebook_v2.topics import data
+    saved=data(books,books.get("alice",book["id"]))
+    assert books.units.get("alice",saved["units"]["chapter:0"])["attempts"]==1
+    assert books.units.get("alice",saved["units"]["review:0"])["attempts"]==3
+    assert books.units.get("alice",saved["units"]["review:0"])["max_attempts"]==5

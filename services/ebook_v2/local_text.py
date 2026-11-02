@@ -294,10 +294,12 @@ def generated_issues(chapter):
 
 
 def review_handler(payload,repair):
-    chapter=payload["chapter"];spec=payload["spec"];previous=payload.get("_recovery",{})
+    spec=payload["spec"];previous=payload.get("_recovery",{})
+    awaiting=previous.get("awaiting_review") is True
+    chapter=previous.get("chapter",payload["chapter"]) if awaiting else payload["chapter"]
     if generated_issues(chapter):raise Repairable("MODEL_ARTIFACT",{"chapter":chapter,"report":{
         "checks":{key:False for key in CHECKS},"issues":generated_issues(chapter)}})
-    if repair and previous.get("report"):
+    if repair and previous.get("report") and not awaiting:
         chapter=previous.get("chapter",chapter)
         prompt="Copyedit this chapter and address these specific findings. Preserve the approved title, "
         prompt+="correct meaning and practical detail. Return fully written prose, at least "+str(spec["min_words"])+" words. "
@@ -313,6 +315,9 @@ def review_handler(payload,repair):
                 report["issues"]+=generated_issues(candidate.get("chapter",chapter))
                 raise Repairable(error.code,{"chapter":chapter,"report":report,"rejected_attempt":candidate.get("chapter")}) from None
             raise Repairable(error.code,{"chapter":candidate.get("chapter",revised),"report":previous["report"]}) from None
+        # Persist the corrected candidate now. Independent review is a later
+        # processing step, with its own single model call and finite attempt.
+        raise Repairable("EDITORIAL_RECHECK",{"chapter":chapter,"report":previous["report"],"awaiting_review":True})
     report=generate("Independently check this chapter for grammar, relevance to the brief, internal "
         "consistency and appropriate claims. True means a check passes. Ordinary cautious practical "
         "guidance and explicitly hypothetical examples do not need citations. False applies to actual "
@@ -326,7 +331,6 @@ def review_handler(payload,repair):
     result={"chapter":chapter,"minimum":spec["min_words"],"report":report,"source":"local_editorial_review"}
     if not review_valid(result):raise Repairable("EDITORIAL_FINDINGS",result)
     return result
-
 
 def review_valid(output):
     if not chapter_valid(output) or numeric_issues(output["chapter"]):return False

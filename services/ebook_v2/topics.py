@@ -36,12 +36,12 @@ def policies():
               "MODEL_ARTIFACT":("rewrite_plain_prose",)}
     reviews={**common,"EDITORIAL_FINDINGS":("apply_editorial_feedback",),
         "SHORT_CHAPTER":("expand_editorial_revision",),"CONTENT_QUALITY":("apply_editorial_feedback",),
-        "MODEL_ARTIFACT":("apply_editorial_feedback",)}
+        "MODEL_ARTIFACT":("apply_editorial_feedback",),"EDITORIAL_RECHECK":("review_saved_revision",)}
     drafts={**chapters,"SHORT_DRAFT":("develop_saved_draft",),"SHORT_ADDITION":("expand_saved_section",)}
     return {"titles":Policy("titles-2",text.titles_handler,text.titles_valid,common,timeout=deadline,retry_delay=5),
         "outline":Policy("outline-2",text.outline_handler,text.outline_valid,common,timeout=deadline,retry_delay=5),
         "writing":Policy("writing-6",text.chapter_handler,text.chapter_valid,chapters,timeout=deadline,retry_delay=5),
-        "editorial":Policy("editorial-7",text.review_handler,text.review_valid,reviews,timeout=2*deadline,retry_delay=5),
+        "editorial":Policy("editorial-8",text.review_handler,text.review_valid,reviews,timeout=deadline,retry_delay=5),
         "draft":Policy("draft-4",text.draft_handler,text.partial_valid,drafts,timeout=deadline,retry_delay=5),
         "expand":Policy("expand-4",text.expansion_handler,text.expansion_valid,drafts,timeout=deadline,retry_delay=5),
         "assemble":Policy("assemble-2",text.assembly_handler,text.chapter_valid,{},timeout=20,retry_delay=0)}
@@ -74,7 +74,7 @@ def advance(books,book):
         if name not in unit_map:
             policy=books.policies[stage].version
             fingerprint=digest({"stage":stage,"policy":policy,"payload":payload,"parents":parents})[:16]
-            unit_map[name]=books.units.enqueue(owner,book["id"]+":"+name+":"+fingerprint,stage,policy,payload,parents)
+            unit_map[name]=books.units.enqueue(owner,book["id"]+":"+name+":"+fingerprint,stage,policy,payload,parents,max_attempts=5 if stage=="editorial" else 3)
             changed=True
             return None
         row=books.units.get(owner,unit_map[name])
