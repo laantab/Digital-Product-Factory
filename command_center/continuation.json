@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "project": "Digital Product Factory Pro",
+  "branch": "rebuild/ebook-engine-v2-20261102",
+  "pull_request": 107,
+  "checked_at": "2026-11-02",
+  "runtime_candidate": "e7f63f443e02b5cba51f7881bc5b812746f8e4e6",
+  "authorization": {
+    "routine_fixes_pushes_and_deployment": true,
+    "paid_generation": false,
+    "protect_other_generators": true
+  },
+  "evidence": {
+    "local_studio": {
+      "tests": 100,
+      "subtests": 163,
+      "failures": 0,
+      "skips": 0
+    },
+    "fresh_model": {
+      "run_id": 41516165140,
+      "status": "success",
+      "artifact_id": 13178970874,
+      "artifact_name": "studio-local-model-engineering-evidence",
+      "human_review": "pending"
+    },
+    "full_release": {
+      "status": "not_certified",
+      "last_observed_progress": "past 92 percent with two failures",
+      "failure_details": "Unavailable after local execution loss; must recover or reproduce. Do not treat as green."
+    }
+  },
+  "next_actions": [
+    {
+      "id": "review_model_artifacts",
+      "status": "pending",
+      "action": "Download run 41516165140 evidence; review manuscript and every rendered page; verify actual output bytes."
+    },
+    {
+      "id": "resolve_full_release",
+      "status": "pending",
+      "action": "Recover or rerun enforced full release suite against frozen runtime candidate. Restore exact reference archive before running. Identify and resolve both observed failures; retain red evidence."
+    },
+    {
+      "id": "verify_supported_delivery",
+      "status": "pending",
+      "action": "Confirm supported local Studio delivery and hosted integration boundary. Do not replace live Factory with a loopback-only app."
+    },
+    {
+      "id": "release_and_verify",
+      "status": "pending",
+      "action": "After acceptance, merge/deploy only supported changes; verify actual PDF/ZIP downloads in the intended environment."
+    }
+  ],
+  "completion": "not complete",
+  "blocker": "Local execution service unavailable in current session; GitHub operations remain available.",
+  "resume_rule": "Fetch current state and resume first unfinished action without requesting routine approval."
+}
