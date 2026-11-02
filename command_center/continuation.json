@@ -4,7 +4,7 @@
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
   "checked_at": "2026-11-02",
-  "runtime_candidate": "e7f63f443e02b5cba51f7881bc5b812746f8e4e6",
+  "runtime_candidate": "dca873bc9308e7aec1bc7dc27cae6fa5bad1c166",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
     "paid_generation": false,
@@ -33,7 +33,7 @@
     },
     "full_release": {
       "status": "not_certified",
-      "last_observed_progress": "past 92 percent with two failures",
+      "last_observed_progress": "A failure reproduced near 50 percent in current fresh-workspace run; final traceback pending.",
       "failure_details": "Unavailable after local execution loss; must recover or reproduce. Do not treat as green."
     }
   },
@@ -70,6 +70,7 @@
   "recovery_progress": {
     "execution": "restored in fresh workspace",
     "source_fix": "Raise bounded paragraph field capacity from 1100 to 3000, request complete sentences and reject unfinished paragraphs independently; permit bounded editorial correction before independent recheck.",
-    "tests": "Frozen final writing candidate: 33 passed, 1 browser test deselected, 45.63 seconds; 103 Studio/protection cases collected. GitHub CI required for browser and protection checks."
+    "tests": "Frozen final writing candidate: 33 passed, 1 browser test deselected, 45.63 seconds; 103 Studio/protection cases collected. GitHub CI required for browser and protection checks.",
+    "ci": "Studio Windows and Linux jobs both passed all 103 checks in run 41535780087; broader checks still running."
   }
 }

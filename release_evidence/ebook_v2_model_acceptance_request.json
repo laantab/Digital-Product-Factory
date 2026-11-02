@@ -1,17 +1,16 @@
 {
-  "candidate_commit": "e7f63f443e02b5cba51f7881bc5b812746f8e4e6",
+  "candidate_commit": "dca873bc9308e7aec1bc7dc27cae6fa5bad1c166",
   "requested_at": "2026-11-02",
   "model": "qwen3:8b",
   "chapters": 8,
   "min_words_per_chapter": 650,
   "paid_providers": false,
-  "local_validation": {
-    "tests": 100,
-    "subtests": 163,
-    "failures": 0,
-    "errors": 0,
-    "skips": 0,
-    "seconds": 122.66
+  "reason": "Validate increased paragraph capacity and independent unfinished-sentence rejection after old real-model manuscript failed review.",
+  "verification": {
+    "studio_run": 41535780087,
+    "windows_cases": 103,
+    "linux_cases": 103,
+    "final_local_writing_cases": 33
   },
-  "status": "requested; no model acceptance claimed"
+  "status": "requested; no acceptance claimed"
 }
