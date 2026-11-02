@@ -23,6 +23,7 @@ async function api(path,body){let r=await fetch(path,body?{method:'POST',headers
 function error(e){message.textContent=e.message;}
 async function listing(){const data=await api('/api/books');let saved=document.querySelector('#saved');saved.replaceChildren();for(const book of data.books){const b=document.createElement('button');b.className='secondary';b.textContent=book.title+' · '+book.state.toLowerCase().replaceAll('_',' ');b.onclick=()=>open(book.id);saved.append(b);}}
 function render(book){current=book;form.hidden=true;actions.replaceChildren();message.textContent=book.title+'\n'+book.chapters_checked+' of '+book.chapters_total+' chapters checked.\n'+book.review_scope;
+if(book.activity)message.textContent+='\n'+book.activity+' · '+book.words_saved+' words saved';
 if(book.state==='RUNNING')message.textContent+='\nPreparing your saved book. You can close this page; the separate worker continues.';
 if(book.state==='WAITING_SERVICE')message.textContent+='\nWaiting for the Book Studio worker to reconnect. Your saved work is preserved.';
 if(book.state==='NEEDS_ATTENTION'){message.textContent+='\nThis step needs attention. Completed chapters are saved.';button('Continue saved work','resume');}

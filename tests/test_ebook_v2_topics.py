@@ -47,7 +47,14 @@ def provider(monkeypatch):
             elif "chapters" in schema["properties"]:
                 result={"chapters":[{"title":ch["title"],"purpose":"A distinct practical step for a useful desk arrangement"} for ch in supplied()["chapters"]]}
             elif "checks" in schema["properties"]:result={"checks":{key:True for key in local_text.CHECKS},"issues":[]}
-            else:result=developed_chapter(schema["properties"]["title"]["enum"][0])
+            elif "new_paragraphs" in schema["properties"]:
+                state["addition_count"]=state.get("addition_count",0)+1
+                source=[p for ch in supplied()["chapters"] for p in ch["text"].split("\n\n")]
+                result={"new_paragraphs":[source[state["addition_count"]%len(source)]]}
+            else:
+                result=developed_chapter(schema["properties"]["title"]["enum"][0])
+                if state.get("short_writing"):
+                    result["text"]=supplied()["chapters"][0]["text"].split("\n\n")[0]
             self.reply({"done":not state["incomplete"],"done_reason":"length" if state["incomplete"] else "stop","response":json.dumps(result)})
     server=ThreadingHTTPServer(("127.0.0.1",0),Handler)
     thread=Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -192,7 +199,7 @@ def test_short_single_paragraph_is_retained_and_expanded_without_replacement(mon
     assert failure.value.candidate["chapter"]==chapter
     source=developed_chapter(chapter["title"])
     paragraphs=source["text"].split("\n\n")
-    monkeypatch.setattr(local_text,"generate",lambda *a,**kw:{"paragraphs":paragraphs})
+    monkeypatch.setattr(local_text,"generate",lambda *a,**kw:{"new_paragraphs":paragraphs})
     expanded=local_text.expand(chapter,topic_spec(),"expand_saved_chapter")
     assert expanded["text"].startswith(chapter["text"]+"\n\n")
     assert expanded["title"]==chapter["title"]
@@ -226,3 +233,59 @@ def test_model_review_cannot_approve_internal_markup(monkeypatch,markup):
     with pytest.raises(Repairable) as error:local_text._require(chapter,450,chapter["title"])
     assert error.value.code=="MODEL_ARTIFACT"
     with pytest.raises(Repairable):local_text.review_handler({"chapter":chapter,"spec":topic_spec()},"")
+
+
+def test_echoed_source_is_not_counted_as_new_expansion(monkeypatch):
+    chapter=developed_chapter("Choose one clear working area")
+    echoed=chapter["text"].split("\n\n")
+    novel=supplied()["chapters"][1]["text"].split("\n\n")[0]
+    monkeypatch.setattr(local_text,"generate",lambda *a,**kw:{"new_paragraphs":echoed+[novel]})
+    expanded=local_text.expand(chapter,topic_spec(),"expand_saved_section")
+    assert expanded["text"]==chapter["text"]+"\n\n"+novel
+
+
+def test_partial_expansion_checkpoints_survive_restart_before_chapter_completion(provider,tmp_path):
+    provider["short_writing"]=True
+    books=Books(tmp_path/"studio.sqlite",tmp_path/"objects");books.initialize()
+    book=books.create("alice","partial-graph-request-001",topic_spec());book_id=book["id"]
+    from services.ebook_v2.topics import data as topic_data
+    first_expansion=None
+    for _ in range(60):
+        book=books.get("alice",book_id)
+        if book["state"]=="WAITING_TITLE":
+            view=books.status("alice",book_id)
+            books.decide("alice",book_id,book["revision"],"title",view["titles"][0])
+        else:books.advance("alice",book_id)
+        saved=topic_data(books,books.get("alice",book_id))
+        key=saved["units"].get("expand:0:0")
+        if key and books.units.get("alice",key)["state"]=="COMPLETE":first_expansion=key;break
+    assert first_expansion is not None
+    restarted=Books(books.units.path,books.root)
+    for _ in range(60):
+        restarted.advance("alice",book_id)
+        saved=topic_data(restarted,restarted.get("alice",book_id))
+        key=saved["units"].get("chapter:0")
+        if key and restarted.units.get("alice",key)["state"]=="COMPLETE":break
+    else:pytest.fail("Measured expansion did not complete the chapter")
+    assert restarted.units.get("alice",first_expansion)["attempts"]==1
+    assert len(restarted.units.get("alice",key)["output"]["chapter"]["text"].split())>=450
+
+
+@pytest.mark.parametrize("defect",[
+    "When I worked with a volunteer group, we always used a weekly task list.",
+    "The next sentence contains unexpected text: This坦白,",
+])
+def test_independent_prose_guards_reject_model_approved_defects(monkeypatch,defect):
+    chapter=developed_chapter("Choose one clear working area")
+    chapter["text"]+="\n\n"+defect
+    monkeypatch.setattr(local_text,"generate",lambda *a,**kw:{"checks":{key:True for key in local_text.CHECKS},"issues":[]})
+    assert not local_text.review_valid({"chapter":chapter,"minimum":450,"report":{"checks":{key:True for key in local_text.CHECKS},"issues":[]}})
+    with pytest.raises(Repairable):local_text._require(chapter,450,chapter["title"])
+
+
+def test_sentence_repetition_across_different_paragraph_boundaries_is_rejected():
+    chapter=developed_chapter("Choose one clear working area")
+    sentence="For a practical trial, imagine preparing to answer a set of letters while a laptop and several reference folders share the desk."
+    chapter["text"]+="\n\n"+sentence+" Add a different ending to disguise the copied paragraph."
+    assert any("repeated" in issue for issue in local_text.generated_issues(chapter))
+    assert not local_text.chapter_valid({"chapter":chapter,"minimum":450})

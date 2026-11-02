@@ -37,10 +37,14 @@ def policies():
     reviews={**common,"EDITORIAL_FINDINGS":("apply_editorial_feedback",),
         "SHORT_CHAPTER":("expand_editorial_revision",),"CONTENT_QUALITY":("apply_editorial_feedback",),
         "MODEL_ARTIFACT":("apply_editorial_feedback",)}
+    drafts={**chapters,"SHORT_DRAFT":("develop_saved_draft",),"SHORT_ADDITION":("expand_saved_section",)}
     return {"titles":Policy("titles-1",text.titles_handler,text.titles_valid,common,timeout=deadline,retry_delay=5),
         "outline":Policy("outline-1",text.outline_handler,text.outline_valid,common,timeout=deadline,retry_delay=5),
-        "writing":Policy("writing-4",text.chapter_handler,text.chapter_valid,chapters,timeout=deadline,retry_delay=5),
-        "editorial":Policy("editorial-4",text.review_handler,text.review_valid,reviews,timeout=2*deadline,retry_delay=5)}
+        "writing":Policy("writing-5",text.chapter_handler,text.chapter_valid,chapters,timeout=deadline,retry_delay=5),
+        "editorial":Policy("editorial-6",text.review_handler,text.review_valid,reviews,timeout=2*deadline,retry_delay=5),
+        "draft":Policy("draft-3",text.draft_handler,text.partial_valid,drafts,timeout=deadline,retry_delay=5),
+        "expand":Policy("expand-3",text.expansion_handler,text.expansion_valid,drafts,timeout=deadline,retry_delay=5),
+        "assemble":Policy("assemble-2",text.assembly_handler,text.chapter_valid,{},timeout=20,retry_delay=0)}
 
 
 def data(books,book):
@@ -68,7 +72,9 @@ def advance(books,book):
     def unit(name,stage,payload,parents=()):
         nonlocal changed
         if name not in unit_map:
-            unit_map[name]=books.units.enqueue(owner,book["id"]+":"+name,stage,books.policies[stage].version,payload,parents)
+            policy=books.policies[stage].version
+            fingerprint=digest({"stage":stage,"policy":policy,"payload":payload,"parents":parents})[:16]
+            unit_map[name]=books.units.enqueue(owner,book["id"]+":"+name+":"+fingerprint,stage,policy,payload,parents)
             changed=True
             return None
         row=books.units.get(owner,unit_map[name])
@@ -91,7 +97,27 @@ def advance(books,book):
     reviewed=[]
     for index in range(spec["chapter_count"]):
         name=f"chapter:{index}";review=f"review:{index}"
-        chapter=unit(name,"writing",{"spec":spec,"plan":plan,"index":index},[unit_map["outline"]])
+        existing=books.units.get(owner,unit_map[name]) if name in unit_map else None
+        if existing and existing["state"]=="COMPLETE":
+            chapter=existing["output"]
+        else:
+            draft_name=f"draft:{index}";payload={"spec":spec,"plan":plan,"index":index}
+            seed_id=state.get("seeds",{}).get(name)
+            if seed_id:
+                saved=books.units.get(owner,seed_id)["output"] or {}
+                if text.partial_valid({"chapter":saved.get("chapter")}):payload["seed"]=saved["chapter"]
+            draft=unit(draft_name,"draft",payload,[unit_map["outline"]])
+            if draft is None:return pending()
+            parent=unit_map[draft_name]
+            maximum_steps=min(32,max(6,(spec["min_words"]+59)//60))
+            for step in range(maximum_steps):
+                if len(draft["chapter"]["text"].split())>=spec["min_words"]:break
+                expansion_name=f"expand:{index}:{step}"
+                draft=unit(expansion_name,"expand",{"spec":spec,"chapter":draft["chapter"]},[parent])
+                if draft is None:return pending()
+                parent=unit_map[expansion_name]
+            chapter=unit(name,"assemble",{"chapter":draft["chapter"],"minimum":spec["min_words"],
+                         "title":plan["chapters"][index]["title"]},[parent])
         if chapter is None:return pending()
         checked=unit(review,"editorial",{"spec":spec,"chapter":chapter["chapter"]},[unit_map[name]])
         if checked is None:return pending()
@@ -105,16 +131,33 @@ def advance(books,book):
 
 
 def status(books,book):
-    state=data(books,book);rows={key:books.units.get(book["owner"],value) for key,value in state["units"].items()}
+    state=data(books,book);snapshot=books.units.outputs(book["owner"],state["units"].values())
+    rows={key:snapshot[value] for key,value in state["units"].items()}
     def output(name):
         row=rows.get(name)
         return row["output"] if row and row["state"]=="COMPLETE" else {}
     exported=output("export");total=book["spec"]["chapter_count"]
+    saved_words={}
+    for name,row in rows.items():
+        if row["state"]!="COMPLETE" or not isinstance(row["output"],dict):continue
+        chapter=row["output"].get("chapter")
+        if chapter and name.startswith(("draft:","expand:","chapter:","review:")):
+            index=int(name.split(":")[1]);saved_words[index]=max(saved_words.get(index,0),len(chapter["text"].split()))
+    labels={"titles":"Preparing title choices","outline":"Planning chapters","draft":"Drafting chapter",
+        "expand":"Developing chapter","assemble":"Saving chapter","writing":"Writing chapter",
+        "editorial":"Reviewing chapter","export":"Formatting files"}
+    activity="Saved work is up to date"
+    for name,row in rows.items():
+        if row["state"] in {"RUNNING","QUEUED"}:
+            activity=labels.get(row["stage"],"Preparing your book")
+            if ":" in name and name.split(":")[1].isdigit():activity+=" "+str(int(name.split(":")[1])+1)
+            break
     return {"id":book["id"],"title":state["decisions"].get("title",book["spec"]["title"]),
         "author":book["spec"]["author"],"state":("WAITING_SERVICE" if book["state"]=="RUNNING"
             and (not books.available(local_text=True)) else book["state"]),"revision":book["revision"],
         "source":"local_model","chapters_checked":sum(output(f"review:{index}")!={} for index in range(total)),
-        "chapters_total":total,"integrity":exported.get("integrity"),"files":list(exported.get("files",{})),
+        "chapters_total":total,"words_saved":sum(saved_words.values()),"activity":activity,
+        "integrity":exported.get("integrity"),"files":list(exported.get("files",{})),
         "titles":output("titles").get("titles",[]),"outline":output("outline").get("chapters",[]),
         "review_scope":"Local AI editorial and structural checks. External factual and plagiarism verification were not performed."}
 
@@ -140,6 +183,10 @@ def resume(books,book):
     for name,key in list(state["units"].items()):
         row=books.units.get(book["owner"],key)
         if row["state"]!="NEEDS_ATTENTION":continue
+        if row["stage"]=="writing":
+            state.setdefault("seeds",{})[name]=key
+            del state["units"][name]
+            continue
         with books.units.transaction() as conn:
             parents=[r[0] for r in conn.execute("SELECT parent_id FROM ebook_v2_dependencies WHERE unit_id=?",(key,))]
         state["units"][name]=books.units.enqueue(book["owner"],book["id"]+f":resume:{book['revision']}:{name}",

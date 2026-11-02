@@ -94,6 +94,24 @@ class Store:
         with self.transaction() as conn:
             return self._get(conn, owner, unit_id)
 
+    def outputs(self,owner,ids):
+        """Batch view metadata without repeatedly loading saved input manuscripts."""
+        ids=list(dict.fromkeys(ids));result={}
+        with self.transaction() as conn:
+            for start in range(0,len(ids),400):
+                batch=ids[start:start+400]
+                placeholders=",".join("?" for _ in batch)
+                for row in conn.execute("SELECT id,stage,state,request_key,output,output_sha FROM ebook_v2_units WHERE owner=? AND id IN ("+placeholders+")",(str(owner),*batch)):
+                    value=dict(row)
+                    if value["output"] is not None:
+                        try:value["output"]=json.loads(value["output"])
+                        except (ValueError,TypeError):raise CorruptCheckpoint("Saved output is not valid JSON") from None
+                        if digest(value["output"])!=value["output_sha"]:raise CorruptCheckpoint("Saved output checksum does not match")
+                    if value["state"]=="COMPLETE" and value["output"] is None:raise CorruptCheckpoint("Missing completed output")
+                    result[value["id"]]=value
+        if len(result)!=len(ids):raise LookupError("Saved work was not found")
+        return result
+
     def enqueue(self, owner, key, stage, policy, payload, parents=(), max_attempts=3):
         if (not str(owner) or not key or not stage or not policy or not isinstance(payload,dict)
                 or type(max_attempts) is not int or not 1 <= max_attempts <= 10):

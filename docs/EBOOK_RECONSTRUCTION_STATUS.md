@@ -73,3 +73,23 @@ Four regression inputs reproduce the defect, including an approving fake model.
 61 reconstructed checks passed53.12sec after the correction. A larger4B local
 run is in progress. The owner's8B default and all minimum-length checks remain
 unchanged. Do not deliver the rejected draft as a finished book.
+
+## Durable partial drafting and independent prose checks
+Drafting, measured expansion and final assembly now have separate immutable
+checkpoints. A short draft is preserved without consuming the retry budget for
+a finished chapter; only final assembly satisfying the requested length can
+reach editorial review. Expansion excludes exact echoed paragraphs, and requires
+actual new words. Status reports saved words and the current stage rather than
+a synthetic progress percentage. Completed chapters remain intact on resume.
+
+63 focused checks passed57.38sec before the additional prose guards. The4B CPU
+development recovery run finished2chapters/6pages, but actual text inspection
+REJECTED it: repeated sentences split across paragraph boundaries, unsupported
+first-person author experience, and stray CJK text escaped model approval.
+Independent guards now address these defects; final tests are recorded in the
+next evidence update. This run is not accepted quality or uninterrupted fresh
+completion evidence. No production changes or paid calls occurred.
+
+Final focused follow-up:66 passed41.22sec. Includes real browser/worker
+integration fixtures, interruption/restart and independent prose guard cases.
+This is not the final full Factory release gate.

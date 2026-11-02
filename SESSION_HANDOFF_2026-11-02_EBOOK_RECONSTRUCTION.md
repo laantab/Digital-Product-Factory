@@ -31,3 +31,11 @@ User explicitly authorized GitHub backup. Push every tested milestone and verify
 remote source before saying backed up. Never claim local commits are durable
 backup. The six-file foundation2c3a6f6 is already remotely verified; next is the
 supplied-book checkpoint. Never put customer files, runtime DBs or secrets in git.
+
+Latest source: local-only topic drafting and editorial paths have been published
+at9e26afdbbf0f348c13295562a0d3804ed709d849. Follow-up introduces persisted
+partial draft/expansion/assembly and measured progress. See current status doc.
+Both1.7B and4B model runs exposed defects missed by model review; do not present
+their technical READY state as quality acceptance. Source and regression checks
+are useful, but editing, versions, photos, EPUB/DOCX/KDP and target8B Windows
+acceptance remain unfinished. Preserve all original customer files.
