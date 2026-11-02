@@ -116,7 +116,6 @@ jobs:
       UNSPLASH_ACCESS_KEY: ''
       UNSPLASH_API_KEY: ''
       OLLAMA_HOST: '127.0.0.1:11434'
-      OLLAMA_MODELS: ${{ runner.temp }}/ollama-models
       OLLAMA_NO_CLOUD: '1'
       OLLAMA_NUM_PARALLEL: '1'
       OLLAMA_CONTEXT_LENGTH: '8192'
@@ -139,6 +138,7 @@ jobs:
           curl -fL --retry 3 https://github.com/ollama/ollama/releases/download/v0.40.13/ollama-linux-amd64.tgz -o "$RUNNER_TEMP/ollama.tgz"
           echo "c9490e0f520be21271d969e6703f012268b1d39f8b70dd58854e5bfef7a75bb6  $RUNNER_TEMP/ollama.tgz" | sha256sum -c -
           mkdir -p "$RUNNER_TEMP/ollama"
+          echo "OLLAMA_MODELS=$RUNNER_TEMP/ollama-models" >> "$GITHUB_ENV"
           tar -xzf "$RUNNER_TEMP/ollama.tgz" -C "$RUNNER_TEMP/ollama" --exclude='lib/ollama/cuda*' --exclude='lib/ollama/rocm*' --exclude='lib/ollama/vulkan*'
           rm "$RUNNER_TEMP/ollama.tgz"
       - name: Start local service and install the free model
