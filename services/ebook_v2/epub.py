@@ -19,7 +19,7 @@ def document(title, body):
         '<body>'+body+'</body></html>')
 
 
-def render(book, cover):
+def render(book, cover,root=None):
     title,author=escape(book['title']),escape(book['author'])
     identifier='urn:uuid:'+str(uuid.uuid4())
     modified=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -36,8 +36,21 @@ def render(book, cover):
     spine=['<itemref idref="cover"/>','<itemref idref="nav"/>'];links=[]
     for index,chapter in enumerate(book['chapters'],1):
         name=f'chapter-{index}.xhtml';key=f'ch{index}'
+        visual=book.get('visuals',[])[index-1] if book.get('visuals') else None
+        illustration=''
+        if visual:
+            from .visuals import photo_bytes,credit
+            if visual.get('photo'):
+                photo=visual['photo'];image_name=f'image-{index}.jpg'
+                resources[image_name]=photo_bytes(root,visual)
+                items.append(f'<item id="image-{index}" href="{image_name}" media-type="image/jpeg"/>')
+                illustration=('<figure><img src="'+image_name+'" alt="'+escape(photo['alt'],{'"':'&quot;'})+
+                    '"/><figcaption><a href="'+escape(photo['source_url'],{'"':'&quot;'})+'">'+
+                    escape(credit(photo))+'</a></figcaption></figure>')
+            elif visual.get('overview'):
+                illustration='<aside><h2>At a glance</h2><ul>'+''.join('<li>'+escape(p)+'</li>' for p in visual['overview'])+'</ul></aside>'
         resources[name]=document(chapter['title'],'<section epub:type="chapter"><h1>'+
-            escape(chapter['title'])+'</h1>'+''.join('<p>'+escape(p).replace('\n','<br/>')+'</p>'
+            escape(chapter['title'])+'</h1>'+illustration+''.join('<p>'+escape(p).replace('\n','<br/>')+'</p>'
                 for p in chapter['text'].split('\n\n'))+'</section>')
         items.append(f'<item id="{key}" href="{name}" media-type="application/xhtml+xml"/>')
         spine.append(f'<itemref idref="{key}"/>')

@@ -1,3 +1,21 @@
+# Current candidate status — VERSION1.9.69
+
+See SESSION_HANDOFF_2026-11-02_EBOOK_RECONSTRUCTION.md for the current checkpoint.
+The isolated Studio implements topic/manual creation, durable partial drafting,
+editorial checks, saved stock/cover work, owner edits and retained editions,
+PDF/EPUB/Word/Markdown/JPEG/ZIP and eligible measured print packs.128 focused,
+protection and version cases passed83.74sec. Visual PDF/Word fixture QA and
+EPUBCheck passed. These are not default8chapter/Windows model acceptance.
+
+The first full gate passed3468 cases and failed one changelog heading test.
+That note contract is corrected; final full gate is pending. The fresh8B CPU
+pilot was stopped by this environment's8GiB memory ceiling while large tests
+were running. Run inference separately. No production changes or paid calls.
+Authenticated stock search, market-demand research, external fact/originality
+certification, hosted parity and target Windows GPU execution remain unproved.
+
+---
+
 # Ebook replacement reconstruction — November 2, 2026
 
 ## Durable baseline
@@ -20,7 +38,7 @@ Reconstruct an isolated ebook engine with durable per-stage work, bounded recove
 ## Persistence rule
 Commit and push each verified milestone to this branch. Confirm the remote commit before describing it as backed up. Do not depend on a temporary checkout or local commit alone. Keep a current status record with exact checks and blockers. Never commit customer files, secrets, generated books, or runtime databases.
 
-## Current status
+## Historical supplied-text milestone
 The isolated supplied-manuscript milestone is implemented. Focused reconstruction
 suite: 38 passed in18.21seconds. Real browser + independent CLI worker acceptance
 stopped the worker after a saved chapter, closed the browser, restarted the

@@ -101,7 +101,7 @@ class Store:
             for start in range(0,len(ids),400):
                 batch=ids[start:start+400]
                 placeholders=",".join("?" for _ in batch)
-                for row in conn.execute("SELECT id,stage,state,request_key,output,output_sha FROM ebook_v2_units WHERE owner=? AND id IN ("+placeholders+")",(str(owner),*batch)):
+                for row in conn.execute("SELECT id,stage,state,request_key,error,output,output_sha FROM ebook_v2_units WHERE owner=? AND id IN ("+placeholders+")",(str(owner),*batch)):
                     value=dict(row)
                     if value["output"] is not None:
                         try:value["output"]=json.loads(value["output"])

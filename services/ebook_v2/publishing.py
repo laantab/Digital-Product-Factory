@@ -43,24 +43,24 @@ def chapter_valid(output):
         return False
 
 
-def render_pdf(book,print_mode=False):
+def render_pdf(book,print_mode=False,root=None,only_cover=False):
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.lib import colors
     from reportlab.lib.styles import ParagraphStyle
-    from reportlab.platypus import (BaseDocTemplate,PageTemplate,Frame,Paragraph,Spacer,PageBreak)
+    from reportlab.platypus import (BaseDocTemplate,PageTemplate,Frame,Paragraph,Spacer,PageBreak,Image,KeepTogether)
     from reportlab.platypus.tableofcontents import TableOfContents
     fonts = Path(__file__).resolve().parents[1]/"fonts"
     for name,filename in (("V2Body","LiberationSerif-Regular.ttf"),
-                          ("V2Head","LiberationSans-Bold.ttf")):
+                          ("V2Head","LiberationSans-Bold.ttf"),("V2Sans","LiberationSans-Regular.ttf")):
         if name not in pdfmetrics.getRegisteredFontNames():
             pdfmetrics.registerFont(TTFont(name,str(fonts/filename)))
     accent,paper = THEMES[book["theme"]]
     accent,paper = colors.HexColor(accent),colors.HexColor(paper)
     if print_mode:accent,paper=colors.black,colors.white
-    body = ParagraphStyle("body",fontName="V2Body",fontSize=11,leading=15,spaceAfter=9,
+    body = ParagraphStyle("body",fontName="V2Sans" if book["theme"]=="practical" else "V2Body",fontSize=11,leading=15,spaceAfter=9,
                           textColor=colors.black if print_mode else colors.HexColor("#24332e"))
-    heading = ParagraphStyle("chapter",fontName="V2Head",fontSize=20,leading=25,
+    heading = ParagraphStyle("chapter",fontName="V2Body" if book["theme"]=="editorial" else "V2Head",fontSize=20,leading=25,
                              textColor=accent,spaceAfter=20)
     title = ParagraphStyle("cover",parent=heading,fontSize=30,leading=35,spaceAfter=22)
     small = ParagraphStyle("small",parent=body,fontSize=9,leading=12)
@@ -88,17 +88,53 @@ def render_pdf(book,print_mode=False):
         leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)],onPage=decorate))
     while Paragraph(escape(book["title"]),title).wrap(348,500)[1]>350 and title.fontSize>20:
         title.fontSize-=1;title.leading-=1
-    story=[Spacer(1,35 if print_mode else 105),Paragraph(escape(book["title"]),title),
-           Paragraph(escape(book["author"]),body),PageBreak(),Paragraph("Contents",heading)]
-    # Contents does not list itself.
-    story[-1]=Paragraph("Contents",ParagraphStyle("contents-title",parent=heading))
-    toc=TableOfContents();toc.levelStyles=[ParagraphStyle("toc",parent=body,spaceBefore=10)]
-    story += [toc,PageBreak()]
-    for index,chapter in enumerate(book["chapters"]):
+    cover_visual=next((v for v in book.get("visuals",[]) if v.get("photo")),None)
+    story=[Spacer(1,35 if print_mode or cover_visual else 105),Paragraph(escape(book["title"]),title),
+           Paragraph(escape(book["author"]),body)]
+    if cover_visual and not print_mode:
+        from .visuals import photo_bytes
+        photo=cover_visual["photo"];title_height=Paragraph(escape(book["title"]),title).wrap(348,500)[1]
+        height=min(220,max(70,440-title_height));width=min(348,height*photo["width"]/photo["height"])
+        height=width*photo["height"]/photo["width"]
+        picture=Image(io.BytesIO(photo_bytes(root,cover_visual)),width=width,height=height)
+        if book["theme"]=="editorial":
+            story=[Spacer(1,35),picture,Spacer(1,18),Paragraph(escape(book["title"]),title),Paragraph(escape(book["author"]),body)]
+        elif book["theme"]=="practical":
+            story=[story[0],story[1],Spacer(1,18),picture,Spacer(1,12),story[2]]
+        else:story.extend([Spacer(1,18),picture])
+    if not only_cover:
+        story.extend([PageBreak(),Paragraph("Contents",ParagraphStyle("contents-title",parent=heading))])
+        toc=TableOfContents();toc.levelStyles=[ParagraphStyle("toc",parent=body,spaceBefore=10)]
+        story += [toc,PageBreak()]
+    for index,chapter in enumerate([] if only_cover else book["chapters"]):
         if index:story.append(PageBreak())
         story.append(Paragraph(escape(chapter["title"]),heading))
+        visual=book.get("visuals",[])[index] if book.get("visuals") else None
+        if visual:
+            from .visuals import photo_bytes,credit
+            if visual.get("photo"):
+                photo=visual["photo"];data=photo_bytes(root,visual)
+                if print_mode:
+                    from PIL import Image as PILImage
+                    with PILImage.open(io.BytesIO(data)) as source:
+                        gray=io.BytesIO();source.convert("L").save(gray,"JPEG",quality=92);data=gray.getvalue()
+                width=348;height=min(230,width*photo["height"]/photo["width"])
+                width=height*photo["width"]/photo["height"]
+                story.append(KeepTogether([Image(io.BytesIO(data),width=width,height=height),
+                    Spacer(1,5),Paragraph(escape(credit(photo)),small),Spacer(1,12)]))
+            elif visual.get("overview"):
+                story.append(Paragraph("At a glance",ParagraphStyle("overview-title",parent=small,fontName="V2Head")))
+                for point in visual["overview"]:
+                    story.append(Paragraph(escape(point),small,bulletText="•"))
+                story.append(Spacer(1,10))
         for paragraph in chapter["text"].split("\n\n"):
             story.append(Paragraph(escape(paragraph).replace("\n","<br/>"),body))
+    photos=[v["photo"] for v in book.get("visuals",[]) if v.get("photo")]
+    if photos and not only_cover:
+        from .visuals import credit
+        story.extend([PageBreak(),Paragraph("Photo credits",heading)])
+        for photo in photos:
+            story.append(Paragraph(escape(credit(photo))+"<br/>"+escape(photo["source_url"]),small))
     document.multiBuild(story)
     return out.getvalue()
 
@@ -132,23 +168,28 @@ def verified_file(root,receipt):
 
 
 def export_handler(payload,repair):
-    book=payload["book"];pdf=render_pdf(book)
+    from .visuals import prepare
+    book={**payload["book"]}
+    if "visuals" not in book:book["visuals"]=prepare(book,payload["root"])
+    pdf=render_pdf(book,root=payload["root"])
     manuscript="# "+book["title"]+"\n\n"+book["author"]+"\n\n"+"\n\n".join(
         "## "+ch["title"]+"\n\n"+ch["text"] for ch in book["chapters"])
     from . import epub
     import fitz
     with fitz.open(stream=pdf,filetype="pdf") as document:
         cover=document[0].get_pixmap(matrix=fitz.Matrix(300/72,300/72),alpha=False).tobytes("jpeg")
-    electronic=epub.render(book,cover)
+    electronic=epub.render(book,cover,root=payload["root"])
     from . import manuscript as word
-    editable=word.render(book);word.inspect(editable,book)
+    editable=word.render(book,root=payload["root"]);word.inspect(editable,book)
     from . import print_pack
-    paperback=print_pack.render(book,render_pdf(book,print_mode=True),cover)
+    paperback=print_pack.render(book,render_pdf(book,print_mode=True,root=payload["root"]),cover)
     out=io.BytesIO()
     with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("ebook.pdf",pdf);archive.writestr("manuscript.md",manuscript)
         archive.writestr("ebook.epub",electronic);archive.writestr("cover.jpg",cover)
         archive.writestr("manuscript.docx",editable)
+        archive.writestr("photo-sources.json",json.dumps([{**{key:v["photo"][key] for key in ("provider","photographer","source_url","license_url","alt","width","height")},
+            "image_sha256":v["photo"]["file"]["sha256"]} for v in book["visuals"] if v.get("photo")],indent=2))
         if paperback:archive.writestr("print-pack.zip",paperback[0])
         archive.writestr("edition.json",json.dumps({"title":book["title"],"author":book["author"],
             "source":book.get("source","author_supplied"),"review_scope":("local_editorial_checks" if book.get("source")=="local_model" else "structural_checks_only"),
@@ -169,7 +210,7 @@ def export_handler(payload,repair):
         receipt={"key":str(path.relative_to(root)),"size":len(data),"sha256":hashlib.sha256(data).hexdigest()}
         verified_file(root,receipt);files[name]=receipt
     return {"files":files,"integrity":integrity,"root":str(root),
-            "print_specification":paperback[1] if paperback else None}
+            "print_specification":paperback[1] if paperback else None,"visuals":book["visuals"]}
 
 
 def export_valid(output):
@@ -188,6 +229,8 @@ def export_valid(output):
         if "print-pack.zip" in files:
             from . import print_pack
             print_pack.inspect_package(verified_file(root,files["print-pack.zip"]))
+        for visual in output.get("visuals",[]):
+            if visual.get("photo"):verified_file(root,visual["photo"]["file"])
         return actual==output["integrity"]
     except (OSError,KeyError,ValueError,TypeError,zipfile.BadZipFile):
         return False

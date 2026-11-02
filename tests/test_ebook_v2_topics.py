@@ -42,6 +42,7 @@ def provider(monkeypatch):
             request=json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             state["calls"].append((self.path,request))
             if self.path=="/api/show":return self.reply({"remote_host":"https://cloud.invalid"} if state["cloud"] else {})
+            if state.get("capacity"):return self.reply({"error":"llama-server process has terminated: signal: killed"},500)
             schema=request["format"]
             if "titles" in schema["properties"]:result={"titles":["A Clear Desk","Room for Useful Work","The Desk Reset Guide"]}
             elif "chapters" in schema["properties"]:
@@ -189,6 +190,8 @@ def test_automatic_topic_browser_only_requires_title_and_cover_choices(provider,
             page.get_by_role("button",name="A Clear Desk",exact=True).wait_for(state="visible",timeout=30000)
             page.get_by_role("button",name="A Clear Desk",exact=True).click()
             page.get_by_role("button",name="Warm Wellness",exact=True).wait_for(state="visible",timeout=60000)
+            assert page.locator("#actions img").count()==3
+            page.wait_for_function("Array.from(document.querySelectorAll('#actions img')).every(image=>image.complete&&image.naturalWidth===1800)")
             page.get_by_role("button",name="Warm Wellness",exact=True).click()
             page.get_by_role("link",name="Download PDF",exact=True).wait_for(state="visible",timeout=30000)
             assert page.get_by_role("button",name="Approve this edition").count()==0
@@ -300,3 +303,25 @@ def test_sentence_repetition_across_different_paragraph_boundaries_is_rejected()
     chapter["text"]+="\n\n"+sentence+" Add a different ending to disguise the copied paragraph."
     assert any("repeated" in issue for issue in local_text.generated_issues(chapter))
     assert not local_text.chapter_valid({"chapter":chapter,"minimum":450})
+
+
+def test_design_name_and_workflow_settings_never_become_writing_subject(monkeypatch):
+    source=topic_spec();source.update(theme="wellness",title="internal fallback",mode="automatic")
+    captured=[]
+    def generate(prompt,schema,repair="",**kwargs):
+        captured.append(prompt)
+        if "titles" in schema["properties"]:return {"titles":["A","B","C"]}
+        return {"chapters":[{"title":"Team planning","purpose":"Coordinate concrete weekly tasks"}]*2}
+    monkeypatch.setattr(local_text,"generate",generate)
+    local_text.titles_handler({"spec":source},"")
+    local_text.outline_handler({"spec":source,"title":"Team planning"},"")
+    assert all('wellness' not in prompt and 'internal fallback' not in prompt and 'automatic' not in prompt for prompt in captured)
+    assert all(source["topic"] in prompt and source["outcome"] in prompt for prompt in captured)
+
+
+def test_local_memory_exhaustion_is_identified_without_blind_retries(provider):
+    from services.ebook_v2.topics import policies
+    provider["capacity"]=True
+    with pytest.raises(Repairable) as failure:local_text.generate("Outline a useful book",local_text.PLAN_SCHEMA)
+    assert failure.value.code=="LOCAL_CAPACITY"
+    assert "LOCAL_CAPACITY" not in policies()["outline"].repairs

@@ -433,7 +433,7 @@
       "unlocked_reason": null,
       "relocked_by": null,
       "relocked_after_tests": null,
-      "notes": "Isolated local candidate.61 focused checks passed. Supplied-text real browser/worker shutdown proof is complete. Actual small-model technical completion was rejected on manual text review; deterministic model-markup guard now covers that defect. Fresh4B acceptance in progress. No full generator/deployment claim."
+      "notes": "Isolated SQLite candidate.88 reconstruction cases plus9 protection and31 version cases passed83.74sec. Browser verifies saved cover previews, editing, retained original bytes and authenticated downloads. EPUBCheck passes; actual small-model output quality and resource failures are not accepted fresh/default-size completion evidence. No Windows GPU, hosted SQL/R2 or deployment certification."
     }
   }
 }

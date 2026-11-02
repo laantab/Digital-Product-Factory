@@ -1,41 +1,61 @@
-# Ebook reconstruction supplied-text milestone
+# Book Studio reconstruction checkpoint — November 2 2026
 
-Branch rebuild/ebook-engine-v2-20261102, base19068c4. Candidate1.9.68 is isolated;
-no live app registration, deployment, hosted schema or customer data changed.
-The previous missing replacement source has not been recovered. This is new
-reconstruction, not a claim to have restored the missing63-test implementation.
+Candidate VERSION1.9.69. Source is isolated in services/ebook_v2, standalone
+loopback5088 with separate SQLite/auth/storage. Legacy app.py, customer files,
+production database/configuration, billing and other generators are unchanged.
+User authorizes continued work and access to GitHub/Render. No paid calls.
 
-Foundation21 cases and supplied-book/customer-path17 cases:38 passed18.21sec.
-Registry integrity/enforcement9 passed0.16sec. Existing fast baseline826 passed
-378.08sec before expanding registry coverage. Expanded/full gate pending.
-See docs/EBOOK_RECONSTRUCTION_STATUS.md and release_evidence/ebook_v2_supplied_milestone.json.
+## Implemented and checked
+Durable fenced per-stage jobs, bounded validated repair memory, partial drafting
+and expansion, local-only Ollama writing/review, automatic/manual decisions,
+three saved cover previews, bounded Pexels/Unsplash stock acquisition with credits,
+source-derived chapter overviews, owner editing and linked retained editions.
+PDF/EPUB/Word/Markdown/cover JPEG/ZIP exports verify actual bytes and package
+identity. Eligible24–150page interiors get measured6x9B&W white-paper print packs;
+that is this renderer's range, not Amazon's maximum. KDP Previewer/proof required.
 
-Real browser acceptance uses an independent CLI worker. It stops the worker
-after a completed chapter, closes the browser, restarts the worker, reopens
-Saved Books, approves the edition and downloads actual matching PDF/ZIP bytes.
-The first completed chapter stays at one attempt. HTTP proofs include200,
-SHA256 response checksums, signatures, CRC, embedded PDF equality, cross-owner404,
-unauthenticated401 and CSRF403. Read-only status never advances work. Missing
-worker creation503 creates no failed attempt. Worker heartbeat stays independent
-of long-running work. PDF review inspected every page of a four-page supplied
-fixture explicitly labeled NOT FOR SALE. No paid or model calls occurred.
+88 reconstruction cases +9 protection +31 version cases:128 passed83.74sec.
+This includes actual browser preview loads, worker restart, edition edits and
+unchanged original PDF bytes. API fixtures prove protocol/limits, not live-key
+search quality. A manually selected public Pexels image was checked in3covers,
+all6PDF fixture pages and all4Word fixture pages. EPUBCheck5.4.0:zero errors or
+warnings. Mechanical QA text is NOT FOR SALE and is not topic-quality proof.
 
-Current workflow supports supplied prose, three simple templates, PDF/ZIP,
-editable Markdown, saved books, authenticated local login and manual recovery.
-It does not yet reconstruct topic writing, independent editorial checks, photos,
-chapter editing/versions, EPUB/DOCX or KDP. Do not call the generator complete.
-Windows launcher is supplied but not executed on Windows. Hosted SQL/R2 are
-unverified. sqlite is deliberate until hosted parity is proved.
+## Failures and precise corrections
+The full Factory run at e140f60 source tree35d1de3 passed3468 cases and failed
+one release-note heading contract,1071.75sec. Corrected CHANGELOG and current
+version checks pass31cases; whole gate must run again on frozen final code.
+Actual1.7B/4B books reached technical READY but manual text review rejected
+repetition, markup, author-experience invention and stray CJK text. Independent
+guards cover these defects. Design name wellness had leaked into model briefs;
+new brief filtering prevents it. Actual fresh8B run retained titles then failed
+outline when the8GB test environment exhausted memory during overlapping full
+suite/model work. Kernel oom_kill counters and provider logs confirm it. Do not
+count it as model acceptance; run inference separately after tests. Memory
+exhaustion now has a safe specific message and no identical automatic retries.
 
-User explicitly authorized GitHub backup. Push every tested milestone and verify
-remote source before saying backed up. Never claim local commits are durable
-backup. The six-file foundation2c3a6f6 is already remotely verified; next is the
-supplied-book checkpoint. Never put customer files, runtime DBs or secrets in git.
+## Next required work
+Publish and verify this exact source checkpoint before more work. Last prior
+remote backup is e140f60e7379ee731b9be67962d054007aa35c2a on
+rebuild/ebook-engine-v2-20261102. Native git has no push credentials; use GitHub
+create_tree/create_commit/update_ref with expected SHA and exact tree comparison.
+Never commit runtime DBs, generated books, credentials or preservation originals.
 
-Latest source: local-only topic drafting and editorial paths have been published
-at9e26afdbbf0f348c13295562a0d3804ed709d849. Follow-up introduces persisted
-partial draft/expansion/assembly and measured progress. See current status doc.
-Both1.7B and4B model runs exposed defects missed by model review; do not present
-their technical READY state as quality acceptance. Source and regression checks
-are useful, but editing, versions, photos, EPUB/DOCX/KDP and target8B Windows
-acceptance remain unfinished. Preserve all original customer files.
+Run fresh local8B acceptance without concurrent large tests; inspect actual text
+and every page, not just READY. Default-size8x650 and Windows RTX3060/8B execution
+remain unproved. Authenticated stock search needs configured provider keys.
+Market demand, external factual/originality certification, hosted SQL/R2 parity,
+Windows execution and deployment remain uncertified. Do not claim completed
+replacement or legacy70percent repair. Current source is not enabled in the
+hosted Factory. Production configuration/cutover remains a distinct boundary.
+
+## Runtime evidence locations in this workspace
+Original source checkout factory; isolated visual-development checkout factory-visuals.
+Frozen first full gate:/tmp/factory-v2-full-release.log. Focused final:
+/tmp/factory-v2-visuals-freeze-tests.log. Failed8B resource pilot:
+/tmp/factory-v2-fresh-8b-topic. Ollama binary:/tmp/factory-ollama/bin/ollama;
+models:/tmp/factory-v2-topic-pilot/models. CPU memory ceiling8GiB. Run server
+and client as children of the same exec orchestrator; separate exec loopbacks
+are isolated. Current real-model harness:/tmp/factory_v2_fresh_8b_topic.py.
+Actual original preservation PDF/ZIP are restored, ignored by git and hash
+verified. Keep these exact bytes for the full gate; never substitute newer PDFs.

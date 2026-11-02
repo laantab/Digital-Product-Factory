@@ -70,7 +70,11 @@ def generate(prompt,schema,repair="",max_tokens=5000):
                     "Never invent personal experience for the author. Mark illustrative scenarios as hypothetical.",
                 "options":{"temperature":.5 if repair else .35,"repeat_penalty":1.12 if repair else 1.05,
                            "num_predict":max_tokens}},timeout=(3,timeout()),allow_redirects=False)
-            if response.status_code==500 and "token repeat" in response.text.lower():raise Repairable("REPETITION_LOOP")
+            if response.status_code==500:
+                reason=response.text.casefold()
+                if any(marker in reason for marker in ("signal: killed","out of memory","unable to allocate")):
+                    raise Repairable("LOCAL_CAPACITY")
+                if "token repeat" in reason:raise Repairable("REPETITION_LOOP")
             response.raise_for_status()
             if response.status_code!=200:raise Repairable("LOCAL_CONFIGURATION")
             if len(response.content)>2_000_000:raise Repairable("INVALID_RESPONSE")
@@ -115,9 +119,14 @@ def as_chapter(value):
     return value
 
 
+def brief(spec):
+    """Design presets and workflow state are not instructions about the subject."""
+    return {key:spec[key] for key in ("topic","audience","outcome","chapter_count","min_words") if key in spec}
+
+
 def titles_handler(payload,repair):
     return generate("Propose three distinct honest book titles for this brief. No fabricated numerical "
-                    "promises or guaranteed outcomes. Brief: "+json.dumps(payload["spec"]),TITLE_SCHEMA,repair,max_tokens=500)
+                    "promises or guaranteed outcomes. Brief: "+json.dumps(brief(payload["spec"])),TITLE_SCHEMA,repair,max_tokens=500)
 
 
 def titles_valid(output):
@@ -130,7 +139,7 @@ def outline_handler(payload,repair):
     schema=json.loads(json.dumps(PLAN_SCHEMA));count=payload["spec"]["chapter_count"]
     schema["properties"]["chapters"].update(minItems=count,maxItems=count)
     result=generate("Plan a useful nonfiction book with exactly "+str(count)+" chapters. Each needs a "
-        "distinct title and clear purpose, with minimal overlap. Brief: "+json.dumps(payload),schema,repair,max_tokens=2400)
+        "distinct title and clear purpose, with minimal overlap. Brief: "+json.dumps({"spec":brief(payload["spec"]),"title":payload["title"]}),schema,repair,max_tokens=2400)
     return {**result,"expected_count":count}
 
 
@@ -192,7 +201,7 @@ def chapter_handler(payload,repair):
     else:
         prompt="Write a complete useful nonfiction chapter, with at least three developed paragraphs, a "
         prompt+="concrete hypothetical example and practical exercise. Use plain prose, no Markdown markers. "
-    prompt+=" Aim for "+str(spec["min_words"]+150)+" words; minimum "+str(spec["min_words"])+". Brief: "+json.dumps(spec)
+    prompt+=" Aim for "+str(spec["min_words"]+150)+" words; minimum "+str(spec["min_words"])+". Brief: "+json.dumps(brief(spec))
     prompt+=". Approved outline: "+json.dumps(plan)+". Write only this chapter: "+json.dumps(item)
     if repair=="rewrite_plain_prose":prompt+=". Return only real book prose. No chat markup, tool-response tags, JSON field labels or model reasoning."
     chapter=_require(generate(prompt,chapter_schema(item["title"],spec["min_words"]),repair,
@@ -228,7 +237,7 @@ def draft_handler(payload,repair):
     else:
         chapter=as_chapter(generate("Draft this useful nonfiction chapter in developed plain paragraphs. "
             "Include a concrete hypothetical example and a practical exercise. No chat markers, internal "
-            "field labels or Markdown. Aim for "+str(spec["min_words"]+150)+" words. Brief: "+json.dumps(spec)
+            "field labels or Markdown. Aim for "+str(spec["min_words"]+150)+" words. Brief: "+json.dumps(brief(spec))
             +". Approved plan: "+json.dumps(payload["plan"])+". Write only: "+json.dumps(item),
             chapter_schema(item["title"],spec["min_words"]),repair,max_tokens=min(5000,spec["min_words"]*3+600)))
     result={"chapter":chapter,"source":"local_partial_draft"}
@@ -309,7 +318,7 @@ def review_handler(payload,repair):
         "guidance and explicitly hypothetical examples do not need citations. False applies to actual "
         "grammar defects, irrelevant content, contradictions or invented facts/statistics. List only "
         "actual defects, with an empty issues array when all checks pass. Do not claim plagiarism or "
-        "external fact verification. Brief: "+json.dumps(spec)+". Chapter: "+json.dumps(chapter),REVIEW_SCHEMA,repair,max_tokens=1200)
+        "external fact verification. Brief: "+json.dumps(brief(spec))+". Chapter: "+json.dumps(chapter),REVIEW_SCHEMA,repair,max_tokens=1200)
     issues=numeric_issues(chapter)
     if issues:
         report.setdefault("checks",{})["claims_appropriate"]=False

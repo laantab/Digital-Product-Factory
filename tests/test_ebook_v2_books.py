@@ -223,3 +223,124 @@ def test_short_ebook_does_not_offer_a_padded_print_pack(engine):
     output=engine.units.get("alice",book["units"][-1])["output"]
     assert output["print_specification"] is None
     assert "print-pack.zip" not in output["files"]
+
+
+def test_free_stock_receipt_uses_actual_pixels_and_never_forwards_api_key(tmp_path,monkeypatch):
+    from services.ebook_v2.visuals import Stock,photo_bytes
+    from PIL import Image
+    image=io.BytesIO();Image.new("RGB",(1920,1280),(60,110,75)).save(image,"PNG")
+    monkeypatch.setenv("PEXELS_API_KEY","fixture-key-only")
+    monkeypatch.delenv("UNSPLASH_ACCESS_KEY",raising=False);monkeypatch.delenv("UNSPLASH_API_KEY",raising=False)
+    calls=[]
+    class Response:
+        def json(self):return {"photos":[{"id":123,"alt":"Volunteer team planning a neighborhood event",
+            "src":{"original":"https://images.pexels.com/photos/123/test.png"},
+            "url":"https://www.pexels.com/photo/123/","photographer":"Fixture photographer"}]}
+        def iter_content(self,size):yield image.getvalue()
+        def close(self):pass
+    def request(self,url,**kwargs):
+        calls.append((url,kwargs))
+        if "images.pexels.com" in url:assert "headers" not in kwargs
+        return Response()
+    monkeypatch.setattr(Stock,"request",request)
+    stock=Stock(tmp_path)
+    try:photo=stock.acquire("volunteer team planning")
+    finally:stock.close()
+    assert photo["width"]==1920 and photo["height"]==1280
+    assert photo["provider"]=="Pexels" and photo["photographer"]=="Fixture photographer"
+    assert photo_bytes(tmp_path,{"photo":photo}).startswith(b"\xff\xd8")
+    assert "fixture-key-only" not in str(photo)
+    assert calls[0][1]["headers"]["Authorization"]=="fixture-key-only"
+
+
+@pytest.mark.parametrize("url",["http://images.pexels.com/x","https://127.0.0.1/x",
+    "https://images.pexels.com.attacker.invalid/x","https://secret@images.pexels.com/x"])
+def test_stock_never_fetches_unapproved_image_hosts(url):
+    from services.ebook_v2.visuals import safe_url
+    with pytest.raises(ValueError):safe_url(url,"images.pexels.com")
+
+
+def test_missing_stock_keys_use_actual_chapter_overview_without_network(tmp_path,monkeypatch):
+    from services.ebook_v2.visuals import Stock,prepare
+    for key in ("PEXELS_API_KEY","UNSPLASH_ACCESS_KEY","UNSPLASH_API_KEY"):monkeypatch.delenv(key,raising=False)
+    monkeypatch.setattr(Stock,"request",lambda *a,**kw:pytest.fail("Unexpected remote request"))
+    source=spec();visuals=prepare(source,tmp_path)
+    assert all(v["photo"] is None and v["overview"] for v in visuals)
+    for chapter,visual in zip(source["chapters"],visuals):
+        assert all(point in chapter["text"] for point in visual["overview"])
+
+
+def test_visual_checkpoints_and_cover_previews_are_reused_after_restart(engine):
+    from services.ebook_v2.visuals import valid
+    book=engine.create("alice","visual-checkpoint-001",spec())
+    total=len(spec()["chapters"])
+    for _ in range(20):
+        book=engine.advance("alice",book["id"])
+        if len(book["units"])>total:
+            row=engine.units.get("alice",book["units"][total])
+            if row["state"]=="COMPLETE":break
+    assert row["stage"]=="visuals" and valid(row["output"])
+    original=engine.units.get("alice",row["id"])
+    restarted=Books(engine.units.path,engine.root)
+    for _ in range(20):
+        book=restarted.advance("alice",book["id"])
+        if book["state"]=="REVIEW":break
+    assert book["state"]=="REVIEW"
+    after=restarted.units.get("alice",row["id"])
+    assert after["attempts"]==1 and after["output"]==original["output"]
+
+
+def test_unsplash_download_tracking_follows_successful_image_acquisition(tmp_path,monkeypatch):
+    from services.ebook_v2.visuals import Stock
+    from PIL import Image
+    image=io.BytesIO();Image.new("RGB",(1800,1200),(90,110,130)).save(image,"JPEG")
+    monkeypatch.setenv("UNSPLASH_ACCESS_KEY","fixture-unsplash-only")
+    candidate={"provider":"Unsplash","id":"abc123","alt":"Volunteer team planning",
+        "url":"https://images.unsplash.com/photo-abc?ixid=public",
+        "original":"https://images.unsplash.com/photo-abc?ixid=public",
+        "page":"https://unsplash.com/photos/abc123","download":"https://api.unsplash.com/photos/abc123/download",
+        "photographer":"Fixture artist","license":"https://unsplash.com/license"}
+    monkeypatch.setattr(Stock,"candidates",lambda self,query:iter([candidate]))
+    calls=[]
+    class Response:
+        def iter_content(self,size):yield image.getvalue()
+        def close(self):pass
+    def request(self,url,**kwargs):
+        calls.append((url,kwargs))
+        if "images.unsplash.com" in url:
+            assert "headers" not in kwargs and "w=1800" in url
+        else:assert kwargs["headers"]["Authorization"]=="Client-ID fixture-unsplash-only"
+        return Response()
+    monkeypatch.setattr(Stock,"request",request)
+    stock=Stock(tmp_path)
+    try:photo=stock.acquire("volunteer team planning")
+    finally:stock.close()
+    assert photo and len(calls)==2 and calls[-1][0].endswith("/photos/abc123/download")
+
+
+def test_expired_stock_budget_does_not_start_a_network_call(tmp_path,monkeypatch):
+    from services.ebook_v2.visuals import Stock
+    monkeypatch.setenv("PEXELS_API_KEY","fixture-key-only")
+    for key in ("UNSPLASH_ACCESS_KEY","UNSPLASH_API_KEY"):monkeypatch.delenv(key,raising=False)
+    stock=Stock(tmp_path,budget=0)
+    monkeypatch.setattr(stock.session,"get",lambda *a,**kw:pytest.fail("Expired budget made a network call"))
+    try:assert stock.acquire("volunteer team planning") is None
+    finally:stock.close()
+
+
+def test_local_settings_import_never_selects_the_legacy_database(tmp_path,monkeypatch):
+    import os,sys
+    from services.ebook_v2 import cli
+    legacy=tmp_path/"legacy.sqlite";legacy.write_bytes(b"preserved customer database sentinel")
+    settings=tmp_path/"local.env"
+    settings.write_text(f"FACTORY_DB_PATH={legacy}\nDATABASE_URL=forbidden-remote-setting\nPEXELS_API_KEY=fixture-free-photo-key\n")
+    monkeypatch.setenv("FACTORY_TEST_MODE","0")
+    monkeypatch.setenv("FACTORY_V2_SETTINGS_FILE",str(settings))
+    for key in ("FACTORY_DB_PATH","FACTORY_DB_BACKEND","DATABASE_URL"):monkeypatch.setenv(key,os.environ.get(key,""))
+    monkeypatch.delenv("PEXELS_API_KEY",raising=False)
+    monkeypatch.setattr(sys,"argv",["studio","init","--data",str(tmp_path/"separate")])
+    cli.main()
+    assert os.environ["PEXELS_API_KEY"]=="fixture-free-photo-key"
+    assert os.environ["DATABASE_URL"]=="" and os.environ["FACTORY_DB_BACKEND"]=="sqlite"
+    assert legacy.read_bytes()==b"preserved customer database sentinel"
+    assert (tmp_path/"separate"/"studio.sqlite").exists()

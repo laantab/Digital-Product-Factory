@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-02",
+  "candidate": "1.9.69",
+  "focused_protection_version_passed": 128,
+  "seconds": 83.74,
+  "reconstruction_cases": 88,
+  "protection_cases": 9,
+  "version_cases": 31,
+  "visual_pdf_fixture_pages_reviewed": 6,
+  "visual_word_fixture_pages_reviewed": 4,
+  "cover_variants_reviewed": 3,
+  "epubcheck": "5.4.0",
+  "epubcheck_errors": 0,
+  "epubcheck_warnings": 0,
+  "stock_live_asset": "manually selected public Pexels36713461; mechanical layout QA only",
+  "authenticated_stock_search_certified": false,
+  "first_full_gate": {
+    "source": "e140f60e7379ee731b9be67962d054007aa35c2a",
+    "passed": 3468,
+    "failed": 1,
+    "seconds": 1071.75,
+    "failure": "missing required changelog headings; corrected and version suite passed"
+  },
+  "fresh_8b": "titles saved, outline stopped after OS killed model under8GiB memory pressure; not accepted",
+  "paid_calls": 0,
+  "production_changed": false
+}

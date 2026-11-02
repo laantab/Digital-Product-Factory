@@ -9,7 +9,7 @@ from . import local_text as text
 def clean_spec(raw):
     result={"source":"ollama"}
     if raw.get("research_acknowledged") is not True:
-        raise ValueError("This reconstruction does not assess market demand. Confirm that limitation before topic generation.")
+        raise ValueError("Confirm that market demand has not been assessed before starting.")
     result["research_acknowledged"]=True
     for key,limit in (("topic",2000),("audience",500),("outcome",1000),("author",100)):
         value=raw.get(key)
@@ -38,12 +38,12 @@ def policies():
         "SHORT_CHAPTER":("expand_editorial_revision",),"CONTENT_QUALITY":("apply_editorial_feedback",),
         "MODEL_ARTIFACT":("apply_editorial_feedback",)}
     drafts={**chapters,"SHORT_DRAFT":("develop_saved_draft",),"SHORT_ADDITION":("expand_saved_section",)}
-    return {"titles":Policy("titles-1",text.titles_handler,text.titles_valid,common,timeout=deadline,retry_delay=5),
-        "outline":Policy("outline-1",text.outline_handler,text.outline_valid,common,timeout=deadline,retry_delay=5),
-        "writing":Policy("writing-5",text.chapter_handler,text.chapter_valid,chapters,timeout=deadline,retry_delay=5),
-        "editorial":Policy("editorial-6",text.review_handler,text.review_valid,reviews,timeout=2*deadline,retry_delay=5),
-        "draft":Policy("draft-3",text.draft_handler,text.partial_valid,drafts,timeout=deadline,retry_delay=5),
-        "expand":Policy("expand-3",text.expansion_handler,text.expansion_valid,drafts,timeout=deadline,retry_delay=5),
+    return {"titles":Policy("titles-2",text.titles_handler,text.titles_valid,common,timeout=deadline,retry_delay=5),
+        "outline":Policy("outline-2",text.outline_handler,text.outline_valid,common,timeout=deadline,retry_delay=5),
+        "writing":Policy("writing-6",text.chapter_handler,text.chapter_valid,chapters,timeout=deadline,retry_delay=5),
+        "editorial":Policy("editorial-7",text.review_handler,text.review_valid,reviews,timeout=2*deadline,retry_delay=5),
+        "draft":Policy("draft-4",text.draft_handler,text.partial_valid,drafts,timeout=deadline,retry_delay=5),
+        "expand":Policy("expand-4",text.expansion_handler,text.expansion_valid,drafts,timeout=deadline,retry_delay=5),
         "assemble":Policy("assemble-2",text.assembly_handler,text.chapter_valid,{},timeout=20,retry_delay=0)}
 
 
@@ -122,10 +122,13 @@ def advance(books,book):
         checked=unit(review,"editorial",{"spec":spec,"chapter":chapter["chapter"]},[unit_map[name]])
         if checked is None:return pending()
         reviewed.append(checked["chapter"])
+    visuals=unit("visuals","visuals",{"root":books.root,"book":{"title":state["decisions"]["title"],
+        "author":spec["author"],"topic":spec["topic"],"chapters":reviewed}},[unit_map[f"review:{index}"] for index in range(spec["chapter_count"])])
+    if visuals is None:return pending()
     if "cover" not in state["decisions"]:return save(books,book,state,"WAITING_COVER")
     exported=unit("export","export",{"root":books.root,"book":{"title":state["decisions"]["title"],
-        "author":spec["author"],"theme":state["decisions"]["cover"],"chapters":reviewed,"source":"local_model"}},
-        [unit_map[f"review:{index}"] for index in range(spec["chapter_count"])])
+        "author":spec["author"],"theme":state["decisions"]["cover"],"chapters":reviewed,"source":"local_model","visuals":visuals["visuals"]}},
+        [unit_map["visuals"]])
     if exported is None:return pending()
     return save(books,book,state,"READY" if spec["mode"]=="automatic" else "REVIEW")
 
@@ -145,19 +148,29 @@ def status(books,book):
             index=int(name.split(":")[1]);saved_words[index]=max(saved_words.get(index,0),len(chapter["text"].split()))
     labels={"titles":"Preparing title choices","outline":"Planning chapters","draft":"Drafting chapter",
         "expand":"Developing chapter","assemble":"Saving chapter","writing":"Writing chapter",
-        "editorial":"Reviewing chapter","export":"Formatting files"}
+        "editorial":"Reviewing chapter","visuals":"Preparing images and cover previews","export":"Formatting files"}
     activity="Saved work is up to date"
     for name,row in rows.items():
         if row["state"] in {"RUNNING","QUEUED"}:
             activity=labels.get(row["stage"],"Preparing your book")
             if ":" in name and name.split(":")[1].isdigit():activity+=" "+str(int(name.split(":")[1])+1)
             break
-    return {"id":book["id"],"title":state["decisions"].get("title",book["spec"]["title"]),
+    attention=""
+    for row in rows.values():
+        if row["state"]=="NEEDS_ATTENTION":
+            if row.get("error")=="LOCAL_CAPACITY":
+                attention="The local model needs more available memory. Close other heavy applications, then continue your saved work."
+                activity="Waiting for local model capacity"
+            else:attention="This step needs a correction. Completed chapters and drafts are preserved."
+            break
+    return {"attention":attention,"id":book["id"],"title":state["decisions"].get("title",book["spec"]["title"]),
         "author":book["spec"]["author"],"state":("WAITING_SERVICE" if book["state"]=="RUNNING"
             and (not books.available(local_text=True)) else book["state"]),"revision":book["revision"],
         "source":"local_model","chapters_checked":sum(output(f"review:{index}")!={} for index in range(total)),
         "chapters_total":total,"words_saved":sum(saved_words.values()),"activity":activity,
         "integrity":exported.get("integrity"),"files":list(exported.get("files",{})),
+        "cover_previews":list(output("visuals").get("covers",{})),
+        "photo_credits":[v["photo"] for v in output("visuals").get("visuals",[]) if v.get("photo")],
         "titles":output("titles").get("titles",[]),"outline":output("outline").get("chapters",[]),
         "review_scope":"Local AI editorial and structural checks. External factual and plagiarism verification were not performed."}
 

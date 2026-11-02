@@ -17,6 +17,14 @@ def main():
     args=parser.parse_args()
     if not .1<=args.interval<=30:parser.error("Interval must be between .1 and 30 seconds")
     data=Path(args.data).resolve();data.mkdir(parents=True,exist_ok=True)
+    if os.environ.get("FACTORY_TEST_MODE")!="1":
+        from dotenv import dotenv_values
+        settings=Path(os.environ.get("FACTORY_V2_SETTINGS_FILE",Path(__file__).resolve().parents[2]/".env"))
+        values=dotenv_values(settings)
+        allowed=("PEXELS_API_KEY","UNSPLASH_ACCESS_KEY","UNSPLASH_API_KEY","FACTORY_V2_OLLAMA_URL",
+                 "FACTORY_V2_OLLAMA_MODEL","FACTORY_V2_TEXT_TIMEOUT_SECONDS")
+        for key in allowed:
+            if values.get(key):os.environ.setdefault(key,values[key])
     os.environ["FACTORY_DB_PATH"]=str(data/"studio.sqlite")
     os.environ["FACTORY_DB_BACKEND"]="sqlite";os.environ["DATABASE_URL"]=""
     from .books import Books,Conflict

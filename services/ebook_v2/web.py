@@ -93,6 +93,20 @@ def create_app(books):
         else:raise LookupError("Action not found")
         return jsonify(books.status(str(current_user.id),book_id))
 
+    @app.get("/api/books/<book_id>/covers/<theme>.jpg")
+    def cover_preview(book_id,theme):
+        from .topics import data
+        from .publishing import verified_file
+        book=books.get(str(current_user.id),book_id)
+        if book["spec"].get("source")!="ollama" or book["state"] not in {"WAITING_COVER","REVIEW","READY"}:
+            raise LookupError("Cover not found")
+        unit_id=data(books,book)["units"].get("visuals")
+        if not unit_id:raise LookupError("Cover not found")
+        unit=books.units.get(str(current_user.id),unit_id)
+        if unit["state"]!="COMPLETE" or theme not in unit["output"]["covers"]:raise LookupError("Cover not found")
+        response=send_file(io.BytesIO(verified_file(books.root,unit["output"]["covers"][theme])),mimetype="image/jpeg")
+        return response
+
     @app.get("/api/books/<book_id>/files/<name>")
     def download(book_id,name):
         preview=request.args.get("preview")=="1"

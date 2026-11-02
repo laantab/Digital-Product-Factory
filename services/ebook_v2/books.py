@@ -43,12 +43,16 @@ class Books:
         self.units=Store(database);self.root=str(Path(objects).resolve())
         self.policies=policies or {
             "chapter":Policy("supplied-1",chapter_handler,chapter_valid,timeout=20),
-            "export":Policy("pdf-zip-3",export_handler,export_valid,
+            "export":Policy("pdf-zip-4",export_handler,export_valid,
                 {"TIMEOUT":("rebuild",),"WORKER_EXITED":("rebuild",),
                  "VALIDATION_FAILED":("rebuild",)},timeout=120,retry_delay=1)}
         if policies is None:
             from .topics import policies as topic_policies
             self.policies.update(topic_policies())
+        if policies is None:
+            from .visuals import handler,valid
+            self.policies['visuals']=Policy('stock-1',handler,valid,
+                {'TIMEOUT':('rebuild',),'WORKER_EXITED':('rebuild',),'VALIDATION_FAILED':('rebuild',)},timeout=120,retry_delay=1)
         self.worker=Worker(self.units,self.policies)
 
     def initialize(self):
@@ -153,8 +157,13 @@ class Books:
                 return self.get(owner,book_id)
             outputs.append(unit["output"])
         if len(outputs)==expected:
+            visual=self.units.enqueue(owner,book_id+":visuals","visuals",self.policies["visuals"].version,
+                {"root":self.root,"book":{**book["spec"],"chapters":[o["chapter"] for o in outputs]}},parents=book["units"])
+            return self.save(book,units=book["units"]+[visual])
+        if len(outputs)==expected+1:
             export=self.units.enqueue(owner,book_id+":export","export",self.policies["export"].version,
-                {"root":self.root,"book":{**book["spec"],"chapters":[o["chapter"] for o in outputs]}},
+                {"root":self.root,"book":{**book["spec"],"chapters":[o["chapter"] for o in outputs[:expected]],
+                    "visuals":outputs[expected]["visuals"]}},
                 parents=book["units"])
             return self.save(book,units=book["units"]+[export])
         return self.save(book,state="REVIEW")
@@ -166,7 +175,7 @@ class Books:
             return status(self,book)
         units=[self.units.get(owner,key) for key in book["units"]]
         total=len(book["spec"]["chapters"])
-        exported=units[-1]["output"] if len(units)>total and units[-1]["state"]=="COMPLETE" else None
+        exported=units[-1]["output"] if units and units[-1]["stage"]=="export" and units[-1]["state"]=="COMPLETE" else None
         return {"id":book_id,"title":book["spec"]["title"],"author":book["spec"]["author"],
             "state":("WAITING_SERVICE" if book["state"]=="RUNNING" and not self.available() else book["state"]),"revision":book["revision"],
             "chapters_checked":sum(unit["state"]=="COMPLETE" for unit in units[:total]),

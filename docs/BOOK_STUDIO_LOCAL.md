@@ -1,8 +1,8 @@
-# Book Studio supplied-manuscript milestone
+# Local Book Studio candidate
 
 This is the reconstructed, isolated local engine. Existing Factory routes,
-customer projects and production services are unchanged. It is not a fix claim
-for the legacy 70 percent stall and is not a completed topic generator.
+customer projects and production services are unchanged. It is a separate candidate; default-size topic quality and Windows GPU execution
+are not yet certified.
 
 ## Start on Windows
 
@@ -27,8 +27,8 @@ edition to enable PDF, complete ZIP and editable Markdown downloads.
 
 This path preserves supplied prose and performs structural/file-integrity
 checks. It does not claim AI generation, copyediting, plagiarism checking or
-fact verification. Those and photographs, EPUB/DOCX, chapter revision/version
-controls and KDP preparation remain later reconstruction stages.
+fact verification. Topic writing, stock images, EPUB/Word, retained editions and eligible print
+preparation now have separate workflows described below.
 
 ## Command line
 
@@ -86,3 +86,23 @@ and downloads, checks the exact revised text, and requires approval before the
 new downloads are released. Existing AI chapter work is retained in the original
 book; owner edits do not trigger automatic rewriting. Saved editions can be
 reopened from the same editor. Two tabs cannot silently overwrite one another.
+
+## Stock images and cover previews
+Pexels is tried before Unsplash when their free-provider credentials are configured.
+The separate worker saves approved-host, resolution-checked assets and all three
+cover previews before the topic cover decision. Completed image work is reused.
+Missing/unavailable stock uses an overview taken from the chapter's exact prose;
+no invented numeric chart or unrelated placeholder is inserted. Metadata filtering
+is not a visual-semantic certification; inspect the actual book pages.
+
+The launcher reads only the stock and local-model settings from the local project
+configuration, or FACTORY_V2_SETTINGS_FILE. Production database settings are
+ignored; Studio always selects its separate local SQLite file. Stock settings
+are PEXELS_API_KEY and UNSPLASH_ACCESS_KEY (UNSPLASH_API_KEY is also accepted).
+Credentials are never included in book files or source receipts.
+
+## Paperback preparation
+Eligible interiors24–150pages receive a measured6x9white-paper B&W print pack.
+This is the supported range of this renderer. Short ebooks are not padded to
+qualify. Only a parity page can be added. Check KDP Previewer and a physical proof
+before publishing; this is preparation, not approval by Amazon.

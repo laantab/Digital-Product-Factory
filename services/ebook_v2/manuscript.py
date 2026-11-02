@@ -2,7 +2,7 @@
 import io
 
 
-def render(book):
+def render(book,root=None):
     from docx import Document
     from docx.shared import Inches, Pt, RGBColor
     from docx.oxml.ns import qn
@@ -28,9 +28,18 @@ def render(book):
     document.add_paragraph(book['title'],'Title')
     document.add_paragraph(book['author'])
     document.add_page_break()
+    caption=document.styles['Caption'];caption.font.color.rgb=RGBColor(0,0,0)
+    caption.font.name='Liberation Serif';caption.font.size=Pt(9);caption.font.bold=False;caption.font.italic=False
+    caption.paragraph_format.line_spacing=1.1;caption.paragraph_format.space_after=Pt(8)
     for index,chapter in enumerate(book['chapters']):
         if index:document.add_page_break()
         document.add_paragraph(chapter['title'],'Heading 1')
+        visual=book.get('visuals',[])[index] if book.get('visuals') else None
+        if visual and visual.get('photo'):
+            from .visuals import photo_bytes,credit
+            picture=document.add_picture(io.BytesIO(photo_bytes(root,visual)),width=Inches(4.7))
+            picture._inline.docPr.set('descr',visual['photo']['alt'])
+            document.add_paragraph(credit(visual['photo'])+' — '+visual['photo']['source_url'],'Caption')
         for paragraph in chapter['text'].split('\n\n'):document.add_paragraph(paragraph)
     out=io.BytesIO();document.save(out)
     return out.getvalue()
@@ -39,7 +48,7 @@ def render(book):
 def inspect(data,book=None):
     from docx import Document
     document=Document(io.BytesIO(data))
-    paragraphs=[p for p in document.paragraphs if p.text]
+    paragraphs=[p for p in document.paragraphs if p.text and p.style.name!='Caption']
     if not paragraphs or paragraphs[0].style.name!='Title':raise ValueError('Missing manuscript title')
     if book:
         expected=[book['title'],book['author']]

@@ -1,18 +1,64 @@
-## 1.9.68 — Reconstructed Book Studio supplied-text milestone (candidate)
+## 1.9.69 — Saved image work and clearer local writing recovery (candidate)
 
 ### What changed
-Added a separate local Book Studio that saves supplied manuscripts, checks each
-chapter independently, renders a PDF and matching complete ZIP, requires page
-review, and serves authenticated owner-scoped downloads. A separate worker
-continues after browser closure and reuses saved chapters after shutdown.
-Missing-worker preflight refuses before creating a book attempt. Verified
-repair memory is bounded by code-owned policies and versioned validators.
+Book Studio prepares stock images and three saved cover previews before the
+cover decision. Free Pexels acquisition precedes Unsplash; image dimensions,
+approved hosts, source credits and stored checksums are verified. Without suitable
+stock, chapter overviews use the approved prose. PDF, EPUB and Word reuse the
+same saved image bytes. Previously completed image work survives reopening.
 
-### Release boundary
-This candidate does not replace the live Factory or certify fresh-topic writing.
-The supplied-text milestone passed38 focused reconstruction cases and9 registry
-checks; the existing Factory baseline passed826. Expanded/full release and
-production acceptance remain pending. No paid calls or production changes.
+### What was fixed
+The wellness design preset had entered model writing briefs, producing unrelated
+wellness references. Writing now receives only the topic, audience and reader
+outcome. Local model memory exhaustion has a specific message and preserves saved
+work instead of consuming repeated identical attempts. The preceding release-note
+heading failure is corrected without weakening its test.
+
+### Do the steps change?
+Choose the title and then the actual saved cover preview. Stock-provider settings
+can be read from the local configuration without importing production database
+settings. The separate Studio and retained editions remain isolated from the live
+Factory. Owner edits still require review and do not trigger automatic rewriting.
+
+### Release gate
+The new focused and protection checks passed94 cases in79.97seconds. This includes
+actual browser cover-preview loads, saved-image restart checks and a regression
+for design words entering the writing brief. A public Pexels asset was manually
+selected and inspected for layout; authenticated automatic API search is not yet
+certified. Final whole-Factory release and target Windows GPU acceptance remain
+pending. No paid calls or production changes were made.
+
+## 1.9.68 — Local Book Studio replacement candidate
+
+### What changed
+Added an isolated local Book Studio with topic writing, automatic and manual
+modes, title and cover choices, per-chapter editorial review, actual page previews,
+owner manuscript editing and retained editions. Exports include PDF, EPUB, Word,
+Markdown, cover JPEG and a complete ZIP. Eligible books can receive a measured
+paperback preparation pack. Stock-image acquisition and saved cover previews
+are being verified separately from the live Factory.
+
+### What was fixed
+Drafts and measured expansions are saved separately, allowing interrupted work
+to resume without discarding completed chapters. Independent checks reject
+internal model markup, repeated developed sentences and unsupported author
+experience even when the model approves them. Design settings are excluded from
+writing briefs. Edition approval verifies every file against its ZIP entry.
+Local model memory exhaustion is identified explicitly instead of blindly retried.
+
+### Do the steps change?
+Use the separate Book Studio launcher and its local account. Automatic mode asks
+for a title and cover; manual mode also asks for outline and final approval.
+Editing saves a new edition for review and preserves the prior book's downloads.
+This candidate does not change the live Factory or certify its legacy 70 percent
+recovery. No paid generation or production configuration changes were made.
+
+### Release gate
+The paperback checkpoint passed85 focused/protection checks. Its full Factory
+run passed3468 tests and failed one release-note heading contract, corrected in
+this entry. Additional image and cover-preview checks passed92 cases before
+follow-up brief/capacity corrections. Final full release, fresh default-size
+writing, Windows GPU execution and production acceptance remain pending.
 
 ## 1.9.67 — Continue saved ebooks and verify both final downloads
 
