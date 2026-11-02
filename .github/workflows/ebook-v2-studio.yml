@@ -135,12 +135,13 @@ jobs:
       - name: Install checksum verified official CPU runtime
         shell: bash
         run: |
-          curl -fL --retry 3 https://github.com/ollama/ollama/releases/download/v0.40.13/ollama-linux-amd64.tgz -o "$RUNNER_TEMP/ollama.tgz"
-          echo "c9490e0f520be21271d969e6703f012268b1d39f8b70dd58854e5bfef7a75bb6  $RUNNER_TEMP/ollama.tgz" | sha256sum -c -
+          curl -fL --retry 3 https://github.com/ollama/ollama/releases/download/v0.40.13/ollama-linux-amd64.tar.zst -o "$RUNNER_TEMP/ollama.tar.zst"
+          echo "c9490e0f520be21271d969e6703f012268b1d39f8b70dd58854e5bfef7a75bb6  $RUNNER_TEMP/ollama.tar.zst" | sha256sum -c -
+          if ! command -v zstd > /dev/null; then sudo apt-get update; sudo apt-get install -y zstd; fi
           mkdir -p "$RUNNER_TEMP/ollama"
           echo "OLLAMA_MODELS=$RUNNER_TEMP/ollama-models" >> "$GITHUB_ENV"
-          tar -xzf "$RUNNER_TEMP/ollama.tgz" -C "$RUNNER_TEMP/ollama" --exclude='lib/ollama/cuda*' --exclude='lib/ollama/rocm*' --exclude='lib/ollama/vulkan*'
-          rm "$RUNNER_TEMP/ollama.tgz"
+          tar --zstd -xf "$RUNNER_TEMP/ollama.tar.zst" -C "$RUNNER_TEMP/ollama" --exclude='lib/ollama/cuda*' --exclude='lib/ollama/rocm*' --exclude='lib/ollama/vulkan*'
+          rm "$RUNNER_TEMP/ollama.tar.zst"
       - name: Start local service and install the free model
         shell: bash
         run: |
@@ -153,6 +154,11 @@ jobs:
           "$RUNNER_TEMP/ollama/bin/ollama" pull qwen3:8b
       - name: Verify a fresh eight chapter book without operator repairs
         run: python scripts/verify_ebook_v2_local.py --data "${{ runner.temp }}/studio-acceptance" --chapters 8 --min-words 650 --deadline 5400
+      - name: Report local service diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/ollama.log" ]; then tail -n 120 "$RUNNER_TEMP/ollama.log"; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
