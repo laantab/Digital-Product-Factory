@@ -27,8 +27,8 @@ def render(book, cover):
         'h1 { font-family: sans-serif; line-height: 1.2; } '
         'p { margin: 0 0 0.8em; } img { max-width: 100%; height: auto; }'),
         'cover.jpg':cover,
-        'cover.xhtml':document(book['title'],'<section epub:type="cover"><h1>'+title+
-            '</h1><p>'+author+'</p><img src="cover.jpg" alt="Book cover"/></section>')}
+        'cover.xhtml':document(book['title'],'<div epub:type="cover">'
+            '<img src="cover.jpg" alt="Cover for '+escape(book['title'],{'\"':'&quot;'})+'"/></div>')}
     items=['<item id="cover-image" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>',
         '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>',
         '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',

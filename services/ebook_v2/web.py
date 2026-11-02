@@ -97,7 +97,7 @@ def create_app(books):
     def download(book_id,name):
         preview=request.args.get("preview")=="1"
         data,checksum=books.download(str(current_user.id),book_id,name,preview=preview)
-        mime={"ebook.pdf":"application/pdf","package.zip":"application/zip","manuscript.md":"text/markdown",
+        mime={"ebook.pdf":"application/pdf","package.zip":"application/zip","print-pack.zip":"application/zip","manuscript.md":"text/markdown",
               "manuscript.docx":"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
               "ebook.epub":"application/epub+zip","cover.jpg":"image/jpeg"}.get(name)
         if mime is None:raise LookupError("File not found")

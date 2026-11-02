@@ -43,7 +43,7 @@ def chapter_valid(output):
         return False
 
 
-def render_pdf(book):
+def render_pdf(book,print_mode=False):
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.lib import colors
@@ -57,8 +57,9 @@ def render_pdf(book):
             pdfmetrics.registerFont(TTFont(name,str(fonts/filename)))
     accent,paper = THEMES[book["theme"]]
     accent,paper = colors.HexColor(accent),colors.HexColor(paper)
+    if print_mode:accent,paper=colors.black,colors.white
     body = ParagraphStyle("body",fontName="V2Body",fontSize=11,leading=15,spaceAfter=9,
-                          textColor=colors.HexColor("#24332e"))
+                          textColor=colors.black if print_mode else colors.HexColor("#24332e"))
     heading = ParagraphStyle("chapter",fontName="V2Head",fontSize=20,leading=25,
                              textColor=accent,spaceAfter=20)
     title = ParagraphStyle("cover",parent=heading,fontSize=30,leading=35,spaceAfter=22)
@@ -87,7 +88,7 @@ def render_pdf(book):
         leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)],onPage=decorate))
     while Paragraph(escape(book["title"]),title).wrap(348,500)[1]>350 and title.fontSize>20:
         title.fontSize-=1;title.leading-=1
-    story=[Spacer(1,105),Paragraph(escape(book["title"]),title),
+    story=[Spacer(1,35 if print_mode else 105),Paragraph(escape(book["title"]),title),
            Paragraph(escape(book["author"]),body),PageBreak(),Paragraph("Contents",heading)]
     # Contents does not list itself.
     story[-1]=Paragraph("Contents",ParagraphStyle("contents-title",parent=heading))
@@ -137,15 +138,18 @@ def export_handler(payload,repair):
     from . import epub
     import fitz
     with fitz.open(stream=pdf,filetype="pdf") as document:
-        cover=document[0].get_pixmap(matrix=fitz.Matrix(3,3),alpha=False).tobytes("jpeg")
+        cover=document[0].get_pixmap(matrix=fitz.Matrix(300/72,300/72),alpha=False).tobytes("jpeg")
     electronic=epub.render(book,cover)
     from . import manuscript as word
     editable=word.render(book);word.inspect(editable,book)
+    from . import print_pack
+    paperback=print_pack.render(book,render_pdf(book,print_mode=True),cover)
     out=io.BytesIO()
     with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("ebook.pdf",pdf);archive.writestr("manuscript.md",manuscript)
         archive.writestr("ebook.epub",electronic);archive.writestr("cover.jpg",cover)
         archive.writestr("manuscript.docx",editable)
+        if paperback:archive.writestr("print-pack.zip",paperback[0])
         archive.writestr("edition.json",json.dumps({"title":book["title"],"author":book["author"],
             "source":book.get("source","author_supplied"),"review_scope":("local_editorial_checks" if book.get("source")=="local_model" else "structural_checks_only"),
             "pdf_sha256":hashlib.sha256(pdf).hexdigest()},indent=2))
@@ -153,8 +157,10 @@ def export_handler(payload,repair):
     root=Path(payload["root"]).resolve();folder=root/"ebook-v2"/uuid.uuid4().hex
     folder.mkdir(parents=True,exist_ok=False)
     files={}
-    for name,data in {"ebook.pdf":pdf,"package.zip":package,"manuscript.md":manuscript.encode(),
-                      "ebook.epub":electronic,"cover.jpg":cover,"manuscript.docx":editable}.items():
+    contents={"ebook.pdf":pdf,"package.zip":package,"manuscript.md":manuscript.encode(),
+                      "ebook.epub":electronic,"cover.jpg":cover,"manuscript.docx":editable}
+    if paperback:contents["print-pack.zip"]=paperback[0]
+    for name,data in contents.items():
         path=folder/name
         with path.open("xb") as stream:
             stream.write(data);stream.flush()
@@ -162,7 +168,8 @@ def export_handler(payload,repair):
             os.fsync(stream.fileno())
         receipt={"key":str(path.relative_to(root)),"size":len(data),"sha256":hashlib.sha256(data).hexdigest()}
         verified_file(root,receipt);files[name]=receipt
-    return {"files":files,"integrity":integrity,"root":str(root)}
+    return {"files":files,"integrity":integrity,"root":str(root),
+            "print_specification":paperback[1] if paperback else None}
 
 
 def export_valid(output):
@@ -178,6 +185,9 @@ def export_valid(output):
         if "manuscript.docx" in files:
             from . import manuscript as word
             word.inspect(verified_file(root,files["manuscript.docx"]))
+        if "print-pack.zip" in files:
+            from . import print_pack
+            print_pack.inspect_package(verified_file(root,files["print-pack.zip"]))
         return actual==output["integrity"]
     except (OSError,KeyError,ValueError,TypeError,zipfile.BadZipFile):
         return False

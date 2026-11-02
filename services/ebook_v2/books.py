@@ -43,7 +43,7 @@ class Books:
         self.units=Store(database);self.root=str(Path(objects).resolve())
         self.policies=policies or {
             "chapter":Policy("supplied-1",chapter_handler,chapter_valid,timeout=20),
-            "export":Policy("pdf-zip-2",export_handler,export_valid,
+            "export":Policy("pdf-zip-3",export_handler,export_valid,
                 {"TIMEOUT":("rebuild",),"WORKER_EXITED":("rebuild",),
                  "VALIDATION_FAILED":("rebuild",)},timeout=120,retry_delay=1)}
         if policies is None:

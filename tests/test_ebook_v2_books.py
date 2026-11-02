@@ -188,3 +188,38 @@ def test_edit_creates_new_reviewable_edition_and_preserves_original_downloads(en
     restarted=Books(engine.units.path,engine.root)
     assert len(history(restarted,"alice",book["id"]))==2
     assert restarted.download("alice",original["id"],"ebook.pdf")[0]==original_pdf
+
+
+@pytest.mark.parametrize("pages,expected",[(23,None),(24,24),(25,26),(150,150),(151,None)])
+def test_print_pack_measures_pages_and_rejects_unsupported_lengths(pages,expected):
+    from services.ebook_v2 import print_pack
+    from services.ebook_v2.publishing import render_pdf
+    from reportlab.pdfgen import canvas
+    out=io.BytesIO();c=canvas.Canvas(out,pagesize=(432,648))
+    for index in range(pages):
+        c.drawString(42,590,f"Print geometry acceptance fixture page {index+1}")
+        c.drawString(42,565,"NOT FOR SALE")
+        c.showPage()
+    c.save()
+    book=spec()
+    with fitz.open(stream=render_pdf(book),filetype="pdf") as document:
+        cover=document[0].get_pixmap().tobytes("jpeg")
+    result=print_pack.render(book,out.getvalue(),cover)
+    if expected is None:assert result is None;return
+    data,report=result
+    assert report["interior_pages"]==expected
+    assert report["spine_inches"]==pytest.approx(expected*.002252)
+    assert print_pack.inspect_package(data)
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        with fitz.open(stream=archive.read("print-cover.pdf"),filetype="pdf") as document:
+            assert document[0].rect.width==pytest.approx((12.25+expected*.002252)*72,abs=.01)
+        with fitz.open(stream=archive.read("print-interior.pdf"),filetype="pdf") as document:
+            assert len(document)==expected
+            assert bool(document[-1].get_text().strip())==(pages%2==0)
+
+
+def test_short_ebook_does_not_offer_a_padded_print_pack(engine):
+    book=reviewed(engine)
+    output=engine.units.get("alice",book["units"][-1])["output"]
+    assert output["print_specification"] is None
+    assert "print-pack.zip" not in output["files"]

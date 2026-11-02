@@ -118,3 +118,19 @@ checks reject stale decisions. Edition history and downloads remain owner-scoped
 The real browser edits a saved book, downloads its revised PDF, and confirms the
 original PDF and completed chapter attempt count remain unchanged.79 focused
 and protection checks passed54.49sec before additional topic-edit assertions.
+
+## Paperback preparation checkpoint
+The isolated export path can now prepare a6x9white-paper black-and-white
+interior and measured full-wrap cover for24–150pages. This is the renderer's
+supported range, not Amazon's maximum. Spine width uses actual even interior
+page count times0.002252inches. Cover bleed is0.125inches, no spine text is
+added, and a2x1.2inch barcode area stays blank. Only a final parity page may be
+added; books below24pages do not get a padded paperback pack. KDP Previewer
+and a physical proof remain required. No Amazon approval is claimed.
+85 focused/protection checks passed61.23sec; boundary cases23,24,25,150,151
+pages verify eligibility, parity and actual PDF geometry. The wrap was rendered
+and visually inspected using clearly labeled mechanical acceptance text.
+Cover JPEG output is now300dpi. The updated actual EPUB again passed
+EPUBCheck5.4.0 with zero errors/warnings, with its front-cover text duplication
+removed. A fresh2chapter650word Qwen3 8B CPU development request is starting;
+it does not establish Windows GPU or standard8chapter acceptance.
