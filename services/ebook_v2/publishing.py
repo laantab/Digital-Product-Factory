@@ -138,7 +138,7 @@ def export_handler(payload,repair):
     with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("ebook.pdf",pdf);archive.writestr("manuscript.md",manuscript)
         archive.writestr("edition.json",json.dumps({"title":book["title"],"author":book["author"],
-            "source":"author_supplied","review_scope":"structural_checks_only",
+            "source":book.get("source","author_supplied"),"review_scope":("local_editorial_checks" if book.get("source")=="local_model" else "structural_checks_only"),
             "pdf_sha256":hashlib.sha256(pdf).hexdigest()},indent=2))
     package=out.getvalue();integrity=inspect(pdf,package)
     root=Path(payload["root"]).resolve();folder=root/"ebook-v2"/uuid.uuid4().hex

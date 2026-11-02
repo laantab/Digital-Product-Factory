@@ -190,3 +190,14 @@ class Store:
                 WHERE stage=? AND policy=? AND error=? ORDER BY successes DESC,repair""",
                 (stage,policy,code)).fetchall()
         return next((r[0] for r in rows if r[0] in allowed), allowed[0] if allowed else "")
+
+    def seed_recovery(self,owner,new_id,prior_id,code,repair):
+        """Explicit manual continuation retains rejected text, never its success."""
+        with self.transaction() as conn:
+            new=self._get(conn,owner,new_id);prior=self._get(conn,owner,prior_id)
+            if new["state"]!="QUEUED" or new["attempts"]!=0:raise ValueError("Recovery unit already started")
+            if prior["state"]!="NEEDS_ATTENTION" or prior["stage"]!=new["stage"]:
+                raise ValueError("Recovery source must be the matching exhausted work")
+            if prior["output"] is None:return
+            conn.execute("UPDATE ebook_v2_units SET output=?,output_sha=?,error=?,repair=? WHERE id=?",
+                (encode(prior["output"]),prior["output_sha"],code,repair,new_id))

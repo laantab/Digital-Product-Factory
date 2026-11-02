@@ -420,7 +420,8 @@
       "protected_test_files": [
         "tests/test_ebook_v2_recovery.py",
         "tests/test_ebook_v2_books.py",
-        "tests/test_ebook_v2_customer_path.py"
+        "tests/test_ebook_v2_customer_path.py",
+        "tests/test_ebook_v2_topics.py"
       ],
       "shared_code_dependencies": [
         "services/ebook_v2/",
@@ -432,7 +433,7 @@
       "unlocked_reason": null,
       "relocked_by": null,
       "relocked_after_tests": null,
-      "notes": "Supplied-manuscript and recovery candidate only. No production app registration. Real HTTP/browser and separate worker acceptance passed. Fresh-topic generation, hosted parity and Windows launcher remain unverified."
+      "notes": "Isolated local candidate.61 focused checks passed. Supplied-text real browser/worker shutdown proof is complete. Actual small-model technical completion was rejected on manual text review; deterministic model-markup guard now covers that defect. Fresh4B acceptance in progress. No full generator/deployment claim."
     }
   }
 }

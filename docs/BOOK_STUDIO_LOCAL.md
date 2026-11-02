@@ -57,3 +57,23 @@ restarts the worker and reopens the saved book. It checks the original chapter
 was not repeated, then approves and downloads actual PDF/ZIP bytes. HTTP checks
 verify signatures, response checksums, CRC, embedded/standalone PDF equality,
 authentication, ownership, CSRF and read-only status behavior. No paid calls.
+
+## Local topic writing checkpoint
+Choose Write from my topic, provide audience and reader outcome, and select
+Automatic or Manual. The local Ollama service must be installed and running
+withqwen3:8b (the default) before a topic attempt can start. It is never pulled
+silently by the app. Source settings can be configured through
+FACTORY_V2_OLLAMA_MODEL and a loopback-only FACTORY_V2_OLLAMA_URL. No cloud or
+paid fallback is allowed. The worker checks installed model metadata separately
+from the browser.
+
+This checkpoint explicitly requires acknowledging that market demand has not
+been assessed. Automatic mode asks for title and cover/theme choices. Manual
+mode also asks for outline and final-page approval. Local editorial checks
+review grammar, relevance, consistency and cautious claims; they do not certify
+external facts or plagiarism absence. Short outputs retain their draft and
+receive bounded expansion attempts. Code-owned remedies are learned only when
+the repaired output passes validation.
+
+The actual small CPU-model pilot is engineering evidence with stated limits,
+not a benchmark of the owner's8B model/GPU or a publication-ready product.

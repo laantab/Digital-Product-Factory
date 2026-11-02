@@ -38,3 +38,38 @@ Fresh-topic writing, independent editorial checks, photographs, chapter editing,
 retained versions, EPUB/DOCX and KDP preparation remain to reconstruct. Hosted
 SQL/R2, Windows execution and deployment have not been verified. This milestone
 is deliberately not called the completed replacement generator.
+
+## Local writing checkpoint
+Local-only topic writing is implemented with title choices, an approved chapter
+plan, per-chapter writing and independent editorial review, and cover/theme
+choice. Automatic mode asks for title and cover; manual mode also holds for
+outline and final-page approval. Supplied text still requires human review.
+Worker capability preflight refuses a topic attempt when the installed local
+model is absent. Cloud-backed model metadata, remote URLs, proxies and redirects
+are refused by the text adapter. No paid fallback exists.
+
+57 reconstructed cases passed62.35sec, including a real browser using an
+explicit protocol fixture. An actual local qwen3:1.7b CPU development run reached
+READY with a six-page guide, but included operator corrections. A separate
+bounded fresh run is in progress and is not yet certified. Current app default
+remainsqwen3:8b for the owner's desktop. Do not substitute fixture tests or the
+small development book for complete fresh/default-size acceptance.
+
+Response schemas now bound paragraph growth and token counts. Short drafts are
+retained and expanded, including after explicit manual continuation; validated
+completed chapters remain untouched. Independent review uses positive checks
+and a separate numerical-percentage guard. It does not certify plagiarism
+absence or external facts. Actual book-quality review is still required.
+
+Expanded fast gate on the supplied milestonef30faa0:864 passed400.33sec. See
+release_evidence/ebook_v2_local_writing_checkpoint.json for exact limits.
+
+## Quality guard correction
+Manual text review rejected the seven-page1.7B run despite its technical READY
+state: internal model markup had appeared inside chapter prose. It is not
+accepted fresh completion evidence. Separate deterministic guards now reject
+chat/control tokens and leaked internal field labels at writing and review.
+Four regression inputs reproduce the defect, including an approving fake model.
+61 reconstructed checks passed53.12sec after the correction. A larger4B local
+run is in progress. The owner's8B default and all minimum-length checks remain
+unchanged. Do not deliver the rejected draft as a finished book.

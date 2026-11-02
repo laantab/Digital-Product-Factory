@@ -15,6 +15,10 @@ class Conflict(ValueError):
 
 def clean_spec(raw):
     if not isinstance(raw,dict):raise ValueError("Enter book settings")
+    if raw.get("source")=="ollama":
+        from .topics import clean_spec as clean_topic
+        return clean_topic(raw)
+    if raw.get("source") not in {None,"manuscript"}:raise ValueError("Choose an available text source")
     result={}
     for key,limit in (("title",180),("author",100)):
         value=raw.get(key)
@@ -42,6 +46,9 @@ class Books:
             "export":Policy("pdf-zip-1",export_handler,export_valid,
                 {"TIMEOUT":("rebuild",),"WORKER_EXITED":("rebuild",),
                  "VALIDATION_FAILED":("rebuild",)},timeout=120,retry_delay=1)}
+        if policies is None:
+            from .topics import policies as topic_policies
+            self.policies.update(topic_policies())
         self.worker=Worker(self.units,self.policies)
 
     def initialize(self):
@@ -53,15 +60,19 @@ class Books:
                 state TEXT NOT NULL,revision INTEGER NOT NULL,created REAL NOT NULL,updated REAL NOT NULL,
                 UNIQUE(owner,request_key))""")
             conn.execute("CREATE TABLE IF NOT EXISTS ebook_v2_workers (id TEXT PRIMARY KEY,seen REAL NOT NULL)")
+            if "local_text" not in {r[1] for r in conn.execute("PRAGMA table_info(ebook_v2_workers)")}:
+                conn.execute("ALTER TABLE ebook_v2_workers ADD COLUMN local_text INTEGER NOT NULL DEFAULT 0")
+            conn.execute("CREATE TABLE IF NOT EXISTS ebook_v2_topics (book_id TEXT PRIMARY KEY REFERENCES ebook_v2_books(id),data TEXT NOT NULL,sha TEXT NOT NULL)")
 
-    def record_worker(self,worker_id):
+    def record_worker(self,worker_id,local_text=False):
         with self.units.transaction() as conn:
-            conn.execute("INSERT INTO ebook_v2_workers VALUES (?,?) ON CONFLICT(id) DO UPDATE SET seen=excluded.seen",
-                         (worker_id,time.time()))
+            conn.execute("INSERT INTO ebook_v2_workers (id,seen,local_text) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET seen=excluded.seen,local_text=excluded.local_text",
+                         (worker_id,time.time(),int(bool(local_text))))
 
-    def available(self):
+    def available(self,local_text=False):
         with self.units.transaction() as conn:
-            return conn.execute("SELECT 1 FROM ebook_v2_workers WHERE seen>? LIMIT 1",(time.time()-20,)).fetchone() is not None
+            return conn.execute("SELECT 1 FROM ebook_v2_workers WHERE seen>? AND (local_text=1 OR ?=0) LIMIT 1",
+                                (time.time()-20,int(bool(local_text)))).fetchone() is not None
 
     @staticmethod
     def checked(row):
@@ -78,8 +89,10 @@ class Books:
 
     def listing(self,owner):
         with self.units.transaction() as conn:
-            rows=conn.execute("""SELECT id,state,revision,created,updated,json_extract(spec,'$.title') AS title FROM ebook_v2_books
-                WHERE owner=? ORDER BY updated DESC LIMIT 30""",(str(owner),)).fetchall()
+            rows=conn.execute("""SELECT b.id,b.state,b.revision,b.created,b.updated,
+                coalesce(json_extract(t.data,'$.decisions.title'),json_extract(b.spec,'$.title')) AS title
+                FROM ebook_v2_books b LEFT JOIN ebook_v2_topics t ON t.book_id=b.id
+                WHERE b.owner=? ORDER BY b.updated DESC LIMIT 30""",(str(owner),)).fetchall()
         return [dict(row) for row in rows]
 
     def create(self,owner,key,raw):
@@ -94,6 +107,9 @@ class Books:
             book_id=uuid.uuid4().hex;now=time.time()
             conn.execute("INSERT INTO ebook_v2_books VALUES (?,?,?,?,?,?,'RUNNING',1,?,?)",
                 (book_id,str(owner),key,encode(spec),digest(spec),"[]",now,now))
+            if spec.get("source")=="ollama":
+                initial={"units":{},"decisions":{}}
+                conn.execute("INSERT INTO ebook_v2_topics VALUES (?,?,?)",(book_id,encode(initial),digest(initial)))
         # The dispatcher creates missing units after a crash here, too.
         return self.get(owner,book_id)
 
@@ -107,11 +123,14 @@ class Books:
 
     def pending(self):
         with self.units.transaction() as conn:
-            return [dict(r) for r in conn.execute("SELECT id,owner FROM ebook_v2_books WHERE state='RUNNING'")]
+            return [dict(r) for r in conn.execute("SELECT id,owner,json_extract(spec,'$.source') AS source FROM ebook_v2_books WHERE state='RUNNING'")]
 
     def advance(self,owner,book_id):
         book=self.get(owner,book_id)
         if book["state"]!="RUNNING":return book
+        if book["spec"].get("source")=="ollama":
+            from .topics import advance
+            return advance(self,book)
         expected=len(book["spec"]["chapters"])
         if len(book["units"])<expected:
             units=[]
@@ -136,6 +155,9 @@ class Books:
 
     def status(self,owner,book_id):
         book=self.get(owner,book_id)
+        if book["spec"].get("source")=="ollama":
+            from .topics import status
+            return status(self,book)
         units=[self.units.get(owner,key) for key in book["units"]]
         total=len(book["spec"]["chapters"])
         exported=units[-1]["output"] if len(units)>total and units[-1]["state"]=="COMPLETE" else None
@@ -158,6 +180,9 @@ class Books:
         book=self.get(owner,book_id)
         if type(revision) is not int or revision!=book["revision"]:raise Conflict("Reload the saved book")
         if book["state"]!="NEEDS_ATTENTION":raise ValueError("Book does not need manual recovery")
+        if book["spec"].get("source")=="ollama":
+            from .topics import resume
+            return resume(self,book)
         replacements=[]
         for index,key in enumerate(book["units"]):
             unit=self.units.get(owner,key)
@@ -168,11 +193,21 @@ class Books:
             replacements.append(key)
         return self.save(book,units=replacements,state="RUNNING")
 
+    def decide(self,owner,book_id,revision,action,value):
+        if self.get(owner,book_id)["spec"].get("source")!="ollama":raise ValueError("This book uses supplied text")
+        from .topics import decide
+        return decide(self,owner,book_id,revision,action,value)
+
     def download(self,owner,book_id,name,preview=False):
         book=self.get(owner,book_id)
         if book["state"]!="READY" and not (preview and book["state"]=="REVIEW"):
             raise ValueError("Review the completed book before downloading")
-        unit=self.units.get(owner,book["units"][-1])
+        if book["spec"].get("source")=="ollama":
+            from .topics import data
+            export_id=data(self,book)["units"].get("export")
+            if not export_id:raise ValueError("Files are not ready")
+        else:export_id=book["units"][-1]
+        unit=self.units.get(owner,export_id)
         if unit["state"]!="COMPLETE":raise ValueError("Files are not ready")
         output=unit["output"]
         if name not in output["files"]:raise LookupError("File not found")

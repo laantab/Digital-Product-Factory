@@ -1,7 +1,8 @@
-# Standalone supplied-manuscript Book Studio; no paid-provider SDK.
+# Standalone local Book Studio; no paid-provider SDK.
 Flask==3.1.1
 Flask-Login==0.6.3
 bcrypt==5.0.0
 Pillow==12.2.0
 PyMuPDF==1.26.6
 reportlab==4.4.9
+requests==2.32.4

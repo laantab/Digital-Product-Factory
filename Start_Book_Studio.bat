@@ -10,10 +10,10 @@ if not exist ".ebook-v2-venv\Scripts\python.exe" (
   py -3 -m venv .ebook-v2-venv
   if errorlevel 1 goto failed
 )
-if not exist ".ebook-v2-venv\supplied-1.ready" (
+if not exist ".ebook-v2-venv\local-writing-1.ready" (
   ".ebook-v2-venv\Scripts\python.exe" -m pip install -r requirements-ebook-v2.txt
   if errorlevel 1 goto failed
-  echo ready>".ebook-v2-venv\supplied-1.ready"
+  echo ready>".ebook-v2-venv\local-writing-1.ready"
 )
 ".ebook-v2-venv\Scripts\python.exe" -m services.ebook_v2.cli init --data "%STUDIO_DATA%"
 if errorlevel 1 goto failed
@@ -26,6 +26,11 @@ if errorlevel 2 (
 if not errorlevel 1 (
   start "" "http://127.0.0.1:5088"
   exit /b 0
+)
+where ollama >nul 2>nul
+if not errorlevel 1 (
+  powershell -NoProfile -Command "try{Invoke-RestMethod 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 ^| Out-Null;exit 0}catch{exit 1}"
+  if errorlevel 1 start "Local Writing Service" ollama serve
 )
 start "Book Studio Worker" ".ebook-v2-venv\Scripts\python.exe" -m services.ebook_v2.cli worker --data "%STUDIO_DATA%"
 start "Book Studio Server" ".ebook-v2-venv\Scripts\python.exe" -m services.ebook_v2.cli serve --data "%STUDIO_DATA%"

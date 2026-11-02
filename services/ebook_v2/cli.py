@@ -28,15 +28,21 @@ def main():
         create_app(books).run(host="127.0.0.1",port=5088,threaded=True,use_reloader=False)
     else:
         stopped=Event();worker_id=uuid.uuid4().hex
+        capabilities={"local_text":False}
         def heartbeat():
             while not stopped.is_set():
-                try:books.record_worker(worker_id)
+                try:
+                    from .local_text import ready
+                    books.record_worker(worker_id,False)
+                    capabilities["local_text"]=ready()
+                    books.record_worker(worker_id,capabilities["local_text"])
                 except Exception:logging.exception("Book Studio worker heartbeat failed")
                 stopped.wait(3)
         monitor=Thread(target=heartbeat,daemon=True);monitor.start()
         try:
             while True:
                 for row in books.pending():
+                    if row.get("source")=="ollama" and not capabilities["local_text"]:continue
                     try:books.advance(row["owner"],row["id"])
                     except Conflict:pass
                     except Exception:logging.exception("Book Studio work needs attention")

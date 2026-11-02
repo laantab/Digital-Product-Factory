@@ -204,3 +204,15 @@ def test_policy_version_must_match_before_claim(store):
 def test_invalid_attempt_limits_rejected(store,budget):
     with pytest.raises(ValueError):
         task(store,max_attempts=budget)
+
+
+def test_manual_continuation_keeps_rejected_candidate_without_marking_it_complete(store):
+    old=task(store,max_attempts=1);claim=store.claim("alice",old,10)
+    store.fail("alice",old,claim["token"],"BROKEN","safe_fix",0,{"value":0,"feedback":"preserve this draft"})
+    new=task(store,"manual-resume")
+    store.seed_recovery("alice",new,old,"BROKEN","safe_fix")
+    result=store.get("alice",new)
+    assert result["state"]=="QUEUED" and result["attempts"]==0
+    assert result["output"]["feedback"]=="preserve this draft"
+    with store.transaction() as conn:
+        assert conn.execute("SELECT count(*) FROM ebook_v2_lessons").fetchone()[0]==0

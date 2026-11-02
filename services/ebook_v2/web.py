@@ -50,7 +50,7 @@ def create_app(books):
         return response
 
     @app.get("/health")
-    def health():return jsonify(service="factory-book-studio",worker_online=books.available())
+    def health():return jsonify(service="factory-book-studio",worker_online=books.available(),local_text=books.available(local_text=True))
 
     @app.get("/")
     def home():
@@ -65,6 +65,9 @@ def create_app(books):
         if not books.available():return jsonify(error="Start the Book Studio worker before creating a book. No book attempt was started."),503
         body=request.get_json()
         if not isinstance(body,dict):raise ValueError("Send valid book settings")
+        raw=body.get("spec")
+        if isinstance(raw,dict) and raw.get("source")=="ollama" and not books.available(local_text=True):
+            return jsonify(error="Start the local writing service and install the selected model before creating a topic book. No book attempt was started."),503
         book=books.create(str(current_user.id),body.get("request_key"),body.get("spec"))
         return jsonify(books.status(str(current_user.id),book["id"])),202
 
@@ -74,10 +77,11 @@ def create_app(books):
     @app.post("/api/books/<book_id>/<action>")
     def decide(book_id,action):
         actions={"approve":books.approve,"resume":books.resume}
-        if action not in actions:raise LookupError("Action not found")
         body=request.get_json()
         if not isinstance(body,dict):raise ValueError("Send a valid book decision")
-        actions[action](str(current_user.id),book_id,body.get("revision"))
+        if action=="decision":books.decide(str(current_user.id),book_id,body.get("revision"),body.get("action"),body.get("value"))
+        elif action in actions:actions[action](str(current_user.id),book_id,body.get("revision"))
+        else:raise LookupError("Action not found")
         return jsonify(books.status(str(current_user.id),book_id))
 
     @app.get("/api/books/<book_id>/files/<name>")

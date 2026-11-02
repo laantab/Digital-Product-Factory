@@ -1,0 +1,67 @@
+{
+  "status": "LOCAL_WRITING_IMPLEMENTATION_TESTED_FRESH_ACCEPTANCE_IN_PROGRESS",
+  "captured_at": "2026-11-02T16:39:32.364730+00:00",
+  "prior_milestone_remote_commit": "f30faa0c1e79bb405629114ea196a2d2d94a7fb5",
+  "supplied_milestone_expanded_fast_gate": {
+    "passed": 864,
+    "seconds": 400.33,
+    "files": 63,
+    "source_commit": "f30faa0c1e79bb405629114ea196a2d2d94a7fb5"
+  },
+  "focused_reconstruction_suite": {
+    "passed": 61,
+    "seconds": 53.12
+  },
+  "protocol_fixtures": "Explicit fake local HTTP model used for integration/browser cases; not evidence of real inference",
+  "actual_local_development_book": {
+    "status": "READY",
+    "title": "The Small Desk Reset: A Guide to Organizing Your Space",
+    "pages": 6,
+    "provider": "Actual local Ollama qwen3:1.7b CPU; cloud disabled",
+    "integrity": {
+      "all_pages_rendered": true,
+      "embedded_pdf_matches": true,
+      "pages": 6,
+      "pdf_sha256": "2b0cf81d12cecab8ea2520336f88f0dcafaadc39dd826e602a40173d14655ffb",
+      "zip_crc_ok": true,
+      "zip_sha256": "c7adf192f552a6d8b7866074dba9e7f5f935338f804147a87d500f6e43816d6e"
+    },
+    "limitation": "Included operator restarts after a test-runtime library fix and short-draft adapter correction. Not an uninterrupted fresh run or sale-ready certification."
+  },
+  "fresh_bounded_run": "Technical READY was reached for a seven-page1.7B book, but manual text review found internal model markup and rejected the artifact. It is NOT fresh completion acceptance. New deterministic writing/review guards and4 reproductions reject that content. A fresh4B run is now in progress; default stays8B.",
+  "paid_calls": 0,
+  "official_test_runtime": {
+    "version": "0.40.13",
+    "archive_sha256": "c9490e0f520be21271d969e6703f012268b1d39f8b70dd58854e5bfef7a75bb6"
+  },
+  "source_sha256": {
+    "services/ebook_v2/recovery.py": "1b14bc7bae59938c5ca66baa7f76b46dbbe120622e929830066eae01aaf220aa",
+    "services/ebook_v2/books.py": "07cd833ce5ed02a874e3583daa81f1c7f8fa5c396127ff92c2fea542e90ef31b",
+    "services/ebook_v2/__init__.py": "7a295cc39c71ec50715febec4d09ee894a3cd86f765492c01cc82faa40dfc20b",
+    "services/ebook_v2/publishing.py": "e3286b58d8fcfedd0c5d981a305ba3a34ebee92b7ea6d7b4b5890f3d062a89cb",
+    "services/ebook_v2/web.py": "c84a654b0dba4ff8c0b5cb56e8e9149111b071085c3699d83354b6af9d18a63a",
+    "services/ebook_v2/cli.py": "bafefffd1191cc68c0e05b9a664b2e3afb8898d3d26f46f0507dc4de4880ed70",
+    "services/ebook_v2/local_text.py": "a74dcbfa69b778fc1caa3349f4f26221391e3d50dcc0d182cf721f53429915ad",
+    "services/ebook_v2/worker.py": "f391f413f7e762c9b56aac8cd8b9212061beca1c1fe89c3c9725aaac11619837",
+    "services/ebook_v2/topics.py": "e6ec809279d4e54e7d215822a37dbe616502dc7e7703b2d5cfa1d24fbd3e3136",
+    "templates/ebook_v2.html": "9eb5a0a97c7df838250227f2a4e0629d5190e9a7a23fe8343080eb7c4a774ba6",
+    "Start_Book_Studio.bat": "451402817a8adff0291c2014f739e16a964f9800809ac48242b675c6a57c7bca",
+    "requirements-ebook-v2.txt": "76cf03b26e7c95668696af70852b2c2f5f191ccee8112c412db79e8f0ea742a1",
+    "tests/test_ebook_v2_recovery.py": "78cbfb8a4d0fbab767c80fba32233913dbcaf023d88d561029081cd0047de668",
+    "tests/test_ebook_v2_customer_path.py": "8c9093fdf5dd0c860a734630a10dadf0f483fe06a754ab4df379168fc74953f4",
+    "tests/test_ebook_v2_topics.py": "78afc9a64d35842ff879152022a1e639a261049e2dc2b45ece1c68ca4c8d1dc8",
+    "tests/test_ebook_v2_books.py": "a1638d13ec1f322261782bba0d8a48954d4f45545714a66fb6ac3200e7053c60"
+  },
+  "not_certified": [
+    "Uninterrupted real-model fresh acceptance still running",
+    "Default8chapters and650word standard book on target qwen3:8b",
+    "Market-demand proof",
+    "External plagiarism/factual verification",
+    "Photographs and comprehensive design/editor revisions",
+    "EPUB/DOCX/KDP reconstruction",
+    "Native hosted SQL/R2",
+    "Windows launcher execution",
+    "Production deployment"
+  ],
+  "weak_model_finding": "1.7B produced short drafts even with bounded expansions. No length/content gate was relaxed."
+}
