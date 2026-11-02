@@ -4,7 +4,7 @@
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
   "checked_at": "2026-11-02",
-  "runtime_candidate": "dca873bc9308e7aec1bc7dc27cae6fa5bad1c166",
+  "runtime_candidate": "9f9027ed1ff012125224f21ee9404cdb08671e5d",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
     "paid_generation": false,
@@ -12,65 +12,95 @@
   },
   "evidence": {
     "local_studio": {
-      "tests": 100,
-      "subtests": 163,
+      "tests": 104,
       "failures": 0,
-      "skips": 0
+      "errors": 0,
+      "skips": 0,
+      "duration_seconds": 166.28
+    },
+    "candidate_ci_before_latest_correction": {
+      "studio_run": 41535780087,
+      "studio_windows_and_linux": "success, 103 cases on each platform",
+      "broader_runs_at_532bee07f90e73b2bec3b2e25d69e168e46e6f89": {
+        "41537203814": "success",
+        "41537204055": "success",
+        "41537203830": "success",
+        "41537204051": "success",
+        "41537203915": "success",
+        "41537203836": "success"
+      }
     },
     "fresh_model": {
-      "run_id": 41516165140,
-      "status": "success",
-      "artifact_id": 13178970874,
-      "artifact_name": "studio-local-model-engineering-evidence",
-      "human_review": "REJECTED: unfinished paragraph endings in chapters 1, 2, 6 and 8; three paragraphs hit 1100 characters and one hit 1099.",
-      "bytes_verified": [
-        "ebook.pdf SHA-256 and 26 nonempty pages",
-        "EPUB SHA-256 and ZIP CRC",
-        "Word SHA-256 and ZIP CRC",
-        "Markdown SHA-256"
-      ],
-      "package_note": "Original artifact omitted package.zip, print-pack.zip and cover.jpg. Workflow now retains them for future acceptance; previous package integrity cannot be independently rechecked."
+      "accepted_run": null,
+      "rejected_run": {
+        "run_id": 41516165140,
+        "artifact_id": 13178970874,
+        "technical_status": "success",
+        "human_review": "REJECTED: unfinished paragraph endings in chapters 1, 2, 6 and 8; all 26 rendered pages were inspected.",
+        "bytes_verified": [
+          "ebook.pdf SHA-256 and 26 nonempty pages",
+          "EPUB SHA-256 and ZIP CRC",
+          "Word SHA-256 and ZIP CRC",
+          "Markdown SHA-256"
+        ],
+        "package_note": "The artifact omitted package.zip, print-pack.zip and cover.jpg, so package integrity was not independently accepted."
+      },
+      "follow_up_failure": {
+        "run_id": 41537196386,
+        "artifact_id": 13186053580,
+        "source_commit": "532bee07f90e73b2bec3b2e25d69e168e46e6f89",
+        "result": "failed before export",
+        "saved_progress": "2 of 8 chapters reviewed, 2311 words",
+        "failure": "editorial unit exhausted 5 attempts with SHORT_CHAPTER",
+        "correction_commit": "9f9027ed1ff012125224f21ee9404cdb08671e5d",
+        "correction": "Keep processing local-only and bounded, but allow up to 9 attempts so two correction/expansion/independent-recheck cycles can complete.",
+        "verification": "New exact-sequence regression plus all 104 local Studio/protection tests passed."
+      }
+    },
+    "preservation_reference": {
+      "restored": true,
+      "source": "Factory_Project20_Verified_Recovery_Copy_2026-10-18.zip",
+      "pdf_sha256": "20792e8fcce4ab4fcc7daa8e49df1d0a634f7c624d9197d346d0fda83f8d025d",
+      "package_sha256": "f7cc37a90f71e8563039c412f23f7ba11deff52edb055419117197921d572d26",
+      "zip_crc": "passed",
+      "embedded_pdf_matches": true
     },
     "full_release": {
       "status": "not_certified",
-      "last_observed_progress": "A failure reproduced near 50 percent in current fresh-workspace run; final traceback pending.",
-      "failure_details": "Unavailable after local execution loss; must recover or reproduce. Do not treat as green."
+      "latest_attempt": "The restored-reference suite reached 59 percent and recorded one failure before the execution session was terminated; no final JUnit report was produced.",
+      "recovered_failure": "tests/test_ebook_v2_topics.py::test_automatic_topic_browser_only_requires_title_and_cover_choices",
+      "focused_reproduction": "passed twice, once normally and once with four xdist workers; no source correction is justified from this transient result alone.",
+      "second_failure": "The second failure from the earlier lost run is still not identified. A historical release-note heading failure was corrected before this candidate, but it is not being assumed to be the lost second failure."
     }
   },
   "next_actions": [
     {
-      "id": "verify_paragraph_repair",
-      "status": "pending",
-      "action": "Wait for final candidate Studio CI; then request fresh eight-chapter acceptance by updating its request JSON. Inspect repaired manuscript, all pages and actual ZIP. Do not certify old technically green book."
+      "id": "verify_editorial_budget_correction",
+      "status": "in_progress",
+      "action": "Wait for the Actions checks triggered by 9f9027ed1ff012125224f21ee9404cdb08671e5d. If green, request exactly one new free eight-chapter acceptance run; do not duplicate a running generation."
     },
     {
       "id": "review_new_model_artifacts",
       "status": "pending",
-      "action": "Review the next successful real-model output; keep the old model book rejected."
+      "action": "Inspect the complete manuscript, every rendered page, standalone PDF bytes and actual package ZIP from the next successful real-model run."
     },
     {
       "id": "resolve_full_release",
       "status": "pending",
-      "action": "Recover or rerun enforced full release suite against frozen runtime candidate. Restore exact reference archive before running. Identify and resolve both observed failures; retain red evidence."
+      "action": "Resume the enforced full release suite with the exact restored preservation files. Retain the final JUnit report, identify every failure, and make only evidence-backed corrections."
     },
     {
       "id": "verify_supported_delivery",
       "status": "pending",
-      "action": "Confirm supported local Studio delivery and hosted integration boundary. Do not replace live Factory with a loopback-only app."
+      "action": "Confirm the supported local Studio delivery and hosted integration boundary. Do not replace the hosted Factory with a loopback-only application."
     },
     {
       "id": "release_and_verify",
       "status": "pending",
-      "action": "After acceptance, merge/deploy only supported changes; verify actual PDF/ZIP downloads in the intended environment."
+      "action": "Only after acceptance, merge/deploy supported changes and verify actual PDF and ZIP downloads in the intended environment."
     }
   ],
   "completion": "not complete",
-  "blocker": "Previous local full-release logs were lost. Execution is available again in a fresh workspace; both prior failures must be reproduced. Fresh-model artifact review rejected incomplete paragraphs.",
-  "resume_rule": "Fetch current state and resume first unfinished action without requesting routine approval.",
-  "recovery_progress": {
-    "execution": "restored in fresh workspace",
-    "source_fix": "Raise bounded paragraph field capacity from 1100 to 3000, request complete sentences and reject unfinished paragraphs independently; permit bounded editorial correction before independent recheck.",
-    "tests": "Frozen final writing candidate: 33 passed, 1 browser test deselected, 45.63 seconds; 103 Studio/protection cases collected. GitHub CI required for browser and protection checks.",
-    "ci": "Studio Windows and Linux jobs both passed all 103 checks in run 41535780087; broader checks still running."
-  }
+  "blocker": "No user action is required. CI, a successful human-reviewed fresh model artifact, the completed full release gate, supported integration and deployed PDF/ZIP verification remain outstanding.",
+  "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
