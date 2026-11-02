@@ -1,0 +1,17 @@
+{
+  "candidate_commit": "e7f63f443e02b5cba51f7881bc5b812746f8e4e6",
+  "requested_at": "2026-11-02",
+  "model": "qwen3:8b",
+  "chapters": 8,
+  "min_words_per_chapter": 650,
+  "paid_providers": false,
+  "local_validation": {
+    "tests": 100,
+    "subtests": 163,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "seconds": 122.66
+  },
+  "status": "requested; no model acceptance claimed"
+}
