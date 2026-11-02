@@ -194,7 +194,7 @@ def test_automatic_topic_browser_only_requires_title_and_cover_choices(provider,
             page.get_by_role("button",name="A Clear Desk",exact=True).wait_for(state="visible",timeout=30000)
             page.get_by_role("button",name="A Clear Desk",exact=True).click()
             page.get_by_role("button",name="Warm Wellness",exact=True).wait_for(state="visible",timeout=60000)
-            assert page.locator("#actions img").count()==3
+            assert page.locator("#actions img").count()==6
             page.wait_for_function("Array.from(document.querySelectorAll('#actions img')).every(image=>image.complete&&image.naturalWidth===1800)")
             page.get_by_role("button",name="Warm Wellness",exact=True).click()
             page.get_by_role("link",name="Download PDF",exact=True).wait_for(state="visible",timeout=30000)

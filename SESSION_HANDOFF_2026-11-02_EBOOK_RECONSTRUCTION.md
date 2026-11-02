@@ -85,3 +85,17 @@ the next runtime candidate and its checks are ready; no request file exists
 yet. This avoids rerunning an expensive fresh book for every intermediate
 source checkpoint. The former955d660 model run is baseline evidence only.
 No customer artifacts, runtime databases or credentials were committed.
+
+## Six-design continuation
+Added Modern Focus, Classic Library and Spacious Workbook to the existing
+three designs. All six are selectable at creation, cover choice and retained
+edition editing. They use distinct cover treatments; the new interiors use
+sans/serif typography or more generous workbook spacing. Six actual PDF cover
+renders were visually inspected. A regression checks every design preserves
+chapter text, renders readable pages and print PDFs, and yields six distinct
+cover raster hashes. The browser contract now requires six loaded previews.
+The Studio/protection gate now collects exactly100 cases.
+Fresh8B acceptance and the complete frozen release gate remain required.
+Render production is live on19068c448be08e0da28b62b110a928afaba320a0
+(PR106); the isolated reconstruction is still draft PR107, not deployed.
+No paid provider calls or production configuration changes.

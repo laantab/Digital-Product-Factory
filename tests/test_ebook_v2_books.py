@@ -344,3 +344,20 @@ def test_local_settings_import_never_selects_the_legacy_database(tmp_path,monkey
     assert os.environ["DATABASE_URL"]=="" and os.environ["FACTORY_DB_BACKEND"]=="sqlite"
     assert legacy.read_bytes()==b"preserved customer database sentinel"
     assert (tmp_path/"separate"/"studio.sqlite").exists()
+
+
+def test_six_designs_preserve_manuscript_and_produce_distinct_layouts():
+    from services.ebook_v2.publishing import THEMES,render_pdf
+    assert len(THEMES)==6
+    covers=set()
+    for theme in THEMES:
+        book={**spec(),"theme":theme}
+        pdf=render_pdf(book)
+        with fitz.open(stream=pdf,filetype="pdf") as document:
+            text=' '.join(page.get_text() for page in document)
+            assert all(ch['title'] in text for ch in book['chapters'])
+            covers.add(hashlib.sha256(document[0].get_pixmap().samples).hexdigest())
+            for page in document:
+                assert page.get_text().strip()
+        assert render_pdf(book,print_mode=True).startswith(b'%PDF-')
+    assert len(covers)==6

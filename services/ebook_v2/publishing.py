@@ -11,7 +11,9 @@ from xml.sax.saxutils import escape
 from .worker import Repairable
 
 THEMES = {"wellness":("#285b49","#f4f0e8"), "editorial":("#243c56","#edf1f6"),
-          "practical":("#704126","#f7efe4")}
+          "practical":("#704126","#f7efe4"),
+          "modern":("#28314a","#f0f2fa"), "classic":("#593545","#f8f1ec"),
+          "workbook":("#245968","#edf6f5")}
 
 
 def clean_chapter(chapter):
@@ -58,9 +60,9 @@ def render_pdf(book,print_mode=False,root=None,only_cover=False):
     accent,paper = THEMES[book["theme"]]
     accent,paper = colors.HexColor(accent),colors.HexColor(paper)
     if print_mode:accent,paper=colors.black,colors.white
-    body = ParagraphStyle("body",fontName="V2Sans" if book["theme"]=="practical" else "V2Body",fontSize=11,leading=15,spaceAfter=9,
+    body = ParagraphStyle("body",fontName="V2Sans" if book["theme"] in ("practical","modern","workbook") else "V2Body",fontSize=11,leading=17 if book["theme"]=="workbook" else 15,spaceAfter=14 if book["theme"]=="workbook" else 9,
                           textColor=colors.black if print_mode else colors.HexColor("#24332e"))
-    heading = ParagraphStyle("chapter",fontName="V2Body" if book["theme"]=="editorial" else "V2Head",fontSize=20,leading=25,
+    heading = ParagraphStyle("chapter",fontName="V2Body" if book["theme"] in ("editorial","classic") else "V2Head",fontSize=20,leading=25,
                              textColor=accent,spaceAfter=20)
     title = ParagraphStyle("cover",parent=heading,fontSize=30,leading=35,spaceAfter=22)
     small = ParagraphStyle("small",parent=body,fontSize=9,leading=12)
@@ -74,6 +76,12 @@ def render_pdf(book,print_mode=False,root=None,only_cover=False):
         if doc.page == 1:
             canvas.setFillColor(paper);canvas.rect(0,0,432,648,fill=1,stroke=0)
             canvas.setStrokeColor(accent);canvas.setLineWidth(2);canvas.line(42,598,390,598)
+            if book["theme"]=="modern":
+                canvas.setFillColor(accent);canvas.rect(0,0,18,648,fill=1,stroke=0)
+            elif book["theme"]=="classic":
+                canvas.rect(25,25,382,598,fill=0,stroke=1)
+            elif book["theme"]=="workbook":
+                for y in (560,550,540):canvas.line(310,y,390,y)
         else:
             canvas.setFont("V2Body",8);canvas.setFillColor(accent)
             label=book["title"]
