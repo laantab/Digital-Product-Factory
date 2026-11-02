@@ -43,7 +43,7 @@ class Books:
         self.units=Store(database);self.root=str(Path(objects).resolve())
         self.policies=policies or {
             "chapter":Policy("supplied-1",chapter_handler,chapter_valid,timeout=20),
-            "export":Policy("pdf-zip-1",export_handler,export_valid,
+            "export":Policy("pdf-zip-2",export_handler,export_valid,
                 {"TIMEOUT":("rebuild",),"WORKER_EXITED":("rebuild",),
                  "VALIDATION_FAILED":("rebuild",)},timeout=120,retry_delay=1)}
         if policies is None:
@@ -172,8 +172,12 @@ class Books:
         book=self.get(owner,book_id)
         if type(revision) is not int or revision!=book["revision"]:raise Conflict("Reload the saved book")
         if book["state"]!="REVIEW":raise ValueError("Book is not ready for review")
-        self.download(owner,book_id,"ebook.pdf",preview=True)
-        self.download(owner,book_id,"package.zip",preview=True)
+        if book["spec"].get("source")=="ollama":
+            from .topics import data
+            export_id=data(self,book)["units"]["export"]
+        else:export_id=book["units"][-1]
+        output=self.units.get(owner,export_id)["output"]
+        if not export_valid(output):raise ValueError("An edition file failed verification")
         return self.save(book,state="READY")
 
     def resume(self,owner,book_id,revision):

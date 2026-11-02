@@ -84,6 +84,14 @@ def test_authenticated_http_downloads_checksums_and_customer_isolation(live):
         with zipfile.ZipFile(io.BytesIO(package.content)) as archive:
             assert archive.testzip() is None
             assert archive.read("ebook.pdf")==pdf.content
+            for name,mime in (("ebook.epub","application/epub+zip"),
+                    ("manuscript.docx","application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+                    ("cover.jpg","image/jpeg")):
+                actual=session.get(base+f"/api/books/{book_id}/files/{name}")
+                assert actual.status_code==200
+                assert actual.headers["Content-Type"].split(";")[0]==mime
+                assert archive.read(name)==actual.content
+                assert hashlib.sha256(actual.content).hexdigest()==actual.headers["X-Content-SHA256"]
         other=requests.Session();other.trust_env=False
         assert other.get(base+"/api/books").status_code==401
         assert other.post(base+"/auth/register",json={"email":"bob@studio.example.test","password":"Disposable-test-password"}).status_code==201

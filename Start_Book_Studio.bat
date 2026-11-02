@@ -10,10 +10,10 @@ if not exist ".ebook-v2-venv\Scripts\python.exe" (
   py -3 -m venv .ebook-v2-venv
   if errorlevel 1 goto failed
 )
-if not exist ".ebook-v2-venv\local-writing-1.ready" (
+if not exist ".ebook-v2-venv\editable-formats-1.ready" (
   ".ebook-v2-venv\Scripts\python.exe" -m pip install -r requirements-ebook-v2.txt
   if errorlevel 1 goto failed
-  echo ready>".ebook-v2-venv\local-writing-1.ready"
+  echo ready>".ebook-v2-venv\editable-formats-1.ready"
 )
 ".ebook-v2-venv\Scripts\python.exe" -m services.ebook_v2.cli init --data "%STUDIO_DATA%"
 if errorlevel 1 goto failed

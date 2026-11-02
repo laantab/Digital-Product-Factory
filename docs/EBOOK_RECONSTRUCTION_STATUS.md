@@ -93,3 +93,17 @@ completion evidence. No production changes or paid calls occurred.
 Final focused follow-up:66 passed41.22sec. Includes real browser/worker
 integration fixtures, interruption/restart and independent prose guard cases.
 This is not the final full Factory release gate.
+
+## EPUB and editable Word checkpoint
+Exports now include EPUB3, editable Word manuscript and a cover JPEG alongside
+the PDF and Markdown. All standalone files must match their ZIP entries; approval
+revalidates every file, closing a corruption gap found by the new EPUB test.
+EPUBCheck5.4.0 reported zero errors/warnings on the actual supplied-fixture EPUB.
+Its downloaded official archive SHA256 is
+33350c61038e71dfb3d45a76aed04bf5481e6d5500cb780f6e98db8bbd15a28c.
+Word uses native editable paragraphs and headings; all3rendered fixture pages
+were inspected after removing a default template title border. Content is checked
+against the same approved source.78 focused/registry checks passed47.94sec.
+The local launcher installs python-docx1.2.0 in its own environment. Legacy
+Factory runtime requirements remain unchanged; test setup includes the new
+dependency through requirements-dev.txt. Final whole-Factory release is pending.

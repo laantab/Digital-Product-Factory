@@ -118,3 +118,44 @@ def test_bad_supplied_input_does_not_create_a_failed_book(engine,change):
     if change=="wrong-theme":raw["theme"]="unknown"
     with pytest.raises(ValueError):engine.create("alice","fixture-request-0001",raw)
     assert engine.listing("alice")==[]
+
+
+def test_epub_reading_order_text_cover_and_package_identity(engine):
+    from xml.etree import ElementTree as ET
+    from services.ebook_v2 import epub
+    book=reviewed(engine)
+    data,_=engine.download("alice",book["id"],"ebook.epub",preview=True)
+    assert epub.inspect(data)
+    package,_=engine.download("alice",book["id"],"package.zip",preview=True)
+    cover,_=engine.download("alice",book["id"],"cover.jpg",preview=True)
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        assert archive.read("ebook.epub")==data
+        assert archive.read("cover.jpg")==cover
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert archive.read("EPUB/cover.jpg")==cover
+        for index,chapter in enumerate(spec()["chapters"],1):
+            root=ET.fromstring(archive.read(f"EPUB/chapter-{index}.xhtml"))
+            ns={"h":"http://www.w3.org/1999/xhtml"}
+            assert root.find("h:body/h:section/h:h1",ns).text==chapter["title"]
+            assert [p.text for p in root.findall("h:body/h:section/h:p",ns)]==chapter["text"].split("\n\n")
+
+
+def test_epub_in_package_cannot_diverge_from_standalone(engine):
+    from pathlib import Path
+    book=reviewed(engine)
+    output=engine.units.get("alice",book["units"][-1])["output"]
+    path=Path(engine.root)/output["files"]["ebook.epub"]["key"]
+    path.write_bytes(b"deliberate corruption")
+    assert not export_valid(output)
+    with pytest.raises(ValueError):engine.approve("alice",book["id"],book["revision"])
+
+
+def test_word_manuscript_is_editable_and_preserves_approved_text(engine):
+    from services.ebook_v2 import manuscript
+    book=reviewed(engine)
+    data,_=engine.download("alice",book["id"],"manuscript.docx",preview=True)
+    assert manuscript.inspect(data,spec())
+    package,_=engine.download("alice",book["id"],"package.zip",preview=True)
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:assert archive.read("manuscript.docx")==data
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert b"pBdr" not in archive.read("word/styles.xml")

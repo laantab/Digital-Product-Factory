@@ -134,9 +134,18 @@ def export_handler(payload,repair):
     book=payload["book"];pdf=render_pdf(book)
     manuscript="# "+book["title"]+"\n\n"+book["author"]+"\n\n"+"\n\n".join(
         "## "+ch["title"]+"\n\n"+ch["text"] for ch in book["chapters"])
+    from . import epub
+    import fitz
+    with fitz.open(stream=pdf,filetype="pdf") as document:
+        cover=document[0].get_pixmap(matrix=fitz.Matrix(3,3),alpha=False).tobytes("jpeg")
+    electronic=epub.render(book,cover)
+    from . import manuscript as word
+    editable=word.render(book);word.inspect(editable,book)
     out=io.BytesIO()
     with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("ebook.pdf",pdf);archive.writestr("manuscript.md",manuscript)
+        archive.writestr("ebook.epub",electronic);archive.writestr("cover.jpg",cover)
+        archive.writestr("manuscript.docx",editable)
         archive.writestr("edition.json",json.dumps({"title":book["title"],"author":book["author"],
             "source":book.get("source","author_supplied"),"review_scope":("local_editorial_checks" if book.get("source")=="local_model" else "structural_checks_only"),
             "pdf_sha256":hashlib.sha256(pdf).hexdigest()},indent=2))
@@ -144,7 +153,8 @@ def export_handler(payload,repair):
     root=Path(payload["root"]).resolve();folder=root/"ebook-v2"/uuid.uuid4().hex
     folder.mkdir(parents=True,exist_ok=False)
     files={}
-    for name,data in {"ebook.pdf":pdf,"package.zip":package,"manuscript.md":manuscript.encode()}.items():
+    for name,data in {"ebook.pdf":pdf,"package.zip":package,"manuscript.md":manuscript.encode(),
+                      "ebook.epub":electronic,"cover.jpg":cover,"manuscript.docx":editable}.items():
         path=folder/name
         with path.open("xb") as stream:
             stream.write(data);stream.flush()
@@ -159,7 +169,15 @@ def export_valid(output):
     try:
         files=output["files"];root=output["root"]
         actual=inspect(verified_file(root,files["ebook.pdf"]),verified_file(root,files["package.zip"]))
-        verified_file(root,files["manuscript.md"])
+        from . import epub
+        with zipfile.ZipFile(io.BytesIO(verified_file(root,files["package.zip"]))) as archive:
+            for name,receipt in files.items():
+                if name!="package.zip" and archive.read(name)!=verified_file(root,receipt):return False
+        # Older verified editions remain downloadable without being rewritten.
+        if "ebook.epub" in files:epub.inspect(verified_file(root,files["ebook.epub"]))
+        if "manuscript.docx" in files:
+            from . import manuscript as word
+            word.inspect(verified_file(root,files["manuscript.docx"]))
         return actual==output["integrity"]
     except (OSError,KeyError,ValueError,TypeError,zipfile.BadZipFile):
         return False
