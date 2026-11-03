@@ -35,7 +35,7 @@
     {
       "chapter": 1,
       "characters": 1100,
-      "ending": "what is working and what isn\u2018"
+      "ending": "what is working and what isn‘"
     },
     {
       "chapter": 2,
@@ -73,5 +73,59 @@
     "human_review": "Not possible because the run stopped before export; no manuscript PDF or package ZIP was produced."
   },
   "production_changed": false,
-  "paid_calls": 0
+  "paid_calls": 0,
+  "accepted_follow_up_run": {
+    "run_id": 41553666103,
+    "source_commit": "f72eee7efb0cd277e803c16094998fba6ba8bc39",
+    "artifact_id": 13194619107,
+    "artifact_digest": "sha256:734fc1056a7d0d34badfa1d9f4229c413e5182fa8b3160b31f6ef41a7041ff93",
+    "result": "ACCEPTED_LOCAL_MODEL_ARTIFACT",
+    "manuscript_review": "All 8 chapters and 6,485 saved words reviewed. Paragraphs end cleanly; no model markup, CJK leakage, invented author experience, placeholders or exact repeated long sentences were found. External fact/originality certification remains outside this acceptance.",
+    "pages_inspected": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27
+    ],
+    "layout_review": "All 27 rendered ebook pages plus the 28-page print interior and one-page full-wrap print cover were inspected. Typography is readable and consistent; no clipping, overlap, missing glyphs or empty ebook pages were found. The print interior includes the expected final parity page.",
+    "byte_review": {
+      "artifact_zip_sha256": "734fc1056a7d0d34badfa1d9f4229c413e5182fa8b3160b31f6ef41a7041ff93",
+      "ebook_pdf_sha256": "f2bd16dba650aecf363dd709bd8760ba95a9899a11c47738d28c67d66ee8265e",
+      "package_zip_sha256": "4d7cbcf8d473f7a444a6f1058d2fa9ed9caab7afbe06a8289a090e85572c01d9",
+      "print_pack_zip_sha256": "c20efbbc6cb3e82e9a9cc76c174ce974ab06f8615ad5c35382317d921bedac04",
+      "summary_hashes_match": true,
+      "package_zip_crc": true,
+      "print_pack_zip_crc": true,
+      "epub_crc": true,
+      "docx_crc": true,
+      "embedded_pdf_matches_standalone": true,
+      "all_package_members_match_standalone": true
+    },
+    "paid_calls": 0,
+    "production_changed": false,
+    "hosted_integration_verified": false
+  }
 }
