@@ -134,7 +134,9 @@
           "embedded_pdf_matches_standalone": true,
           "all_package_members_match_standalone": true
         }
-      }
+      },
+      "run_id": 41553666103,
+      "artifact_id": 13194619107
     },
     "preservation_reference": {
       "restored": true,
@@ -155,6 +157,24 @@
       "final_gate": "3488 passed, 0 failures, 0 errors and 0 skips in 1246.17 seconds from a clean checkout under the workspace root with the exact restored preservation PDF and ZIP.",
       "paid_api_calls_permitted": 0,
       "note": "A separate clean checkout under /tmp produced two expected database-path fixture failures plus two load-sensitive timing failures; all four passed focused reproduction under the valid workspace path and none recurred in the final complete gate."
+    },
+    "checkpoint_ci_after_artifact_review": {
+      "source_commit": "982c624d229214a2704b7d842a9cc64db7eb0591",
+      "runs": {
+        "41569341006": "success: Book Studio Windows/Linux and factory version/fast gate",
+        "41569341055": "success",
+        "41569341036": "success",
+        "41569341022": "success",
+        "41569341032": "success",
+        "41569341061": "success"
+      },
+      "note": "The separate continuation collector run 41569336792 failed because fresh_model.run_id was nested only under latest_technical_success. This checkpoint adds the exact top-level run ID expected by the collector; no application source changed."
+    },
+    "delivery_boundary": {
+      "supported_local_delivery": "Start_Book_Studio.bat initializes a separate per-user SQLite/object store under LOCALAPPDATA, starts an independent worker and binds the authenticated Studio only to 127.0.0.1:5088. The 104-case Studio/protection matrix passed on Windows and Linux.",
+      "hosted_integration": "Not implemented. render.yaml starts the legacy gunicorn app and existing workflow builder; it does not mount services/ebook_v2. The Studio CLI forces SQLite/local objects and its text path expects loopback Ollama, which is not present in the hosted Render topology.",
+      "production_changed": false,
+      "deployment_attempted": false
     }
   },
   "next_actions": [
@@ -175,16 +195,16 @@
     },
     {
       "id": "verify_supported_delivery",
-      "status": "pending",
-      "action": "Confirm the supported local Studio delivery and hosted integration boundary. Do not replace the hosted Factory with a loopback-only application."
+      "status": "completed",
+      "action": "Verified the supported delivery boundary: the accepted rebuild is a private Windows/local Studio with separate data and loopback-only service. It is not integrated into render.yaml, the hosted Flask app, PostgreSQL/R2, or a hosted no-paid model runtime."
     },
     {
       "id": "release_and_verify",
-      "status": "pending",
-      "action": "Only after acceptance, merge/deploy supported changes and verify actual PDF and ZIP downloads in the intended environment."
+      "status": "blocked_by_supported_integration",
+      "action": "Do not deploy the loopback Studio as the hosted Factory. Before merge/deploy completion, implement and verify a supported hosted integration using shared authenticated customer state, PostgreSQL/R2-compatible storage and an explicitly approved no-paid-generation runtime; then verify actual hosted PDF and ZIP downloads."
     }
   ],
-  "completion": "not complete: local model artifact accepted; supported integration and deployed PDF/ZIP verification remain pending",
-  "blocker": "No execution blocker remains. The isolated Studio candidate and fresh local-model artifact are accepted, but supported hosted integration and deployed PDF/ZIP verification are still pending. Do not deploy the loopback-only Studio as the hosted Factory.",
+  "completion": "not complete: local Studio and fresh artifact accepted; hosted integration architecture/runtime and deployed PDF/ZIP verification remain blocked",
+  "blocker": "Specific delivery blocker: PR #107's accepted engine is supported only as a private local Windows Studio. The current hosted Render topology does not integrate services/ebook_v2, and has no local Ollama/no-paid model runtime; the Studio also forces separate SQLite/local object storage rather than hosted PostgreSQL/R2 customer state. Deploying it now would either leave the hosted Factory unchanged or incorrectly expose a loopback-only service. A supported hosted architecture/runtime decision is required before merge/deploy and hosted PDF/ZIP verification.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
