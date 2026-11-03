@@ -66,31 +66,33 @@
       "embedded_pdf_matches": true
     },
     "full_release": {
-      "status": "not_certified",
+      "status": "passed",
       "completed_attempt": "3487 passed and 1 failed in 1153.42 seconds with the exact restored reference.",
       "failure": "tests/test_version_management.py::test_the_checker_runs_and_passes_on_the_current_tree required a patch version and matching release note because two production files changed.",
       "correction_commit": "401bc7e1ee4148cd94be75fc4392423e41585e96",
       "correction": "Bumped VERSION from 1.9.70 to 1.9.71 and added a matching CHANGELOG entry; no test was weakened.",
       "clean_correction_verification": "All 31 version-management tests passed from a detached clean checkout of 401bc7e1ee4148cd94be75fc4392423e41585e96.",
       "recovered_browser_failure": "The prior interrupted run cached tests/test_ebook_v2_topics.py::test_automatic_topic_browser_only_requires_title_and_cover_choices. It passed twice in focused reproduction and passed in the completed 3488-case run, so no source change was made for it.",
-      "next_requirement": "Run the final whole-Factory gate on the versioned candidate after CI. The completed pre-version run is evidence, not final certification."
+      "final_gate": "3488 passed, 0 failures, 0 errors and 0 skips in 1246.17 seconds from a clean checkout under the workspace root with the exact restored preservation PDF and ZIP.",
+      "paid_api_calls_permitted": 0,
+      "note": "A separate clean checkout under /tmp produced two expected database-path fixture failures plus two load-sensitive timing failures; all four passed focused reproduction under the valid workspace path and none recurred in the final complete gate."
     }
   },
   "next_actions": [
     {
       "id": "verify_editorial_budget_correction",
-      "status": "in_progress",
-      "action": "Wait for the Actions checks triggered by the source and version commits. If green, request exactly one new free eight-chapter acceptance run; do not duplicate a running generation."
+      "status": "completed",
+      "action": "All six versioned-candidate regression workflows passed. Exactly one free eight-chapter acceptance run was requested."
     },
     {
       "id": "review_new_model_artifacts",
-      "status": "pending",
-      "action": "Inspect the complete manuscript, every rendered page, standalone PDF bytes and actual package ZIP from the next successful real-model run."
+      "status": "in_progress",
+      "action": "Run 41553666103 is active. When it completes, inspect the complete manuscript, every rendered page, standalone PDF bytes and actual package ZIP. Do not request a duplicate run."
     },
     {
       "id": "resolve_full_release",
-      "status": "pending",
-      "action": "Resume the enforced full release suite with the exact restored preservation files. Retain the final JUnit report, identify every failure, and make only evidence-backed corrections."
+      "status": "completed",
+      "action": "The exact restored-reference release gate passed all 3488 cases on the versioned candidate."
     },
     {
       "id": "verify_supported_delivery",
@@ -104,6 +106,6 @@
     }
   ],
   "completion": "not complete",
-  "blocker": "No user action is required. CI, a successful human-reviewed fresh model artifact, the completed full release gate, supported integration and deployed PDF/ZIP verification remain outstanding.",
+  "blocker": "No user action is required. Fresh-model run 41553666103 must complete and its actual manuscript/pages/PDF/ZIP must pass human and byte review. Supported integration and deployed PDF/ZIP verification remain outstanding.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
