@@ -7,6 +7,8 @@
   "runtime_candidate": "401bc7e1ee4148cd94be75fc4392423e41585e96",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
+    "hosted_integration_engineering": true,
+    "acceptance_priority": "Recover an existing stalled customer book before a fresh full-flow book; reuse accepted chapters and minimize ChatGPT credits and repeated checks.",
     "paid_generation": false,
     "protect_other_generators": true
   },
@@ -17,6 +19,14 @@
       "errors": 0,
       "skips": 0,
       "duration_seconds": 166.28
+    },
+    "legacy_recovery_snapshot_candidate": {
+      "version": "1.9.72",
+      "source": "services/ebook_v2/legacy_snapshot.py",
+      "verification": "7 isolated unittest cases passed: exact text and pending quality preservation; owner isolation; missing identity/version rejection; idempotent save and retained source versions; conflicting same-version content rejection; checksum corruption rejection; concurrent save deduplication.",
+      "hosted_verified": false,
+      "enabled_in_production": false,
+      "next_action": "Verify the snapshot store against real PostgreSQL, then wire authenticated owner-scoped snapshot save/reopen using the existing saved project and its actual version. The new table contains preservation snapshots only; original projects and artifact objects must not be changed. Reuse accepted chapters and independently validate pending text before worker recovery."
     },
     "candidate_ci_before_latest_correction": {
       "studio_run": 41535780087,
@@ -179,6 +189,11 @@
   },
   "next_actions": [
     {
+      "id": "recover_existing_stalled_book",
+      "status": "in_progress",
+      "action": "Hosted sign-in and reopening succeeded. The Weekly Desk Reset for Beginners is DRAFT revision 1: research/title/outline approved; chapters 1-3 PASS at 1264/1323/1182 words; chapter 4 preserved at 2000 words with GENERIC_FILLER finding for keep going. The correction estimate returned No remaining budget for manuscript correction; no generation was started. A new isolated immutable owner-scoped snapshot store passes 7 tests. Next verify actual PostgreSQL persistence and wire authenticated save/reopen before importing accepted/pending chapters. Do not press legacy Resume Build while its paid-provider path remains possible."
+    },
+    {
       "id": "verify_editorial_budget_correction",
       "status": "completed",
       "action": "All six versioned-candidate regression workflows passed. Exactly one free eight-chapter acceptance run was requested."
@@ -204,7 +219,7 @@
       "action": "Do not deploy the loopback Studio as the hosted Factory. Before merge/deploy completion, implement and verify a supported hosted integration using shared authenticated customer state, PostgreSQL/R2-compatible storage and an explicitly approved no-paid-generation runtime; then verify actual hosted PDF and ZIP downloads."
     }
   ],
-  "completion": "not complete: local Studio and fresh artifact accepted; hosted integration architecture/runtime and deployed PDF/ZIP verification remain blocked",
-  "blocker": "Specific delivery blocker: PR #107's accepted engine is supported only as a private local Windows Studio. The current hosted Render topology does not integrate services/ebook_v2, and has no local Ollama/no-paid model runtime; the Studio also forces separate SQLite/local object storage rather than hosted PostgreSQL/R2 customer state. Deploying it now would either leave the hosted Factory unchanged or incorrectly expose a loopback-only service. A supported hosted architecture/runtime decision is required before merge/deploy and hosted PDF/ZIP verification.",
+  "completion": "not complete: hosted integration engineering is authorized; existing stalled book has been reopened and its exact blocking stage inspected; reconstructed-engine hosted persistence and recovery remain to implement",
+  "blocker": "No approval decision is pending. The existing hosted book correction path reports no remaining correction budget and may invoke paid generation. The accepted reconstructed engine has no hosted customer-state/import integration or configured no-paid model runtime yet. Preserve the inspected book and implement that bridge before attempting recovery. This session verified hosted sign-in/reopen only, not a hosted new-engine save or completed recovery. All seven Actions runs on 1dfc89dd91483439e680c6e30b47c1f41fe5c00c are completed success. No deployment, paid generation, or customer manuscript edit was performed.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

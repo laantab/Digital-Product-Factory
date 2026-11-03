@@ -1,6 +1,20 @@
 Warning: truncated output (original token count: 54441)
 Total output lines: 4171
 
+## 1.9.72 — Preserve existing books for reconstructed-engine recovery (candidate)
+
+### What changed
+Added an isolated recovery snapshot store with persisted-owner checks, immutable
+source versions, content checksums and idempotent concurrent saves. It retains
+accepted chapters, pending drafts and artifact references without editing the
+original project or invoking generation. Account isolation, restart/reopen,
+conflicting versions and corruption are tested on isolated SQLite databases.
+
+### Integration boundary
+The store accepts Factory's database connection interface. Hosted PostgreSQL,
+authenticated route wiring, artifact-byte preservation and model-worker recovery
+remain unverified and are not enabled by this change.
+
 ## 1.9.71 — Complete local paragraphs and bounded editorial recovery (candidate)
 
 ### What changed
