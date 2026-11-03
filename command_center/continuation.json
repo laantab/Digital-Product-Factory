@@ -55,6 +55,19 @@
         "correction_commit": "9f9027ed1ff012125224f21ee9404cdb08671e5d",
         "correction": "Keep processing local-only and bounded, but allow up to 9 attempts so two correction/expansion/independent-recheck cycles can complete.",
         "verification": "New exact-sequence regression plus all 104 local Studio/protection tests passed."
+      },
+      "latest_technical_success": {
+        "run_id": 41553666103,
+        "source_commit": "f72eee7efb0cd277e803c16094998fba6ba8bc39",
+        "status": "completed",
+        "conclusion": "success",
+        "artifact_id": 13194619107,
+        "artifact_name": "studio-local-model-engineering-evidence",
+        "artifact_size_bytes": 2598962,
+        "artifact_digest": "sha256:734fc1056a7d0d34badfa1d9f4229c413e5182fa8b3160b31f6ef41a7041ff93",
+        "expires_at": "2026-11-10T01:09:16Z",
+        "human_review": "PENDING: technical success is not acceptance. Manuscript, every rendered page, standalone PDF and retained package ZIP have not yet been inspected.",
+        "download_attempts": "GitHub artifact metadata and a reusable file reference were obtained. Repeated byte retrieval attempts returned HTTP 503; the next local execution attempt was blocked by the execution service usage limit."
       }
     },
     "preservation_reference": {
@@ -86,8 +99,8 @@
     },
     {
       "id": "review_new_model_artifacts",
-      "status": "in_progress",
-      "action": "Run 41553666103 is active. When it completes, inspect the complete manuscript, every rendered page, standalone PDF bytes and actual package ZIP. Do not request a duplicate run."
+      "status": "blocked_transient",
+      "action": "Download artifact 13194619107 from run 41553666103 when execution resumes; inspect the complete manuscript and every page, then verify standalone PDF signatures/hashes, package ZIP CRC and embedded-PDF equality. Do not regenerate the book."
     },
     {
       "id": "resolve_full_release",
@@ -106,6 +119,6 @@
     }
   ],
   "completion": "not complete",
-  "blocker": "No user action is required. Fresh-model run 41553666103 must complete and its actual manuscript/pages/PDF/ZIP must pass human and byte review. Supported integration and deployed PDF/ZIP verification remain outstanding.",
+  "blocker": "Transient execution blocker: artifact 13194619107 exists and is unexpired, but repeated byte downloads returned HTTP 503 and the local execution service then reported its usage limit. No user action is required; resume artifact inspection without triggering another generation. Supported integration and deployed PDF/ZIP verification remain outstanding.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
