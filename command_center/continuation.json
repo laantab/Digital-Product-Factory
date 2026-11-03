@@ -4,7 +4,7 @@
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
   "checked_at": "2026-11-02",
-  "runtime_candidate": "9f9027ed1ff012125224f21ee9404cdb08671e5d",
+  "runtime_candidate": "401bc7e1ee4148cd94be75fc4392423e41585e96",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
     "paid_generation": false,
@@ -67,17 +67,20 @@
     },
     "full_release": {
       "status": "not_certified",
-      "latest_attempt": "The restored-reference suite reached 59 percent and recorded one failure before the execution session was terminated; no final JUnit report was produced.",
-      "recovered_failure": "tests/test_ebook_v2_topics.py::test_automatic_topic_browser_only_requires_title_and_cover_choices",
-      "focused_reproduction": "passed twice, once normally and once with four xdist workers; no source correction is justified from this transient result alone.",
-      "second_failure": "The second failure from the earlier lost run is still not identified. A historical release-note heading failure was corrected before this candidate, but it is not being assumed to be the lost second failure."
+      "completed_attempt": "3487 passed and 1 failed in 1153.42 seconds with the exact restored reference.",
+      "failure": "tests/test_version_management.py::test_the_checker_runs_and_passes_on_the_current_tree required a patch version and matching release note because two production files changed.",
+      "correction_commit": "401bc7e1ee4148cd94be75fc4392423e41585e96",
+      "correction": "Bumped VERSION from 1.9.70 to 1.9.71 and added a matching CHANGELOG entry; no test was weakened.",
+      "clean_correction_verification": "All 31 version-management tests passed from a detached clean checkout of 401bc7e1ee4148cd94be75fc4392423e41585e96.",
+      "recovered_browser_failure": "The prior interrupted run cached tests/test_ebook_v2_topics.py::test_automatic_topic_browser_only_requires_title_and_cover_choices. It passed twice in focused reproduction and passed in the completed 3488-case run, so no source change was made for it.",
+      "next_requirement": "Run the final whole-Factory gate on the versioned candidate after CI. The completed pre-version run is evidence, not final certification."
     }
   },
   "next_actions": [
     {
       "id": "verify_editorial_budget_correction",
       "status": "in_progress",
-      "action": "Wait for the Actions checks triggered by 9f9027ed1ff012125224f21ee9404cdb08671e5d. If green, request exactly one new free eight-chapter acceptance run; do not duplicate a running generation."
+      "action": "Wait for the Actions checks triggered by the source and version commits. If green, request exactly one new free eight-chapter acceptance run; do not duplicate a running generation."
     },
     {
       "id": "review_new_model_artifacts",
