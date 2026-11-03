@@ -1,5 +1,6 @@
 """Preservation tests use isolated databases and never import a provider."""
 import copy
+from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
 import sqlite3
 import tempfile
@@ -72,8 +73,11 @@ class LegacySnapshots(unittest.TestCase):
 
     def test_corrupt_saved_payload_is_not_returned(self):
         key = self.store.save(self.project, 7)
-        with self.connect() as conn:
-            conn.execute("UPDATE ebook_v2_legacy_snapshots SET payload='{}' WHERE id=?", (key,))
+        # sqlite3's transaction context commits but does not close the file.
+        # Close explicitly before TemporaryDirectory cleanup on Windows.
+        with closing(self.connect()) as conn:
+            with conn:
+                conn.execute("UPDATE ebook_v2_legacy_snapshots SET payload='{}' WHERE id=?", (key,))
         with self.assertRaises(CorruptCheckpoint):
             self.store.reopen(7, key)
 

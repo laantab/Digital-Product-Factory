@@ -185,6 +185,18 @@
       "hosted_integration": "Not implemented. render.yaml starts the legacy gunicorn app and existing workflow builder; it does not mount services/ebook_v2. The Studio CLI forces SQLite/local objects and its text path expects loopback Ollama, which is not present in the hosted Render topology.",
       "production_changed": false,
       "deployment_attempted": false
+    },
+    "snapshot_ci_repair": {
+      "previous_commit": "578cde348eda11f6181d615737481c0ea9fb8beb",
+      "previous_run": 41626357260,
+      "linux": "111 passed",
+      "windows": "110 passed; corruption fixture cleanup failed with WinError 32 because test connection remained open",
+      "version": "Changelog customer-question contract failed: required headings absent",
+      "correction": "Explicitly close test-only SQLite connection using contextlib.closing; add required changelog sections without weakening tests.",
+      "local_verification": "All 7 snapshot tests passed before and after; exact unchanged changelog contract passed after repair.",
+      "ci_verification": "Pending publication and Windows/Linux rerun; no model acceptance request changed.",
+      "production_changed": false,
+      "paid_generation": false
     }
   },
   "next_actions": [
@@ -220,6 +232,6 @@
     }
   ],
   "completion": "not complete: hosted integration engineering is authorized; existing stalled book has been reopened and its exact blocking stage inspected; reconstructed-engine hosted persistence and recovery remain to implement",
-  "blocker": "No approval decision is pending. The existing hosted book correction path reports no remaining correction budget and may invoke paid generation. The accepted reconstructed engine has no hosted customer-state/import integration or configured no-paid model runtime yet. Preserve the inspected book and implement that bridge before attempting recovery. This session verified hosted sign-in/reopen only, not a hosted new-engine save or completed recovery. All seven Actions runs on 1dfc89dd91483439e680c6e30b47c1f41fe5c00c are completed success. No deployment, paid generation, or customer manuscript edit was performed.",
+  "blocker": "Two known CI failures have targeted test/documentation fixes locally verified; Windows/Linux and version CI rerun remains required. Hosted PostgreSQL snapshot persistence, authenticated save/reopen/import and no-paid runtime integration remain unfinished. No deployment, customer manuscript edit or paid generation occurred.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

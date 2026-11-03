@@ -10,6 +10,21 @@ accepted chapters, pending drafts and artifact references without editing the
 original project or invoking generation. Account isolation, restart/reopen,
 conflicting versions and corruption are tested on isolated SQLite databases.
 
+### What was fixed
+The corruption test now explicitly closes its SQLite connection after committing
+the deliberately damaged fixture. The transaction context alone left the file
+open, causing Windows temporary-directory cleanup to fail. Corruption rejection
+and all existing snapshot assertions remain required.
+
+### Do the steps change?
+No customer steps change. Existing saved books and generation settings remain
+unchanged. These corrections do not start model work or enable hosted recovery.
+
+### Release gate
+The seven isolated snapshot tests must pass, followed by the existing Windows
+and Linux Studio checks and all version-management contracts. Production recovery
+is not accepted by these checks alone.
+
 ### Integration boundary
 The store accepts Factory's database connection interface. Hosted PostgreSQL,
 authenticated route wiring, artifact-byte preservation and model-worker recovery
