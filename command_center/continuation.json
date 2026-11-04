@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-04T15:22:00.314Z",
+  "checked_at": "2026-11-04T17:35:01.759436+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -371,13 +371,80 @@
         "native_git_push": "unavailable: no command-line GitHub credentials; publication succeeded through the connected GitHub account after confirming public repository ownership and admin permission",
         "next_action": "Inspect the exact recorded external jobs and artifacts. Finish protection proof/relocking, then continue hosted worker/import engineering in a new usable execution environment. Do not repeat accepted model generation."
       }
+    },
+    "ci_artifact_review_20261104": {
+      "source_commit": "ddf192b9e0d62b9761306f6bfd8acf5dceda7a34",
+      "studio_run": 41856995045,
+      "artifacts": [
+        {
+          "platform": "linux",
+          "id": 13337871848,
+          "sha256": "4db1f9ecdea9fc5b250cf53dff130817f9a8408bdf9405b76e6da044dcaa5c94",
+          "tests": 124,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 87.043
+        },
+        {
+          "platform": "windows",
+          "id": 13337827781,
+          "sha256": "5c0cad595675612ffb6c8d18c1b9c0acef2635f53e4426ff3de43358d3e85ce6",
+          "tests": 124,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 149.945
+        },
+        {
+          "platform": "postgresql",
+          "id": 13338701135,
+          "run": 41856995023,
+          "sha256": "29188c859941fd07c3825531352d6c433ba069aaac070fd7338ef937d58d5bbf",
+          "tests": 9,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 2.239
+        }
+      ],
+      "artifact_review": "Downloaded ZIP bytes matched GitHub digests; parsed actual JUnit reports. Tests only, not real AI inference or production certification.",
+      "paid_generation": false,
+      "production_changed": false
+    },
+    "route_classification_correction": {
+      "version": "1.9.74",
+      "parent_commit": "ddf192b9e0d62b9761306f6bfd8acf5dceda7a34",
+      "change": "Classify immutable whole-project snapshots as heavy/deferred; no supported snapshot builder task exists. No execution path changed.",
+      "verification": {
+        "tests": 49,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "seconds": 1.662,
+      "junit_sha256": "8ae0856a054f01b21f2e1db5d02527c7f72cb1a690064c1782c7ca67a32a341b",
+      "full_gate_accepted": false
+    },
+    "active_local_release_attempt": {
+      "source_commit": "ddf192b9e0d62b9761306f6bfd8acf5dceda7a34",
+      "status": "running_at_checkpoint",
+      "collected_cases": 3519,
+      "observed_failure": "tests/test_post_route_registry.py::PostRouteRegistryTests::test_every_live_post_route_is_classified",
+      "failure_correction": "1.9.74 passes all 49 focused classification/version/hosted HTTP cases; not a new full release pass",
+      "preservation_originals_restored_and_hash_verified": true,
+      "log": "/tmp/factory-current-full.log",
+      "junit": "test-results/factory-junit.xml",
+      "baseline_source": "5c0047602c35c637952497f46d2f1f6832be74f2",
+      "baseline_status": "queued after full-gate JUnit is written; 72 unchanged protected test files",
+      "caution": "Recheck execution and final reports before claiming progress. This checkpoint does not establish jobs continue after execution loss."
     }
   },
   "next_actions": [
     {
       "id": "recover_existing_stalled_book",
       "status": "in_progress",
-      "action": "Immutable saved-book preservation now passes all 9 real PostgreSQL and 11 signed Factory HTTP cases; the API is registered in candidate source, not deployed. Inspect Windows/Linux and protected CI at 291c9b62a17746a9c350db35632109e1f8951841, complete shared capability protection proof/relocking, restore a usable execution environment, then import accepted/pending chapters and connect an explicitly no-paid writing runtime. Do not regenerate accepted books or use the legacy paid Resume path."
+      "action": "Execution restored and original preservation PDF/ZIP hashes verified. Inspected exact Windows/Linux (124 each) and PostgreSQL (9) artifact bytes on ddf192b. Finish the current full gate and before/after protection proof; 1.9.74 corrects the observed missing heavy snapshot route classification and passes 49 focused cases. Relock only after complete proof. Then connect supported no-paid hosted import/writing and recover an existing book without regenerating accepted chapters."
     },
     {
       "id": "verify_editorial_budget_correction",
@@ -405,7 +472,7 @@
       "action": "Do not deploy the loopback Studio as the hosted Factory. Before merge/deploy completion, implement and verify a supported hosted integration using shared authenticated customer state, PostgreSQL/R2-compatible storage and an explicitly approved no-paid-generation runtime; then verify actual hosted PDF and ZIP downloads."
     }
   ],
-  "completion": "not complete: final-page/photo gates and signed PostgreSQL-compatible preservation are implemented; supported hosted worker/import, complete release acceptance and production download verification remain unfinished",
-  "blocker": "Local execution environment disconnected. Source is preserved through 291c9b62a17746a9c350db35632109e1f8951841. PostgreSQL and Linux Studio checks passed; Windows and broader protected checks were still running. Five shared-capability registries remain explicitly UNLOCKED pending completed before/after proof; do not invent a relock or deploy. No supported no-paid writing runtime is connected to the hosted Factory.",
+  "completion": "Not complete: CI artifacts inspected and route-classification release defect corrected in candidate source. Full frozen release, protection/relocking, supported no-paid hosted recovery, real customer-book acceptance and production downloads remain required.",
+  "blocker": "Full release and shared-capability protection proof remain unfinished; five registries remain UNLOCKED. The full gate on ddf192b caught the missing recovery POST classification; the 1.9.74 correction passes 49 focused tests but is not a full release pass. No supported no-paid hosted worker/import runtime is connected. Recheck local jobs before claiming they are running or finished.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

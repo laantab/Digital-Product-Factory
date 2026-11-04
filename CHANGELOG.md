@@ -1,3 +1,24 @@
+## 1.9.74 — Classify saved-book preservation work (candidate)
+
+### What changed
+Registered the signed recovery snapshot POST route in the enforced workload
+inventory. Copying a complete saved project can include large embedded artifacts,
+so it is classified as heavy rather than a small decision-only JSON update.
+
+### What was fixed
+The full Factory gate caught the new route missing from its classification
+registry. The entry now explicitly records that the existing book builder has no
+immutable-preservation task. No route assertion, timeout or protection was relaxed.
+
+### Do the steps change?
+No customer steps change. This classification does not start generation, change
+saved books, move snapshot work to a worker or enable hosted release.
+
+### Release gate
+Require the existing live-route classification and version contracts, signed
+recovery cases and protected customer paths. The fresh full release gate and
+supported no-paid hosted recovery runtime remain required before release.
+
 ## 1.9.73 — Verify final pages and preserve requested photographs (candidate)
 
 ### What changed
