@@ -66,6 +66,10 @@ def create_app(books):
         body=request.get_json()
         if not isinstance(body,dict):raise ValueError("Send valid book settings")
         raw=body.get("spec")
+        if isinstance(raw,dict) and raw.get("require_photos") is True:
+            from .visuals import configured
+            if not configured():
+                return jsonify(error="Picture search is not available yet. Your book has not been started. Choose text and graphics, or connect picture search first."),503
         if isinstance(raw,dict) and raw.get("source")=="ollama" and not books.available(local_text=True):
             return jsonify(error="Start the local writing service and install the selected model before creating a topic book. No book attempt was started."),503
         book=books.create(str(current_user.id),body.get("request_key"),body.get("spec"))

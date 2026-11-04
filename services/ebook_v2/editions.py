@@ -40,6 +40,9 @@ def history(books,owner,book_id):
 def edit(books,owner,book_id,revision,key,raw):
     from .books import clean_spec,Conflict
     if not isinstance(key,str) or not 8<=len(key)<=100:raise ValueError('Use a valid edit request key')
+    parent=books.get(owner,book_id)
+    if parent['spec'].get('require_photos') and isinstance(raw,dict) and 'require_photos' not in raw:
+        raw={**raw,'require_photos':True}
     spec=clean_spec(raw)
     if spec.get('source')=='ollama':raise ValueError('Edits must supply the exact revised manuscript')
     request='edit:'+digest({'parent':book_id,'key':key})

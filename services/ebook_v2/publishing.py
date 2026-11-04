@@ -180,6 +180,8 @@ def export_handler(payload,repair):
     book={**payload["book"]}
     if "visuals" not in book:book["visuals"]=prepare(book,payload["root"])
     pdf=render_pdf(book,root=payload["root"])
+    from .final_quality import inspect as inspect_pages
+    page_quality=inspect_pages(pdf,book,payload["root"])
     manuscript="# "+book["title"]+"\n\n"+book["author"]+"\n\n"+"\n\n".join(
         "## "+ch["title"]+"\n\n"+ch["text"] for ch in book["chapters"])
     from . import epub
@@ -196,6 +198,7 @@ def export_handler(payload,repair):
         archive.writestr("ebook.pdf",pdf);archive.writestr("manuscript.md",manuscript)
         archive.writestr("ebook.epub",electronic);archive.writestr("cover.jpg",cover)
         archive.writestr("manuscript.docx",editable)
+        archive.writestr("quality-report.json",json.dumps(page_quality,indent=2))
         archive.writestr("photo-sources.json",json.dumps([{**{key:v["photo"][key] for key in ("provider","photographer","source_url","license_url","alt","width","height")},
             "image_sha256":v["photo"]["file"]["sha256"]} for v in book["visuals"] if v.get("photo")],indent=2))
         if paperback:archive.writestr("print-pack.zip",paperback[0])
@@ -217,7 +220,7 @@ def export_handler(payload,repair):
             os.fsync(stream.fileno())
         receipt={"key":str(path.relative_to(root)),"size":len(data),"sha256":hashlib.sha256(data).hexdigest()}
         verified_file(root,receipt);files[name]=receipt
-    return {"files":files,"integrity":integrity,"root":str(root),
+    return {"files":files,"integrity":integrity,"page_quality":page_quality,"root":str(root),
             "print_specification":paperback[1] if paperback else None,"visuals":book["visuals"]}
 
 
@@ -229,6 +232,17 @@ def export_valid(output):
         with zipfile.ZipFile(io.BytesIO(verified_file(root,files["package.zip"]))) as archive:
             for name,receipt in files.items():
                 if name!="package.zip" and archive.read(name)!=verified_file(root,receipt):return False
+            if "page_quality" in output:
+                report=output["page_quality"]
+                if (json.loads(archive.read("quality-report.json"))!=report
+                        or report.get("contract")!="final-pages-1"
+                        or report.get("pdf_sha256")!=actual["pdf_sha256"]
+                        or report.get("pages")!=actual["pages"]
+                        or report.get("source_text_present") is not True
+                        or report.get("text_within_page") is not True
+                        or report.get("photograph_pixels_verified") is not True
+                        or report.get("photographs_expected")!=sum(bool(v.get("photo")) for v in output.get("visuals",[]))
+                        or report.get("photographs_placed",-1)<report["photographs_expected"]):return False
         # Older verified editions remain downloadable without being rewritten.
         if "ebook.epub" in files:epub.inspect(verified_file(root,files["ebook.epub"]))
         if "manuscript.docx" in files:

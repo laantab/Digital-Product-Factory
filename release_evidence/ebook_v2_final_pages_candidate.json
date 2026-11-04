@@ -1,0 +1,88 @@
+{
+  "checked_at": "2026-11-04T15:06:11.458328+00:00",
+  "version": "1.9.73",
+  "status": "candidate_not_deployed",
+  "source_scope": [
+    "Final-page source text, layout and actual photograph checks",
+    "Default photo requests fail closed before generation when search is unconfigured",
+    "Bounded photo recovery retains acquired images and completed chapters",
+    "Signed-account immutable preservation reads actual owner/version/raw data atomically"
+  ],
+  "local_studio_after": {
+    "tests": "108",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "70.816",
+    "junit_sha256": "f06d9bfdbfa0f2851daa96110769be7f767a29e2cc8a93c86166a0b08ec2d91d"
+  },
+  "final_page_defect_regressions": {
+    "tests": "12",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "7.230",
+    "junit_sha256": "63aa3f043aa5c19fc52f6a5c023047076763ae90e7e2b5545d13a5065fa5e663"
+  },
+  "hosted_preservation_sqlite_and_snapshot_contracts": {
+    "tests": "18",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "61.043",
+    "junit_sha256": "32a1d3690bcbfa4ea98ce179ff00b162a33a9d99542f97fdeeba75debe048ea9"
+  },
+  "freeze_attempt": {
+    "tests": "155",
+    "failures": "1",
+    "errors": "0",
+    "skipped": "0",
+    "time": "88.547",
+    "junit_sha256": "b9cf2cfc07d3ffb670a5c9b0a927131d0800eb691e05299548a193921455844f"
+  },
+  "worker_timing_reproduction": {
+    "tests": "22",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "4.477",
+    "junit_sha256": "b9d6df6f080ff4aa45d0d135d9cae6fa07033e4b6eb2f56034dbd51255d5e665"
+  },
+  "protected_baseline": {
+    "tests": "729",
+    "failures": "1",
+    "errors": "0",
+    "skipped": "0",
+    "time": "828.885",
+    "junit_sha256": "a1bd43f5ed7cc006f8212d711e5939f3363eb57c07c176f778ef16a81f5275a4"
+  },
+  "baseline_failure_reproduction": {
+    "tests": "1",
+    "failures": "1",
+    "errors": "0",
+    "skipped": "0",
+    "time": "183.538",
+    "junit_sha256": "2e0829f3211c7dfd5bfe68ab2fee313a18c4b5a56d539a331329aafd37d79069"
+  },
+  "unchanged_browser_diagnostic_reproduction": {
+    "tests": "1",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "155.215",
+    "junit_sha256": "7fb5da71e261070ad06cc2fc13a4184e20ff5025c7f22b04ab03bcb388505cf6"
+  },
+  "baseline_note": "The unchanged ai_recommended real-browser path exceeded its 180-second limit twice, then passed the diagnostic run in 155.20 seconds. The worker-crash 1-second test passed with all 22 worker contracts when run alone. No assertions, time limits or production behavior were weakened. These are aggregate case results, not a fully green uninterrupted release gate.",
+  "protected_after": "running; final evidence must be recorded before release",
+  "postgres_preservation_and_http": "Nine tests enrolled in a disposable localhost PostgreSQL CI job; not yet executed.",
+  "paid_generation": false,
+  "production_changed": false,
+  "release_accepted": false,
+  "remaining": [
+    "Inspect PostgreSQL and Windows/Linux CI artifacts",
+    "Complete before/after protection proof and relock shared capability registries",
+    "Run frozen whole-Factory release gate with the exact preservation originals",
+    "Import accepted/pending chapters into a supported no-paid hosted worker",
+    "Verify actual production save/reopen and final customer PDF/ZIP downloads"
+  ]
+}

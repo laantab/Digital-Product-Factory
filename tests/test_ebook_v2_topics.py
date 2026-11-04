@@ -193,6 +193,7 @@ def test_automatic_topic_browser_only_requires_title_and_cover_choices(provider,
             page=context.new_page();errors=[];page.on("pageerror",lambda error:errors.append(str(error)))
             page.goto(base)
             raw=topic_spec()
+            page.locator('[name="images"]').select_option("text")
             page.locator('[name="source"]').select_option("ollama")
             for key in ("topic","audience","outcome","author"):page.locator(f'[name="{key}"]').fill(raw[key])
             page.locator('[name="chapter_count"]').fill("2")

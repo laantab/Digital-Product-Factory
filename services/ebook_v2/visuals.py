@@ -14,6 +14,11 @@ import uuid
 import requests
 from PIL import Image,ImageOps
 from .publishing import verified_file
+from .worker import Repairable
+
+
+def configured():
+    return any(os.environ.get(key) for key in ('PEXELS_API_KEY','UNSPLASH_ACCESS_KEY','UNSPLASH_API_KEY'))
 
 
 def safe_url(value,host):
@@ -49,6 +54,7 @@ class Stock:
     def __init__(self,root,budget=30,limit=4):
         self.root=Path(root);self.deadline=time.monotonic()+budget;self.limit=limit
         self.session=requests.Session()
+        self.used=set()
 
     def close(self):self.session.close()
 
@@ -93,6 +99,7 @@ class Stock:
     def acquire(self,query):
         if self.limit<=0:return None
         for candidate in self.candidates(query):
+            if candidate.get('page') in self.used:continue
             response=None
             try:
                 host='images.pexels.com' if candidate['provider']=='Pexels' else 'images.unsplash.com'
@@ -124,6 +131,7 @@ class Stock:
                          'sha256':hashlib.sha256(data).hexdigest()}
                 verified_file(self.root,receipt)
                 self.limit-=1
+                self.used.add(candidate['page'])
                 return {'file':receipt,'alt':candidate['alt'],'provider':candidate['provider'],
                     'photographer':candidate['photographer'],'source_url':candidate['page'],
                     'license_url':candidate['license'],'width':image.width,'height':image.height,
@@ -134,11 +142,21 @@ class Stock:
         return None
 
 
-def prepare(book,root):
+def prepare(book,root,retained=None):
     stock=Stock(root)
     try:
+        retained=retained or []
+        if retained and len(retained)!=len(book['chapters']):raise ValueError('Invalid saved image checkpoint')
+        for visual in retained:
+            if visual.get('photo'):
+                photo_bytes(root,visual)
+                stock.used.add(visual['photo']['source_url'])
+                stock.limit-=1
         result=[]
-        for chapter in book['chapters']:
+        for index,chapter in enumerate(book['chapters']):
+            if retained and retained[index].get('photo'):
+                result.append({'photo':retained[index]['photo'],'overview':overview(chapter)})
+                continue
             subject=book.get('topic') or book['title']
             terms=[w for w in re.findall(r'[A-Za-z]{4,}',subject.lower()) if w.rstrip('s') in words(subject)]
             if len(terms)<3:terms.extend(w for w in re.findall(r'[A-Za-z]{4,}',chapter['title'].lower()) if w.rstrip('s') in words(chapter['title']))
@@ -160,7 +178,9 @@ def credit(photo):
 def handler(payload,repair):
     import fitz
     from .publishing import render_pdf,THEMES
-    root=Path(payload['root']);book=payload['book'];visuals=prepare(book,root)
+    root=Path(payload['root']);book=payload['book'];visuals=prepare(book,root,payload.get('retained_visuals'))
+    if book.get('require_photos') and sum(bool(v.get('photo')) for v in visuals)<min(4,len(book['chapters'])):
+        raise Repairable('MISSING_PHOTOS',{'visuals':visuals})
     covers={};folder=root/'ebook-v2-media';folder.mkdir(parents=True,exist_ok=True)
     for theme in THEMES:
         with fitz.open(stream=render_pdf({**book,'theme':theme,'visuals':visuals},root=root,only_cover=True),filetype='pdf') as document:

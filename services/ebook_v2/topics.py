@@ -8,6 +8,9 @@ from . import local_text as text
 
 def clean_spec(raw):
     result={"source":"ollama"}
+    if "require_photos" in raw:
+        if type(raw["require_photos"]) is not bool:raise ValueError("Choose whether to include photographs")
+        result["require_photos"]=raw["require_photos"]
     if raw.get("research_acknowledged") is not True:
         raise ValueError("Confirm that market demand has not been assessed before starting.")
     result["research_acknowledged"]=True
@@ -125,11 +128,11 @@ def advance(books,book):
         if checked is None:return pending()
         reviewed.append(checked["chapter"])
     visuals=unit("visuals","visuals",{"root":books.root,"book":{"title":state["decisions"]["title"],
-        "author":spec["author"],"topic":spec["topic"],"chapters":reviewed}},[unit_map[f"review:{index}"] for index in range(spec["chapter_count"])])
+        "author":spec["author"],"topic":spec["topic"],"require_photos":spec.get("require_photos",False),"chapters":reviewed}},[unit_map[f"review:{index}"] for index in range(spec["chapter_count"])])
     if visuals is None:return pending()
     if "cover" not in state["decisions"]:return save(books,book,state,"WAITING_COVER")
     exported=unit("export","export",{"root":books.root,"book":{"title":state["decisions"]["title"],
-        "author":spec["author"],"theme":state["decisions"]["cover"],"chapters":reviewed,"source":"local_model","visuals":visuals["visuals"]}},
+        "author":spec["author"],"theme":state["decisions"]["cover"],"chapters":reviewed,"source":"local_model","require_photos":spec.get("require_photos",False),"visuals":visuals["visuals"]}},
         [unit_map["visuals"]])
     if exported is None:return pending()
     return save(books,book,state,"READY" if spec["mode"]=="automatic" else "REVIEW")
@@ -163,6 +166,7 @@ def status(books,book):
             if row.get("error")=="LOCAL_CAPACITY":
                 attention="The local model needs more available memory. Close other heavy applications, then continue your saved work."
                 activity="Waiting for local model capacity"
+            elif row.get("error")=="MISSING_PHOTOS":attention="The requested photographs could not be completed. Your chapters are saved. Continue after picture search is available."
             else:attention="This step needs a correction. Completed chapters and drafts are preserved."
             break
     return {"attention":attention,"id":book["id"],"title":state["decisions"].get("title",book["spec"]["title"]),
@@ -171,6 +175,7 @@ def status(books,book):
         "source":"local_model","chapters_checked":sum(output(f"review:{index}")!={} for index in range(total)),
         "chapters_total":total,"words_saved":sum(saved_words.values()),"activity":activity,
         "integrity":exported.get("integrity"),"files":list(exported.get("files",{})),
+        "page_quality":exported.get("page_quality"),
         "cover_previews":list(output("visuals").get("covers",{})),
         "photo_credits":[v["photo"] for v in output("visuals").get("visuals",[]) if v.get("photo")],
         "titles":output("titles").get("titles",[]),"outline":output("outline").get("chapters",[]),
@@ -204,8 +209,11 @@ def resume(books,book):
             continue
         with books.units.transaction() as conn:
             parents=[r[0] for r in conn.execute("SELECT parent_id FROM ebook_v2_dependencies WHERE unit_id=?",(key,))]
+        payload=dict(row["payload"])
+        if row["stage"]=="visuals" and row["error"]=="MISSING_PHOTOS" and row["output"]:
+            payload["retained_visuals"]=row["output"]["visuals"]
         state["units"][name]=books.units.enqueue(book["owner"],book["id"]+f":resume:{book['revision']}:{name}",
-            row["stage"],books.policies[row["stage"]].version,row["payload"],parents)
+            row["stage"],books.policies[row["stage"]].version,payload,parents)
         if row["output"] is not None and row["stage"] in {"writing","editorial"}:
             code,repair=row["error"],row["repair"]
             chapter=row["output"].get("chapter")

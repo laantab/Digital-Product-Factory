@@ -240,6 +240,8 @@
     "tests/test_ebook_v2_books.py",
     "tests/test_ebook_v2_customer_path.py",
     "tests/test_ebook_v2_topics.py",
-    "tests/test_ebook_v2_legacy_snapshot.py"
+    "tests/test_ebook_v2_legacy_snapshot.py",
+    "tests/test_ebook_v2_final_quality.py",
+    "tests/test_ebook_v2_hosted_recovery.py"
   ]
 }

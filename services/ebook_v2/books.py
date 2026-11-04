@@ -20,6 +20,9 @@ def clean_spec(raw):
         return clean_topic(raw)
     if raw.get("source") not in {None,"manuscript"}:raise ValueError("Choose an available text source")
     result={}
+    if "require_photos" in raw:
+        if type(raw["require_photos"]) is not bool:raise ValueError("Choose whether to include photographs")
+        result["require_photos"]=raw["require_photos"]
     for key,limit in (("title",180),("author",100)):
         value=raw.get(key)
         if not isinstance(value,str) or not 1<=len(value.strip())<=limit:
@@ -43,7 +46,7 @@ class Books:
         self.units=Store(database);self.root=str(Path(objects).resolve())
         self.policies=policies or {
             "chapter":Policy("supplied-1",chapter_handler,chapter_valid,timeout=20),
-            "export":Policy("pdf-zip-4",export_handler,export_valid,
+            "export":Policy("pdf-zip-5",export_handler,export_valid,
                 {"TIMEOUT":("rebuild",),"WORKER_EXITED":("rebuild",),
                  "VALIDATION_FAILED":("rebuild",)},timeout=120,retry_delay=1)}
         if policies is None:
@@ -51,7 +54,7 @@ class Books:
             self.policies.update(topic_policies())
         if policies is None:
             from .visuals import handler,valid
-            self.policies['visuals']=Policy('stock-1',handler,valid,
+            self.policies['visuals']=Policy('stock-2',handler,valid,
                 {'TIMEOUT':('rebuild',),'WORKER_EXITED':('rebuild',),'VALIDATION_FAILED':('rebuild',)},timeout=120,retry_delay=1)
         self.worker=Worker(self.units,self.policies)
 
@@ -180,6 +183,9 @@ class Books:
             "state":("WAITING_SERVICE" if book["state"]=="RUNNING" and not self.available() else book["state"]),"revision":book["revision"],
             "chapters_checked":sum(unit["state"]=="COMPLETE" for unit in units[:total]),
             "chapters_total":total,"integrity":exported["integrity"] if exported else None,
+            "page_quality":exported.get("page_quality") if exported else None,
+            "attention":("The requested photographs could not be completed. Your chapters are saved. Continue after picture search is available."
+                         if any(u.get("error")=="MISSING_PHOTOS" and u["state"]=="NEEDS_ATTENTION" for u in units) else ""),
             "review_scope":"Author-supplied text: structural checks; editorial and page review required.",
             "files":list(exported["files"]) if exported else []}
 
@@ -207,8 +213,11 @@ class Books:
             unit=self.units.get(owner,key)
             if unit["state"]=="NEEDS_ATTENTION":
                 policy=self.policies[unit["stage"]]
+                payload=dict(unit["payload"])
+                if unit["stage"]=="visuals" and unit["error"]=="MISSING_PHOTOS" and unit["output"]:
+                    payload["retained_visuals"]=unit["output"]["visuals"]
                 key=self.units.enqueue(owner,book_id+f":resume:{revision}:{index}",unit["stage"],
-                    policy.version,unit["payload"],parents=replacements if unit["stage"]=="export" else ())
+                    policy.version,payload,parents=replacements if unit["stage"]=="export" else ())
             replacements.append(key)
         return self.save(book,units=replacements,state="RUNNING")
 

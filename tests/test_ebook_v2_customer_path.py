@@ -130,6 +130,7 @@ def test_browser_shutdown_worker_restart_and_saved_book_download(live):
             page=context.new_page();errors=[];page.on("pageerror",lambda error:errors.append(str(error)))
             page.goto(base)
             source=spec()
+            page.locator('[name="images"]').select_option("text")
             page.locator('[name="title"]').fill(source["title"])
             page.locator('[name="author"]').fill(source["author"])
             page.locator('[name="manuscript"]').fill("\n\n".join("## "+ch["title"]+"\n\n"+ch["text"] for ch in source["chapters"]))
@@ -200,3 +201,15 @@ def test_no_worker_preflight_starts_no_failed_attempt(live):
     before=books.get("1",book["id"])
     assert session.get(base+"/api/books/"+book["id"]).json()["state"]=="WAITING_SERVICE"
     assert books.get("1",book["id"])==before
+
+
+def test_photo_preflight_refuses_unavailable_search_before_creating_a_book(live,monkeypatch):
+    books,session,base,data,app=live
+    for key in ('PEXELS_API_KEY','UNSPLASH_ACCESS_KEY','UNSPLASH_API_KEY'):
+        monkeypatch.delenv(key,raising=False)
+    books.record_worker('photo-preflight-test')
+    response=session.post(base+'/api/books',json={
+        'request_key':'photo-preflight-refusal-001','spec':{**spec(),'require_photos':True}})
+    assert response.status_code==503
+    assert 'has not been started' in response.json()['error']
+    assert books.listing('1')==[]

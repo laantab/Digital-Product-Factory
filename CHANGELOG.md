@@ -1,3 +1,34 @@
+## 1.9.73 — Verify final pages and preserve requested photographs (candidate)
+
+### What changed
+New Book Studio requests default to stock photos in the interface. An explicit
+text-and-graphics option remains available; retained editions keep their original
+settings. Missing picture-search configuration refuses a new photo request before
+starting any book. An incomplete photo step preserves completed chapters and
+acquired photographs for explicit Continue instead of silently substituting prose.
+
+### What was fixed
+Final PDF checks now compare every source paragraph with the actual pages,
+excluding running footers between split paragraphs. Missing or substituted photos,
+text overlap, clipped or tiny text, and low-resolution placed images block export.
+The ZIP includes a quality report tied to the exact PDF checksum. Mechanical
+checks explicitly do not certify designer quality or external factual originality.
+
+### Do the steps change?
+Choose stock photos or a text-led guide before creating the book. Automatic mode
+still asks only for title and cover after creation. Existing verified downloads
+remain readable. No production configuration, paid generation or other generator
+behavior is changed by this isolated Studio update.
+
+### Release gate
+Require actual-PDF defect regressions, image recovery and no-generation preflight
+checks plus the existing Studio/Windows/Linux protections. Real PostgreSQL snapshot
+contracts now have a disposable localhost CI job; that job does not use production.
+Authenticated immutable recovery save/reopen is now registered in Factory; its
+owner/version/body read uses one scoped SQL query. No existing project is edited.
+Hosted recovery/import acceptance, a supported free hosted writing runtime, the frozen full
+Factory gate and deployment verification remain separate unfinished work.
+
 Warning: truncated output (original token count: 54441)
 Total output lines: 4171
 
