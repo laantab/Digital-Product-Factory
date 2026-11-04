@@ -76,8 +76,12 @@ class LegacySnapshots(unittest.TestCase):
         # sqlite3's transaction context commits but does not close the file.
         # Close explicitly before TemporaryDirectory cleanup on Windows.
         with closing(self.connect()) as conn:
-            with conn:
-                conn.execute("UPDATE ebook_v2_legacy_snapshots SET payload='{}' WHERE id=?", (key,))
+            conn.execute("UPDATE ebook_v2_legacy_snapshots SET payload='{}' WHERE id=?", (key,))
+            # The Factory PostgreSQL wrapper closes, rather than commits,
+            # on context exit. Persist the deliberately damaged fixture on
+            # both backends before testing the unchanged corruption guard.
+            conn.commit()
+            self.assertEqual(conn.execute("SELECT payload FROM ebook_v2_legacy_snapshots WHERE id=?", (key,)).fetchone()["payload"], "{}")
         with self.assertRaises(CorruptCheckpoint):
             self.store.reopen(7, key)
 

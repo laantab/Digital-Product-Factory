@@ -84,5 +84,15 @@
     "Run frozen whole-Factory release gate with the exact preservation originals",
     "Import accepted/pending chapters into a supported no-paid hosted worker",
     "Verify actual production save/reopen and final customer PDF/ZIP downloads"
-  ]
+  ],
+  "ci_corrections": {
+    "source_commit": "6a1a971f1534450bcfcb62ab6790726801954570",
+    "postgres_run": 41855093574,
+    "postgres_result": "8 passed; corruption fixture did not commit its deliberately damaged payload because PostgreSQL connection context closes without committing. Fixture now explicitly commits and asserts stored corruption before the unchanged rejection assertion. All 7 SQLite contracts passed afterward.",
+    "studio_run": 41855093293,
+    "studio_failure": "Hosted route tests imported the full Factory app in the standalone dependency job, causing missing openai SDK during collection. Hosted cases now run in the existing full-Factory dependency job; the Windows/Linux standalone gate retains all 124 cases. No application dependency or assertion weakened.",
+    "account_postgres_run": 41855093288,
+    "account_postgres_result": "success",
+    "production_changed": false
+  }
 }
