@@ -3,8 +3,8 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-04T15:06:11.458328+00:00",
-  "runtime_candidate": "401bc7e1ee4148cd94be75fc4392423e41585e96",
+  "checked_at": "2026-11-04T15:22:00.314Z",
+  "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
     "hosted_integration_engineering": true,
@@ -26,7 +26,13 @@
       "verification": "7 isolated unittest cases passed: exact text and pending quality preservation; owner isolation; missing identity/version rejection; idempotent save and retained source versions; conflicting same-version content rejection; checksum corruption rejection; concurrent save deduplication.",
       "hosted_verified": false,
       "enabled_in_production": false,
-      "next_action": "Verify the snapshot store against real PostgreSQL, then wire authenticated owner-scoped snapshot save/reopen using the existing saved project and its actual version. The new table contains preservation snapshots only; original projects and artifact objects must not be changed. Reuse accepted chapters and independently validate pending text before worker recovery."
+      "next_action": "Verify the snapshot store against real PostgreSQL, then wire authenticated owner-scoped snapshot save/reopen using the existing saved project and its actual version. The new table contains preservation snapshots only; original projects and artifact objects must not be changed. Reuse accepted chapters and independently validate pending text before worker recovery.",
+      "endpoints_implemented": true,
+      "postgres_verification": {
+        "run_id": 41855773013,
+        "cases": 9,
+        "result": "passed on disposable PostgreSQL 16; live production snapshot write not attempted"
+      }
     },
     "candidate_ci_before_latest_correction": {
       "studio_run": 41535780087,
@@ -182,7 +188,7 @@
     },
     "delivery_boundary": {
       "supported_local_delivery": "Start_Book_Studio.bat initializes a separate per-user SQLite/object store under LOCALAPPDATA, starts an independent worker and binds the authenticated Studio only to 127.0.0.1:5088. The 104-case Studio/protection matrix passed on Windows and Linux.",
-      "hosted_integration": "Not implemented. render.yaml starts the legacy gunicorn app and existing workflow builder; it does not mount services/ebook_v2. The Studio CLI forces SQLite/local objects and its text path expects loopback Ollama, which is not present in the hosted Render topology.",
+      "hosted_integration": "Candidate source registers signed-account immutable preservation APIs. Original projects and artifacts remain unchanged. The generated-book worker/import path is not integrated into hosted PostgreSQL/R2, and loopback Ollama is unavailable in the current Render topology. No hosted generation or deployment is accepted.",
       "production_changed": false,
       "deployment_attempted": false
     },
@@ -273,8 +279,11 @@
         "junit_sha256": "7fb5da71e261070ad06cc2fc13a4184e20ff5025c7f22b04ab03bcb388505cf6"
       },
       "baseline_note": "The unchanged ai_recommended real-browser path exceeded its 180-second limit twice, then passed the diagnostic run in 155.20 seconds. The worker-crash 1-second test passed with all 22 worker contracts when run alone. No assertions, time limits or production behavior were weakened. These are aggregate case results, not a fully green uninterrupted release gate.",
-      "protected_after": "running; final evidence must be recorded before release",
-      "postgres_preservation_and_http": "Nine tests enrolled in a disposable localhost PostgreSQL CI job; not yet executed.",
+      "protected_after": {
+        "status": "unknown after execution loss",
+        "note": "Local file-isolated run was still executing at disconnect. It had loaded the earlier hosted-route loader before its correction; the corrected 11 HTTP cases later passed independently and in the full-dependency GitHub job. Do not claim the interrupted local run passed."
+      },
+      "postgres_preservation_and_http": "All nine real PostgreSQL store and HTTP contracts passed in corrected run 41855773013. This verifies disposable PostgreSQL parity, not live Render production writes.",
       "paid_generation": false,
       "production_changed": false,
       "release_accepted": false,
@@ -294,6 +303,73 @@
         "account_postgres_run": 41855093288,
         "account_postgres_result": "success",
         "production_changed": false
+      },
+      "corrected_ci": {
+        "source_commit": "291c9b62a17746a9c350db35632109e1f8951841",
+        "checked_at": "2026-11-04T15:22:00.314Z",
+        "postgres": {
+          "run_id": 41855773013,
+          "status": "completed",
+          "conclusion": "success",
+          "cases": 9,
+          "failures": 0,
+          "errors": 0,
+          "skips": 0,
+          "artifact_id": 13338335396,
+          "artifact_digest": "sha256:a006af765755db727efe4e85d682eba7b9cb925c5e88e06e886dfa894e861693",
+          "artifact_byte_review": "not performed: local execution disconnected before byte retrieval; success and strict nine-case/no-skip steps verified through GitHub"
+        },
+        "account_postgres": {
+          "run_id": 41855773059,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        "studio": {
+          "run_id": 41855773026,
+          "linux_job": 126663859170,
+          "linux_result": "completed success; strict 124-case no-failure/error/skip step passed",
+          "windows_job": 126663859719,
+          "windows_result": "running after Chromium install; no final result yet",
+          "factory_job": 126663859768,
+          "version_cases": "all 31 passed",
+          "hosted_http_cases": "all 11 passed with no skips",
+          "protected_fast_gate": "running"
+        },
+        "broader_runs": [
+          {
+            "run_id": 41855773030,
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "run_id": 41855773016,
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "run_id": 41855772978,
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "run_id": 41855773084,
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "run_id": 41855773145,
+            "status": "in_progress",
+            "conclusion": null
+          }
+        ]
+      },
+      "execution_loss": {
+        "at": "2026-11-04T15:22:00.314Z",
+        "status": "local execution unavailable",
+        "source_saved": true,
+        "latest_source_commit": "291c9b62a17746a9c350db35632109e1f8951841",
+        "native_git_push": "unavailable: no command-line GitHub credentials; publication succeeded through the connected GitHub account after confirming public repository ownership and admin permission",
+        "next_action": "Inspect the exact recorded external jobs and artifacts. Finish protection proof/relocking, then continue hosted worker/import engineering in a new usable execution environment. Do not repeat accepted model generation."
       }
     }
   },
@@ -301,7 +377,7 @@
     {
       "id": "recover_existing_stalled_book",
       "status": "in_progress",
-      "action": "Signed-account preservation endpoints are implemented and registered, with actual owner/version/raw-data reads, CSRF, immutable save/reopen and current ownership checks. All 11 HTTP cases and 7 store cases passed locally. Nine real PostgreSQL store/HTTP contracts are enrolled but not yet run. Current protected before/after verification is unfinished. Next inspect PostgreSQL/Windows/Linux CI and finish protection proof; then import accepted/pending chapters without regenerating approved text. No paid generation or production mutation occurred."
+      "action": "Immutable saved-book preservation now passes all 9 real PostgreSQL and 11 signed Factory HTTP cases; the API is registered in candidate source, not deployed. Inspect Windows/Linux and protected CI at 291c9b62a17746a9c350db35632109e1f8951841, complete shared capability protection proof/relocking, restore a usable execution environment, then import accepted/pending chapters and connect an explicitly no-paid writing runtime. Do not regenerate accepted books or use the legacy paid Resume path."
     },
     {
       "id": "verify_editorial_budget_correction",
@@ -329,7 +405,7 @@
       "action": "Do not deploy the loopback Studio as the hosted Factory. Before merge/deploy completion, implement and verify a supported hosted integration using shared authenticated customer state, PostgreSQL/R2-compatible storage and an explicitly approved no-paid-generation runtime; then verify actual hosted PDF and ZIP downloads."
     }
   ],
-  "completion": "not complete: final-page/photo gates and preservation API implemented in candidate source; protected verification, PostgreSQL evidence, supported hosted worker/import and deployment remain unfinished",
-  "blocker": "Two CI harness corrections are ready: commit the deliberately corrupt PostgreSQL fixture, and run hosted route tests with full Factory dependencies. Retry actual PostgreSQL/Windows/Linux checks. Hosted worker/import and a no-paid runtime remain unfinished.",
+  "completion": "not complete: final-page/photo gates and signed PostgreSQL-compatible preservation are implemented; supported hosted worker/import, complete release acceptance and production download verification remain unfinished",
+  "blocker": "Local execution environment disconnected. Source is preserved through 291c9b62a17746a9c350db35632109e1f8951841. PostgreSQL and Linux Studio checks passed; Windows and broader protected checks were still running. Five shared-capability registries remain explicitly UNLOCKED pending completed before/after proof; do not invent a relock or deploy. No supported no-paid writing runtime is connected to the hosted Factory.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
