@@ -1,0 +1,62 @@
+{
+  "status": "SUPPLIED_MANUSCRIPT_MILESTONE_PASSED_NOT_DEPLOYED",
+  "baseline_fast_gate": {
+    "passed": 826,
+    "seconds": 378.08
+  },
+  "focused_suite": {
+    "passed": 38,
+    "seconds": 18.21
+  },
+  "acceptance_input": "Original supplied-text fixture, not model generation or a sale-ready book",
+  "proof": {
+    "source": "Original supplied-text acceptance fixture; not AI topic generation",
+    "files": {
+      "ebook.pdf": {
+        "bytes": 46723,
+        "sha256": "f9aa812a15a89c0b8ef07fa8b859f8f44e21e9d79dd3a649a039464f13bd4981"
+      },
+      "package.zip": {
+        "bytes": 44552,
+        "sha256": "139b9c93d439b7db9ceb94ba3caa30ed07999a176b6d376416026a2ddc840cb5"
+      },
+      "manuscript.md": {
+        "bytes": 3495,
+        "sha256": "89042b88a1f0222349578900d61edc75655e21362e58a71b08b8bd1d4615183c"
+      }
+    },
+    "pages": 4,
+    "chapters": 2
+  },
+  "browser_shutdown_recovery": "PASS: independent worker stopped after first saved chapter; restarted, original chapter attempts remained1; saved book reopened and real downloads matched",
+  "http_downloads": "PASS: authenticated HTTP200, signatures, SHA256 response headers, ZIP CRC, embedded PDF equality; cross-account404 and unauthenticated401",
+  "manual_page_review": "All four PDF pages visually inspected; no clipping or overlap found",
+  "paid_calls": 0,
+  "source_sha256": {
+    "services/ebook_v2/recovery.py": "c04f2a3cd1fc9ba3665edad7dbc5b656815877629194d09f41c31620bca66deb",
+    "services/ebook_v2/books.py": "81d157d3059a0f545b7bab42e773c571d2e53e20e3569c7b21378bb530239cc0",
+    "services/ebook_v2/__init__.py": "7a295cc39c71ec50715febec4d09ee894a3cd86f765492c01cc82faa40dfc20b",
+    "services/ebook_v2/publishing.py": "b27d0f331160f2ee037e44248541d3785614990dd18a4a6ef66d90fd783e22a6",
+    "services/ebook_v2/web.py": "c5fd287aacb1c604d4cb0c31ff9da083bbd6869d03f1823c9dc3c99d226da2ae",
+    "services/ebook_v2/cli.py": "a4e9f72df2254ffb838548cfdd59f3b30f07b8c7b4d2ab20364533b0afca8afe",
+    "services/ebook_v2/worker.py": "f391f413f7e762c9b56aac8cd8b9212061beca1c1fe89c3c9725aaac11619837",
+    "templates/ebook_v2.html": "e3b8dfebd1289c37a17ef3a4951474f6112f6456b12a157f337a4e34c4344f62",
+    "Start_Book_Studio.bat": "3c3e9ff32f2f6e84e274757218216a61a8eb1389f566637f849ab66150a53abd",
+    "requirements-ebook-v2.txt": "0ef80f134c1dd0c39d03b391e922e5b5009aadc53ce1bbeace7ab230a6bc4b0a",
+    "tests/test_ebook_v2_recovery.py": "2ce3311cbd9dc4f41b4b822dc81a5262702e0f92bee2f6d1a925c65abdd4b3a4",
+    "tests/test_ebook_v2_customer_path.py": "8c9093fdf5dd0c860a734630a10dadf0f483fe06a754ab4df379168fc74953f4",
+    "tests/test_ebook_v2_books.py": "a1638d13ec1f322261782bba0d8a48954d4f45545714a66fb6ac3200e7053c60",
+    "tests/ebook_v2_fixture.py": "49116897da1e175a26e471ec1c2490b06f79cd0bd77083b76891cf80f09f5fe3"
+  },
+  "remaining": [
+    "Fresh-topic local AI writing",
+    "Independent editorial checks",
+    "Photographs and visual review",
+    "Chapter editing and immutable versions",
+    "EPUB and DOCX",
+    "KDP preparation",
+    "Native hosted SQL and R2 parity",
+    "Windows execution",
+    "Full release and production acceptance"
+  ]
+}

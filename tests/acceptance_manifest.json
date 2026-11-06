@@ -235,6 +235,13 @@
     "tests/test_editor_in_chief.py",
     "tests/test_practice_chart_boundaries.py",
     "tests/test_ebook_photo_review_recovery.py",
-    "tests/test_saved_listing_memory_reclaim.py"
+    "tests/test_saved_listing_memory_reclaim.py",
+    "tests/test_ebook_v2_recovery.py",
+    "tests/test_ebook_v2_books.py",
+    "tests/test_ebook_v2_customer_path.py",
+    "tests/test_ebook_v2_topics.py",
+    "tests/test_ebook_v2_legacy_snapshot.py",
+    "tests/test_ebook_v2_final_quality.py",
+    "tests/test_ebook_v2_hosted_recovery.py"
   ]
 }

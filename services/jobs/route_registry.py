@@ -103,6 +103,12 @@ ROUTES: tuple[dict, ...] = (
     _l("/auth/register", "creates a user row and logs it in"),
     _l("/auth/login", "checks a password and starts a session"),
     _l("/auth/logout", "ends the session"),
+    _h("/api/ebook-recovery/projects/<int:project_id>/snapshots",
+       "copies the complete saved project JSON, potentially including large embedded artifacts",
+       DEFERRED,
+       "The existing builder only supports build_ebook; an immutable preservation task "
+       "is not implemented. This candidate route remains synchronous and requires "
+       "a supported recovery execution path before hosted release."),
     _l("/pin-factory/text", "forwards one request to Pin Factory Pro"),
     _l("/pin-factory/image", "forwards one request to Pin Factory Pro"),
     _l("/pin-factory/export", "forwards one request to Pin Factory Pro"),

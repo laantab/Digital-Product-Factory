@@ -1,0 +1,49 @@
+name: Book recovery PostgreSQL preservation
+on:
+  pull_request:
+    paths:
+      - 'services/ebook_v2/**'
+      - 'services/db/**'
+      - 'tests/test_ebook_v2_legacy_snapshot.py'
+      - 'integration_tests/test_ebook_v2_snapshots_postgres_live.py'
+      - '.github/workflows/ebook-v2-postgres.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  snapshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: factory_ebook_recovery_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable_test_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FACTORY_TEST_MODE: '1'
+      FACTORY_TEST_POSTGRES_URL: postgresql://postgres:disposable_test_only@127.0.0.1:5432/factory_ebook_recovery_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest==8.4.1 'psycopg[binary]==3.2.9' Flask==3.1.1 Flask-Login==0.6.3
+      - run: python -m pytest -q integration_tests/test_ebook_v2_snapshots_postgres_live.py --junitxml=postgres-snapshots.xml
+      - name: Require all nine preservation and HTTP contracts without skips
+        run: python -c "import xml.etree.ElementTree as E; r=E.parse('postgres-snapshots.xml').getroot(); s=list(r.iter('testsuite')); assert sum(int(x.get('tests','0')) for x in s)==9; assert not any(int(x.get(k,'0')) for x in s for k in ('failures','errors','skipped'))"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ebook-recovery-postgres-evidence
+          path: postgres-snapshots.xml
+          if-no-files-found: ignore
+          retention-days: 14

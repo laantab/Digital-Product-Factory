@@ -1,0 +1,61 @@
+name: Factory continuation evidence
+on:
+  push:
+    branches: ['rebuild/ebook-engine-v2-20261102']
+    paths:
+      - 'command_center/continuation.json'
+      - '.github/workflows/factory-continuation.yml'
+      - 'AGENTS.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate checkpoint and collect durable run evidence
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const state = JSON.parse(fs.readFileSync('command_center/continuation.json', 'utf8'));
+            if (state.schema_version !== 1 || !Array.isArray(state.next_actions) || !state.next_actions.length) {
+              throw new Error('Missing continuation contract');
+            }
+            if (state.authorization.paid_generation !== false) throw new Error('Paid-generation constraint changed');
+            const {owner, repo} = context.repo;
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo,
+              {owner, repo, branch: state.branch, per_page: 100});
+            const recorded = runs.slice(0, 30).map(r => ({
+              id:r.id, name:r.name, sha:r.head_sha, status:r.status,
+              conclusion:r.conclusion, url:r.html_url
+            }));
+            const model = await github.rest.actions.getWorkflowRun({
+              owner, repo, run_id: state.evidence.fresh_model.run_id
+            });
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
+              {owner, repo, run_id: state.evidence.fresh_model.run_id});
+            fs.mkdirSync('continuation-evidence', {recursive:true});
+            const report = {
+              collected_at:new Date().toISOString(), checkpoint_commit:context.sha,
+              checkpoint:state, fresh_model_status:model.data.status,
+              fresh_model_conclusion:model.data.conclusion, runs:recorded,
+              artifacts:artifacts.map(a=>({id:a.id,name:a.name,expired:a.expired,size:a.size_in_bytes}))
+            };
+            fs.writeFileSync('continuation-evidence/resume-report.json', JSON.stringify(report,null,2));
+            fs.copyFileSync('command_center/continuation.json', 'continuation-evidence/checkpoint.json');
+            await core.summary.addHeading('Factory resume checkpoint')
+              .addRaw('This job preserves evidence. It does not fix code, approve a release or certify production.')
+              .addTable([['Next action','Status'], ...state.next_actions.map(a=>[a.action,a.status])])
+              .addRaw('\nFresh model: '+model.data.status+' / '+model.data.conclusion)
+              .write();
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: factory-resume-checkpoint
+          path: continuation-evidence/
+          retention-days: 90
+          if-no-files-found: error

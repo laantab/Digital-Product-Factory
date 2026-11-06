@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-02",
+  "focused_and_protection_passed": 85,
+  "seconds": 61.23,
+  "trim_inches": [
+    6,
+    9
+  ],
+  "implementation_page_range": [
+    24,
+    150
+  ],
+  "page_boundary_cases": [
+    23,
+    24,
+    25,
+    150,
+    151
+  ],
+  "spine_inches_per_page": 0.002252,
+  "outside_cover_bleed_inches": 0.125,
+  "actual_geometry_verified": true,
+  "cover_visually_reviewed": true,
+  "kdp_approval": false,
+  "epubcheck_errors": 0,
+  "epubcheck_warnings": 0,
+  "paid_calls": 0,
+  "production_changed": false
+}
