@@ -1,8 +1,10 @@
 # Local Book Studio candidate
 
 This is the reconstructed, isolated local engine. Existing Factory routes,
-customer projects and production services are unchanged. It is a separate candidate; default-size topic quality and Windows GPU execution
-are not yet certified.
+customer projects and production services are unchanged. It is a separate
+candidate. One default-size, eight-chapter local-model book has passed manuscript,
+page and download-byte review; this does not certify every topic, the owner's
+Windows GPU, or integration with the hosted Factory.
 
 ## Start on Windows
 
@@ -20,7 +22,7 @@ refuses before starting a book, and saved running work shows waiting for service
 
 ## Create a supplied-text book
 
-Enter a title, author and one of three designs. Paste at least two chapters,
+Enter a title, author and one of six designs. Paste at least two chapters,
 starting each with `## Chapter title`. Each needs 250 to 8000 words and at least
 three developed paragraphs. Review the actual PDF pages, then approve the
 edition to enable PDF, complete ZIP and editable Markdown downloads.
@@ -61,7 +63,7 @@ authentication, ownership, CSRF and read-only status behavior. No paid calls.
 ## Local topic writing checkpoint
 Choose Write from my topic, provide audience and reader outcome, and select
 Automatic or Manual. The local Ollama service must be installed and running
-withqwen3:8b (the default) before a topic attempt can start. It is never pulled
+with qwen3:8b (the default) before a topic attempt can start. It is never pulled
 silently by the app. Source settings can be configured through
 FACTORY_V2_OLLAMA_MODEL and a loopback-only FACTORY_V2_OLLAMA_URL. No cloud or
 paid fallback is allowed. The worker checks installed model metadata separately
@@ -75,8 +77,13 @@ external facts or plagiarism absence. Short outputs retain their draft and
 receive bounded expansion attempts. Code-owned remedies are learned only when
 the repaired output passes validation.
 
-The actual small CPU-model pilot is engineering evidence with stated limits,
-not a benchmark of the owner's8B model/GPU or a publication-ready product.
+The accepted local-model run contains eight chapters and 6,485 words. All 27
+ebook pages, the print interior and wrap, and matching PDF/ZIP bytes were reviewed.
+The exact run, checksums and review limits are recorded under
+`accepted_follow_up_run` in `release_evidence/ebook_v2_real_model_review.json`.
+Earlier failed pilots remain in that record; they are not accepted results.
+Windows and Linux Studio tests are separate technical evidence, not a benchmark
+of the owner's GPU or verification that the Windows launcher ran on that PC.
 
 ## Editable manuscripts and retained editions
 Finished books include PDF, EPUB, editable Word and Markdown manuscripts, a

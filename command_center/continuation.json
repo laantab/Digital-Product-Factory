@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-04T17:35:01.759436+00:00",
+  "checked_at": "2026-11-06T07:30:58.060751+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -427,24 +427,34 @@
       "full_gate_accepted": false
     },
     "active_local_release_attempt": {
-      "source_commit": "ddf192b9e0d62b9761306f6bfd8acf5dceda7a34",
+      "source_commit": "0ff179ff878812582c0601be806a42aaace5651f",
       "status": "running_at_checkpoint",
-      "collected_cases": 3519,
-      "observed_failure": "tests/test_post_route_registry.py::PostRouteRegistryTests::test_every_live_post_route_is_classified",
-      "failure_correction": "1.9.74 passes all 49 focused classification/version/hosted HTTP cases; not a new full release pass",
+      "command": "python -u scripts/run_factory_tests.py",
+      "progress_cases_completed": 1052,
+      "reported_failures_so_far": 0,
+      "reported_errors_so_far": 0,
       "preservation_originals_restored_and_hash_verified": true,
-      "log": "/tmp/factory-current-full.log",
+      "log": "/tmp/factory-release-0ff179f.log",
       "junit": "test-results/factory-junit.xml",
+      "workspace": "/workspace/scratch/be1ffe6c4262/factory",
+      "exec_session": 2452,
       "baseline_source": "5c0047602c35c637952497f46d2f1f6832be74f2",
-      "baseline_status": "queued after full-gate JUnit is written; 72 unchanged protected test files",
-      "caution": "Recheck execution and final reports before claiming progress. This checkpoint does not establish jobs continue after execution loss."
+      "baseline_status": "Automatically queued after a complete zero-failure/zero-error/zero-skip release JUnit; 72 byte-identical legacy protected files",
+      "baseline_exec_session": 74383,
+      "baseline_log": "/tmp/factory-protected-baseline.log",
+      "baseline_junit": "/tmp/factory-protected-baseline.xml",
+      "baseline_worktree": "/workspace/scratch/be1ffe6c4262/factory-protected-baseline",
+      "comparison_script": "/tmp/factory-compare-protection.py",
+      "runtime_source_changed": false,
+      "documentation_update": "Corrected stale three-design and unreviewed-model claims in docs/BOOK_STUDIO_LOCAL.md using recorded accepted evidence.",
+      "caution": "These local jobs are not a durable remote worker. Recheck sessions and final reports after any interruption. No final release/protection pass or deployment is claimed."
     }
   },
   "next_actions": [
     {
       "id": "recover_existing_stalled_book",
       "status": "in_progress",
-      "action": "Execution restored and original preservation PDF/ZIP hashes verified. Inspected exact Windows/Linux (124 each) and PostgreSQL (9) artifact bytes on ddf192b. Finish the current full gate and before/after protection proof; 1.9.74 corrects the observed missing heavy snapshot route classification and passes 49 focused cases. Relock only after complete proof. Then connect supported no-paid hosted import/writing and recover an existing book without regenerating accepted chapters."
+      "action": "Monitor the corrected 0ff179f full gate already running. The 72-file unchanged baseline comparison is automatically queued only after a clean final JUnit. Compare exact case identities and relock only after complete proof. Then resolve supported no-paid hosted recovery/import and real customer-download acceptance; do not regenerate the accepted book."
     },
     {
       "id": "verify_editorial_budget_correction",
@@ -472,7 +482,7 @@
       "action": "Do not deploy the loopback Studio as the hosted Factory. Before merge/deploy completion, implement and verify a supported hosted integration using shared authenticated customer state, PostgreSQL/R2-compatible storage and an explicitly approved no-paid-generation runtime; then verify actual hosted PDF and ZIP downloads."
     }
   ],
-  "completion": "Not complete: CI artifacts inspected and route-classification release defect corrected in candidate source. Full frozen release, protection/relocking, supported no-paid hosted recovery, real customer-book acceptance and production downloads remain required.",
-  "blocker": "Full release and shared-capability protection proof remain unfinished; five registries remain UNLOCKED. The full gate on ddf192b caught the missing recovery POST classification; the 1.9.74 correction passes 49 focused tests but is not a full release pass. No supported no-paid hosted worker/import runtime is connected. Recheck local jobs before claiming they are running or finished.",
+  "completion": "Not complete: corrected source full release is running, baseline protection comparison is queued, and the setup guide now reflects the recorded six-design/local-model acceptance. No runtime code changed in this session. Hosted integration and production download acceptance remain unfinished.",
+  "blocker": "Waiting for final full release and before/after protection results; five registries remain UNLOCKED. The local-only model/runtime is still not connected to a supported no-paid hosted generation/import path. No deployment or paid generation has occurred.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
