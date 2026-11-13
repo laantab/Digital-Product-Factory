@@ -448,6 +448,14 @@
       "runtime_source_changed": false,
       "documentation_update": "Corrected stale three-design and unreviewed-model claims in docs/BOOK_STUDIO_LOCAL.md using recorded accepted evidence.",
       "caution": "These local jobs are not a durable remote worker. Recheck sessions and final reports after any interruption. No final release/protection pass or deployment is claimed."
+    },
+    "november_13_resume": {
+      "prior_head": "a727b504cc7964979efe20f7c6e8d7dfc8235774",
+      "live_render_version": "1.9.67",
+      "live_deploy": "dep-dbk909vb9u1s73chajd0",
+      "interrupted_local_release": "Final JUnit unavailable in resumed workspace. Full release and protection comparison remain unverified.",
+      "ci": "Six workflow runs failed at Chromium setup. Logs from jobs 127771654895, 127771655571 and 127771655743 show pinned Playwright rejecting Ubuntu 26.04. Browser workflows now pin their Linux jobs to Ubuntu 24.04. Verify new runs.",
+      "next": "Verify browser CI and final release checks, then complete hosted recovery and no-paid writing execution."
     }
   },
   "next_actions": [

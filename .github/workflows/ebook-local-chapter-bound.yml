@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   offline-chapter-bound:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 75
     env:
       FACTORY_TEST_MODE: '1'

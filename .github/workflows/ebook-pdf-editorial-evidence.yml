@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   editorial-evidence:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       FACTORY_TEST_MODE: '1'
