@@ -455,14 +455,37 @@
       "live_deploy": "dep-dbk909vb9u1s73chajd0",
       "interrupted_local_release": "Final JUnit unavailable in resumed workspace. Full release and protection comparison remain unverified.",
       "ci": "Six workflow runs failed at Chromium setup. Logs from jobs 127771654895, 127771655571 and 127771655743 show pinned Playwright rejecting Ubuntu 26.04. Browser workflows now pin their Linux jobs to Ubuntu 24.04. Verify new runs.",
-      "next": "Verify browser CI and final release checks, then complete hosted recovery and no-paid writing execution."
+      "next": "Verify browser CI and final release checks, then complete hosted recovery and no-paid writing execution.",
+      "full_gate": {
+        "commit": "04ffd760e5b96b551c678cdddec5b9e228c2ee23",
+        "tests": 3519,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 795.41,
+        "junit_sha256": "cb4ca3ab68496e4b9156c0b7b5d388f6a4d77baa978a51a47ebfaa35b87f0881"
+      },
+      "protected_comparison": {
+        "baseline": "5c0047602c35c637952497f46d2f1f6832be74f2",
+        "unchanged_files": 73,
+        "matching_passed_cases": 1192,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "junit_sha256": "952dda65b561a2b8fe61325197d4aa91b3dc0b909bb50c87f30203db4d0d6e41"
+      },
+      "verified_ci_runs": [
+        43505428223,
+        43505428371,
+        43505428403
+      ]
     }
   },
   "next_actions": [
     {
       "id": "recover_existing_stalled_book",
       "status": "in_progress",
-      "action": "Monitor the corrected 0ff179f full gate already running. The 72-file unchanged baseline comparison is automatically queued only after a clean final JUnit. Compare exact case identities and relock only after complete proof. Then resolve supported no-paid hosted recovery/import and real customer-download acceptance; do not regenerate the accepted book."
+      "action": "Integrate owned saved-book recovery with hosted execution, then recover an existing saved book before fresh topic acceptance."
     },
     {
       "id": "verify_editorial_budget_correction",
@@ -490,7 +513,7 @@
       "action": "Do not deploy the loopback Studio as the hosted Factory. Before merge/deploy completion, implement and verify a supported hosted integration using shared authenticated customer state, PostgreSQL/R2-compatible storage and an explicitly approved no-paid-generation runtime; then verify actual hosted PDF and ZIP downloads."
     }
   ],
-  "completion": "Not complete: corrected source full release is running, baseline protection comparison is queued, and the setup guide now reflects the recorded six-design/local-model acceptance. No runtime code changed in this session. Hosted integration and production download acceptance remain unfinished.",
-  "blocker": "Waiting for final full release and before/after protection results; five registries remain UNLOCKED. The local-only model/runtime is still not connected to a supported no-paid hosted generation/import path. No deployment or paid generation has occurred.",
+  "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
+  "blocker": "Book Studio uses local SQLite, local files and loopback Ollama. Hosted operation needs shared durable jobs and artifacts plus a supported model runtime without paid generation calls.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
