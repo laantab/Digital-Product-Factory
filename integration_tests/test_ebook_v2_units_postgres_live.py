@@ -37,3 +37,26 @@ def test_shared_queue_recovers_with_fenced_leases(tmp_path):
     assert first.get(owner, left)["output"] == {"text": "Verified chapter"}
     assert first.claim(owner, left, 30) is None
     assert not (tmp_path / "unused.sqlite").exists()
+
+
+def test_saved_book_queries_use_shared_postgres(tmp_path):
+    from services.ebook_v2.books import Books
+    from services.ebook_v2.editions import history
+
+    url = os.environ["FACTORY_TEST_POSTGRES_URL"]
+    parsed = urlparse(url)
+    assert parsed.hostname in {"localhost", "127.0.0.1"}
+    assert parsed.path == "/factory_ebook_recovery_test"
+    writer = Books(tmp_path / "unused.sqlite", tmp_path, policies={"unused": None}, postgres_url=url)
+    writer.initialize()
+    reader = Books(tmp_path / "unused.sqlite", tmp_path, policies={"unused": None}, postgres_url=url)
+    owner = uuid4().hex
+    text = "\n\n".join(f"Paragraph {index} " + "word " * 100 for index in range(3))
+    book = writer.create(owner, uuid4().hex, {
+        "title": "Shared saved book", "author": "Test author",
+        "chapters": [{"title": title, "text": text} for title in ("First", "Second")],
+    })
+    assert reader.listing(owner)[0]["title"] == "Shared saved book"
+    assert reader.listing(uuid4().hex) == []
+    assert any(row["id"] == book["id"] for row in reader.pending())
+    assert history(reader, owner, book["id"])[0]["title"] == "Shared saved book"

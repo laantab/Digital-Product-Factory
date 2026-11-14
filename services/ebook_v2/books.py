@@ -104,8 +104,8 @@ class Books:
 
     def listing(self,owner):
         with self.units.transaction() as conn:
-            rows=conn.execute("""SELECT b.id,b.state,b.revision,b.created,b.updated,
-                coalesce(json_extract(t.data,'$.decisions.title'),json_extract(b.spec,'$.title')) AS title
+            rows=conn.execute(f"""SELECT b.id,b.state,b.revision,b.created,b.updated,
+                coalesce({self.units.json_text('t.data', 'decisions', 'title')},{self.units.json_text('b.spec', 'title')}) AS title
                 FROM ebook_v2_books b LEFT JOIN ebook_v2_topics t ON t.book_id=b.id
                 WHERE b.owner=? ORDER BY b.updated DESC LIMIT 30""",(str(owner),)).fetchall()
         return [dict(row) for row in rows]
@@ -138,7 +138,7 @@ class Books:
 
     def pending(self):
         with self.units.transaction() as conn:
-            return [dict(r) for r in conn.execute("SELECT id,owner,json_extract(spec,'$.source') AS source FROM ebook_v2_books WHERE state='RUNNING'")]
+            return [dict(r) for r in conn.execute(f"SELECT id,owner,{self.units.json_text('spec', 'source')} AS source FROM ebook_v2_books WHERE state='RUNNING'")]
 
     def advance(self,owner,book_id):
         book=self.get(owner,book_id)

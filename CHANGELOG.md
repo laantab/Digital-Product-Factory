@@ -1,3 +1,17 @@
+## 1.9.76 — Prepare saved manuscripts for recovery (candidate)
+
+### What changed
+Studio can stage an owned, complete manuscript from a verified recovery snapshot.
+
+### What was fixed
+Book listing, worker dispatch and edition history now use PostgreSQL-compatible JSON queries.
+
+### Do the steps change?
+The import is an internal integration step. Incomplete manuscripts still need a writing path.
+
+### Release gate
+Verify snapshot import and shared book queries before connecting hosted exports.
+
 ## 1.9.75 — Shared Book Studio checkpoints (candidate)
 
 ### What changed

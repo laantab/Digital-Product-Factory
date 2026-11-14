@@ -29,8 +29,8 @@ def history(books,owner,book_id):
     with books.units.transaction() as conn:
         link=conn.execute('SELECT root_id FROM ebook_v2_editions WHERE book_id=?',(book_id,)).fetchone()
         root=link['root_id'] if link else book_id
-        rows=conn.execute('''SELECT b.id,b.state,b.revision,b.created,
-            coalesce(e.number,1) AS number,json_extract(b.spec,'$.title') AS title
+        rows=conn.execute(f'''SELECT b.id,b.state,b.revision,b.created,
+            coalesce(e.number,1) AS number,{books.units.json_text('b.spec', 'title')} AS title
             FROM ebook_v2_books b LEFT JOIN ebook_v2_editions e ON e.book_id=b.id
             WHERE b.owner=? AND (b.id=? OR e.root_id=?) ORDER BY number''',
             (str(owner),root,root)).fetchall()

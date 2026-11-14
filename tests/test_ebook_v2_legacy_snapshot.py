@@ -93,3 +93,45 @@ class LegacySnapshots(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_import_preserves_existing_manuscript_and_rejects_partial_snapshot(tmp_path):
+    import pytest
+
+    from services.ebook_v2.books import Books
+    from services.ebook_v2.snapshot_import import import_saved_book
+
+    def connect():
+        conn = sqlite3.connect(tmp_path / "snapshots.sqlite")
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    snapshots = Snapshots(connect)
+    snapshots.initialize()
+    books = Books(tmp_path / "books.sqlite", tmp_path / "objects")
+    books.initialize()
+    text = "\n\n".join(f"Paragraph {n} " + "word " * 100 for n in range(3)).strip()
+    workspace = {
+        "accepted_chapters": [
+            {"order": 2, "title": "Second", "body": text},
+            {"order": 1, "title": "First", "body": text},
+        ],
+        "chapter_pipeline": {"assembled_complete": False},
+        "pending": {"body": "Do not include this draft"},
+    }
+    project = {"id": 42, "user_id": 7, "type": "ebook", "version": 1,
+               "data": {"ebook_workspace": workspace}}
+    settings = {"title": "Recovered", "author": "Author", "theme": "wellness"}
+    partial = snapshots.save(project, 7)
+    with pytest.raises(ValueError, match="still needs chapters"):
+        import_saved_book(snapshots, books, 7, partial, **settings)
+    workspace["chapter_pipeline"]["assembled_complete"] = True
+    project["version"] = 2
+    complete = snapshots.save(project, 7)
+    with pytest.raises(LookupError):
+        import_saved_book(snapshots, books, 8, complete, **settings)
+    imported = import_saved_book(snapshots, books, 7, complete, **settings)
+    assert [chapter["title"] for chapter in imported["spec"]["chapters"]] == ["First", "Second"]
+    assert all(chapter["text"].split() == text.split() for chapter in imported["spec"]["chapters"])
+    assert import_saved_book(snapshots, books, 7, complete, **settings)["id"] == imported["id"]
+    assert snapshots.reopen(7, complete)["data"] == project["data"]

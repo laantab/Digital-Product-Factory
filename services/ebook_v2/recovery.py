@@ -69,6 +69,13 @@ class Store:
         finally:
             conn.close()
 
+    def json_text(self, column, *keys):
+        """Build a JSON text selector from code-owned columns and keys."""
+        if self.postgres_url:
+            path = ", ".join(f"'{key}'" for key in keys)
+            return f"jsonb_extract_path_text(CAST({column} AS jsonb), {path})"
+        return f"json_extract({column}, '$.{'.'.join(keys)}')"
+
     def initialize(self):
         if not self.postgres_url:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)

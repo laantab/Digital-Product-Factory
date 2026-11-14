@@ -483,13 +483,19 @@
     "shared_queue_candidate": {
       "version": "1.9.75",
       "status": "PostgreSQL adapter and disposable integration test implemented; await CI before enabling. Existing SQLite launch remains default. No production changes."
+    },
+    "snapshot_import_candidate": {
+      "version": "1.9.76",
+      "prior_postgres_run": 43562830201,
+      "focused_tests_passed": 39,
+      "scope": "Verified owner snapshots with complete accepted manuscripts can stage a separate Studio book. PostgreSQL listing, pending and history have dedicated CI coverage pending. No live recovery or deployment."
     }
   },
   "next_actions": [
     {
       "id": "recover_existing_stalled_book",
       "status": "in_progress",
-      "action": "Verify PostgreSQL queue CI, then integrate owned snapshot import and shared export storage before any hosted cutover."
+      "action": "Verify the new PostgreSQL book query test, then wire snapshot import and shared PDF/ZIP storage into hosted execution. Add an independent review path for incomplete manuscripts."
     },
     {
       "id": "verify_editorial_budget_correction",
