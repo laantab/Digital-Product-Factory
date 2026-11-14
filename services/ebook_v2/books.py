@@ -42,8 +42,8 @@ def clean_spec(raw):
 
 
 class Books:
-    def __init__(self,database,objects,policies=None):
-        self.units=Store(database);self.root=str(Path(objects).resolve())
+    def __init__(self,database,objects,policies=None,*,postgres_url=None):
+        self.units=Store(database, postgres_url=postgres_url);self.root=str(Path(objects).resolve())
         self.policies=policies or {
             "chapter":Policy("supplied-1",chapter_handler,chapter_valid,timeout=20),
             "export":Policy("pdf-zip-5",export_handler,export_valid,
@@ -64,10 +64,12 @@ class Books:
             conn.execute("""CREATE TABLE IF NOT EXISTS ebook_v2_books (
                 id TEXT PRIMARY KEY,owner TEXT NOT NULL,request_key TEXT NOT NULL,
                 spec TEXT NOT NULL,spec_sha TEXT NOT NULL,units TEXT NOT NULL,
-                state TEXT NOT NULL,revision INTEGER NOT NULL,created REAL NOT NULL,updated REAL NOT NULL,
+                state TEXT NOT NULL,revision INTEGER NOT NULL,created DOUBLE PRECISION NOT NULL,updated DOUBLE PRECISION NOT NULL,
                 UNIQUE(owner,request_key))""")
-            conn.execute("CREATE TABLE IF NOT EXISTS ebook_v2_workers (id TEXT PRIMARY KEY,seen REAL NOT NULL)")
-            if "local_text" not in {r[1] for r in conn.execute("PRAGMA table_info(ebook_v2_workers)")}:
+            conn.execute("CREATE TABLE IF NOT EXISTS ebook_v2_workers (id TEXT PRIMARY KEY,seen DOUBLE PRECISION NOT NULL)")
+            if self.units.postgres_url:
+                conn.execute("ALTER TABLE ebook_v2_workers ADD COLUMN IF NOT EXISTS local_text INTEGER NOT NULL DEFAULT 0")
+            elif "local_text" not in {r[1] for r in conn.execute("PRAGMA table_info(ebook_v2_workers)")}:
                 conn.execute("ALTER TABLE ebook_v2_workers ADD COLUMN local_text INTEGER NOT NULL DEFAULT 0")
             conn.execute("CREATE TABLE IF NOT EXISTS ebook_v2_topics (book_id TEXT PRIMARY KEY REFERENCES ebook_v2_books(id),data TEXT NOT NULL,sha TEXT NOT NULL)")
 
@@ -75,7 +77,7 @@ class Books:
                 book_id TEXT PRIMARY KEY REFERENCES ebook_v2_books(id),
                 parent_id TEXT NOT NULL REFERENCES ebook_v2_books(id),
                 root_id TEXT NOT NULL REFERENCES ebook_v2_books(id),
-                number INTEGER NOT NULL,created REAL NOT NULL,UNIQUE(root_id,number))""")
+                number INTEGER NOT NULL,created DOUBLE PRECISION NOT NULL,UNIQUE(root_id,number))""")
 
     def record_worker(self,worker_id,local_text=False):
         with self.units.transaction() as conn:

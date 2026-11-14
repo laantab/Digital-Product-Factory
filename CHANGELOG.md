@@ -1,3 +1,17 @@
+## 1.9.75 — Shared Book Studio checkpoints (candidate)
+
+### What changed
+Book Studio can explicitly use PostgreSQL to share book state across worker processes.
+
+### What was fixed
+Shared transactions preserve request deduplication and prevent concurrent workers from claiming the same unit.
+
+### Do the steps change?
+The local launcher continues to use SQLite.
+
+### Release gate
+Verify the shared queue on disposable PostgreSQL. Hosted worker activation and shared artifact storage are still required.
+
 ## 1.9.74 — Classify saved-book preservation work (candidate)
 
 ### What changed

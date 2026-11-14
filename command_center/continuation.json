@@ -479,13 +479,17 @@
         43505428371,
         43505428403
       ]
+    },
+    "shared_queue_candidate": {
+      "version": "1.9.75",
+      "status": "PostgreSQL adapter and disposable integration test implemented; await CI before enabling. Existing SQLite launch remains default. No production changes."
     }
   },
   "next_actions": [
     {
       "id": "recover_existing_stalled_book",
       "status": "in_progress",
-      "action": "Integrate owned saved-book recovery with hosted execution, then recover an existing saved book before fresh topic acceptance."
+      "action": "Verify PostgreSQL queue CI, then integrate owned snapshot import and shared export storage before any hosted cutover."
     },
     {
       "id": "verify_editorial_budget_correction",

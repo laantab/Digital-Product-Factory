@@ -208,7 +208,7 @@ def resume(books,book):
             del state["units"][name]
             continue
         with books.units.transaction() as conn:
-            parents=[r[0] for r in conn.execute("SELECT parent_id FROM ebook_v2_dependencies WHERE unit_id=?",(key,))]
+            parents=[r["parent_id"] for r in conn.execute("SELECT parent_id FROM ebook_v2_dependencies WHERE unit_id=?",(key,))]
         payload=dict(row["payload"])
         if row["stage"]=="visuals" and row["error"]=="MISSING_PHOTOS" and row["output"]:
             payload["retained_visuals"]=row["output"]["visuals"]

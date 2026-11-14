@@ -64,8 +64,8 @@ def edit(books,owner,book_id,revision,key,raw):
         if count!=1:raise Conflict('This edition has newer saved changes')
         link=conn.execute('SELECT root_id FROM ebook_v2_editions WHERE book_id=?',(book_id,)).fetchone()
         root=link['root_id'] if link else book_id
-        number=conn.execute('SELECT coalesce(max(number),1)+1 FROM ebook_v2_editions WHERE root_id=?',
-            (root,)).fetchone()[0]
+        number=conn.execute('SELECT coalesce(max(number),1)+1 AS next_number FROM ebook_v2_editions WHERE root_id=?',
+            (root,)).fetchone()["next_number"]
         conn.execute("INSERT INTO ebook_v2_books VALUES (?,?,?,?,?,?,'RUNNING',1,?,?)",
             (new_id,str(owner),request,encode(spec),digest(spec),'[]',now,now))
         conn.execute('INSERT INTO ebook_v2_editions VALUES (?,?,?,?,?)',

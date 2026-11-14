@@ -1,7 +1,6 @@
 """Durable local work, fenced leases and evidence-backed repair memory.
 
-This adapter is deliberately SQLite-only until hosted SQL parity is proved.
-It never reads the legacy Factory database unless explicitly given that path.
+SQLite is the default for local Studio. PostgreSQL is opt-in for shared worker state.
 """
 from contextlib import contextmanager
 import hashlib
@@ -28,19 +27,41 @@ class InputConflict(ValueError):
     pass
 
 
+class _PostgresStudioConnection:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def execute(self, sql, params=()):
+        from services.db.dialect import to_postgres
+
+        return self.connection.execute(to_postgres(sql), params)
+
+
 class Store:
-    def __init__(self, path, clock=time.time):
+    def __init__(self, path, clock=time.time, *, postgres_url=None):
         self.path = str(Path(path).resolve())
         self.clock = clock
+        self.postgres_url = postgres_url
 
     @contextmanager
     def transaction(self):
-        conn = sqlite3.connect(self.path, timeout=30, isolation_level=None)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys=ON")
+        if self.postgres_url:
+            import psycopg
+            from psycopg.rows import dict_row
+
+            conn = psycopg.connect(self.postgres_url, row_factory=dict_row)
+        else:
+            conn = sqlite3.connect(self.path, timeout=30, isolation_level=None)
+            conn.row_factory = sqlite3.Row
         try:
-            conn.execute("BEGIN IMMEDIATE")
-            yield conn
+            if self.postgres_url:
+                # Match SQLite's serialization for read-then-write leases and keys.
+                conn.execute("SELECT pg_advisory_xact_lock(1162628930, 2)")
+                yield _PostgresStudioConnection(conn)
+            else:
+                conn.execute("PRAGMA foreign_keys=ON")
+                conn.execute("BEGIN IMMEDIATE")
+                yield conn
             conn.commit()
         except BaseException:
             conn.rollback()
@@ -49,16 +70,17 @@ class Store:
             conn.close()
 
     def initialize(self):
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        if not self.postgres_url:
+            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         with self.transaction() as conn:
             conn.execute("""CREATE TABLE IF NOT EXISTS ebook_v2_units (
                 id TEXT PRIMARY KEY, owner TEXT NOT NULL, request_key TEXT NOT NULL,
                 stage TEXT NOT NULL, policy TEXT NOT NULL, payload TEXT NOT NULL,
                 input_sha TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'QUEUED',
                 attempts INTEGER NOT NULL DEFAULT 0, max_attempts INTEGER NOT NULL,
-                due REAL NOT NULL DEFAULT 0, token TEXT, expires REAL NOT NULL DEFAULT 0,
+                due DOUBLE PRECISION NOT NULL DEFAULT 0, token TEXT, expires DOUBLE PRECISION NOT NULL DEFAULT 0,
                 output TEXT, output_sha TEXT, error TEXT NOT NULL DEFAULT '',
-                repair TEXT NOT NULL DEFAULT '', created REAL NOT NULL,
+                repair TEXT NOT NULL DEFAULT '', created DOUBLE PRECISION NOT NULL,
                 UNIQUE(owner,request_key))""")
             conn.execute("""CREATE TABLE IF NOT EXISTS ebook_v2_dependencies (
                 unit_id TEXT NOT NULL REFERENCES ebook_v2_units(id),
@@ -124,7 +146,7 @@ class Store:
                                  (str(owner), key)).fetchone()
             if prior:
                 prior = self.checked(prior)
-                saved_parents = sorted(r[0] for r in conn.execute(
+                saved_parents = sorted(r["parent_id"] for r in conn.execute(
                     "SELECT parent_id FROM ebook_v2_dependencies WHERE unit_id=?", (prior["id"],)))
                 previous = digest({"stage": prior["stage"], "policy": prior["policy"],
                     "payload": prior["payload"], "parents": saved_parents, "max_attempts": prior["max_attempts"]})
@@ -157,7 +179,7 @@ class Store:
                              (unit_id,))
                 return None
             for row in conn.execute("SELECT parent_id FROM ebook_v2_dependencies WHERE unit_id=?", (unit_id,)):
-                if self._get(conn, owner, row[0])["state"] != "COMPLETE":
+                if self._get(conn, owner, row["parent_id"])["state"] != "COMPLETE":
                     return None
             token = uuid.uuid4().hex
             conn.execute("""UPDATE ebook_v2_units SET state='RUNNING',attempts=attempts+1,
@@ -207,7 +229,7 @@ class Store:
             rows = conn.execute("""SELECT repair FROM ebook_v2_lessons
                 WHERE stage=? AND policy=? AND error=? ORDER BY successes DESC,repair""",
                 (stage,policy,code)).fetchall()
-        return next((r[0] for r in rows if r[0] in allowed), allowed[0] if allowed else "")
+        return next((r["repair"] for r in rows if r["repair"] in allowed), allowed[0] if allowed else "")
 
     def seed_recovery(self,owner,new_id,prior_id,code,repair):
         """Explicit manual continuation retains rejected text, never its success."""
