@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   release-review-memory:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       FACTORY_TEST_MODE: '1'
@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install offline test dependencies
-        run: python -m pip install -r requirements.txt pytest==8.4.1 playwright==1.56.0
+        run: python -m pip install -r requirements.txt pytest==8.4.1 playwright==1.56.0 python-docx==1.2.0
       - name: Install Chromium for protected browser acceptance
         run: python -m playwright install --with-deps chromium
       - name: Compile memory fix and tests

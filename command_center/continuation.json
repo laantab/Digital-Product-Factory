@@ -1,0 +1,523 @@
+{
+  "schema_version": 1,
+  "project": "Digital Product Factory Pro",
+  "branch": "rebuild/ebook-engine-v2-20261102",
+  "pull_request": 107,
+  "checked_at": "2026-11-06T07:30:58.060751+00:00",
+  "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
+  "authorization": {
+    "routine_fixes_pushes_and_deployment": true,
+    "hosted_integration_engineering": true,
+    "acceptance_priority": "Recover an existing stalled customer book before a fresh full-flow book; reuse accepted chapters and minimize ChatGPT credits and repeated checks.",
+    "paid_generation": false,
+    "protect_other_generators": true
+  },
+  "evidence": {
+    "local_studio": {
+      "tests": 104,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0,
+      "duration_seconds": 166.28
+    },
+    "legacy_recovery_snapshot_candidate": {
+      "version": "1.9.72",
+      "source": "services/ebook_v2/legacy_snapshot.py",
+      "verification": "7 isolated unittest cases passed: exact text and pending quality preservation; owner isolation; missing identity/version rejection; idempotent save and retained source versions; conflicting same-version content rejection; checksum corruption rejection; concurrent save deduplication.",
+      "hosted_verified": false,
+      "enabled_in_production": false,
+      "next_action": "Verify the snapshot store against real PostgreSQL, then wire authenticated owner-scoped snapshot save/reopen using the existing saved project and its actual version. The new table contains preservation snapshots only; original projects and artifact objects must not be changed. Reuse accepted chapters and independently validate pending text before worker recovery.",
+      "endpoints_implemented": true,
+      "postgres_verification": {
+        "run_id": 41855773013,
+        "cases": 9,
+        "result": "passed on disposable PostgreSQL 16; live production snapshot write not attempted"
+      }
+    },
+    "candidate_ci_before_latest_correction": {
+      "studio_run": 41535780087,
+      "studio_windows_and_linux": "success, 103 cases on each platform",
+      "broader_runs_at_532bee07f90e73b2bec3b2e25d69e168e46e6f89": {
+        "41537203814": "success",
+        "41537204055": "success",
+        "41537203830": "success",
+        "41537204051": "success",
+        "41537203915": "success",
+        "41537203836": "success"
+      }
+    },
+    "fresh_model": {
+      "accepted_run": {
+        "run_id": 41553666103,
+        "source_commit": "f72eee7efb0cd277e803c16094998fba6ba8bc39",
+        "artifact_id": 13194619107,
+        "artifact_digest": "sha256:734fc1056a7d0d34badfa1d9f4229c413e5182fa8b3160b31f6ef41a7041ff93",
+        "result": "ACCEPTED_LOCAL_MODEL_ARTIFACT",
+        "manuscript_review": "All 8 chapters and 6,485 saved words reviewed. Paragraphs end cleanly; no model markup, CJK leakage, invented author experience, placeholders or exact repeated long sentences were found. External fact/originality certification remains outside this acceptance.",
+        "pages_inspected": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27
+        ],
+        "layout_review": "All 27 rendered ebook pages plus the 28-page print interior and one-page full-wrap print cover were inspected. Typography is readable and consistent; no clipping, overlap, missing glyphs or empty ebook pages were found. The print interior includes the expected final parity page.",
+        "byte_review": {
+          "artifact_zip_sha256": "734fc1056a7d0d34badfa1d9f4229c413e5182fa8b3160b31f6ef41a7041ff93",
+          "ebook_pdf_sha256": "f2bd16dba650aecf363dd709bd8760ba95a9899a11c47738d28c67d66ee8265e",
+          "package_zip_sha256": "4d7cbcf8d473f7a444a6f1058d2fa9ed9caab7afbe06a8289a090e85572c01d9",
+          "print_pack_zip_sha256": "c20efbbc6cb3e82e9a9cc76c174ce974ab06f8615ad5c35382317d921bedac04",
+          "summary_hashes_match": true,
+          "package_zip_crc": true,
+          "print_pack_zip_crc": true,
+          "epub_crc": true,
+          "docx_crc": true,
+          "embedded_pdf_matches_standalone": true,
+          "all_package_members_match_standalone": true
+        },
+        "paid_calls": 0,
+        "production_changed": false,
+        "hosted_integration_verified": false
+      },
+      "rejected_run": {
+        "run_id": 41516165140,
+        "artifact_id": 13178970874,
+        "technical_status": "success",
+        "human_review": "REJECTED: unfinished paragraph endings in chapters 1, 2, 6 and 8; all 26 rendered pages were inspected.",
+        "bytes_verified": [
+          "ebook.pdf SHA-256 and 26 nonempty pages",
+          "EPUB SHA-256 and ZIP CRC",
+          "Word SHA-256 and ZIP CRC",
+          "Markdown SHA-256"
+        ],
+        "package_note": "The artifact omitted package.zip, print-pack.zip and cover.jpg, so package integrity was not independently accepted."
+      },
+      "follow_up_failure": {
+        "run_id": 41537196386,
+        "artifact_id": 13186053580,
+        "source_commit": "532bee07f90e73b2bec3b2e25d69e168e46e6f89",
+        "result": "failed before export",
+        "saved_progress": "2 of 8 chapters reviewed, 2311 words",
+        "failure": "editorial unit exhausted 5 attempts with SHORT_CHAPTER",
+        "correction_commit": "9f9027ed1ff012125224f21ee9404cdb08671e5d",
+        "correction": "Keep processing local-only and bounded, but allow up to 9 attempts so two correction/expansion/independent-recheck cycles can complete.",
+        "verification": "New exact-sequence regression plus all 104 local Studio/protection tests passed."
+      },
+      "latest_technical_success": {
+        "run_id": 41553666103,
+        "source_commit": "f72eee7efb0cd277e803c16094998fba6ba8bc39",
+        "status": "completed",
+        "conclusion": "success",
+        "artifact_id": 13194619107,
+        "artifact_name": "studio-local-model-engineering-evidence",
+        "artifact_size_bytes": 2598962,
+        "artifact_digest": "sha256:734fc1056a7d0d34badfa1d9f4229c413e5182fa8b3160b31f6ef41a7041ff93",
+        "expires_at": "2026-11-10T01:09:16Z",
+        "human_review": "ACCEPTED for the isolated local-model artifact: all 8 chapters and all 27 rendered ebook pages were reviewed; no unfinished endings or visual defects were found.",
+        "download_attempts": "GitHub artifact metadata and a reusable file reference were obtained. Repeated byte retrieval attempts returned HTTP 503; the next local execution attempt was blocked by the execution service usage limit.",
+        "byte_review": {
+          "artifact_zip_sha256": "734fc1056a7d0d34badfa1d9f4229c413e5182fa8b3160b31f6ef41a7041ff93",
+          "ebook_pdf_sha256": "f2bd16dba650aecf363dd709bd8760ba95a9899a11c47738d28c67d66ee8265e",
+          "package_zip_sha256": "4d7cbcf8d473f7a444a6f1058d2fa9ed9caab7afbe06a8289a090e85572c01d9",
+          "print_pack_zip_sha256": "c20efbbc6cb3e82e9a9cc76c174ce974ab06f8615ad5c35382317d921bedac04",
+          "summary_hashes_match": true,
+          "package_zip_crc": true,
+          "print_pack_zip_crc": true,
+          "epub_crc": true,
+          "docx_crc": true,
+          "embedded_pdf_matches_standalone": true,
+          "all_package_members_match_standalone": true
+        }
+      },
+      "run_id": 41553666103,
+      "artifact_id": 13194619107
+    },
+    "preservation_reference": {
+      "restored": true,
+      "source": "Factory_Project20_Verified_Recovery_Copy_2026-10-18.zip",
+      "pdf_sha256": "20792e8fcce4ab4fcc7daa8e49df1d0a634f7c624d9197d346d0fda83f8d025d",
+      "package_sha256": "f7cc37a90f71e8563039c412f23f7ba11deff52edb055419117197921d572d26",
+      "zip_crc": "passed",
+      "embedded_pdf_matches": true
+    },
+    "full_release": {
+      "status": "passed",
+      "completed_attempt": "3487 passed and 1 failed in 1153.42 seconds with the exact restored reference.",
+      "failure": "tests/test_version_management.py::test_the_checker_runs_and_passes_on_the_current_tree required a patch version and matching release note because two production files changed.",
+      "correction_commit": "401bc7e1ee4148cd94be75fc4392423e41585e96",
+      "correction": "Bumped VERSION from 1.9.70 to 1.9.71 and added a matching CHANGELOG entry; no test was weakened.",
+      "clean_correction_verification": "All 31 version-management tests passed from a detached clean checkout of 401bc7e1ee4148cd94be75fc4392423e41585e96.",
+      "recovered_browser_failure": "The prior interrupted run cached tests/test_ebook_v2_topics.py::test_automatic_topic_browser_only_requires_title_and_cover_choices. It passed twice in focused reproduction and passed in the completed 3488-case run, so no source change was made for it.",
+      "final_gate": "3488 passed, 0 failures, 0 errors and 0 skips in 1246.17 seconds from a clean checkout under the workspace root with the exact restored preservation PDF and ZIP.",
+      "paid_api_calls_permitted": 0,
+      "note": "A separate clean checkout under /tmp produced two expected database-path fixture failures plus two load-sensitive timing failures; all four passed focused reproduction under the valid workspace path and none recurred in the final complete gate."
+    },
+    "checkpoint_ci_after_artifact_review": {
+      "source_commit": "982c624d229214a2704b7d842a9cc64db7eb0591",
+      "runs": {
+        "41569341006": "success: Book Studio Windows/Linux and factory version/fast gate",
+        "41569341055": "success",
+        "41569341036": "success",
+        "41569341022": "success",
+        "41569341032": "success",
+        "41569341061": "success"
+      },
+      "note": "The separate continuation collector run 41569336792 failed because fresh_model.run_id was nested only under latest_technical_success. This checkpoint adds the exact top-level run ID expected by the collector; no application source changed."
+    },
+    "delivery_boundary": {
+      "supported_local_delivery": "Start_Book_Studio.bat initializes a separate per-user SQLite/object store under LOCALAPPDATA, starts an independent worker and binds the authenticated Studio only to 127.0.0.1:5088. The 104-case Studio/protection matrix passed on Windows and Linux.",
+      "hosted_integration": "Candidate source registers signed-account immutable preservation APIs. Original projects and artifacts remain unchanged. The generated-book worker/import path is not integrated into hosted PostgreSQL/R2, and loopback Ollama is unavailable in the current Render topology. No hosted generation or deployment is accepted.",
+      "production_changed": false,
+      "deployment_attempted": false
+    },
+    "snapshot_ci_repair": {
+      "previous_commit": "578cde348eda11f6181d615737481c0ea9fb8beb",
+      "previous_run": 41626357260,
+      "linux": "111 passed",
+      "windows": "110 passed; corruption fixture cleanup failed with WinError 32 because test connection remained open",
+      "version": "Changelog customer-question contract failed: required headings absent",
+      "correction": "Explicitly close test-only SQLite connection using contextlib.closing; add required changelog sections without weakening tests.",
+      "local_verification": "All 7 snapshot tests passed before and after; exact unchanged changelog contract passed after repair.",
+      "ci_verification": "Verified all six workflows succeeded on 5c0047602c35c637952497f46d2f1f6832be74f2; Studio run 41704607171 includes Windows/Linux artifacts.",
+      "production_changed": false,
+      "paid_generation": false
+    },
+    "final_page_candidate": {
+      "checked_at": "2026-11-04T15:06:11.458328+00:00",
+      "version": "1.9.73",
+      "status": "candidate_not_deployed",
+      "source_scope": [
+        "Final-page source text, layout and actual photograph checks",
+        "Default photo requests fail closed before generation when search is unconfigured",
+        "Bounded photo recovery retains acquired images and completed chapters",
+        "Signed-account immutable preservation reads actual owner/version/raw data atomically"
+      ],
+      "local_studio_after": {
+        "tests": "108",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "70.816",
+        "junit_sha256": "f06d9bfdbfa0f2851daa96110769be7f767a29e2cc8a93c86166a0b08ec2d91d"
+      },
+      "final_page_defect_regressions": {
+        "tests": "12",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "7.230",
+        "junit_sha256": "63aa3f043aa5c19fc52f6a5c023047076763ae90e7e2b5545d13a5065fa5e663"
+      },
+      "hosted_preservation_sqlite_and_snapshot_contracts": {
+        "tests": "18",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "61.043",
+        "junit_sha256": "32a1d3690bcbfa4ea98ce179ff00b162a33a9d99542f97fdeeba75debe048ea9"
+      },
+      "freeze_attempt": {
+        "tests": "155",
+        "failures": "1",
+        "errors": "0",
+        "skipped": "0",
+        "time": "88.547",
+        "junit_sha256": "b9cf2cfc07d3ffb670a5c9b0a927131d0800eb691e05299548a193921455844f"
+      },
+      "worker_timing_reproduction": {
+        "tests": "22",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "4.477",
+        "junit_sha256": "b9d6df6f080ff4aa45d0d135d9cae6fa07033e4b6eb2f56034dbd51255d5e665"
+      },
+      "protected_baseline": {
+        "tests": "729",
+        "failures": "1",
+        "errors": "0",
+        "skipped": "0",
+        "time": "828.885",
+        "junit_sha256": "a1bd43f5ed7cc006f8212d711e5939f3363eb57c07c176f778ef16a81f5275a4"
+      },
+      "baseline_failure_reproduction": {
+        "tests": "1",
+        "failures": "1",
+        "errors": "0",
+        "skipped": "0",
+        "time": "183.538",
+        "junit_sha256": "2e0829f3211c7dfd5bfe68ab2fee313a18c4b5a56d539a331329aafd37d79069"
+      },
+      "unchanged_browser_diagnostic_reproduction": {
+        "tests": "1",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0",
+        "time": "155.215",
+        "junit_sha256": "7fb5da71e261070ad06cc2fc13a4184e20ff5025c7f22b04ab03bcb388505cf6"
+      },
+      "baseline_note": "The unchanged ai_recommended real-browser path exceeded its 180-second limit twice, then passed the diagnostic run in 155.20 seconds. The worker-crash 1-second test passed with all 22 worker contracts when run alone. No assertions, time limits or production behavior were weakened. These are aggregate case results, not a fully green uninterrupted release gate.",
+      "protected_after": {
+        "status": "unknown after execution loss",
+        "note": "Local file-isolated run was still executing at disconnect. It had loaded the earlier hosted-route loader before its correction; the corrected 11 HTTP cases later passed independently and in the full-dependency GitHub job. Do not claim the interrupted local run passed."
+      },
+      "postgres_preservation_and_http": "All nine real PostgreSQL store and HTTP contracts passed in corrected run 41855773013. This verifies disposable PostgreSQL parity, not live Render production writes.",
+      "paid_generation": false,
+      "production_changed": false,
+      "release_accepted": false,
+      "remaining": [
+        "Inspect PostgreSQL and Windows/Linux CI artifacts",
+        "Complete before/after protection proof and relock shared capability registries",
+        "Run frozen whole-Factory release gate with the exact preservation originals",
+        "Import accepted/pending chapters into a supported no-paid hosted worker",
+        "Verify actual production save/reopen and final customer PDF/ZIP downloads"
+      ],
+      "ci_corrections": {
+        "source_commit": "6a1a971f1534450bcfcb62ab6790726801954570",
+        "postgres_run": 41855093574,
+        "postgres_result": "8 passed; corruption fixture did not commit its deliberately damaged payload because PostgreSQL connection context closes without committing. Fixture now explicitly commits and asserts stored corruption before the unchanged rejection assertion. All 7 SQLite contracts passed afterward.",
+        "studio_run": 41855093293,
+        "studio_failure": "Hosted route tests imported the full Factory app in the standalone dependency job, causing missing openai SDK during collection. Hosted cases now run in the existing full-Factory dependency job; the Windows/Linux standalone gate retains all 124 cases. No application dependency or assertion weakened.",
+        "account_postgres_run": 41855093288,
+        "account_postgres_result": "success",
+        "production_changed": false
+      },
+      "corrected_ci": {
+        "source_commit": "291c9b62a17746a9c350db35632109e1f8951841",
+        "checked_at": "2026-11-04T15:22:00.314Z",
+        "postgres": {
+          "run_id": 41855773013,
+          "status": "completed",
+          "conclusion": "success",
+          "cases": 9,
+          "failures": 0,
+          "errors": 0,
+          "skips": 0,
+          "artifact_id": 13338335396,
+          "artifact_digest": "sha256:a006af765755db727efe4e85d682eba7b9cb925c5e88e06e886dfa894e861693",
+          "artifact_byte_review": "not performed: local execution disconnected before byte retrieval; success and strict nine-case/no-skip steps verified through GitHub"
+        },
+        "account_postgres": {
+          "run_id": 41855773059,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        "studio": {
+          "run_id": 41855773026,
+          "linux_job": 126663859170,
+          "linux_result": "completed success; strict 124-case no-failure/error/skip step passed",
+          "windows_job": 126663859719,
+          "windows_result": "running after Chromium install; no final result yet",
+          "factory_job": 126663859768,
+          "version_cases": "all 31 passed",
+          "hosted_http_cases": "all 11 passed with no skips",
+          "protected_fast_gate": "running"
+        },
+        "broader_runs": [
+          {
+            "run_id": 41855773030,
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "run_id": 41855773016,
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "run_id": 41855772978,
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "run_id": 41855773084,
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "run_id": 41855773145,
+            "status": "in_progress",
+            "conclusion": null
+          }
+        ]
+      },
+      "execution_loss": {
+        "at": "2026-11-04T15:22:00.314Z",
+        "status": "local execution unavailable",
+        "source_saved": true,
+        "latest_source_commit": "291c9b62a17746a9c350db35632109e1f8951841",
+        "native_git_push": "unavailable: no command-line GitHub credentials; publication succeeded through the connected GitHub account after confirming public repository ownership and admin permission",
+        "next_action": "Inspect the exact recorded external jobs and artifacts. Finish protection proof/relocking, then continue hosted worker/import engineering in a new usable execution environment. Do not repeat accepted model generation."
+      }
+    },
+    "ci_artifact_review_20261104": {
+      "source_commit": "ddf192b9e0d62b9761306f6bfd8acf5dceda7a34",
+      "studio_run": 41856995045,
+      "artifacts": [
+        {
+          "platform": "linux",
+          "id": 13337871848,
+          "sha256": "4db1f9ecdea9fc5b250cf53dff130817f9a8408bdf9405b76e6da044dcaa5c94",
+          "tests": 124,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 87.043
+        },
+        {
+          "platform": "windows",
+          "id": 13337827781,
+          "sha256": "5c0cad595675612ffb6c8d18c1b9c0acef2635f53e4426ff3de43358d3e85ce6",
+          "tests": 124,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 149.945
+        },
+        {
+          "platform": "postgresql",
+          "id": 13338701135,
+          "run": 41856995023,
+          "sha256": "29188c859941fd07c3825531352d6c433ba069aaac070fd7338ef937d58d5bbf",
+          "tests": 9,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 2.239
+        }
+      ],
+      "artifact_review": "Downloaded ZIP bytes matched GitHub digests; parsed actual JUnit reports. Tests only, not real AI inference or production certification.",
+      "paid_generation": false,
+      "production_changed": false
+    },
+    "route_classification_correction": {
+      "version": "1.9.74",
+      "parent_commit": "ddf192b9e0d62b9761306f6bfd8acf5dceda7a34",
+      "change": "Classify immutable whole-project snapshots as heavy/deferred; no supported snapshot builder task exists. No execution path changed.",
+      "verification": {
+        "tests": 49,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "seconds": 1.662,
+      "junit_sha256": "8ae0856a054f01b21f2e1db5d02527c7f72cb1a690064c1782c7ca67a32a341b",
+      "full_gate_accepted": false
+    },
+    "active_local_release_attempt": {
+      "source_commit": "0ff179ff878812582c0601be806a42aaace5651f",
+      "status": "running_at_checkpoint",
+      "command": "python -u scripts/run_factory_tests.py",
+      "progress_cases_completed": 1052,
+      "reported_failures_so_far": 0,
+      "reported_errors_so_far": 0,
+      "preservation_originals_restored_and_hash_verified": true,
+      "log": "/tmp/factory-release-0ff179f.log",
+      "junit": "test-results/factory-junit.xml",
+      "workspace": "/workspace/scratch/be1ffe6c4262/factory",
+      "exec_session": 2452,
+      "baseline_source": "5c0047602c35c637952497f46d2f1f6832be74f2",
+      "baseline_status": "Automatically queued after a complete zero-failure/zero-error/zero-skip release JUnit; 72 byte-identical legacy protected files",
+      "baseline_exec_session": 74383,
+      "baseline_log": "/tmp/factory-protected-baseline.log",
+      "baseline_junit": "/tmp/factory-protected-baseline.xml",
+      "baseline_worktree": "/workspace/scratch/be1ffe6c4262/factory-protected-baseline",
+      "comparison_script": "/tmp/factory-compare-protection.py",
+      "runtime_source_changed": false,
+      "documentation_update": "Corrected stale three-design and unreviewed-model claims in docs/BOOK_STUDIO_LOCAL.md using recorded accepted evidence.",
+      "caution": "These local jobs are not a durable remote worker. Recheck sessions and final reports after any interruption. No final release/protection pass or deployment is claimed."
+    },
+    "november_13_resume": {
+      "prior_head": "a727b504cc7964979efe20f7c6e8d7dfc8235774",
+      "live_render_version": "1.9.67",
+      "live_deploy": "dep-dbk909vb9u1s73chajd0",
+      "interrupted_local_release": "Final JUnit unavailable in resumed workspace. Full release and protection comparison remain unverified.",
+      "ci": "Six workflow runs failed at Chromium setup. Logs from jobs 127771654895, 127771655571 and 127771655743 show pinned Playwright rejecting Ubuntu 26.04. Browser workflows now pin their Linux jobs to Ubuntu 24.04. Verify new runs.",
+      "next": "Verify browser CI and final release checks, then complete hosted recovery and no-paid writing execution.",
+      "full_gate": {
+        "commit": "04ffd760e5b96b551c678cdddec5b9e228c2ee23",
+        "tests": 3519,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 795.41,
+        "junit_sha256": "cb4ca3ab68496e4b9156c0b7b5d388f6a4d77baa978a51a47ebfaa35b87f0881"
+      },
+      "protected_comparison": {
+        "baseline": "5c0047602c35c637952497f46d2f1f6832be74f2",
+        "unchanged_files": 73,
+        "matching_passed_cases": 1192,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "junit_sha256": "952dda65b561a2b8fe61325197d4aa91b3dc0b909bb50c87f30203db4d0d6e41"
+      },
+      "verified_ci_runs": [
+        43505428223,
+        43505428371,
+        43505428403
+      ]
+    },
+    "shared_queue_candidate": {
+      "version": "1.9.75",
+      "status": "PostgreSQL adapter and disposable integration test implemented; await CI before enabling. Existing SQLite launch remains default. No production changes."
+    }
+  },
+  "next_actions": [
+    {
+      "id": "recover_existing_stalled_book",
+      "status": "in_progress",
+      "action": "Verify PostgreSQL queue CI, then integrate owned snapshot import and shared export storage before any hosted cutover."
+    },
+    {
+      "id": "verify_editorial_budget_correction",
+      "status": "completed",
+      "action": "All six versioned-candidate regression workflows passed. Exactly one free eight-chapter acceptance run was requested."
+    },
+    {
+      "id": "review_new_model_artifacts",
+      "status": "completed",
+      "action": "Artifact 13194619107 was downloaded without regeneration. All 8 chapters, all 27 ebook pages, the print cover/interior and retained PDF/ZIP bytes passed review; exact hashes and CRC evidence are recorded in release_evidence/ebook_v2_real_model_review.json."
+    },
+    {
+      "id": "resolve_full_release",
+      "status": "completed",
+      "action": "The exact restored-reference release gate passed all 3488 cases on the versioned candidate."
+    },
+    {
+      "id": "verify_supported_delivery",
+      "status": "completed",
+      "action": "Verified the supported delivery boundary: the accepted rebuild is a private Windows/local Studio with separate data and loopback-only service. It is not integrated into render.yaml, the hosted Flask app, PostgreSQL/R2, or a hosted no-paid model runtime."
+    },
+    {
+      "id": "release_and_verify",
+      "status": "blocked_by_supported_integration",
+      "action": "Do not deploy the loopback Studio as the hosted Factory. Before merge/deploy completion, implement and verify a supported hosted integration using shared authenticated customer state, PostgreSQL/R2-compatible storage and an explicitly approved no-paid-generation runtime; then verify actual hosted PDF and ZIP downloads."
+    }
+  ],
+  "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
+  "blocker": "Book Studio uses local SQLite, local files and loopback Ollama. Hosted operation needs shared durable jobs and artifacts plus a supported model runtime without paid generation calls.",
+  "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
+}

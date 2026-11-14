@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   editorial-evidence:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       FACTORY_TEST_MODE: '1'
@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install -r requirements.txt pytest==8.4.1
+      - run: python -m pip install -r requirements.txt pytest==8.4.1 python-docx==1.2.0
       - run: python -m pip install playwright==1.52.0
       - run: python -m playwright install --with-deps chromium
       - name: Prove the three regressions fail on the unchanged baseline

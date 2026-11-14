@@ -1,0 +1,363 @@
+"""Actual supplied-text publishing, saved state, integrity and ownership."""
+import hashlib
+import io
+import zipfile
+import fitz
+import pytest
+from services.ebook_v2.books import Books,Conflict,clean_spec
+from services.ebook_v2.recovery import InputConflict,CorruptCheckpoint
+from services.ebook_v2.publishing import export_valid
+from tests.ebook_v2_fixture import spec
+
+
+@pytest.fixture
+def engine(tmp_path):
+    books=Books(tmp_path/"studio.sqlite",tmp_path/"objects");books.initialize();return books
+
+
+def reviewed(engine):
+    book=engine.create("alice","fixture-request-0001",spec())
+    for _ in range(20):
+        book=engine.advance("alice",book["id"])
+        if book["state"]=="REVIEW":return book
+    pytest.fail("Supplied manuscript did not finish")
+
+
+def test_real_pdf_zip_and_editable_manuscript_agree(engine):
+    book=reviewed(engine)
+    pdf,checksum=engine.download("alice",book["id"],"ebook.pdf",preview=True)
+    package,_=engine.download("alice",book["id"],"package.zip",preview=True)
+    assert hashlib.sha256(pdf).hexdigest()==checksum
+    with fitz.open(stream=pdf,filetype="pdf") as document:
+        assert document.page_count>=4
+        text=" ".join(" ".join(page.get_text().split()) for page in document)
+        assert "ACCEPTANCE FIXTURE - NOT FOR SALE" in text
+        for chapter in spec()["chapters"]:
+            assert chapter["title"] in text
+            assert chapter["text"].split(".")[0] in text
+        for page in document:
+            assert page.get_text().strip()
+            page.get_pixmap()
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        assert archive.testzip() is None
+        assert archive.read("ebook.pdf")==pdf
+        assert b"## Choose one clear working area" in archive.read("manuscript.md")
+    with pytest.raises(ValueError):engine.download("alice",book["id"],"package.zip")
+    book=engine.approve("alice",book["id"],book["revision"])
+    assert book["state"]=="READY"
+    assert engine.download("alice",book["id"],"ebook.pdf")[0]==pdf
+
+
+def test_reopen_uses_completed_chapters_and_immutable_export(engine):
+    book=reviewed(engine)
+    ids=list(book["units"])
+    engine.approve("alice",book["id"],book["revision"])
+    pdf=engine.download("alice",book["id"],"ebook.pdf")[0]
+    restarted=Books(engine.units.path,engine.root)
+    assert restarted.get("alice",book["id"])["units"]==ids
+    assert restarted.advance("alice",book["id"])["state"]=="READY"
+    assert restarted.download("alice",book["id"],"ebook.pdf")[0]==pdf
+    assert all(restarted.units.get("alice",key)["attempts"]==1 for key in ids)
+
+
+def test_creation_idempotency_and_owner_isolation(engine):
+    first=engine.create("alice","fixture-request-0001",spec())
+    assert engine.create("alice","fixture-request-0001",spec())["id"]==first["id"]
+    changed=spec();changed["title"]="Changed title"
+    with pytest.raises(InputConflict):engine.create("alice","fixture-request-0001",changed)
+    with pytest.raises(LookupError):engine.get("bob",first["id"])
+    assert engine.listing("bob")==[]
+    assert engine.listing("alice")[0]["title"]==spec()["title"]
+
+
+def test_status_get_does_not_advance_work(engine):
+    book=engine.create("alice","fixture-request-0001",spec())
+    before=engine.get("alice",book["id"])
+    for _ in range(3):engine.status("alice",book["id"])
+    assert engine.get("alice",book["id"])==before
+
+
+def test_stale_decision_cannot_approve_newer_revision(engine):
+    book=reviewed(engine)
+    with pytest.raises(Conflict):engine.approve("alice",book["id"],book["revision"]-1)
+    with pytest.raises(Conflict):engine.approve("alice",book["id"],True)
+    assert engine.get("alice",book["id"])["state"]=="REVIEW"
+
+
+def test_optimistic_book_updates_preserve_newer_work(engine):
+    book=engine.create("alice","fixture-request-0001",spec())
+    engine.advance("alice",book["id"])
+    with pytest.raises(Conflict):engine.save(book,state="READY")
+    assert engine.get("alice",book["id"])["state"]=="RUNNING"
+
+
+def test_corrupt_file_is_never_downloaded_or_approved(engine):
+    from pathlib import Path
+    book=reviewed(engine)
+    result=engine.units.get("alice",book["units"][-1])["output"]
+    path=Path(engine.root)/result["files"]["ebook.pdf"]["key"]
+    path.write_bytes(b"damaged by deliberate failure-injection test")
+    assert not export_valid(result)
+    with pytest.raises(ValueError):engine.approve("alice",book["id"],book["revision"])
+    assert engine.get("alice",book["id"])["state"]=="REVIEW"
+
+
+def test_saved_manuscript_checksum_mismatch_stops_work(engine):
+    book=engine.create("alice","fixture-request-0001",spec())
+    with engine.units.transaction() as conn:
+        conn.execute("UPDATE ebook_v2_books SET spec='{}' WHERE id=?",(book["id"],))
+    with pytest.raises(CorruptCheckpoint):engine.advance("alice",book["id"])
+
+
+@pytest.mark.parametrize("change",["short","duplicate","placeholder","wrong-theme"])
+def test_bad_supplied_input_does_not_create_a_failed_book(engine,change):
+    raw=spec()
+    if change=="short":raw["chapters"][0]["text"]="Too short"
+    if change=="duplicate":raw["chapters"][1]["title"]=raw["chapters"][0]["title"]
+    if change=="placeholder":raw["chapters"][0]["text"]+="\n\n[placeholder image]"
+    if change=="wrong-theme":raw["theme"]="unknown"
+    with pytest.raises(ValueError):engine.create("alice","fixture-request-0001",raw)
+    assert engine.listing("alice")==[]
+
+
+def test_epub_reading_order_text_cover_and_package_identity(engine):
+    from xml.etree import ElementTree as ET
+    from services.ebook_v2 import epub
+    book=reviewed(engine)
+    data,_=engine.download("alice",book["id"],"ebook.epub",preview=True)
+    assert epub.inspect(data)
+    package,_=engine.download("alice",book["id"],"package.zip",preview=True)
+    cover,_=engine.download("alice",book["id"],"cover.jpg",preview=True)
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        assert archive.read("ebook.epub")==data
+        assert archive.read("cover.jpg")==cover
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert archive.read("EPUB/cover.jpg")==cover
+        for index,chapter in enumerate(spec()["chapters"],1):
+            root=ET.fromstring(archive.read(f"EPUB/chapter-{index}.xhtml"))
+            ns={"h":"http://www.w3.org/1999/xhtml"}
+            assert root.find("h:body/h:section/h:h1",ns).text==chapter["title"]
+            assert [p.text for p in root.findall("h:body/h:section/h:p",ns)]==chapter["text"].split("\n\n")
+
+
+def test_epub_in_package_cannot_diverge_from_standalone(engine):
+    from pathlib import Path
+    book=reviewed(engine)
+    output=engine.units.get("alice",book["units"][-1])["output"]
+    path=Path(engine.root)/output["files"]["ebook.epub"]["key"]
+    path.write_bytes(b"deliberate corruption")
+    assert not export_valid(output)
+    with pytest.raises(ValueError):engine.approve("alice",book["id"],book["revision"])
+
+
+def test_word_manuscript_is_editable_and_preserves_approved_text(engine):
+    from services.ebook_v2 import manuscript
+    book=reviewed(engine)
+    data,_=engine.download("alice",book["id"],"manuscript.docx",preview=True)
+    assert manuscript.inspect(data,spec())
+    package,_=engine.download("alice",book["id"],"package.zip",preview=True)
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:assert archive.read("manuscript.docx")==data
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert b"pBdr" not in archive.read("word/styles.xml")
+
+
+def test_edit_creates_new_reviewable_edition_and_preserves_original_downloads(engine):
+    from services.ebook_v2.editions import editable,edit,history
+    original=reviewed(engine);original=engine.approve("alice",original["id"],original["revision"])
+    original_pdf=engine.download("alice",original["id"],"ebook.pdf")[0]
+    saved=editable(engine,"alice",original["id"])
+    revised=saved["spec"];revised["title"]="Revised desk organization guide"
+    revised["chapters"][0]["text"]+="\n\nThis new author edit must appear only in the revised edition."
+    book=edit(engine,"alice",original["id"],saved["revision"],"edit-request-0001",revised)
+    assert edit(engine,"alice",original["id"],saved["revision"],"edit-request-0001",revised)["id"]==book["id"]
+    assert engine.get("alice",original["id"])["spec"]==spec()
+    assert engine.download("alice",original["id"],"ebook.pdf")[0]==original_pdf
+    for _ in range(20):
+        book=engine.advance("alice",book["id"])
+        if book["state"]=="REVIEW":break
+    assert book["state"]=="REVIEW"
+    new_pdf=engine.download("alice",book["id"],"ebook.pdf",preview=True)[0]
+    with fitz.open(stream=new_pdf,filetype="pdf") as document:
+        assert "This new author edit" in " ".join(page.get_text() for page in document)
+    assert new_pdf!=original_pdf
+    assert [row["number"] for row in history(engine,"alice",book["id"])]==[1,2]
+    with pytest.raises(LookupError):editable(engine,"bob",original["id"])
+    with pytest.raises(Conflict):edit(engine,"alice",original["id"],saved["revision"],"edit-request-0002",revised)
+    altered=dict(revised,title="Different payload")
+    with pytest.raises(InputConflict):edit(engine,"alice",original["id"],saved["revision"],"edit-request-0001",altered)
+    restarted=Books(engine.units.path,engine.root)
+    assert len(history(restarted,"alice",book["id"]))==2
+    assert restarted.download("alice",original["id"],"ebook.pdf")[0]==original_pdf
+
+
+@pytest.mark.parametrize("pages,expected",[(23,None),(24,24),(25,26),(150,150),(151,None)])
+def test_print_pack_measures_pages_and_rejects_unsupported_lengths(pages,expected):
+    from services.ebook_v2 import print_pack
+    from services.ebook_v2.publishing import render_pdf
+    from reportlab.pdfgen import canvas
+    out=io.BytesIO();c=canvas.Canvas(out,pagesize=(432,648))
+    for index in range(pages):
+        c.drawString(42,590,f"Print geometry acceptance fixture page {index+1}")
+        c.drawString(42,565,"NOT FOR SALE")
+        c.showPage()
+    c.save()
+    book=spec()
+    with fitz.open(stream=render_pdf(book),filetype="pdf") as document:
+        cover=document[0].get_pixmap().tobytes("jpeg")
+    result=print_pack.render(book,out.getvalue(),cover)
+    if expected is None:assert result is None;return
+    data,report=result
+    assert report["interior_pages"]==expected
+    assert report["spine_inches"]==pytest.approx(expected*.002252)
+    assert print_pack.inspect_package(data)
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        with fitz.open(stream=archive.read("print-cover.pdf"),filetype="pdf") as document:
+            assert document[0].rect.width==pytest.approx((12.25+expected*.002252)*72,abs=.01)
+        with fitz.open(stream=archive.read("print-interior.pdf"),filetype="pdf") as document:
+            assert len(document)==expected
+            assert bool(document[-1].get_text().strip())==(pages%2==0)
+
+
+def test_short_ebook_does_not_offer_a_padded_print_pack(engine):
+    book=reviewed(engine)
+    output=engine.units.get("alice",book["units"][-1])["output"]
+    assert output["print_specification"] is None
+    assert "print-pack.zip" not in output["files"]
+
+
+def test_free_stock_receipt_uses_actual_pixels_and_never_forwards_api_key(tmp_path,monkeypatch):
+    from services.ebook_v2.visuals import Stock,photo_bytes
+    from PIL import Image
+    image=io.BytesIO();Image.new("RGB",(1920,1280),(60,110,75)).save(image,"PNG")
+    monkeypatch.setenv("PEXELS_API_KEY","fixture-key-only")
+    monkeypatch.delenv("UNSPLASH_ACCESS_KEY",raising=False);monkeypatch.delenv("UNSPLASH_API_KEY",raising=False)
+    calls=[]
+    class Response:
+        def json(self):return {"photos":[{"id":123,"alt":"Volunteer team planning a neighborhood event",
+            "src":{"original":"https://images.pexels.com/photos/123/test.png"},
+            "url":"https://www.pexels.com/photo/123/","photographer":"Fixture photographer"}]}
+        def iter_content(self,size):yield image.getvalue()
+        def close(self):pass
+    def request(self,url,**kwargs):
+        calls.append((url,kwargs))
+        if "images.pexels.com" in url:assert "headers" not in kwargs
+        return Response()
+    monkeypatch.setattr(Stock,"request",request)
+    stock=Stock(tmp_path)
+    try:photo=stock.acquire("volunteer team planning")
+    finally:stock.close()
+    assert photo["width"]==1920 and photo["height"]==1280
+    assert photo["provider"]=="Pexels" and photo["photographer"]=="Fixture photographer"
+    assert photo_bytes(tmp_path,{"photo":photo}).startswith(b"\xff\xd8")
+    assert "fixture-key-only" not in str(photo)
+    assert calls[0][1]["headers"]["Authorization"]=="fixture-key-only"
+
+
+@pytest.mark.parametrize("url",["http://images.pexels.com/x","https://127.0.0.1/x",
+    "https://images.pexels.com.attacker.invalid/x","https://secret@images.pexels.com/x"])
+def test_stock_never_fetches_unapproved_image_hosts(url):
+    from services.ebook_v2.visuals import safe_url
+    with pytest.raises(ValueError):safe_url(url,"images.pexels.com")
+
+
+def test_missing_stock_keys_use_actual_chapter_overview_without_network(tmp_path,monkeypatch):
+    from services.ebook_v2.visuals import Stock,prepare
+    for key in ("PEXELS_API_KEY","UNSPLASH_ACCESS_KEY","UNSPLASH_API_KEY"):monkeypatch.delenv(key,raising=False)
+    monkeypatch.setattr(Stock,"request",lambda *a,**kw:pytest.fail("Unexpected remote request"))
+    source=spec();visuals=prepare(source,tmp_path)
+    assert all(v["photo"] is None and v["overview"] for v in visuals)
+    for chapter,visual in zip(source["chapters"],visuals):
+        assert all(point in chapter["text"] for point in visual["overview"])
+
+
+def test_visual_checkpoints_and_cover_previews_are_reused_after_restart(engine):
+    from services.ebook_v2.visuals import valid
+    book=engine.create("alice","visual-checkpoint-001",spec())
+    total=len(spec()["chapters"])
+    for _ in range(20):
+        book=engine.advance("alice",book["id"])
+        if len(book["units"])>total:
+            row=engine.units.get("alice",book["units"][total])
+            if row["state"]=="COMPLETE":break
+    assert row["stage"]=="visuals" and valid(row["output"])
+    original=engine.units.get("alice",row["id"])
+    restarted=Books(engine.units.path,engine.root)
+    for _ in range(20):
+        book=restarted.advance("alice",book["id"])
+        if book["state"]=="REVIEW":break
+    assert book["state"]=="REVIEW"
+    after=restarted.units.get("alice",row["id"])
+    assert after["attempts"]==1 and after["output"]==original["output"]
+
+
+def test_unsplash_download_tracking_follows_successful_image_acquisition(tmp_path,monkeypatch):
+    from services.ebook_v2.visuals import Stock
+    from PIL import Image
+    image=io.BytesIO();Image.new("RGB",(1800,1200),(90,110,130)).save(image,"JPEG")
+    monkeypatch.setenv("UNSPLASH_ACCESS_KEY","fixture-unsplash-only")
+    candidate={"provider":"Unsplash","id":"abc123","alt":"Volunteer team planning",
+        "url":"https://images.unsplash.com/photo-abc?ixid=public",
+        "original":"https://images.unsplash.com/photo-abc?ixid=public",
+        "page":"https://unsplash.com/photos/abc123","download":"https://api.unsplash.com/photos/abc123/download",
+        "photographer":"Fixture artist","license":"https://unsplash.com/license"}
+    monkeypatch.setattr(Stock,"candidates",lambda self,query:iter([candidate]))
+    calls=[]
+    class Response:
+        def iter_content(self,size):yield image.getvalue()
+        def close(self):pass
+    def request(self,url,**kwargs):
+        calls.append((url,kwargs))
+        if "images.unsplash.com" in url:
+            assert "headers" not in kwargs and "w=1800" in url
+        else:assert kwargs["headers"]["Authorization"]=="Client-ID fixture-unsplash-only"
+        return Response()
+    monkeypatch.setattr(Stock,"request",request)
+    stock=Stock(tmp_path)
+    try:photo=stock.acquire("volunteer team planning")
+    finally:stock.close()
+    assert photo and len(calls)==2 and calls[-1][0].endswith("/photos/abc123/download")
+
+
+def test_expired_stock_budget_does_not_start_a_network_call(tmp_path,monkeypatch):
+    from services.ebook_v2.visuals import Stock
+    monkeypatch.setenv("PEXELS_API_KEY","fixture-key-only")
+    for key in ("UNSPLASH_ACCESS_KEY","UNSPLASH_API_KEY"):monkeypatch.delenv(key,raising=False)
+    stock=Stock(tmp_path,budget=0)
+    monkeypatch.setattr(stock.session,"get",lambda *a,**kw:pytest.fail("Expired budget made a network call"))
+    try:assert stock.acquire("volunteer team planning") is None
+    finally:stock.close()
+
+
+def test_local_settings_import_never_selects_the_legacy_database(tmp_path,monkeypatch):
+    import os,sys
+    from services.ebook_v2 import cli
+    legacy=tmp_path/"legacy.sqlite";legacy.write_bytes(b"preserved customer database sentinel")
+    settings=tmp_path/"local.env"
+    settings.write_text(f"FACTORY_DB_PATH={legacy}\nDATABASE_URL=forbidden-remote-setting\nPEXELS_API_KEY=fixture-free-photo-key\n")
+    monkeypatch.setenv("FACTORY_TEST_MODE","0")
+    monkeypatch.setenv("FACTORY_V2_SETTINGS_FILE",str(settings))
+    for key in ("FACTORY_DB_PATH","FACTORY_DB_BACKEND","DATABASE_URL"):monkeypatch.setenv(key,os.environ.get(key,""))
+    monkeypatch.delenv("PEXELS_API_KEY",raising=False)
+    monkeypatch.setattr(sys,"argv",["studio","init","--data",str(tmp_path/"separate")])
+    cli.main()
+    assert os.environ["PEXELS_API_KEY"]=="fixture-free-photo-key"
+    assert os.environ["DATABASE_URL"]=="" and os.environ["FACTORY_DB_BACKEND"]=="sqlite"
+    assert legacy.read_bytes()==b"preserved customer database sentinel"
+    assert (tmp_path/"separate"/"studio.sqlite").exists()
+
+
+def test_six_designs_preserve_manuscript_and_produce_distinct_layouts():
+    from services.ebook_v2.publishing import THEMES,render_pdf
+    assert len(THEMES)==6
+    covers=set()
+    for theme in THEMES:
+        book={**spec(),"theme":theme}
+        pdf=render_pdf(book)
+        with fitz.open(stream=pdf,filetype="pdf") as document:
+            text=' '.join(page.get_text() for page in document)
+            assert all(ch['title'] in text for ch in book['chapters'])
+            covers.add(hashlib.sha256(document[0].get_pixmap().samples).hexdigest())
+            for page in document:
+                assert page.get_text().strip()
+        assert render_pdf(book,print_mode=True).startswith(b'%PDF-')
+    assert len(covers)==6
