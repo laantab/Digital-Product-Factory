@@ -47,9 +47,9 @@ def test_saved_book_queries_use_shared_postgres(tmp_path):
     parsed = urlparse(url)
     assert parsed.hostname in {"localhost", "127.0.0.1"}
     assert parsed.path == "/factory_ebook_recovery_test"
-    writer = Books(tmp_path / "unused.sqlite", tmp_path, policies={"unused": None}, postgres_url=url)
+    writer = Books(tmp_path / "unused.sqlite", tmp_path, postgres_url=url)
     writer.initialize()
-    reader = Books(tmp_path / "unused.sqlite", tmp_path, policies={"unused": None}, postgres_url=url)
+    reader = Books(tmp_path / "unused.sqlite", tmp_path, postgres_url=url)
     owner = uuid4().hex
     text = "\n\n".join(f"Paragraph {index} " + "word " * 100 for index in range(3))
     book = writer.create(owner, uuid4().hex, {
