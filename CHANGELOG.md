@@ -1,3 +1,17 @@
+## 1.9.78 — Signed recovery and download handoff (candidate)
+
+### What changed
+Signed-in customers can queue an owned, complete saved manuscript through the recovery API when shared processing services are explicitly configured. Status and download routes use private shared artifacts.
+
+### What was fixed
+Recovery refuses to queue while the processing worker is unavailable. Repeated requests reuse the same book. Downloads recheck source ownership and do not depend on files remaining on the generating worker.
+
+### Do the steps change?
+The production interface is not activated yet. The new routes require explicit shared-service wiring and a running worker; they never generate or render inside the web request.
+
+### Release gate
+Verify signed requests, worker absence, repeated recovery, source transfer, review gating and actual PDF/ZIP retrieval after worker-file loss. Live worker integration and deployment acceptance remain required.
+
 ## 1.9.77 — Durable book download handoff (candidate)
 
 ### What changed

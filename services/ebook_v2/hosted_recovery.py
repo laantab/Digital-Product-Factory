@@ -1,13 +1,13 @@
-"""Signed-account preservation API. No generation, project writes or exports.
+"""Signed preservation, queued recovery and private shared downloads.
 
-This is the hosted recovery boundary, not a hosted Studio worker. Snapshots
-remain private, immutable and tied to the exact saved project version.
+Explicit shared-service injection enables recovery; web requests never run a worker.
 """
 import secrets
 import json
+import io
 from contextlib import closing
 
-from flask import Blueprint, current_app, jsonify, request, session
+from flask import Blueprint, current_app, jsonify, request, session, send_file
 from flask_login import current_user
 from werkzeug.exceptions import BadRequest
 
@@ -89,6 +89,60 @@ def blueprint(connection_factory):
         owned(payload["project_id"])
         return jsonify(snapshot_id=snapshot_id, snapshot=payload,
                        generation_started=False)
+
+    def hosted():
+        services = current_app.extensions.get("ebook_v2_hosted")
+        if not services:
+            raise RuntimeError("Hosted recovery is not configured")
+        return services["books"], services["artifacts"]
+
+    def recovery_book(book_id):
+        books, artifacts = hosted()
+        book = books.get(current_user.id, book_id)
+        key = book["request_key"]
+        if not key.startswith("snapshot:"):
+            raise LookupError("Book not found")
+        snapshot = store.reopen(current_user.id, key.removeprefix("snapshot:"))
+        owned(snapshot["project_id"])
+        return books, artifacts, book
+
+    @bp.post("/snapshots/<snapshot_id>/books")
+    def recover(snapshot_id):
+        books, _ = hosted()
+        body = request.get_json()
+        if not isinstance(body, dict) or set(body) != {"title", "author", "theme", "require_photos"}:
+            raise ValueError("Send the title, author, design and photograph choice")
+        payload = store.reopen(current_user.id, snapshot_id)
+        owned(payload["project_id"])
+        from .snapshot_import import prepare
+        spec = prepare(payload, **body)
+        if not books.available():
+            return jsonify(error="Book processing is temporarily unavailable. Your manuscript is saved."), 503
+        # Only queue saved text. No inference or rendering in this request.
+        book = books.create(current_user.id, "snapshot:" + snapshot_id, spec)
+        return jsonify(book_id=book["id"], state=books.status(current_user.id, book["id"])["state"],
+                       queued=True, generation_started=False), 202
+
+    @bp.get("/books/<book_id>")
+    def book_status(book_id):
+        books, _, book = recovery_book(book_id)
+        result = books.status(current_user.id, book["id"])
+        with books.units.transaction() as conn:
+            row = conn.execute("SELECT 1 FROM ebook_v2_artifacts WHERE book_id=? AND owner=?",
+                               (book_id, str(current_user.id))).fetchone()
+        result["files"] = ["ebook.pdf", "package.zip"] if row else []
+        return jsonify(result)
+
+    @bp.get("/books/<book_id>/files/<name>")
+    def book_file(book_id, name):
+        _, artifacts, _ = recovery_book(book_id)
+        preview = request.args.get("preview") == "1"
+        data, checksum = artifacts.download(current_user.id, book_id, name, preview=preview)
+        response = send_file(io.BytesIO(data),
+                             mimetype="application/pdf" if name == "ebook.pdf" else "application/zip",
+                             as_attachment=not preview, download_name=name)
+        response.headers["X-Content-SHA256"] = checksum
+        return response
 
     @bp.errorhandler(LookupError)
     def missing(error):

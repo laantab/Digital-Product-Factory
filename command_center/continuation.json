@@ -498,13 +498,22 @@
       "execution_loss": "Local exec-server unavailable on resume. Reconstructed source and tests from the recorded applied patches; exact remote CI required.",
       "scope": "PDF and ZIP handoff via existing storage driver, checksum readback, durable receipts and owner/review checks. Tested with local storage driver only. No live R2 verification.",
       "production_changed": false
+    },
+    "hosted_handoff_candidate": {
+      "version": "1.9.78",
+      "parent": "a6a019f28671a9512efd7b75a8709bdd1becf9a8",
+      "verification": "52 passed in 4.53s: signed Factory recovery, real-file HTTP handoff, POST route inventory and version contracts",
+      "junit_sha256": "443e88f9a717f12e080ddef3a013f93f876ebbcb3b364f8c7911fb2bdd24d95a",
+      "scope": "Signed snapshot-to-book queue, status and shared PDF/ZIP retrieval. Worker availability, source ownership, CSRF, review and integrity checks. Actual fixture downloads after removing worker files. Explicit service injection required; not enabled in production.",
+      "production_changed": false,
+      "paid_calls": 0
     }
   },
   "next_actions": [
     {
       "id": "recover_existing_stalled_book",
       "status": "in_progress",
-      "action": "Verify v1.9.77 CI, then connect shared artifact handoff to hosted worker and authenticated routes; verify real PostgreSQL receipts and R2 readback before activation."
+      "action": "Verify 1.9.78 CI. Integrate the existing Render workflow worker with the new Books queue and shared artifacts, including durable intermediate photos across task replacement. Add shared review approval and customer controls, then verify a hosted saved-book recovery."
     },
     {
       "id": "verify_editorial_budget_correction",
@@ -533,6 +542,6 @@
     }
   ],
   "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
-  "blocker": "Hosted worker/routes, shared artifact activation and supported no-paid writing runtime still required. Local execution unavailable; use exact GitHub CI evidence.",
+  "blocker": "The existing Render builder still runs workflow_task.py from main. New queue/worker binding, intermediate artifact recovery, service injection, review approval and customer UI are not yet implemented. Fresh-book no-paid model execution also needs a supported runtime.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

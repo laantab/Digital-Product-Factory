@@ -243,6 +243,7 @@
     "tests/test_ebook_v2_legacy_snapshot.py",
     "tests/test_ebook_v2_final_quality.py",
     "tests/test_ebook_v2_hosted_recovery.py",
-    "tests/test_ebook_v2_shared_artifacts.py"
+    "tests/test_ebook_v2_shared_artifacts.py",
+    "tests/test_ebook_v2_hosted_handoff.py"
   ]
 }

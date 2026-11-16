@@ -103,6 +103,8 @@ ROUTES: tuple[dict, ...] = (
     _l("/auth/register", "creates a user row and logs it in"),
     _l("/auth/login", "checks a password and starts a session"),
     _l("/auth/logout", "ends the session"),
+    _l("/api/ebook-recovery/snapshots/<snapshot_id>/books",
+       "validates a bounded saved manuscript and queues a separate book; no rendering or inference"),
     _h("/api/ebook-recovery/projects/<int:project_id>/snapshots",
        "copies the complete saved project JSON, potentially including large embedded artifacts",
        DEFERRED,
