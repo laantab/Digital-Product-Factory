@@ -1,3 +1,17 @@
+## 1.9.77 — Durable book download handoff (candidate)
+
+### What changed
+The rebuilt engine can publish verified PDF and ZIP files through the existing shared storage interface and retain their receipts in its database.
+
+### What was fixed
+Download retrieval no longer needs the generating worker's local files when the shared artifact handoff is used. Both uploads must pass readback before a receipt is committed; interrupted uploads can be retried.
+
+### Do the steps change?
+No live customer steps change yet. Hosted routes and worker activation remain to be connected. Account ownership, review approval and byte checks remain required.
+
+### Release gate
+Verify worker-file loss, upload interruption, owner isolation and corrupt remote files. This candidate is not deployed and does not claim a live R2 acceptance test.
+
 ## 1.9.76 — Prepare saved manuscripts for recovery (candidate)
 
 ### What changed

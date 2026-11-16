@@ -489,13 +489,22 @@
       "prior_postgres_run": 43562830201,
       "focused_tests_passed": 39,
       "scope": "Verified owner snapshots with complete accepted manuscripts can stage a separate Studio book. PostgreSQL listing, pending and history have dedicated CI coverage pending. No live recovery or deployment."
+    },
+    "shared_artifact_candidate": {
+      "version": "1.9.77",
+      "parent": "2ec276b462eb7cb8e4aca903349b157dfaaa69e9",
+      "local_tests": "44 passed in 41.00s: shared artifacts, books and legacy snapshots",
+      "local_version_tests": "28 passed; 3 blocked by missing OpenAI SDK in standalone test environment",
+      "execution_loss": "Local exec-server unavailable on resume. Reconstructed source and tests from the recorded applied patches; exact remote CI required.",
+      "scope": "PDF and ZIP handoff via existing storage driver, checksum readback, durable receipts and owner/review checks. Tested with local storage driver only. No live R2 verification.",
+      "production_changed": false
     }
   },
   "next_actions": [
     {
       "id": "recover_existing_stalled_book",
       "status": "in_progress",
-      "action": "Verify the new PostgreSQL book query test, then wire snapshot import and shared PDF/ZIP storage into hosted execution. Add an independent review path for incomplete manuscripts."
+      "action": "Verify v1.9.77 CI, then connect shared artifact handoff to hosted worker and authenticated routes; verify real PostgreSQL receipts and R2 readback before activation."
     },
     {
       "id": "verify_editorial_budget_correction",
@@ -524,6 +533,6 @@
     }
   ],
   "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
-  "blocker": "Book Studio uses local SQLite, local files and loopback Ollama. Hosted operation needs shared durable jobs and artifacts plus a supported model runtime without paid generation calls.",
+  "blocker": "Hosted worker/routes, shared artifact activation and supported no-paid writing runtime still required. Local execution unavailable; use exact GitHub CI evidence.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
