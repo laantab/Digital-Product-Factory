@@ -552,7 +552,16 @@
       },
       "dashboard": "Browser requires sign-in for task launch; connector can deploy/register workflows but cannot launch a task",
       "paid_generation_calls": 0,
-      "new_services": 0
+      "new_services": 0,
+      "latest_deployment_check": {
+        "checked_at": "2026-11-17T20:09:09.431Z",
+        "user_deployment": "wfv-dbub796c6qcc73d7atv0 loaded old main 19068c4",
+        "restoration_requested": "wfv-dbub8khsrm7s73ebeb2g",
+        "restoration_commit": "3b658c35fe9134eddf857b17ab594d5f02019e37",
+        "last_observed_status": "building",
+        "web": "unchanged at 19068c4",
+        "postgres_ci": "44165922925 succeeded"
+      }
     }
   },
   "next_actions": [
@@ -588,6 +597,6 @@
     }
   ],
   "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
-  "blocker": "Workflow candidate deployed and both tasks registered. Web still on 19068c4, hosted recovery not enabled. Dashboard authentication was canceled; live task launch and actual production PDF/ZIP verification remain blocked. Local execution environment disappeared during sign-in wait; broader local Studio result is unknown. Do not claim completion or ongoing engineering.",
+  "blocker": "Correct recovery workflow restoration requested after manual latest deployment loaded old main. Verify wfv-dbub8khsrm7s73ebeb2g ready and registered tasks. Web remains old main. Dashboard task launch and live PDF/ZIP test remain unverified.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
