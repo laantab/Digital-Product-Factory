@@ -13,6 +13,7 @@ from werkzeug.exceptions import BadRequest
 
 from .legacy_snapshot import Snapshots
 from .recovery import CorruptCheckpoint, InputConflict
+from .recovery_handoff import preserve_and_queue, WorkerUnavailable
 
 
 def blueprint(connection_factory):
@@ -64,7 +65,7 @@ def blueprint(connection_factory):
     @bp.post("/projects/<int:project_id>/snapshots")
     def preserve(project_id):
         body = request.get_json()
-        if not isinstance(body, dict) or set(body) != {"source_version"}:
+        if not isinstance(body, dict) or set(body) not in ({"source_version"}, {"source_version", "recovery"}):
             raise ValueError("Send only the saved book version")
         version = body["source_version"]
         if type(version) is not int or version < 0:
@@ -72,6 +73,12 @@ def blueprint(connection_factory):
         project = owned(project_id)
         if project.get("version") != version:
             raise InputConflict("This book has newer saved changes. Reload before preserving it.")
+        if "recovery" in body:
+            books, _ = hosted()
+            snapshot_id, book = preserve_and_queue(store, books, project, current_user.id, body["recovery"])
+            return jsonify(snapshot_id=snapshot_id, book_id=book["id"],
+                           state=books.status(current_user.id, book["id"])["state"],
+                           queued=True, generation_started=False), 202
         # DDL runs only on an explicitly authenticated save, never at import,
         # startup, listing or source inspection. No legacy row is updated.
         store.initialize()
@@ -106,23 +113,6 @@ def blueprint(connection_factory):
         owned(snapshot["project_id"])
         return books, artifacts, book
 
-    @bp.post("/snapshots/<snapshot_id>/books")
-    def recover(snapshot_id):
-        books, _ = hosted()
-        body = request.get_json()
-        if not isinstance(body, dict) or set(body) != {"title", "author", "theme", "require_photos"}:
-            raise ValueError("Send the title, author, design and photograph choice")
-        payload = store.reopen(current_user.id, snapshot_id)
-        owned(payload["project_id"])
-        from .snapshot_import import prepare
-        spec = prepare(payload, **body)
-        if not books.available():
-            return jsonify(error="Book processing is temporarily unavailable. Your manuscript is saved."), 503
-        # Only queue saved text. No inference or rendering in this request.
-        book = books.create(current_user.id, "snapshot:" + snapshot_id, spec)
-        return jsonify(book_id=book["id"], state=books.status(current_user.id, book["id"])["state"],
-                       queued=True, generation_started=False), 202
-
     @bp.get("/books/<book_id>")
     def book_status(book_id):
         books, _, book = recovery_book(book_id)
@@ -143,6 +133,10 @@ def blueprint(connection_factory):
                              as_attachment=not preview, download_name=name)
         response.headers["X-Content-SHA256"] = checksum
         return response
+
+    @bp.errorhandler(WorkerUnavailable)
+    def worker_unavailable(error):
+        return jsonify(error=str(error)), 503
 
     @bp.errorhandler(LookupError)
     def missing(error):

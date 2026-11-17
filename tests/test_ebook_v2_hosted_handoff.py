@@ -47,13 +47,13 @@ def hosted(tmp_path):
     snapshot = client.post('/api/ebook-recovery/projects/1/snapshots', json={'source_version':1}, headers=headers).json['snapshot_id']
     settings = {key:manuscript[key] for key in ('title','author','theme')}
     settings['require_photos'] = False
-    return app, client, books, artifacts, connect, snapshot, headers, settings
+    return app, client, books, artifacts, connect, snapshot, headers, {'source_version':1, 'recovery':settings}
 
 
 def test_signed_recovery_reaches_download_without_worker_local_files(hosted):
     app, client, books, artifacts, connect, snapshot, headers, settings = hosted
     books.record_worker('test-worker')
-    path = '/api/ebook-recovery/snapshots/'+snapshot+'/books'
+    path = '/api/ebook-recovery/projects/1/snapshots'
     response = client.post(path, json=settings, headers=headers)
     assert response.status_code == 202, response.json
     book_id = response.json['book_id']
@@ -83,7 +83,7 @@ def test_signed_recovery_reaches_download_without_worker_local_files(hosted):
 
 def test_recovery_without_worker_or_csrf_does_not_queue(hosted):
     app, client, books, artifacts, connect, snapshot, headers, settings = hosted
-    path = '/api/ebook-recovery/snapshots/'+snapshot+'/books'
+    path = '/api/ebook-recovery/projects/1/snapshots'
     assert client.post(path,json=settings).status_code == 403
     assert client.post(path,json=settings,headers=headers).status_code == 503
     assert books.listing('alice') == []
@@ -95,9 +95,49 @@ def test_recovery_without_worker_or_csrf_does_not_queue(hosted):
 def test_foreign_account_and_client_manuscript_cannot_be_imported(hosted):
     app, client, books, artifacts, connect, snapshot, headers, settings = hosted
     books.record_worker('test-worker')
-    path = '/api/ebook-recovery/snapshots/'+snapshot+'/books'
+    path = '/api/ebook-recovery/projects/1/snapshots'
     assert client.post(path,json={**settings,'chapters':[]},headers=headers).status_code == 400
     with client.session_transaction() as session:
         session['_user_id'] = 'bob'
     assert client.post(path,json=settings,headers=headers).status_code == 404
     assert books.listing('alice') == []
+
+
+def test_retry_after_preservation_before_queue_reuses_one_snapshot_and_book(hosted, monkeypatch):
+    app, client, books, artifacts, connect, snapshot, headers, settings = hosted
+    books.record_worker('test-worker')
+    path = '/api/ebook-recovery/projects/1/snapshots'
+    with closing(connect()) as conn:
+        original = tuple(conn.execute('SELECT * FROM projects WHERE id=1').fetchone())
+    create = books.create
+    def interrupted(*args, **kwargs):
+        raise RuntimeError('Simulated interruption between preservation and queue')
+    monkeypatch.setattr(books, 'create', interrupted)
+    assert client.post(path, json=settings, headers=headers).status_code == 503
+    assert books.listing('alice') == []
+    monkeypatch.setattr(books, 'create', create)
+    recovered = client.post(path, json=settings, headers=headers)
+    repeated = client.post(path, json=settings, headers=headers)
+    assert recovered.status_code == repeated.status_code == 202
+    assert recovered.json['snapshot_id'] == snapshot
+    assert repeated.json['book_id'] == recovered.json['book_id']
+    assert len(books.listing('alice')) == 1
+    with closing(connect()) as conn:
+        assert conn.execute('SELECT count(*) FROM ebook_v2_legacy_snapshots').fetchone()[0] == 1
+        assert tuple(conn.execute('SELECT * FROM projects WHERE id=1').fetchone()) == original
+
+
+def test_stale_or_incomplete_source_does_not_queue(hosted):
+    app, client, books, artifacts, connect, snapshot, headers, settings = hosted
+    books.record_worker('test-worker')
+    path = '/api/ebook-recovery/projects/1/snapshots'
+    with closing(connect()) as conn:
+        data = json.loads(conn.execute('SELECT data FROM projects WHERE id=1').fetchone()[0])
+        data['ebook_workspace']['chapter_pipeline']['assembled_complete'] = False
+        conn.execute('UPDATE projects SET data=?, version=2 WHERE id=1', (json.dumps(data),))
+        conn.commit()
+    assert client.post(path, json=settings, headers=headers).status_code == 409
+    assert client.post(path, json={**settings,'source_version':2}, headers=headers).status_code == 400
+    assert books.listing('alice') == []
+    with closing(connect()) as conn:
+        assert conn.execute('SELECT count(*) FROM ebook_v2_legacy_snapshots').fetchone()[0] == 1

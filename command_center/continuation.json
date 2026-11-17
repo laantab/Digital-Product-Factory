@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-06T07:30:58.060751+00:00",
+  "checked_at": "2026-11-17T15:16:03.375886+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -507,13 +507,24 @@
       "scope": "Signed snapshot-to-book queue, status and shared PDF/ZIP retrieval. Worker availability, source ownership, CSRF, review and integrity checks. Actual fixture downloads after removing worker files. Explicit service injection required; not enabled in production.",
       "production_changed": false,
       "paid_calls": 0
+    },
+    "recovery_redesign": {
+      "version": "1.9.79",
+      "parent": "6f954238f3ca8e242480d402350d7d46b40cf738",
+      "change": "Replace separate snapshot-to-book POST with version-checked preserve-and-recover in existing isolated recovery endpoint; restore shared route registry exactly to a6a019f. New recovery_handoff service owns validation and idempotent preservation/queue writes.",
+      "verification": "63 passed in 4.29s: signed recovery, HTTP file handoff, interruption recovery, stale/incomplete refusal, route inventory, version checks and unchanged function-lock enforcement/integrity.",
+      "junit_sha256": "496a1f6016c54e040dc481e20c301c0cecef0d2d045d7d2708a347d00e313c5e",
+      "release_guard": "Previously failing protection check now passes locally without unlocking or weakening the guard. Shared registry has no diff from a6a019f.",
+      "production_changed": false,
+      "paid_calls": 0,
+      "remote_checks": "Pending publication and CI; not a full release acceptance."
     }
   },
   "next_actions": [
     {
       "id": "recover_existing_stalled_book",
       "status": "in_progress",
-      "action": "Verify 1.9.78 CI. Integrate the existing Render workflow worker with the new Books queue and shared artifacts, including durable intermediate photos across task replacement. Add shared review approval and customer controls, then verify a hosted saved-book recovery."
+      "action": "Verify redesigned recovery CI. Then integrate existing Render workflow worker with new queue and durable intermediate files, explicit service injection, shared approval and customer controls. Verify actual hosted saved-book downloads before fresh-book acceptance."
     },
     {
       "id": "verify_editorial_budget_correction",
@@ -542,6 +553,6 @@
     }
   ],
   "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
-  "blocker": "The existing Render builder still runs workflow_task.py from main. New queue/worker binding, intermediate artifact recovery, service injection, review approval and customer UI are not yet implemented. Fresh-book no-paid model execution also needs a supported runtime.",
+  "blocker": "The local release-protection blocker is resolved by restoring the protected registry. Hosted workflow integration, intermediate-file recovery, UI/approval and no-paid writing runtime remain outstanding.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

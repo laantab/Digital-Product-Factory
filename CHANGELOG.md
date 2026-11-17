@@ -1,3 +1,17 @@
+## 1.9.79 — Isolated preserve-and-recover handoff (candidate)
+
+### What changed
+Recovery now accepts one version-checked preserve-and-recover request through the existing recovery endpoint. Its separate service validates the source before saving and queues work without running generation inside the web request.
+
+### What was fixed
+Removed the new route that required changing the protected builder registry, restoring that registry exactly. Retrying an interruption between preservation and queue creation reuses the same snapshot and book. Stale or incomplete manuscripts cannot enter the queue.
+
+### Do the steps change?
+A recovery caller can send the source version and recovery settings together. Preservation-only requests keep their existing behavior. The old candidate snapshot-to-book POST is removed before deployment.
+
+### Release gate
+Require unchanged function-lock enforcement, signed recovery, route inventory and version checks, plus real file handoff and interrupted-request recovery. Hosted worker activation and live acceptance are still outstanding.
+
 ## 1.9.78 — Signed recovery and download handoff (candidate)
 
 ### What changed
