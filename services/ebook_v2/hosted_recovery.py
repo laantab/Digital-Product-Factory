@@ -75,7 +75,8 @@ def blueprint(connection_factory):
             raise InputConflict("This book has newer saved changes. Reload before preserving it.")
         if "recovery" in body:
             books, _ = hosted()
-            snapshot_id, book = preserve_and_queue(store, books, project, current_user.id, body["recovery"])
+            snapshot_id, book = preserve_and_queue(store, books, project, current_user.id, body["recovery"],
+                dispatch=current_app.extensions["ebook_v2_hosted"].get("dispatch"))
             return jsonify(snapshot_id=snapshot_id, book_id=book["id"],
                            state=books.status(current_user.id, book["id"])["state"],
                            queued=True, generation_started=False), 202

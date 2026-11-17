@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-17T15:16:03.375886+00:00",
+  "checked_at": "2026-11-17T19:08:50.528348+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -529,6 +529,21 @@
       "paid_calls": 0,
       "new_paid_services": 0,
       "broad_checks": "Not rerun locally, per user request to focus on integration."
+    },
+    "on_demand_workflow_candidate": {
+      "version": "1.9.81",
+      "parent": "538201d7e588d6714e16b74bf2eb78443d618cf6",
+      "focused_verification": "116 passed in 13.74 seconds; signed recovery, workflow retry boundaries, version and function-lock contracts",
+      "junit_sha256": "9901b318da60d6134c6a736348d4b8dcf38eaa75b3bcfe74a1febe2ce4bc3255",
+      "implementation": "Separate recover_saved_ebook task on existing workflow; durable submission claim; unknown submission retained without automatic repeat; owner-scoped saved-manuscript worker and shared file restoration",
+      "live_render_web_commit": "19068c448be08e0da28b62b110a928afaba320a0",
+      "live_workflow_version": "wfv-dbk909vb9u1s73chajrg",
+      "prior_candidate_ci": "All eight workflows succeeded on 538201d7. Downloaded Linux Studio artifact 14342581515 matched its GitHub SHA256 and contained 135 passing JUnit cases.",
+      "postgres_new_test": "Implemented; awaiting CI",
+      "deployment": "Not yet attempted for this candidate",
+      "dashboard": "Browser requires sign-in for task launch; connector can deploy/register workflows but cannot launch a task",
+      "paid_generation_calls": 0,
+      "new_services": 0
     }
   },
   "next_actions": [
@@ -564,6 +579,6 @@
     }
   ],
   "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
-  "blocker": "Web/queue/worker/shared-file connection passes focused local integration. Production remains unconfigured: existing Render Workflow is not a polling worker. Do not claim live connection until deployed and verified. Review/approval and fresh-topic model execution remain outstanding.",
+  "blocker": "On-demand adapter implemented and 116 focused checks passed. Publish and inspect PostgreSQL CI, deploy/register recover_saved_ebook on existing workflow, then configure opt-in web and verify real saved-manuscript PDF/ZIP. Dashboard sign-in is required for unsupported task-launch controls. No live rebuild acceptance yet.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

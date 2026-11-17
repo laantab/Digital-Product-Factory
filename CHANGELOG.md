@@ -1,3 +1,17 @@
+## 1.9.81 — On-demand saved-manuscript workflow (candidate)
+
+### What changed
+The existing Render workflow registers a separate saved-manuscript recovery task. Explicit configuration lets the recovery API dispatch it after durable preservation and queue creation.
+
+### What was fixed
+On-demand execution no longer requires an always-running worker heartbeat. A database submission claim prevents repeated clicks from starting duplicate tasks. Ambiguous submissions remain saved for reconciliation instead of being resubmitted automatically. Replacement workers restore shared intermediate files and reuse completed work.
+
+### Do the steps change?
+Hosted recovery remains opt-in and processes complete saved manuscripts only. The legacy builder task is preserved. No new services or paid text models are introduced. The production export dependencies now include Word document support.
+
+### Release gate
+Require workflow submission, lost-response protection, owner isolation, replacement-worker recovery and actual PDF/ZIP equality checks. Live Render PostgreSQL/R2 acceptance is not claimed by these tests.
+
 ## 1.9.80 — Shared recovery worker connection (candidate)
 
 ### What changed

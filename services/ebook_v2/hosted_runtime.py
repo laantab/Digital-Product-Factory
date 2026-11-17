@@ -18,6 +18,7 @@ def configure(app):
     if existing:
         return existing
     services = configured_services()
+    initialize(services)
     app.extensions['ebook_v2_hosted'] = services
     return services
 
@@ -27,19 +28,28 @@ def configured_services():
     url = os.environ.get('DATABASE_URL', '')
     if not url.startswith(('postgresql://', 'postgres://')):
         raise ValueError('Hosted recovery requires PostgreSQL')
-    root = os.environ.get('FACTORY_V2_WORK_DIR', '')
+    root = os.environ.get('FACTORY_V2_WORK_DIR', '/tmp/factory-ebook-v2')
     if not root or not Path(root).is_absolute():
         raise ValueError('Hosted recovery requires an absolute worker directory')
     books = Books(Path(root)/'unused.sqlite', Path(root)/'objects', postgres_url=url)
     from .shared_work_files import install
     install(books)
     storage = R2Driver()
-    return {'books': books, 'artifacts': SharedArtifacts(books, storage)}
+    services = {'books': books, 'artifacts': SharedArtifacts(books, storage)}
+    task = os.environ.get('FACTORY_V2_WORKFLOW_TASK', '').strip()
+    if task:
+        if '/' not in task or not os.environ.get('RENDER_API_KEY'):
+            raise ValueError('Saved-book workflow dispatch is not configured')
+        from .workflow_recovery import Dispatch
+        services['dispatch'] = Dispatch(books, task)
+    return services
 
 
 def initialize(services):
     services['books'].initialize()
     services['artifacts'].initialize()
+    if services.get('dispatch'):
+        services['dispatch'].initialize()
 
 
 def tick(services):

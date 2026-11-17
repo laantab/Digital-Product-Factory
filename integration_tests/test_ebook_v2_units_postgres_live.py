@@ -60,3 +60,41 @@ def test_saved_book_queries_use_shared_postgres(tmp_path):
     assert reader.listing(uuid4().hex) == []
     assert any(row["id"] == book["id"] for row in reader.pending())
     assert history(reader, owner, book["id"])[0]["title"] == "Shared saved book"
+
+
+def test_on_demand_saved_book_with_real_postgres(tmp_path):
+    from functools import partial
+    import io
+    import shutil
+    import zipfile
+    from services.ebook_v2.books import Books
+    from services.ebook_v2.shared_artifacts import SharedArtifacts
+    from services.ebook_v2.shared_work_files import install
+    from services.ebook_v2.workflow_recovery import Dispatch, run_saved_book
+    from services.storage.local import LocalFilesystemDriver
+    from tests.ebook_v2_fixture import spec
+
+    url = os.environ['FACTORY_TEST_POSTGRES_URL']
+    parsed = urlparse(url)
+    assert parsed.hostname in {'localhost', '127.0.0.1'}
+    assert parsed.path == '/factory_ebook_recovery_test'
+    books = Books(tmp_path/'unused.sqlite', tmp_path/'worker', postgres_url=url)
+    books.initialize()
+    factory = partial(LocalFilesystemDriver, tmp_path/'shared')
+    install(books, factory)
+    artifacts = SharedArtifacts(books, factory()); artifacts.initialize()
+    calls = []
+    dispatch = Dispatch(books, 'builder/recover_saved_ebook', lambda *args: calls.append(args) or 'run-test')
+    dispatch.initialize()
+    owner = uuid4().hex
+    book = books.create(owner, 'snapshot:'+uuid4().hex, spec())
+    dispatch(owner, book['id']); dispatch(owner, book['id'])
+    assert len(calls) == 1
+    result = run_saved_book({'books': books, 'artifacts': artifacts}, owner, book['id'],
+                            pause=lambda _: shutil.rmtree(books.root, ignore_errors=True))
+    assert result['state'] == 'REVIEW'
+    pdf, _ = artifacts.download(owner, book['id'], 'ebook.pdf', preview=True)
+    package, _ = artifacts.download(owner, book['id'], 'package.zip', preview=True)
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        assert archive.testzip() is None
+        assert archive.read('ebook.pdf') == pdf
