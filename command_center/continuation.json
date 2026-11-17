@@ -518,13 +518,24 @@
       "production_changed": false,
       "paid_calls": 0,
       "remote_checks": "Pending publication and CI; not a full release acceptance."
+    },
+    "runtime_connection_candidate": {
+      "version": "1.9.80",
+      "parent": "88bcb96ae6397fc680b59850fc96c68f9eec8e42",
+      "verification": "7 focused recovery and connection tests passed in 5.46s. Web lazy binding, queue consumption, local-file loss between every worker step, and identical PDF inside shared ZIP verified with local storage/SQLite.",
+      "junit_sha256": "dae63b594dbce9f670ee2fe353aec268de8040374c89593f1bf0bb89c9846992",
+      "implementation": "Explicit PostgreSQL/R2 service factory, independent polling worker, durable intermediate-file wrappers, opt-in web binding.",
+      "deployment": "NOT DEPLOYED. Existing Render workflow does not run this polling worker. Need independent worker activation or on-demand workflow adapter.",
+      "paid_calls": 0,
+      "new_paid_services": 0,
+      "broad_checks": "Not rerun locally, per user request to focus on integration."
     }
   },
   "next_actions": [
     {
       "id": "recover_existing_stalled_book",
       "status": "in_progress",
-      "action": "Verify redesigned recovery CI. Then integrate existing Render workflow worker with new queue and durable intermediate files, explicit service injection, shared approval and customer controls. Verify actual hosted saved-book downloads before fresh-book acceptance."
+      "action": "Activate a supported hosted execution path: prefer adapting the existing Render Workflow to avoid adding a paid always-on worker. The new hosted_runtime polling worker is source/tested only. Verify real PostgreSQL/R2 and remote downloads. Finish review/approval UI and fresh-topic model runtime."
     },
     {
       "id": "verify_editorial_budget_correction",
@@ -553,6 +564,6 @@
     }
   ],
   "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
-  "blocker": "The local release-protection blocker is resolved by restoring the protected registry. Hosted workflow integration, intermediate-file recovery, UI/approval and no-paid writing runtime remain outstanding.",
+  "blocker": "Web/queue/worker/shared-file connection passes focused local integration. Production remains unconfigured: existing Render Workflow is not a polling worker. Do not claim live connection until deployed and verified. Review/approval and fresh-topic model execution remain outstanding.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

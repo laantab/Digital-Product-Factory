@@ -1,3 +1,17 @@
+## 1.9.80 — Shared recovery worker connection (candidate)
+
+### What changed
+The hosted recovery API can explicitly load PostgreSQL and R2 services from deployment configuration. A separate recovery worker consumes saved-manuscript jobs and publishes verified PDF and ZIP downloads.
+
+### What was fixed
+Intermediate cover, photograph and export files are copied and verified in shared storage before their work units complete. Replacement workers restore those files before continuing; valid chapters do not need regeneration.
+
+### Do the steps change?
+Hosted recovery remains opt-in. Initialize its separate tables and start the independent worker before enabling the website connection. This worker processes supplied manuscripts only and never starts a text model.
+
+### Release gate
+A focused web-to-queue-to-worker-to-download test removes local files between every step and verifies that the ZIP contains the same PDF. Live Render deployment, real R2/PostgreSQL acceptance and fresh-topic writing remain outstanding.
+
 ## 1.9.79 — Isolated preserve-and-recover handoff (candidate)
 
 ### What changed

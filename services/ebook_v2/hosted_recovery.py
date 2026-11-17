@@ -100,6 +100,9 @@ def blueprint(connection_factory):
     def hosted():
         services = current_app.extensions.get("ebook_v2_hosted")
         if not services:
+            from .hosted_runtime import configure
+            services = configure(current_app)
+        if not services:
             raise RuntimeError("Hosted recovery is not configured")
         return services["books"], services["artifacts"]
 
