@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-17T19:08:50.528348+00:00",
+  "checked_at": "2026-11-17T20:07:17.678Z",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -539,8 +539,17 @@
       "live_render_web_commit": "19068c448be08e0da28b62b110a928afaba320a0",
       "live_workflow_version": "wfv-dbk909vb9u1s73chajrg",
       "prior_candidate_ci": "All eight workflows succeeded on 538201d7. Downloaded Linux Studio artifact 14342581515 matched its GitHub SHA256 and contained 135 passing JUnit cases.",
-      "postgres_new_test": "Implemented; awaiting CI",
-      "deployment": "Not yet attempted for this candidate",
+      "postgres_new_test": "All 12 PostgreSQL cases passed in run 44155641716 (3.06s). Workflow conclusion failed only because count assertion still expected 11; corrected to 12 in this checkpoint.",
+      "deployment": {
+        "workflow_version": "wfv-dbuadb3m8hqs73f8lkng",
+        "status": "ready",
+        "registered_tasks": [
+          "build_ebook",
+          "recover_saved_ebook"
+        ],
+        "web_deployed": false,
+        "live_recovery_run": false
+      },
       "dashboard": "Browser requires sign-in for task launch; connector can deploy/register workflows but cannot launch a task",
       "paid_generation_calls": 0,
       "new_services": 0
@@ -579,6 +588,6 @@
     }
   ],
   "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
-  "blocker": "On-demand adapter implemented and 116 focused checks passed. Publish and inspect PostgreSQL CI, deploy/register recover_saved_ebook on existing workflow, then configure opt-in web and verify real saved-manuscript PDF/ZIP. Dashboard sign-in is required for unsupported task-launch controls. No live rebuild acceptance yet.",
+  "blocker": "Workflow candidate deployed and both tasks registered. Web still on 19068c4, hosted recovery not enabled. Dashboard authentication was canceled; live task launch and actual production PDF/ZIP verification remain blocked. Local execution environment disappeared during sign-in wait; broader local Studio result is unknown. Do not claim completion or ongoing engineering.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
