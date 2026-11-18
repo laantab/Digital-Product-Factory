@@ -4,6 +4,7 @@ from xml.sax.saxutils import escape
 
 
 def inline(text):
+    text = re.sub(r'^\s{0,3}#{1,6}\s+', '', text)
     text = escape(text)
     text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
     text = re.sub(r'__(.+?)__', r'<b>\1</b>', text)

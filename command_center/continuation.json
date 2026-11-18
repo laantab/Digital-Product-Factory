@@ -589,9 +589,10 @@
       "paid_generation": false
     },
     "layout_correction_candidate": {
-      "version": "1.9.82",
-      "verification": "20 layout/shared handoff/protection cases passed, then corrected bold heading mapping passed its real-PDF source-retention regression.",
-      "scope": "PDF/print typography only; original manuscript unchanged; export policy pdf-zip-6 versions retained editions.",
+      "version": "1.9.83",
+      "verification": "20 actual-PDF typography, source retention, shared-file handoff and protected-function cases passed in 14.78s. Includes Markdown in both overview bullets and body text.",
+      "prior_live_correction": "1.9.82 completed export but visual-text scan found three overview heading markers and bold markers in one overview; not approved.",
+      "scope": "PDF/print formatting only; exact saved manuscript retained; export policy pdf-zip-7",
       "deployment": "pending publication"
     }
   },
@@ -628,6 +629,6 @@
     }
   ],
   "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
-  "blocker": "Web and worker deployed and actual production recovery/PDF/ZIP bytes verified. Visual review rejected literal Markdown formatting. Deploy 1.9.82 correction, retain original project11 and rejected edition, increment review copy24 rendering revision only, then recover corrected edition and review actual pages. Hosted fresh-topic writing and customer review UI remain incomplete.",
+  "blocker": "Live web/worker and actual saved manuscript production PDF/ZIP path verified. Deploy 1.9.83 overview/body formatting correction, retain prior editions, recover review copy24 with rendering revision1.9.83 and inspect final output. Hosted fresh-topic writing and customer recovery/review UI remain incomplete.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

@@ -136,7 +136,8 @@ def render_pdf(book,print_mode=False,root=None,only_cover=False):
             elif visual.get("overview"):
                 story.append(Paragraph("At a glance",ParagraphStyle("overview-title",parent=small,fontName="V2Head")))
                 for point in visual["overview"]:
-                    story.append(Paragraph(escape(point),small,bulletText="•"))
+                    from .manuscript_layout import inline
+                    story.append(Paragraph(inline(point),small,bulletText="•"))
                 story.append(Spacer(1,10))
         from .manuscript_layout import flowables
         story.extend(flowables(chapter["text"], body, accent))

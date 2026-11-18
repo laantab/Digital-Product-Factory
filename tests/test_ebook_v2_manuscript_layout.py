@@ -10,6 +10,7 @@ def test_saved_markdown_renders_as_headings_and_emphasis_without_changing_prose(
     book['chapters'][0]['text'] = ('### **A practical starting point**\n\n'
         '**Notice your breathing.** Keep *gentle attention* on the next breath.\n\n'
         '- First useful action\n- Second useful action\n\n' + book['chapters'][0]['text'])
+    book['visuals'] = [{'overview':['### A practical starting point', 'The most **common** parts of being a **beginner**.']}, {}]
     original = copy.deepcopy(book)
     pdf = render_pdf(book)
     with fitz.open(stream=pdf, filetype='pdf') as doc:

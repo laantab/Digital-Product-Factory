@@ -1,3 +1,17 @@
+## 1.9.83 — Format retained chapter overviews
+
+### What changed
+Source-derived chapter overview bullets use the same safe emphasis formatting as the manuscript.
+
+### What was fixed
+Final live review found Markdown markers in overview bullets even after the chapter body was corrected. Heading markers are removed from overview display without changing the saved manuscript or its substantive text.
+
+### Do the steps change?
+Existing editions remain retained. Review the new export before approving it.
+
+### Release gate
+The actual-PDF regression now covers Markdown inside both overview bullets and chapter text, verifies bold fonts and checks complete source-text retention.
+
 ## 1.9.82 — Saved manuscript formatting in rebuilt PDFs
 
 ### What changed
