@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-18T18:25:05.657127+00:00",
+  "checked_at": "2026-11-18T18:42:09.386Z",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -606,13 +606,62 @@
       "original_unchanged": true,
       "body_and_overview_markers_absent": true,
       "visual_review": "All45 pages inspected in four sheets. Headings/emphasis/bullets readable, no clipping or overlaps found. Activity table on page42 still printed pipe-separated source; do not approve this edition."
+    },
+    "live_saved_manuscript_final": {
+      "checked_at": "2026-11-18T18:42:09.386Z",
+      "runtime_version": "1.9.84",
+      "source_commit": "33f132396c6985e106dd4c7995778ef8540c1d67",
+      "web_deploy": "dep-dbuv0gjm8hqs738m25n0",
+      "web_status": "live",
+      "workflow_version": "wfv-dbuv0grm8hqs738m269g",
+      "workflow_status": "ready",
+      "source_branch_for_both": "rebuild/ebook-engine-v2-20261102",
+      "task_run": "trn-0b54gdbuv1e1ht6c000cloot0",
+      "task_status": "completed",
+      "retries": 0,
+      "source_project": 11,
+      "source_version": 60,
+      "original_unchanged": true,
+      "review_copy_project": 24,
+      "review_copy_version": 3,
+      "book_id": "52485f7566d34c889e95e40763454323",
+      "snapshot_id": "5b79a1a72e7248e0a2d965701b537203",
+      "book_state": "REVIEW",
+      "chapters": 9,
+      "photos": 4,
+      "pages": 45,
+      "pdf_bytes": 1896417,
+      "zip_bytes": 6608436,
+      "pdf_sha256": "98881ad703b7b28a2a538e2ce7f8b496ee7788be5ce6523ccd75c191130c2065",
+      "zip_sha256": "34a3233aef29e5cefcb3196250b6568aedf2a548ffbb6f13967541cf439d1432",
+      "actual_remote_downloads": true,
+      "zip_crc": true,
+      "embedded_pdf_matches": true,
+      "full_source_text_present": true,
+      "raw_markdown_markers_absent": true,
+      "visual_review": "All45 pages reviewed in preceding identical-layout edition; corrected table on page42 inspected at readable size in final edition. Headings, emphasis, bullets and table render cleanly; no clipping or overlap found. This is layout/byte acceptance, not factual/originality or commercial certification.",
+      "focused_tests": "20 passed in16.73s on final table correction",
+      "ci": "Final source PostgreSQL and account-isolation workflows passed; remaining six workflows were still running at last inspection. No full final-source release pass claimed.",
+      "paid_generation_calls": 0,
+      "new_paid_services": 0,
+      "pdf_library_file_id": "libfile_f9b429fced74819189d174900244000b",
+      "zip_library_file_id": "libfile_8ed2522b4158819180dcd76bd473137b",
+      "limits": [
+        "Live recovery invoked through authorized administrative preservation/handoff; normal signed-in customer button/download acceptance not completed.",
+        "Hosted fresh-topic no-paid model runtime and customer recovery/review UI remain incomplete."
+      ]
     }
   },
   "next_actions": [
     {
+      "id": "finish_customer_recovery_controls",
+      "status": "pending",
+      "action": "Implement and verify signed-in recovery/review/approval UI and actual customer HTTP download path. Reuse final accepted-layout files; do not regenerate accepted chapters or repeat photo acquisition."
+    },
+    {
       "id": "recover_existing_stalled_book",
-      "status": "in_progress",
-      "action": "Activate a supported hosted execution path: prefer adapting the existing Render Workflow to avoid adding a paid always-on worker. The new hosted_runtime polling worker is source/tested only. Verify real PostgreSQL/R2 and remote downloads. Finish review/approval UI and fresh-topic model runtime."
+      "status": "completed_for_selected_manuscript",
+      "action": "Mindfulness in Motion original project11 preserved; separate account-owned review copy24 recovered through live PostgreSQL/R2/Render workflow. Final45-page PDF and identical embedded PDF in ZIP downloaded and verified. Original remained unchanged; review files delivered without auto-approval."
     },
     {
       "id": "verify_editorial_budget_correction",
@@ -640,7 +689,7 @@
       "action": "Do not deploy the loopback Studio as the hosted Factory. Before merge/deploy completion, implement and verify a supported hosted integration using shared authenticated customer state, PostgreSQL/R2-compatible storage and an explicitly approved no-paid-generation runtime; then verify actual hosted PDF and ZIP downloads."
     }
   ],
-  "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
-  "blocker": "Saved-manuscript live integration and actual remote PDF/ZIP bytes verified. Finish table formatting1.9.84, inspect final review edition, preserve original and earlier editions. Hosted fresh-topic writing and customer recovery/review UI remain incomplete.",
+  "completion": "Live saved-manuscript backend recovery and actual remote PDF/ZIP bytes verified on1.9.84. Full one-button Factory completion is NOT claimed.",
+  "blocker": "No access/deployment blocker remains for saved-manuscript backend. Remaining: customer recovery/review controls and signed-in download acceptance; supported no-paid hosted fresh-topic writing; final-source full release checks. Final files are REVIEW, not customer-approved.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
