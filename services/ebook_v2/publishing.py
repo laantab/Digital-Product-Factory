@@ -54,9 +54,12 @@ def render_pdf(book,print_mode=False,root=None,only_cover=False):
     from reportlab.platypus.tableofcontents import TableOfContents
     fonts = Path(__file__).resolve().parents[1]/"fonts"
     for name,filename in (("V2Body","LiberationSerif-Regular.ttf"),
-                          ("V2Head","LiberationSans-Bold.ttf"),("V2Sans","LiberationSans-Regular.ttf")):
+                          ("V2Head","LiberationSans-Bold.ttf"),("V2Sans","LiberationSans-Regular.ttf"),("V2BodyBold","LiberationSerif-Bold.ttf"),("V2BodyItalic","LiberationSerif-Italic.ttf"),("V2BodyBoldItalic","LiberationSerif-BoldItalic.ttf"),("V2SansBold","LiberationSans-Bold.ttf"),("V2SansItalic","LiberationSans-Italic.ttf"),("V2SansBoldItalic","LiberationSans-BoldItalic.ttf")):
         if name not in pdfmetrics.getRegisteredFontNames():
             pdfmetrics.registerFont(TTFont(name,str(fonts/filename)))
+    pdfmetrics.registerFontFamily('V2Head', normal='V2Head', bold='V2Head', italic='V2SansBoldItalic', boldItalic='V2SansBoldItalic')
+    pdfmetrics.registerFontFamily('V2Body', normal='V2Body', bold='V2BodyBold', italic='V2BodyItalic', boldItalic='V2BodyBoldItalic')
+    pdfmetrics.registerFontFamily('V2Sans', normal='V2Sans', bold='V2SansBold', italic='V2SansItalic', boldItalic='V2SansBoldItalic')
     accent,paper = THEMES[book["theme"]]
     accent,paper = colors.HexColor(accent),colors.HexColor(paper)
     if print_mode:accent,paper=colors.black,colors.white
@@ -135,8 +138,8 @@ def render_pdf(book,print_mode=False,root=None,only_cover=False):
                 for point in visual["overview"]:
                     story.append(Paragraph(escape(point),small,bulletText="•"))
                 story.append(Spacer(1,10))
-        for paragraph in chapter["text"].split("\n\n"):
-            story.append(Paragraph(escape(paragraph).replace("\n","<br/>"),body))
+        from .manuscript_layout import flowables
+        story.extend(flowables(chapter["text"], body, accent))
     photos=[v["photo"] for v in book.get("visuals",[]) if v.get("photo")]
     if photos and not only_cover:
         from .visuals import credit

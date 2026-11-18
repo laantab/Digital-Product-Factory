@@ -1,3 +1,17 @@
+## 1.9.82 — Saved manuscript formatting in rebuilt PDFs
+
+### What changed
+Saved Markdown headings, emphasis and bullet lists render as book typography in the rebuilt PDF and print interior.
+
+### What was fixed
+Live manuscript review found literal heading and bold markers printed on the page. Rendering now interprets those markers while retaining the exact saved chapter text. The export policy is versioned so earlier work is not silently replaced.
+
+### Do the steps change?
+Review the recovered edition before approving it. Existing saved books and original exports remain unchanged.
+
+### Release gate
+Verify actual PDF typography, complete source-text retention, shared PDF/ZIP identity and protected function contracts. This correction does not establish hosted fresh-topic generation.
+
 ## 1.9.81 — On-demand saved-manuscript workflow (candidate)
 
 ### What changed

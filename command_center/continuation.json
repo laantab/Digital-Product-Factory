@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-17T20:07:17.678Z",
+  "checked_at": "2026-11-18T18:25:05.657127+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -562,6 +562,37 @@
         "web": "unchanged at 19068c4",
         "postgres_ci": "44165922925 succeeded"
       }
+    },
+    "live_saved_manuscript_recovery": {
+      "web_deploy": "dep-dbuulsfvd19c73b88r70",
+      "workflow_version": "wfv-dbuumdm8bjmc73ak4jo0",
+      "source_commit": "afc136833b5f1cb16dec5adf08abe2e8d85f224f",
+      "source_project": 11,
+      "source_version": 60,
+      "source_sha256": "410d23423c8b6e52c9523e26214ef27f4c30525e6b4a9bc9014c01eca29a0ad8",
+      "original_unchanged": true,
+      "review_copy_project": 24,
+      "review_copy_owner": 2,
+      "book_id": "87a57d99212241b688053d673716f829",
+      "snapshot_id": "6ebfd610c8894840a48b9f4678d4ba06",
+      "task_run": "trn-0b54gdbuuogejklu000ead97g",
+      "result": "completed, no retries; REVIEW, not approved",
+      "chapters": 9,
+      "photographs": 4,
+      "pages": 43,
+      "pdf_sha256": "f8896b4b34553e9df14fb27417b52a02e476488652e50ca105c83b2535ccf79b",
+      "zip_sha256": "37705f6ab01470d2780c5c6be3d44fe7efe6a8e3ec24431f23f45780507b1876",
+      "actual_remote_downloads_verified": true,
+      "zip_crc": true,
+      "embedded_pdf_matches": true,
+      "visual_rejection": "Literal Markdown headings and emphasis markers in supplied manuscript. Do not approve this edition.",
+      "paid_generation": false
+    },
+    "layout_correction_candidate": {
+      "version": "1.9.82",
+      "verification": "20 layout/shared handoff/protection cases passed, then corrected bold heading mapping passed its real-PDF source-retention regression.",
+      "scope": "PDF/print typography only; original manuscript unchanged; export policy pdf-zip-6 versions retained editions.",
+      "deployment": "pending publication"
     }
   },
   "next_actions": [
@@ -597,6 +628,6 @@
     }
   ],
   "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
-  "blocker": "Correct recovery workflow restoration requested after manual latest deployment loaded old main. Verify wfv-dbub8khsrm7s73ebeb2g ready and registered tasks. Web remains old main. Dashboard task launch and live PDF/ZIP test remain unverified.",
+  "blocker": "Web and worker deployed and actual production recovery/PDF/ZIP bytes verified. Visual review rejected literal Markdown formatting. Deploy 1.9.82 correction, retain original project11 and rejected edition, increment review copy24 rendering revision only, then recover corrected edition and review actual pages. Hosted fresh-topic writing and customer review UI remain incomplete.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
