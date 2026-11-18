@@ -1,3 +1,17 @@
+## 1.9.84 — Render saved manuscript comparison tables
+
+### What changed
+Markdown tables in saved manuscripts render as aligned book tables with a distinct header row.
+
+### What was fixed
+The live review found a pipe-delimited activity table printed as plain text. The PDF renderer now lays out its cells while retaining every source word and the unchanged manuscript.
+
+### Do the steps change?
+Review the new retained export. Earlier editions and original books remain unchanged.
+
+### Release gate
+The real-PDF regression requires headings, emphasis, overview bullets and tables to render without literal Markdown markers, while complete source-text checks still pass.
+
 ## 1.9.83 — Format retained chapter overviews
 
 ### What changed

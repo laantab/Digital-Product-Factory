@@ -589,11 +589,23 @@
       "paid_generation": false
     },
     "layout_correction_candidate": {
-      "version": "1.9.83",
-      "verification": "20 actual-PDF typography, source retention, shared-file handoff and protected-function cases passed in 14.78s. Includes Markdown in both overview bullets and body text.",
-      "prior_live_correction": "1.9.82 completed export but visual-text scan found three overview heading markers and bold markers in one overview; not approved.",
-      "scope": "PDF/print formatting only; exact saved manuscript retained; export policy pdf-zip-7",
+      "version": "1.9.84",
+      "verification": "20 real-PDF source retention, body/overview/table typography, shared-file and protected-function cases passed in16.73 seconds.",
+      "scope": "PDF and print layout only; exact manuscript retained; export policy pdf-zip-8.",
       "deployment": "pending publication"
+    },
+    "live_formatting_review": {
+      "version": "1.9.83",
+      "commit": "a6cd010f02cc9cbc228159f0d88e449e925fe778",
+      "task_run": "trn-0b54gdbuuur1ht6c000cloosg",
+      "book_id": "09314c8eabd645ccbbd11ae62485740a",
+      "pages": 45,
+      "pdf_sha256": "1e7469a5c4e3f31a44f08092931e139a37689f70a3463f9ae76b2cda3608d86f",
+      "zip_sha256": "93dadc822c1d0a9945c45a8a259434691002ec5b915f2ec3aca04efd8522d244",
+      "remote_bytes_verified": true,
+      "original_unchanged": true,
+      "body_and_overview_markers_absent": true,
+      "visual_review": "All45 pages inspected in four sheets. Headings/emphasis/bullets readable, no clipping or overlaps found. Activity table on page42 still printed pipe-separated source; do not approve this edition."
     }
   },
   "next_actions": [
@@ -629,6 +641,6 @@
     }
   ],
   "completion": "Full corrected v1.9.74 release gate passed. All 1192 unchanged protected cases matched the baseline. Hosted generation and production acceptance remain outstanding.",
-  "blocker": "Live web/worker and actual saved manuscript production PDF/ZIP path verified. Deploy 1.9.83 overview/body formatting correction, retain prior editions, recover review copy24 with rendering revision1.9.83 and inspect final output. Hosted fresh-topic writing and customer recovery/review UI remain incomplete.",
+  "blocker": "Saved-manuscript live integration and actual remote PDF/ZIP bytes verified. Finish table formatting1.9.84, inspect final review edition, preserve original and earlier editions. Hosted fresh-topic writing and customer recovery/review UI remain incomplete.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
