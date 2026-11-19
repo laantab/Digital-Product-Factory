@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-19T18:31:23.043130+00:00",
+  "checked_at": "2026-11-19T18:32:09.620831+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -653,7 +653,7 @@
     },
     "fresh_book_user_test_20261119": {
       "request_id": "holiday-guest-home-test-20261119-01",
-      "status": "prepared; publish to request one run",
+      "status": "in_progress: runtime installation; manuscript generation pending",
       "topic": "Preparing a small home for holiday guests without buying new storage",
       "chapters": 4,
       "minimum_words_per_chapter": 650,
@@ -662,14 +662,19 @@
       "paid_generation_calls": 0,
       "production_source_changed": false,
       "hosted_factory_verified": false,
-      "remaining": "Observe requested run; inspect manuscript and rendered pages and verify final PDF/ZIP. Live website fresh-topic runtime remains unconnected."
+      "remaining": "Observe requested run; inspect manuscript and rendered pages and verify final PDF/ZIP. Live website fresh-topic runtime remains unconnected.",
+      "source_commit": "4a0da0eda56e001b7755c0063d5ad115ea867a2e",
+      "run_id": 44588736234,
+      "job_id": 135788651587,
+      "url": "https://github.com/laantab/Digital-Product-Factory/actions/runs/44588736234",
+      "preflight": "Remote brief validation and all5 no-paid request tests passed; official CPU runtime installation in progress. No book completion claimed."
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
-      "status": "prepared",
-      "action": "Run the explicitly authorized holiday guest home brief once using the existing free-model test workflow. Do not repeat generation after interruptions until the run outcome is inspected. Deliver reviewed output and distinguish runner test from live Factory integration."
+      "status": "external_run_in_progress",
+      "action": "Inspect run44588736234 before any new generation. If it completes, retrieve retained manuscript/PDF/ZIP, review actual text and pages, verify bytes and save user deliverables. This is a runner test, not hosted customer UI acceptance."
     },
     {
       "id": "finish_customer_recovery_controls",
