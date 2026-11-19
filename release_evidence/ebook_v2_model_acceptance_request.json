@@ -1,24 +1,15 @@
 {
-  "candidate_commit": "401bc7e1ee4148cd94be75fc4392423e41585e96",
-  "requested_at": "2026-11-02T16:12:00-08:00",
-  "model": "qwen3:8b",
-  "chapters": 8,
-  "min_words_per_chapter": 650,
+  "request_id": "holiday-guest-home-test-20261119-01",
+  "requested_at": "2026-11-19",
   "paid_providers": false,
-  "reason": "Verify complete paragraphs and the bounded two-cycle editorial recovery after run 41537196386 retained two chapters but exhausted the prior five-attempt limit.",
-  "verification": {
-    "studio_run": 41549658652,
-    "windows_cases": 104,
-    "linux_cases": 104,
-    "local_studio_and_protection_cases": 104,
-    "version_management_cases": 31,
-    "broader_regression_runs": [
-      41549658542,
-      41549658587,
-      41549658588,
-      41549658540,
-      41549658532
-    ]
+  "reason": "Owner authorized one fresh-topic test using the existing generator and editorial review. Runner test only; does not establish hosted Factory integration.",
+  "spec": {
+    "topic": "Preparing a small home for holiday guests without buying new storage",
+    "audience": "Busy adults with limited space who want a practical, welcoming home",
+    "outcome": "Prepare the entryway, guest sleeping space and shared rooms using existing supplies, with room-specific checklists and a realistic preparation schedule",
+    "author": "Lonnie Brown",
+    "chapter_count": 4,
+    "min_words": 650
   },
-  "status": "requested once; no acceptance claimed"
+  "status": "prepared; generation not started"
 }

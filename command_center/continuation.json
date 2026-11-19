@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-18T18:42:09.386Z",
+  "checked_at": "2026-11-19T18:31:23.043130+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -650,9 +650,27 @@
         "Live recovery invoked through authorized administrative preservation/handoff; normal signed-in customer button/download acceptance not completed.",
         "Hosted fresh-topic no-paid model runtime and customer recovery/review UI remain incomplete."
       ]
+    },
+    "fresh_book_user_test_20261119": {
+      "request_id": "holiday-guest-home-test-20261119-01",
+      "status": "prepared; publish to request one run",
+      "topic": "Preparing a small home for holiday guests without buying new storage",
+      "chapters": 4,
+      "minimum_words_per_chapter": 650,
+      "verification": "15 brief, local-provider and editorial cases passed in12.44s; 9 unchanged function-lock contracts passed in0.24s; preflight creates no directory or book.",
+      "runtime": "existing public-repository GitHub-hosted CPU test runner; existing qwen3:8b and ebook_v2 writer/reviewer/exporter",
+      "paid_generation_calls": 0,
+      "production_source_changed": false,
+      "hosted_factory_verified": false,
+      "remaining": "Observe requested run; inspect manuscript and rendered pages and verify final PDF/ZIP. Live website fresh-topic runtime remains unconnected."
     }
   },
   "next_actions": [
+    {
+      "id": "fresh_book_user_test_20261119",
+      "status": "prepared",
+      "action": "Run the explicitly authorized holiday guest home brief once using the existing free-model test workflow. Do not repeat generation after interruptions until the run outcome is inspected. Deliver reviewed output and distinguish runner test from live Factory integration."
+    },
     {
       "id": "finish_customer_recovery_controls",
       "status": "pending",
@@ -690,6 +708,6 @@
     }
   ],
   "completion": "Live saved-manuscript backend recovery and actual remote PDF/ZIP bytes verified on1.9.84. Full one-button Factory completion is NOT claimed.",
-  "blocker": "No access/deployment blocker remains for saved-manuscript backend. Remaining: customer recovery/review controls and signed-in download acceptance; supported no-paid hosted fresh-topic writing; final-source full release checks. Final files are REVIEW, not customer-approved.",
+  "blocker": "Live website has no supported no-paid fresh-topic writer. Existing public GitHub runner can exercise the real generator for the authorized fresh-book test without new services; not hosted website acceptance.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

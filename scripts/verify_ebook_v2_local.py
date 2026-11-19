@@ -25,13 +25,48 @@ def save(path,value):
     temporary.replace(path)
 
 
+def requested_spec(path, chapters, minimum):
+    """A test brief controls content, never provider, credentials or runtime."""
+    if path:
+        request=json.loads(Path(path).read_text(encoding='utf-8'))
+        if not isinstance(request,dict) or request.get('paid_providers') is not False:
+            raise ValueError('A test request must explicitly disable paid providers')
+        spec=request.get('spec')
+        allowed={'topic','audience','outcome','author','chapter_count','min_words'}
+        if not isinstance(spec,dict) or set(spec)!=allowed:
+            raise ValueError('Supply only the six book brief fields')
+        spec=dict(spec)
+    else:
+        spec={'topic':'Organizing a simple weekly plan for a small volunteer team',
+            'audience':'Coordinators of small community volunteer groups',
+            'outcome':'Create a clear weekly task list and run a short progress check-in',
+            'author':'Engineering acceptance fixture','chapter_count':chapters,'min_words':minimum}
+    for name,limit in (('topic',2000),('audience',500),('outcome',1000),('author',100)):
+        if not isinstance(spec[name],str) or not 3<=len(spec[name].strip())<=limit:
+            raise ValueError('Invalid '+name+' in book brief')
+    if type(spec['chapter_count']) is not int or not 2<=spec['chapter_count']<=20:
+        raise ValueError('Choose two to twenty chapters')
+    if type(spec['min_words']) is not int or spec['min_words'] not in (450,650,1000):
+        raise ValueError('Choose 450, 650 or 1000 words per chapter')
+    return {**spec,'source':'ollama','mode':'automatic','research_acknowledged':True,
+            'require_photos':False}
+
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--data',required=True)
     parser.add_argument('--chapters',type=int,default=8)
     parser.add_argument('--min-words',type=int,default=650)
     parser.add_argument('--deadline',type=int,default=5400)
+    parser.add_argument('--request',help='Explicit no-paid-generation book brief JSON')
+    parser.add_argument('--prepare-only',action='store_true',help='Validate the brief without starting any service or book')
     args=parser.parse_args()
+    try:spec=requested_spec(args.request,args.chapters,args.min_words)
+    except (ValueError,OSError) as exc:parser.error(str(exc))
+    if args.prepare_only:
+        print(json.dumps({'spec':spec,'generation_started':False,'paid_generation_calls':0},indent=2))
+        return
+    args.chapters,args.min_words=spec['chapter_count'],spec['min_words']
     root=Path(args.data).resolve()
     if root.exists() and any(root.iterdir()):parser.error('Acceptance requires a fresh empty directory')
     root.mkdir(parents=True,exist_ok=True)
@@ -49,11 +84,6 @@ def main():
     before={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
     if not ready():raise RuntimeError('Install and start the selected local model before acceptance')
     books=Books(root/'qa.sqlite',root/'objects');books.initialize()
-    spec={'source':'ollama','topic':'Organizing a simple weekly plan for a small volunteer team',
-        'audience':'Coordinators of small community volunteer groups',
-        'outcome':'Create a clear weekly task list and run a short progress check-in',
-        'author':'Engineering acceptance fixture','chapter_count':args.chapters,
-        'min_words':args.min_words,'mode':'automatic','research_acknowledged':True}
     owner='engineering-acceptance'
     book=books.create(owner,'fresh-'+uuid.uuid4().hex,spec)
     stopped=Event()
@@ -132,7 +162,8 @@ def main():
             'pages':pages,'file_sha256':checksums,'units':units,'validated_repair_lessons':lessons,
             'default_size':args.chapters==8 and args.min_words==650,
             'model':os.environ.get('FACTORY_V2_OLLAMA_MODEL','qwen3:8b'),
-            'paid_generation_calls':0,'market_demand':'unassessed','external_fact_originality_certification':False}
+            'paid_generation_calls':0,'brief':spec,'market_demand':'unassessed',
+            'hosted_factory_acceptance':False,'external_fact_originality_certification':False}
         save(root/'summary.json',summary)
         print('TECHNICAL_LOCAL_ACCEPTANCE',json.dumps(summary),flush=True)
         print('BEGIN ENGINEERING MANUSCRIPT NOT FOR SALE',flush=True)

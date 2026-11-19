@@ -1,4 +1,4 @@
-name: Fresh local Book Studio model acceptance
+name: Fresh Book Studio test — no paid generation
 
 on:
   push:
@@ -40,8 +40,12 @@ jobs:
           python-version: '3.12'
       - name: Compile the engineering acceptance harness
         run: python -m py_compile scripts/verify_ebook_v2_local.py
+      - name: Validate the requested book before installing a model
+        run: python scripts/verify_ebook_v2_local.py --data "${{ runner.temp }}/studio-acceptance" --request release_evidence/ebook_v2_model_acceptance_request.json --prepare-only
       - name: Install isolated Studio dependencies
-        run: python -m pip install -r requirements-ebook-v2.txt
+        run: python -m pip install -r requirements-ebook-v2.txt pytest==8.4.1
+      - name: Verify no-paid request controls before generation
+        run: python -m pytest -q tests/test_ebook_v2_model_request.py
       - name: Install checksum verified official CPU runtime
         shell: bash
         run: |
@@ -62,8 +66,8 @@ jobs:
           done
           curl --noproxy '*' -fsS http://127.0.0.1:11434/api/tags > /dev/null
           "$RUNNER_TEMP/ollama/bin/ollama" pull qwen3:8b
-      - name: Verify a fresh eight chapter book without operator repairs
-        run: python scripts/verify_ebook_v2_local.py --data "${{ runner.temp }}/studio-acceptance" --chapters 8 --min-words 650 --deadline 5400
+      - name: Create the requested book using existing writing review and export stages
+        run: python scripts/verify_ebook_v2_local.py --data "${{ runner.temp }}/studio-acceptance" --request release_evidence/ebook_v2_model_acceptance_request.json --deadline 5400
       - name: Report local service diagnostics on failure
         if: failure()
         shell: bash
@@ -86,4 +90,4 @@ jobs:
             ${{ runner.temp }}/studio-acceptance/manuscript.docx
             ${{ runner.temp }}/studio-acceptance/page-*.png
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 30
