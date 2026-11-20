@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-20T13:15:25.760964+00:00",
+  "checked_at": "2026-11-20T13:39:03.704713+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -877,10 +877,10 @@
     },
     "approved_continuation_20261120": {
       "version": "1.9.90",
-      "status": "running; assisted first chapter passed its actual independent recheck, second recheck running",
+      "status": "completed assisted hosted review edition; actual remote PDF/ZIP downloaded and visually inspected",
       "original_run": "trn-0b54gdbvsceac2s6c73anil30",
       "book_id": "8dce9a74cd89435397a4341427418698",
-      "next_action": "Observe exact run trn-0b54gdc047n1gg92c73djct00; no new paid runs or allowance resets. First assisted recheck completed; three further chapter reviews and export remain. Inspect actual artifacts and every page, preserve all11 originals and disclose assisted provenance. Normal signed-in browser acceptance remains unverified.",
+      "next_action": "Preserve delivered assisted review files. Fix CPU-expensive full-chapter corrections using a measured targeted-edit approach, then finish customer Create/Resume/approval controls and normal signed-in browser acceptance. No new paid task or allowance reset is authorized. Keep existing books and working features intact; do not claim fully automatic or commercial completion.",
       "focused_tests": "21 worker, real fixture PDF/ZIP continuation, independent budget claims, existing recovery and protection cases passed in18.22s. Version and diff checks passed.",
       "superseded_worker_version": "wfv-dc041iss728c73ce6160",
       "superseded_source": "57c899bb989fce795de41247d462875ce952e3a6",
@@ -928,36 +928,66 @@
         "generation_calls_started_by_admin_intervention": 0,
         "review_required": true,
         "limitation": "This is an assisted edition, not proof of fully automatic topic generation."
-      }
+      },
+      "task_status": "completed",
+      "completed_at": "2026-11-20T13:31:09.600831Z",
+      "book_state": "REVIEW",
+      "chapters_independently_reviewed": 4,
+      "pages": 14,
+      "total_words": 3412,
+      "files": {
+        "ebook.pdf": {
+          "size": 65883,
+          "sha256": "0aa3ab6a54581585922b5d283e00b78204bcbfd5425678cc78d7a192ae25c773"
+        },
+        "package.zip": {
+          "size": 366752,
+          "sha256": "5f2e043c450b75a440cec8c4a2b13e1af59a1258879fc557df7c76ec92640cab"
+        }
+      },
+      "pdf_library_file_id": "libfile_3a70bc1537a88191a92e3ae9d8569d59",
+      "zip_library_file_id": "libfile_3a02a6fd8df881918c1f8412b458c081",
+      "evidence_file": "release_evidence/ebook_v2_hosted_assisted_review_20261120.json",
+      "visual_review": "All14 actual rendered pages inspected. No clipping, overlaps or raw Markdown found. Plain typography-only cover and single-word carryovers at the starts of pages7 and13 remain publication-design limitations. Review edition only; no sale-readiness certification.",
+      "publication_approved": false
     },
     "private_review_page_20261120": {
-      "version": "1.9.91",
-      "status": "published and web live; signed browser customer acceptance not completed",
+      "version": "1.9.92",
+      "status": "web live; private sign-in guidance visibly verified; normal signed-in browser flow unverified",
       "path": "/api/ebook-recovery/workspace",
       "scope": "Signed read-only owner-scoped book list/status and shared PDF/ZIP review. No POST routes or paid dispatch changes. Existing snapshot ownership rechecked.",
       "ongoing_task_image": "1.9.90 / 971b5890ed50db11f04d99ee72e78774fa76f2da",
       "verification": "20 private HTTP/shared-file/protection cases passed in19.65s. Real Chromium desktop1280x900 and phone390x844 checks passed with actual fixture ZIP download matching shared bytes, no JavaScript errors, GET-only requests, correct file hiding on book switch and no horizontal overflow. Both screenshots inspected; supplied-text editions omit unavailable word count.",
-      "source_commit": "f591ade79b4b65f4a3be0f934f0a18586f249583",
-      "web_deploy": "dep-dc04bpbm8hqs739g4vh0",
-      "web_finished_at": "2026-11-20T13:07:52.140827Z",
+      "source_commit": "b0d926d555ffbbb0d11ffae846ffabcc95869ab0",
+      "web_deploy": "dep-dc04ktt9fdbs73chr55g",
+      "web_finished_at": "2026-11-20T13:27:33.155343Z",
       "sign_in_candidate": {
         "version": "1.9.92",
-        "status": "source ready, not deployed",
+        "status": "published and live",
         "verification": "20 focused private HTTP/shared-file/protection cases passed in22.54s. Desktop/phone real-browser checks passed including401 HTML sign-in guidance with no title leakage, existing sign-in link, real private ZIP download, GET-only requests and no JavaScript errors.",
         "reason": "Live unsigned browser returned raw Please sign in JSON; replace it with readable private review sign-in guidance without changing authentication."
+      },
+      "final_source_ci": {
+        "studio_run": 44744313086,
+        "windows_linux_version_signed_recovery_and_fast_gate": "success;160 Studio/protection cases required on each platform",
+        "postgres": 44744313191,
+        "postgres_status": "success",
+        "account_isolation": 44744313173,
+        "account_isolation_status": "success",
+        "broader_regressions": "still running at final inspection; no whole-release pass claimed"
       }
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
-      "status": "approved_continuation_submitted",
-      "action": "Observe exact run trn-0b54gdc047n1gg92c73djct00; no new paid runs or allowance resets. First assisted recheck completed; three further chapter reviews and export remain. Inspect actual artifacts and every page, preserve all11 originals and disclose assisted provenance. Normal signed-in browser acceptance remains unverified."
+      "status": "assisted_hosted_review_delivered",
+      "action": "Preserve delivered assisted review files. Fix CPU-expensive full-chapter corrections using a measured targeted-edit approach, then finish customer Create/Resume/approval controls and normal signed-in browser acceptance. No new paid task or allowance reset is authorized. Keep existing books and working features intact; do not claim fully automatic or commercial completion."
     },
     {
       "id": "finish_customer_recovery_controls",
-      "status": "pending",
-      "action": "Implement and verify signed-in recovery/review/approval UI and actual customer HTTP download path. Reuse final accepted-layout files; do not regenerate accepted chapters or repeat photo acquisition."
+      "status": "read_only_review_shipped_mutations_pending",
+      "action": "Private signed-in read-only book progress and actual shared review-file HTTP paths shipped1.9.92 with owner/isolation/browser fixtures. Finish Create/Resume/approval controls and verify normal signed-in live browser delivery; preserve accepted artifacts."
     },
     {
       "id": "recover_existing_stalled_book",
@@ -990,7 +1020,7 @@
       "action": "Do not deploy the loopback Studio as the hosted Factory. Before merge/deploy completion, implement and verify a supported hosted integration using shared authenticated customer state, PostgreSQL/R2-compatible storage and an explicitly approved no-paid-generation runtime; then verify actual hosted PDF and ZIP downloads."
     }
   ],
-  "completion": "Live saved-manuscript backend recovery and actual remote PDF/ZIP bytes verified on1.9.84. Full one-button Factory completion is NOT claimed.",
-  "blocker": "One approved continuation is running, with zero Render task retries. First full-chapter copyedit exceeded local model deadline and retried internally; separate assistant-edited candidates have been queued without overwriting originals. This run is not fully automatic acceptance. No final files yet.",
+  "completion": "Assisted hosted retained-topic book completed in one additional approved Render run; actual14-page PDF and matching ZIP remote bytes verified, all pages reviewed and files saved for user. Saved-manuscript recovery also previously verified. Fully automatic Factory/customer Create flow and publication-quality approval are NOT complete.",
+  "blocker": "Remaining automatic editing performance and customer Create/Resume/approval controls, normal live signed-in delivery acceptance and final publication design polish. Both approved billed-run allowances are consumed; no additional run authorized.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
