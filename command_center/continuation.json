@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-20T12:43:47.353535+00:00",
+  "checked_at": "2026-11-20T12:58:32.695984+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -22,9 +22,10 @@
       "approved_in_chat": "User yes to one additional worker run capped at one hour/$0.70, zero automatic retries, continue saved book",
       "book_id": "8dce9a74cd89435397a4341427418698",
       "allowance": "20261120-continuation-one-hour",
-      "consumed": false,
-      "additional_runs_authorized": 1,
-      "paid_model_api_calls": false
+      "consumed": true,
+      "additional_runs_authorized": 0,
+      "paid_model_api_calls": false,
+      "submitted": true
     }
   },
   "evidence": {
@@ -876,10 +877,10 @@
     },
     "approved_continuation_20261120": {
       "version": "1.9.90",
-      "status": "Correcting actual pre-launch editorial defects; no paid continuation started",
+      "status": "submitted; last observed pending",
       "original_run": "trn-0b54gdbvsceac2s6c73anil30",
       "book_id": "8dce9a74cd89435397a4341427418698",
-      "next_action": "Publish verified source, deploy chosen worker version and launch exactly one durably claimed continuation. Inspect outcome before any repeat. Preserve original11 completed units.",
+      "next_action": "Observe this exact run and preserved units. Do not submit any further paid run or clear either allowance. On REVIEW, download actual shared PDF/ZIP, inspect manuscript and every page, verify hashes/CRC/embedded PDF identity. On failure retain all work and report actual outcome. Customer Create/review UI remains unfinished.",
       "focused_tests": "21 worker, real fixture PDF/ZIP continuation, independent budget claims, existing recovery and protection cases passed in18.22s. Version and diff checks passed.",
       "superseded_worker_version": "wfv-dc041iss728c73ce6160",
       "superseded_source": "57c899bb989fce795de41247d462875ce952e3a6",
@@ -888,14 +889,29 @@
         "Chapter1 directs use of a checklist but provides no concrete checklist lines."
       ],
       "correction_scope": "Independent narrow gates and separate retained correction/recheck units; do not overwrite any existing completed unit. No claimed general factual/originality certification.",
-      "editorial_verification": "67 focused editorial/topic/worker/recovery/protection cases passed, one browser case deselected, in84.73s. Includes real fixture correction of a historically completed false pass with the original row unchanged and valid shared PDF/ZIP output. Version and diff checks passed."
+      "editorial_verification": "67 focused editorial/topic/worker/recovery/protection cases passed, one browser case deselected, in84.73s. Includes real fixture correction of a historically completed false pass with the original row unchanged and valid shared PDF/ZIP output. Version and diff checks passed.",
+      "source_commit": "971b5890ed50db11f04d99ee72e78774fa76f2da",
+      "workflow_version": "wfv-dc0456gm7kps73bc3lfg",
+      "workflow_status": "ready",
+      "task_id": "tsk-dc047eh4m73c73cu7tv0",
+      "task_run": "trn-0b54gdc047n1gg92c73djct00",
+      "submitted_at": "2026-11-20T12:58:04.14206Z",
+      "automatic_task_retries": 0,
+      "attempts_observed": 1,
+      "preservation_baseline": {
+        "units": 11,
+        "sha256": "a0ada8842f8d92b83ed1e16037ea13203c01c149441bd7a10c6cb5742e378afe",
+        "durable_table": "ebook_v2_topic_continuation_dispatch",
+        "fields": "unit id,stage,policy,input_sha,output_sha,state,attempts"
+      },
+      "submission_guard": "Durable SUBMITTING claim committed before SDK call, then SUBMITTED with exact run ID. Never repeat a submission on ambiguous outcome. Separate additional allowance consumed inside worker before model startup. Original allowance remains consumed."
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
-      "status": "additional_hour_approved_preparing_launch",
-      "action": "Publish verified source, deploy chosen worker version and launch exactly one durably claimed continuation. Inspect outcome before any repeat. Preserve original11 completed units."
+      "status": "approved_continuation_submitted",
+      "action": "Observe this exact run and preserved units. Do not submit any further paid run or clear either allowance. On REVIEW, download actual shared PDF/ZIP, inspect manuscript and every page, verify hashes/CRC/embedded PDF identity. On failure retain all work and report actual outcome. Customer Create/review UI remains unfinished."
     },
     {
       "id": "finish_customer_recovery_controls",
@@ -934,6 +950,6 @@
     }
   ],
   "completion": "Live saved-manuscript backend recovery and actual remote PDF/ZIP bytes verified on1.9.84. Full one-button Factory completion is NOT claimed.",
-  "blocker": "Additional single-hour continuation approved; preparing bounded worker continuation. No new run submitted yet. Customer Create/review UI remains unfinished.",
+  "blocker": "Additional approved saved-book continuation submitted, pending at last observation. No PDF/ZIP for this hosted topic book yet. Both approved run allowances now committed; no additional paid run authorized. Customer Create/review UI remains unfinished.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
