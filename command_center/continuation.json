@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-20T03:50:40.403633+00:00",
+  "checked_at": "2026-11-20T04:03:47.147170+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -797,19 +797,34 @@
     },
     "approved_pilot_setup": {
       "version": "1.9.87",
-      "status": "preparing runtime installation; no paid task run started",
+      "status": "single approved pilot submitted; last observed Render status pending",
       "limits": "Task timeout3600; processing budget2700 plus bounded model operation; SDK retries0; durable single-use book-scoped allowance.",
       "runtime": "Explicit official checksum-verified Ollama CPU archive and qwen3:8b download at workflow build time. Local-only service started/stopped within task.",
-      "configuration": "Confirmed dashboard Save only: FACTORY_V2_TOPIC_WORKER_PLAN=2c-8g and FACTORY_V2_TOPIC_WORKER_ENABLED=0. No task started.",
+      "configuration": "Verified dashboard values: topic plan2c-8g, enabled1, exact allowlisted pilot book ID. Existing legacy tasks remain Flex. Workflow build command pip install -r requirements.txt zstandard==0.23.0 && python scripts/prepare_ebook_writer.py.",
       "remaining": "Publish/check source, configure workflow build command, install model, create owned pilot book and set exact allowlisted ID, enable once and launch one run. Customer Create UI remains unfinished.",
-      "local_verification": "18 worker, pilot budget/allowance, saved recovery and protection cases passed in9.48s; installer and managed runtime compiled; diff check passed."
+      "local_verification": "18 worker, pilot budget/allowance, saved recovery and protection cases passed in9.48s; installer and managed runtime compiled; diff check passed.",
+      "source_commit": "d3ec968906a2ed5e62053a7ab673a2d86b3d7f6e",
+      "workflow_version": "wfv-dbvs9vui0phs73b0o4m0",
+      "workflow_status": "ready",
+      "book_id": "8dce9a74cd89435397a4341427418698",
+      "book_owner": "2",
+      "request_key": "topic:approved-pilot-20261119-onehour",
+      "task_run": "trn-0b54gdbvsceac2s6c73anil30",
+      "task_id": "tsk-dbvsc4qvk8ps73d98eog",
+      "submitted_at": "2026-11-20T04:02:01.455481Z",
+      "task_retries": 0,
+      "attempts_observed": 1,
+      "runtime_installation": "Official CPU archive checksum verified, qwen3:8b5.2GB pull reported digest verification/success, final image built and registered3 tasks. No model inference success claimed yet.",
+      "sdk_verification": "Actual Render1.1.0 SDK accepted2c-8g task registration and Retry(max_retries=0).",
+      "submission_guard": "Durable ebook_v2_dispatch SUBMITTING claim before SDK network call, then SUBMITTED with exact run ID; task additionally consumes a single-use book-scoped allowance.",
+      "next_action": "Inspect this exact run and database progress before any action. Never start another paid run or clear either allowance. On completion review actual manuscript/pages and shared PDF/ZIP. If failed, retain work and report exact failure; additional billed runs require a new budget authorization. Customer Create UI remains unfinished."
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
-      "status": "corrected_review_delivered_safeguards_deployed",
-      "action": "Do not regenerate the book. Finish the supported no-paid writing runtime and authenticated fresh-topic customer path; deployed recover_saved_ebook deliberately accepts saved manuscripts only. Existing GitHub free model runner is not connected to the live Create button. Inspect remaining CI before declaring final checks complete."
+      "status": "approved_hosted_pilot_external_run_pending",
+      "action": "Inspect this exact run and database progress before any action. Never start another paid run or clear either allowance. On completion review actual manuscript/pages and shared PDF/ZIP. If failed, retain work and report exact failure; additional billed runs require a new budget authorization. Customer Create UI remains unfinished."
     },
     {
       "id": "finish_customer_recovery_controls",
@@ -848,6 +863,6 @@
     }
   ],
   "completion": "Live saved-manuscript backend recovery and actual remote PDF/ZIP bytes verified on1.9.84. Full one-button Factory completion is NOT claimed.",
-  "blocker": "Topic-worker adapter implemented but disabled. User decision needed between connecting existing desktop inference (no paid compute) and larger on-demand Render task compute (published0.70USD/hour). No paid model API calls/new services allowed. Signed customer creation/review UI remains pending.",
+  "blocker": "Single one-hour8GB pilot submitted on existing Render worker, currently pending. Verify its actual outcome before any retry. Signed-in customer Create/review UI is still unfinished; administrative pilot is not that acceptance.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
