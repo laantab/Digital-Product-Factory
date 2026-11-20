@@ -875,12 +875,20 @@
       }
     },
     "approved_continuation_20261120": {
-      "version": "1.9.89",
-      "status": "preparing source and focused verification; not launched",
+      "version": "1.9.90",
+      "status": "Correcting actual pre-launch editorial defects; no paid continuation started",
       "original_run": "trn-0b54gdbvsceac2s6c73anil30",
       "book_id": "8dce9a74cd89435397a4341427418698",
       "next_action": "Publish verified source, deploy chosen worker version and launch exactly one durably claimed continuation. Inspect outcome before any repeat. Preserve original11 completed units.",
-      "focused_tests": "21 worker, real fixture PDF/ZIP continuation, independent budget claims, existing recovery and protection cases passed in18.22s. Version and diff checks passed."
+      "focused_tests": "21 worker, real fixture PDF/ZIP continuation, independent budget claims, existing recovery and protection cases passed in18.22s. Version and diff checks passed.",
+      "superseded_worker_version": "wfv-dc041iss728c73ce6160",
+      "superseded_source": "57c899bb989fce795de41247d462875ce952e3a6",
+      "manual_findings": [
+        "Chapter2 recommends stacking air mattresses in a hallway and assumes a spare bedroom despite small-home brief.",
+        "Chapter1 directs use of a checklist but provides no concrete checklist lines."
+      ],
+      "correction_scope": "Independent narrow gates and separate retained correction/recheck units; do not overwrite any existing completed unit. No claimed general factual/originality certification.",
+      "editorial_verification": "67 focused editorial/topic/worker/recovery/protection cases passed, one browser case deselected, in84.73s. Includes real fixture correction of a historically completed false pass with the original row unchanged and valid shared PDF/ZIP output. Version and diff checks passed."
     }
   },
   "next_actions": [

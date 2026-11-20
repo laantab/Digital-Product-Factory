@@ -14,6 +14,8 @@ from tests.ebook_v2_fixture import spec
 @pytest.mark.parametrize('defect',[
     'Use the checklists provided to prepare each room.',
     'Stack folding tables in the living room to create a dining area.',
+    'Stack two air mattresses in the hallway.',
+    'Another option is to use an air mattress in a living room or hallway.',
 ])
 def test_approving_model_cannot_override_independent_findings(monkeypatch,defect):
     chapter=developed_chapter('Choose one clear working area')
@@ -37,12 +39,16 @@ def test_internal_title_label_is_rejected_but_hypothetical_prose_is_allowed():
     assert chapter_issues({'title':'Entryway','text':'In this hypothetical example, a host clears one shelf.'})==[]
 
 
-@pytest.mark.parametrize('defect',['title','checklist','tables'])
+@pytest.mark.parametrize('defect',['title','checklist','tables','mattresses'])
 def test_final_export_blocks_known_defects_before_creating_files(tmp_path,defect):
     book=spec();book['source']='local_model'
     if defect=='title':book['title']='Hypothetical: Make room for guests'
-    else:book['chapters'][0]['text']+='\n\n'+('Use the checklist provided.' if defect=='checklist' else 'Stack folding tables to make a dining surface.')
+    else:book['chapters'][0]['text']+='\n\n'+({'checklist':'Use the checklist provided.','tables':'Stack folding tables to make a dining surface.','mattresses':'Stack two air mattresses in the hallway.'}[defect])
     before=copy.deepcopy(book)
     with pytest.raises(ValueError,match='Editorial correction required'):
         export_handler({'root':str(tmp_path),'book':book},'')
     assert list(tmp_path.iterdir())==[] and book==before
+
+
+def test_negative_sleeping_safety_instructions_are_allowed():
+    assert chapter_issues({'title':'Sleeping safely','text':'Do not stack two air mattresses. Never put a mattress in the hallway. Keep the exit clear.'})==[]

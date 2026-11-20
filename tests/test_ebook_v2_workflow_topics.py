@@ -164,3 +164,32 @@ def test_approved_continuation_reuses_completed_units_and_delivers_review_files(
     package,_=artifacts.download('alice',book['id'],'package.zip',preview=True)
     with zipfile.ZipFile(io.BytesIO(package)) as archive:
         assert archive.testzip() is None and archive.read('ebook.pdf')==pdf
+
+
+def test_current_editor_repairs_a_historical_false_pass_without_overwriting_it(hosted,provider):
+    from services.ebook_v2.topics import data,save
+    app,client,books,artifacts,*_=hosted
+    book=books.create('alice','topic:historical-false-pass-001',topic_spec())
+    for _ in range(30):
+        book=books.get('alice',book['id']);state=data(books,book)
+        if 'review:0' in state['units']:
+            original=books.units.get('alice',state['units']['review:0'])
+            if original['state']=='COMPLETE':break
+        if book['state']=='WAITING_TITLE':
+            books.decide('alice',book['id'],book['revision'],'title',books.status('alice',book['id'])['titles'][0])
+        else:books.advance('alice',book['id'])
+    else:pytest.fail('Initial retained chapter did not complete')
+    import copy
+    historical=copy.deepcopy(original['output']);historical['chapter']['text']+='\n\nStack two air mattresses in the hallway.'
+    old=books.units.enqueue('alice',book['id']+':historical-review','editorial','editorial-10',
+                            {'spec':book['spec'],'chapter':historical['chapter']})
+    claimed=books.units.claim('alice',old,60)
+    books.units.complete('alice',old,claimed['token'],historical)
+    state['units']['review:0']=old;book=save(books,book,state)
+    retained=books.units.get('alice',old)
+    result=run_topic_book(app.extensions['ebook_v2_hosted'],'alice',book['id'],ready=lambda:True)
+    assert result['state']=='REVIEW' and books.units.get('alice',old)==retained
+    state=data(books,books.get('alice',book['id']))
+    corrected=books.units.get('alice',state['units']['recheck:0:contract-2'])
+    assert corrected['state']=='COMPLETE' and 'Stack two air mattresses' not in corrected['output']['chapter']['text']
+    assert artifacts.download('alice',book['id'],'ebook.pdf',preview=True)[0].startswith(b'%PDF-')

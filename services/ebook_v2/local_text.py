@@ -310,6 +310,10 @@ def review_handler(payload,repair):
     spec=payload["spec"];previous=payload.get("_recovery",{})
     awaiting=previous.get("awaiting_review") is True
     chapter=previous.get("chapter",payload["chapter"]) if awaiting else payload["chapter"]
+    known=chapter_issues(chapter)
+    if known and not repair:
+        raise Repairable('EDITORIAL_FINDINGS',{'chapter':chapter,'minimum':spec['min_words'],
+            'report':{'checks':{key:False for key in CHECKS},'issues':known}})
     if generated_issues(chapter) and not (repair and previous.get("report") and not awaiting):raise Repairable("MODEL_ARTIFACT",{"chapter":chapter,"report":{
         "checks":{key:False for key in CHECKS},"issues":generated_issues(chapter)}})
     if repair and previous.get("report") and not awaiting:

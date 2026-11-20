@@ -44,7 +44,7 @@ def policies():
     return {"titles":Policy("titles-3",text.titles_handler,text.titles_valid,common,timeout=deadline,retry_delay=5),
         "outline":Policy("outline-2",text.outline_handler,text.outline_valid,common,timeout=deadline,retry_delay=5),
         "writing":Policy("writing-6",text.chapter_handler,text.chapter_valid,chapters,timeout=deadline,retry_delay=5),
-        "editorial":Policy("editorial-10",text.review_handler,text.review_valid,reviews,timeout=deadline,retry_delay=5),
+        "editorial":Policy("editorial-11",text.review_handler,text.review_valid,reviews,timeout=deadline,retry_delay=5),
         "draft":Policy("draft-5",text.draft_handler,text.partial_valid,drafts,timeout=deadline,retry_delay=5),
         "expand":Policy("expand-4",text.expansion_handler,text.expansion_valid,drafts,timeout=deadline,retry_delay=5),
         "assemble":Policy("assemble-2",text.assembly_handler,text.chapter_valid,{},timeout=20,retry_delay=0)}
@@ -126,6 +126,11 @@ def advance(books,book):
         if chapter is None:return pending()
         checked=unit(review,"editorial",{"spec":spec,"chapter":chapter["chapter"]},[unit_map[name]])
         if checked is None:return pending()
+        if text.chapter_issues(checked['chapter']):
+            # Retain the old immutable review and draft; a distinct work unit
+            # repairs only a chapter rejected by the current independent gate.
+            checked=unit(f"recheck:{index}:contract-2","editorial",{'spec':spec,'chapter':checked['chapter']},[unit_map[review]])
+            if checked is None:return pending()
         reviewed.append(checked["chapter"])
     visuals=unit("visuals","visuals",{"root":books.root,"book":{"title":state["decisions"]["title"],
         "author":spec["author"],"topic":spec["topic"],"require_photos":spec.get("require_photos",False),"chapters":reviewed}},[unit_map[f"review:{index}"] for index in range(spec["chapter_count"])])
@@ -144,12 +149,15 @@ def status(books,book):
     def output(name):
         row=rows.get(name)
         return row["output"] if row and row["state"]=="COMPLETE" else {}
+    def checked_output(index):
+        name=f'recheck:{index}:contract-2'
+        return output(name) if name in rows else output(f'review:{index}')
     exported=output("export");total=book["spec"]["chapter_count"]
     saved_words={}
     for name,row in rows.items():
         if row["state"]!="COMPLETE" or not isinstance(row["output"],dict):continue
         chapter=row["output"].get("chapter")
-        if chapter and name.startswith(("draft:","expand:","chapter:","review:")):
+        if chapter and name.startswith(("draft:","expand:","chapter:","review:","recheck:")):
             index=int(name.split(":")[1]);saved_words[index]=max(saved_words.get(index,0),len(chapter["text"].split()))
     labels={"titles":"Preparing title choices","outline":"Planning chapters","draft":"Drafting chapter",
         "expand":"Developing chapter","assemble":"Saving chapter","writing":"Writing chapter",
@@ -175,7 +183,7 @@ def status(books,book):
     return {"attention":attention,"id":book["id"],"title":state["decisions"].get("title",book["spec"]["title"]),
         "author":book["spec"]["author"],"state":("WAITING_SERVICE" if book["state"]=="RUNNING"
             and (not books.available(local_text=True)) else book["state"]),"revision":book["revision"],
-        "source":"local_model","chapters_checked":sum(output(f"review:{index}")!={} for index in range(total)),
+        "source":"local_model","chapters_checked":sum(bool(checked_output(index)) and not text.chapter_issues(checked_output(index)['chapter']) for index in range(total)),
         "chapters_total":total,"words_saved":sum(saved_words.values()),"activity":activity,
         "integrity":exported.get("integrity"),"files":list(exported.get("files",{})),
         "page_quality":exported.get("page_quality"),

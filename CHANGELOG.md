@@ -1,3 +1,17 @@
+## 1.9.90 — Repair unsafe sleeping guidance missed by model review
+
+### What changed
+Independent editorial checks reject affirmative instructions to stack mattresses or use hallways for sleeping, while permitting explicit warnings against those actions. A direction to use a checklist must provide concrete checklist items.
+
+### What was fixed
+Actual pilot text passed model review despite recommending stacked air mattresses in a hallway and referring to an absent checklist. A retained completed review with these known defects now feeds a separate bounded correction/recheck unit. Original drafts and completed review records remain immutable. Known defects enter correction without spending another model call to rediscover them.
+
+### Do the steps change?
+Continue the same saved book; repair only affected chapters before finishing. Progress counts current accepted rechecks. The additional one-hour allowance, zero automatic task retries and no-paid-provider restriction remain unchanged. No commercial quality certification is claimed.
+
+### Release gate
+Verify affirmative and negated guidance, independent final-export refusal, and real fixture PDF/ZIP output after correcting a historical false pass without changing that historical unit. Then inspect the approved hosted continuation's actual manuscript and pages.
+
 ## 1.9.89 — Resume the separately approved saved pilot
 
 ### What changed
