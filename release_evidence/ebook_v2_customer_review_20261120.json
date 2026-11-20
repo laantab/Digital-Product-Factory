@@ -1,6 +1,6 @@
 {
   "version": "1.9.94",
-  "checked_at": "2026-11-20T21:19:19.513990+00:00",
+  "checked_at": "2026-11-20T22:36:23.001Z",
   "state": "web_live_authentication_required_for_real_owner_acceptance",
   "scope": "Explicit owner acknowledgement and CAS approval of exact shared review PDF/ZIP; no local-file requirement or generation. Four independently owner-scoped review endpoints classified for ordinary customers.",
   "studio": {
@@ -125,9 +125,9 @@
   "browser_review": "Actual Chromium1280x900 and390x844 images inspected before/after acknowledgement; no clipping or overflow. Approval sends one explicit POST.",
   "baseline_failure_reproduced": "Normal non-admin Factory request to existing review workspace returned403 before classification. Fixture first corrected to use the authenticated snapshot API because generic project serialization omits owner identity.",
   "limits": [
-    "Owner sign-in required for actual production saved-book UI/download acceptance. Do not mark a real edition reviewed without the owner acknowledgement.",
+    "Actual signed-in production review/download acceptance remains unverified; secure sign-in request cancelled, no retry.",
     "Create and Resume controls remain unfinished.",
-    "Hosted targeted-edit performance and full current-source release CI not yet accepted."
+    "Hosted targeted-edit performance and combined full-Factory release gate remain unverified."
   ],
   "generation_calls_started": 0,
   "new_hosted_task_runs": 0,
@@ -208,5 +208,57 @@
     "verification": "New gunicorn worker boot and Render live event inspected. Actual cloud-browser page visibly shows the private Factory sign-in guidance; request log verifies HTTP401. Deployment-transition502 cleared after service became live. No source book metadata displayed while unsigned."
   },
   "normal_signed_in_live_acceptance": false,
-  "live_book_approval_performed": false
+  "live_book_approval_performed": false,
+  "release_commit_ci": {
+    "source_commit": "c441e71dfb01694e2331d3c4d0548965aa52e167",
+    "status": "all eight deployed-source workflows completed successfully",
+    "runs": [
+      {
+        "id": 44818821783,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821763,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821735,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821758,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821761,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821756,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821750,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821813,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "full_combined_factory_release_gate_claimed": false
+  },
+  "authentication": {
+    "request": "cancelled by user",
+    "signed_in_outcome": "unknown",
+    "automated_retry_started": false
+  }
 }

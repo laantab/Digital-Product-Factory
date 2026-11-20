@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-20T21:19:19.513990+00:00",
+  "checked_at": "2026-11-20T22:36:23.001Z",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -1087,7 +1087,7 @@
     },
     "customer_review_controls_20261120": {
       "version": "1.9.94",
-      "checked_at": "2026-11-20T21:19:19.513990+00:00",
+      "checked_at": "2026-11-20T22:36:23.001Z",
       "state": "web_live_authentication_required_for_real_owner_acceptance",
       "scope": "Explicit owner acknowledgement and CAS approval of exact shared review PDF/ZIP; no local-file requirement or generation. Four independently owner-scoped review endpoints classified for ordinary customers.",
       "studio": {
@@ -1212,9 +1212,9 @@
       "browser_review": "Actual Chromium1280x900 and390x844 images inspected before/after acknowledgement; no clipping or overflow. Approval sends one explicit POST.",
       "baseline_failure_reproduced": "Normal non-admin Factory request to existing review workspace returned403 before classification. Fixture first corrected to use the authenticated snapshot API because generic project serialization omits owner identity.",
       "limits": [
-        "Owner sign-in required for actual production saved-book UI/download acceptance. Do not mark a real edition reviewed without the owner acknowledgement.",
+        "Actual signed-in production review/download acceptance remains unverified; secure sign-in request cancelled, no retry.",
         "Create and Resume controls remain unfinished.",
-        "Hosted targeted-edit performance and full current-source release CI not yet accepted."
+        "Hosted targeted-edit performance and combined full-Factory release gate remain unverified."
       ],
       "generation_calls_started": 0,
       "new_hosted_task_runs": 0,
@@ -1296,19 +1296,59 @@
       },
       "normal_signed_in_live_acceptance": false,
       "live_book_approval_performed": false,
-      "evidence_file": "release_evidence/ebook_v2_customer_review_20261120.json",
       "release_commit_ci": {
         "source_commit": "c441e71dfb01694e2331d3c4d0548965aa52e167",
-        "studio_run": 44818821758,
-        "status": "running at checkpoint; both PostgreSQL workflows44818821763 and44818821783 passed",
-        "broader_runs": [
-          44818821750,
-          44818821813,
-          44818821761,
-          44818821735,
-          44818821756
-        ]
-      }
+        "status": "all eight deployed-source workflows completed successfully",
+        "runs": [
+          {
+            "id": 44818821783,
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 44818821763,
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 44818821735,
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 44818821758,
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 44818821761,
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 44818821756,
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 44818821750,
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 44818821813,
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ],
+        "full_combined_factory_release_gate_claimed": false
+      },
+      "authentication": {
+        "request": "cancelled by user",
+        "signed_in_outcome": "unknown",
+        "automated_retry_started": false
+      },
+      "evidence_file": "release_evidence/ebook_v2_customer_review_20261120.json"
     }
   },
   "next_actions": [
@@ -1354,6 +1394,6 @@
     }
   ],
   "completion": "Hosted saved-manuscript and assisted retained-topic review editions preserved. Customer private review/approval controls are live1.9.94 with185 Studio cases,60 signed Factory guard cases and1139 matching before/after legacy protection cases passed. All five shared-service protections relocked. Actual signed-in production acceptance and fully automatic Create/Resume Factory completion remain unfinished.",
-  "blocker": "Actual signed-in production review/download acceptance requires the owner Factory session. Create/Resume, real hosted targeted-edit performance and final current-source release CI remain unfinished. No additional billed task authorized.",
+  "blocker": "Signed-in live acceptance remains unverified after cancelled secure authentication; no retry started. Create/Resume, hosted targeted-edit performance and combined full-Factory release gate remain unfinished. All eight deployed-source CI workflows succeeded; web remains live. No new billed task authorized.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
