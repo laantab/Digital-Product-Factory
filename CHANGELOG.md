@@ -1,3 +1,17 @@
+## 1.9.86 — Separate automatic topic-worker adapter
+
+### What changed
+A separate opt-in create_topic_ebook task runs the existing local-only topic writer, editorial checks and formatter. It chooses title and design automatically, then stops at REVIEW for actual-page approval before customer downloads.
+
+### What was fixed
+The hosted saved-manuscript task deliberately refused topic requests. Topic requests now have a separate owner-scoped adapter with durable duplicate-submission protection, retained work files and verified shared PDF/ZIP handoff. Completed retries preserve approval and never require another model call.
+
+### Do the steps change?
+No customer cutover is enabled. The new task is disabled by default and keeps the existing compute plan. A configured, available local model and the signed customer Create controls still need integration. Missing model readiness refuses before drafting; no paid-provider fallback exists.
+
+### Release gate
+Exercise the task with a local HTTP model fixture through actual PDF/ZIP download, file loss between worker steps, approval, owner isolation, unavailable-model refusal and ambiguous submission. This is adapter evidence, not a real-model or live customer-path acceptance.
+
 ## 1.9.85 — Enforce known fresh-book editorial defects
 
 ### What changed

@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-20T03:38:19.342926+00:00",
+  "checked_at": "2026-11-20T03:44:13.252841+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -777,6 +777,18 @@
         "account_isolation": "success",
         "broader_workflows": "still running; no whole-release success claimed"
       }
+    },
+    "topic_worker_adapter_20261119": {
+      "version": "1.9.86",
+      "status": "implemented and locally verified; not enabled or deployed",
+      "tests": "17 passed in8.94s: actual fixture-generated PDF/ZIP, intermediate local-file loss, identical embedded PDF, explicit review before download, approval preserved on retry, owner isolation, no-writer refusal before any unit, durable duplicate/ambiguous dispatch, existing saved recovery and protection contracts.",
+      "implementation": "Separate create_topic_ebook on existing workflow; reuses local_text, Books, editor and shared-file adapters. Automatic title/cover choices; hosted result stays REVIEW. Runtime must already be available; no paid fallback. Dedicated topic compute-plan setting does not change existing tasks.",
+      "required_flags": {
+        "FACTORY_V2_TOPIC_WORKER_ENABLED": "unset: disabled",
+        "FACTORY_V2_TOPIC_WORKER_PLAN": "unset: existing plan; not upgraded"
+      },
+      "runtime_constraint": "Official current Render workflow limits: flex has up to4GB RAM. Accepted qwen3:8b test runtime needs more. Existing2c-8g task plan is published at0.70USD/hour, billed during runs. Do not upgrade or run billable inference without an explicit user budget decision. No new service created.",
+      "remaining": "Choose approved runtime approach; install/verify accepted local-only model on that runtime; implement signed customer Create and review controls with route classification/protection proof; verify live actual book. Current adapter test is a local protocol fixture, not real model or hosted acceptance."
     }
   },
   "next_actions": [
@@ -822,6 +834,6 @@
     }
   ],
   "completion": "Live saved-manuscript backend recovery and actual remote PDF/ZIP bytes verified on1.9.84. Full one-button Factory completion is NOT claimed.",
-  "blocker": "v1.9.85 safeguards deployed on existing Render website/worker. Live fresh-topic generation remains unsupported because no reachable no-paid writing runtime and customer Create path are connected. This is implementation work, not a further deploy setting. No paid inference/new services authorized.",
+  "blocker": "Topic-worker adapter implemented but disabled. User decision needed between connecting existing desktop inference (no paid compute) and larger on-demand Render task compute (published0.70USD/hour). No paid model API calls/new services allowed. Signed customer creation/review UI remains pending.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

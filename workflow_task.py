@@ -81,6 +81,10 @@ def build_ebook(ctx: TaskContext, project_id: int) -> dict:
 from services.ebook_v2.workflow_recovery import register as register_recovery
 recover_saved_ebook = register_recovery(app, plan=TASK_PLAN, retry=TASK_RETRY)
 
+from services.ebook_v2.workflow_topics import register as register_topics
+create_topic_ebook = register_topics(app,
+    plan=os.environ.get('FACTORY_V2_TOPIC_WORKER_PLAN', TASK_PLAN), retry=TASK_RETRY)
+
 
 def _version() -> str:
     """The VERSION file next to this entrypoint, or "unknown"."""

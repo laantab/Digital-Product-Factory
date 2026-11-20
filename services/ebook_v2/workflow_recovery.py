@@ -26,10 +26,14 @@ class Dispatch:
                 owner TEXT NOT NULL, state TEXT NOT NULL, run_id TEXT NOT NULL,
                 created DOUBLE PRECISION NOT NULL)''')
 
-    def __call__(self, owner, book_id):
-        book = self.books.get(owner, book_id)
+    @staticmethod
+    def validate(book):
         if book['spec'].get('source') == 'ollama':
             raise ValueError('Hosted recovery accepts saved manuscripts only')
+
+    def __call__(self, owner, book_id):
+        book = self.books.get(owner, book_id)
+        self.validate(book)
         if book['state'] != 'RUNNING':
             return
         with self.books.units.transaction() as conn:

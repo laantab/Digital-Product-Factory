@@ -247,6 +247,7 @@
     "tests/test_ebook_v2_hosted_handoff.py",
     "tests/test_ebook_v2_runtime_connection.py",
     "tests/test_ebook_v2_manuscript_layout.py",
-    "tests/test_ebook_v2_editorial_contract.py"
+    "tests/test_ebook_v2_editorial_contract.py",
+    "tests/test_ebook_v2_workflow_topics.py"
   ]
 }
