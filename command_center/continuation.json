@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-20T20:38:53.656823+00:00",
+  "checked_at": "2026-11-20T20:40:06.545572+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -1029,14 +1029,68 @@
         "Candidate not deployed; prior web and workflow remain live."
       ],
       "evidence_file": "release_evidence/ebook_v2_targeted_edit_20261120.json",
-      "remote_ci": "not yet submitted"
+      "remote_ci": {
+        "source_commit": "88d6334c50a2d11b8a279513c21038602570acbe",
+        "runs": [
+          {
+            "id": 44813354859,
+            "name": "Book Studio Windows and Linux customer paths",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 44813354905,
+            "name": "Release review bounded ZIP memory and protected functions",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "id": 44813354831,
+            "name": "Local manuscript correction billing and protected regressions",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "id": 44813354970,
+            "name": "Account isolation PostgreSQL integration",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "id": 44813354972,
+            "name": "One-button ebook memory and protected fast gate",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "id": 44813354813,
+            "name": "Ebook Safe Mode correction and protected regressions",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "id": 44813355055,
+            "name": "Book recovery PostgreSQL preservation",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "id": 44813354841,
+            "name": "Local ebook chapter bound and protected regression",
+            "status": "in_progress",
+            "conclusion": null
+          }
+        ],
+        "status": "queued/running; no final-source CI success claimed"
+      },
+      "source_commit": "88d6334c50a2d11b8a279513c21038602570acbe"
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
       "status": "targeted_edit_candidate_locally_verified",
-      "action": "Publish v1.9.93 exact-source editorial patches and inspect current-source CI. Real CPU-model speed remains unmeasured; no further billed task authorized. Finish signed customer Create/Resume/approval controls without changing existing books or enabling paid generation; verify normal signed-in live delivery."
+      "action": "Inspect v1.9.93 current-source CI recorded under targeted_editorial_20261120. Then finish signed customer Create/Resume/approval controls without changing existing books or enabling paid generation; verify normal signed-in live delivery. Real CPU-model speed remains unmeasured; no further billed task authorized."
     },
     {
       "id": "finish_customer_recovery_controls",
