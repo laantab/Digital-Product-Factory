@@ -5,6 +5,7 @@ on:
     paths:
       - 'services/ebook_v2/**'
       - 'templates/ebook_v2.html'
+      - 'templates/ebook_v2_review.html'
       - 'tests/test_ebook_v2*'
       - 'requirements-ebook-v2.txt'
       - '.github/workflows/ebook-v2-studio.yml'
@@ -53,8 +54,8 @@ jobs:
           node --check studio-ui.js
       - name: Verify isolated customer paths and protection contracts
         run: python -m pytest -q tests/test_ebook_v2_recovery.py tests/test_ebook_v2_books.py tests/test_ebook_v2_customer_path.py tests/test_ebook_v2_topics.py tests/test_ebook_v2_legacy_snapshot.py tests/test_ebook_v2_final_quality.py tests/test_ebook_v2_shared_artifacts.py tests/test_ebook_v2_hosted_handoff.py tests/test_ebook_v2_runtime_connection.py tests/test_ebook_v2_manuscript_layout.py tests/test_ebook_v2_editorial_contract.py tests/test_ebook_v2_workflow_topics.py tests/test_function_lock_registry_integrity.py tests/test_function_lock_enforcement.py --junitxml=studio-junit.xml
-      - name: Require all 157 Studio and protection cases with no failures errors or skips
-        run: python -c "import xml.etree.ElementTree as E; r=E.parse('studio-junit.xml').getroot(); s=list(r.iter('testsuite')); assert sum(int(x.get('tests','0')) for x in s)==157; assert not any(int(x.get(k,'0')) for x in s for k in ('failures','errors','skipped'))"
+      - name: Require all 160 Studio and protection cases with no failures errors or skips
+        run: python -c "import xml.etree.ElementTree as E; r=E.parse('studio-junit.xml').getroot(); s=list(r.iter('testsuite')); assert sum(int(x.get('tests','0')) for x in s)==160; assert not any(int(x.get(k,'0')) for x in s for k in ('failures','errors','skipped'))"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

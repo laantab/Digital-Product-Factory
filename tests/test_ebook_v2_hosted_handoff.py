@@ -13,6 +13,7 @@ from services.ebook_v2.hosted_recovery import blueprint
 from services.ebook_v2.shared_artifacts import SharedArtifacts
 from services.storage.local import LocalFilesystemDriver
 from tests.ebook_v2_fixture import spec
+from tests.test_ebook_v2_topics import provider
 
 
 @pytest.fixture
@@ -141,3 +142,52 @@ def test_stale_or_incomplete_source_does_not_queue(hosted):
     assert books.listing('alice') == []
     with closing(connect()) as conn:
         assert conn.execute('SELECT count(*) FROM ebook_v2_legacy_snapshots').fetchone()[0] == 1
+
+
+def test_private_review_page_lists_only_owned_books_and_never_builds(hosted,monkeypatch):
+    from tests.test_ebook_v2_topics import topic_spec
+    app,client,books,*_=hosted
+    own=books.create('alice','topic:review-page-owned',dict(topic_spec(),topic='<script>alert(1)</script>'))
+    foreign=books.create('bob','topic:review-page-foreign',dict(topic_spec(),topic='Other account private title'))
+    monkeypatch.setattr(books,'advance',lambda *a,**k:pytest.fail('A review page must never build'))
+    response=client.get('/api/ebook-recovery/workspace?book='+own['id'])
+    assert response.status_code==200 and response.headers['Cache-Control']=='no-store'
+    assert b'&lt;script&gt;alert(1)&lt;/script&gt;' in response.data
+    assert b'Other account private title' not in response.data
+    assert client.get('/api/ebook-recovery/workspace?book='+foreign['id']).status_code==404
+    assert app.test_client().get('/api/ebook-recovery/workspace').status_code==401
+    assert books.get('alice',own['id'])['revision']==own['revision']
+
+
+def test_topic_status_and_unfinished_files_are_private_read_only_requests(hosted,monkeypatch):
+    from tests.test_ebook_v2_topics import topic_spec
+    app,client,books,*_=hosted
+    book=books.create('alice','topic:private-review-status',topic_spec());url='/api/ebook-recovery/books/'+book['id']
+    monkeypatch.setattr(books,'advance',lambda *a,**k:pytest.fail('Status must never build'))
+    assert client.get(url).status_code==200 and client.get(url).json['files']==[]
+    assert client.get(url+'/files/ebook.pdf?preview=1').status_code==400
+    with client.session_transaction() as session:session['_user_id']='bob'
+    assert client.get(url).status_code==404
+    assert client.get(url+'/files/package.zip?preview=1').status_code==404
+    assert app.test_client().get(url).status_code==401
+
+
+def test_topic_review_http_delivers_exact_shared_pdf_and_zip_without_regeneration(hosted,provider,monkeypatch):
+    import hashlib,io,zipfile
+    from tests.test_ebook_v2_topics import topic_spec
+    from services.ebook_v2.workflow_topics import run_topic_book
+    app,client,books,artifacts,*_=hosted
+    book=books.create('alice','topic:review-http-files',topic_spec())
+    assert run_topic_book(app.extensions['ebook_v2_hosted'],'alice',book['id'],ready=lambda:True)['state']=='REVIEW'
+    calls=len(provider['calls']);monkeypatch.setattr(books,'advance',lambda *a,**k:pytest.fail('A review download must never build'))
+    url='/api/ebook-recovery/books/'+book['id']
+    assert client.get('/api/ebook-recovery/workspace?book='+book['id']).status_code==200
+    assert client.get(url).json['files']==['ebook.pdf','package.zip']
+    pdf=client.get(url+'/files/ebook.pdf?preview=1');package=client.get(url+'/files/package.zip?preview=1')
+    assert pdf.status_code==package.status_code==200
+    for response in (pdf,package):
+        assert response.headers['X-Content-SHA256']==hashlib.sha256(response.data).hexdigest()
+        assert response.headers['Cache-Control']=='no-store'
+    with zipfile.ZipFile(io.BytesIO(package.data)) as archive:
+        assert archive.testzip() is None and archive.read('ebook.pdf')==pdf.data
+    assert len(provider['calls'])==calls and books.get('alice',book['id'])['state']=='REVIEW'

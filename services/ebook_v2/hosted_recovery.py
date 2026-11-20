@@ -7,7 +7,7 @@ import json
 import io
 from contextlib import closing
 
-from flask import Blueprint, current_app, jsonify, request, session, send_file
+from flask import Blueprint, current_app, jsonify, request, session, send_file, render_template
 from flask_login import current_user
 from werkzeug.exceptions import BadRequest
 
@@ -17,7 +17,7 @@ from .recovery_handoff import preserve_and_queue, WorkerUnavailable
 
 
 def blueprint(connection_factory):
-    bp = Blueprint("ebook_recovery", __name__, url_prefix="/api/ebook-recovery")
+    bp = Blueprint("ebook_recovery", __name__, url_prefix="/api/ebook-recovery",template_folder='../../templates')
     store = Snapshots(connection_factory)
 
     @bp.before_request
@@ -111,11 +111,27 @@ def blueprint(connection_factory):
         books, artifacts = hosted()
         book = books.get(current_user.id, book_id)
         key = book["request_key"]
+        if key.startswith('topic:') and book['spec'].get('source')=='ollama':
+            return books, artifacts, book
         if not key.startswith("snapshot:"):
             raise LookupError("Book not found")
         snapshot = store.reopen(current_user.id, key.removeprefix("snapshot:"))
         owned(snapshot["project_id"])
         return books, artifacts, book
+
+    @bp.get('/workspace')
+    def workspace():
+        books,_=hosted()
+        visible=[]
+        for row in books.listing(current_user.id):
+            try:recovery_book(row['id'])
+            except LookupError:continue
+            visible.append(row)
+        selected=request.args.get('book','')
+        if selected and selected not in {row['id'] for row in visible}:
+            raise LookupError('Book not found')
+        return render_template('ebook_v2_review.html',books=visible,
+                               selected=selected or (visible[0]['id'] if visible else ''))
 
     @bp.get("/books/<book_id>")
     def book_status(book_id):

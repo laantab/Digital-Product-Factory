@@ -1,3 +1,17 @@
+## 1.9.91 — Open private progress and review files without another build
+
+### What changed
+A signed-in read-only book review page lists the owner's retained hosted books, shows saved progress, and opens verified PDF/ZIP review copies when ready. Existing topic books use the same private shared-file delivery boundary as preserved manuscripts.
+
+### What was fixed
+The hosted topic pilot had no customer review page. Opening status or review downloads now needs no administrative generation action. Transferred source ownership, account isolation, private caching and explicit review state remain enforced. No Create, Resume or approval mutation is added.
+
+### Do the steps change?
+Open /api/ebook-recovery/workspace while signed in, select a saved book, then open the review PDF or save its ZIP. Processing progress refreshes automatically. This page does not launch generation or approve publication.
+
+### Release gate
+Verify signed-out and foreign-owner refusal, escaped private titles, unchanged saved revisions, unavailable unfinished downloads, actual shared PDF/ZIP HTTP bytes and package identity with no model calls during review. Inspect the rendered desktop/mobile page before web deployment. The separately approved ongoing worker stays on its own immutable1.9.90 image.
+
 ## 1.9.90 — Repair unsafe sleeping guidance missed by model review
 
 ### What changed

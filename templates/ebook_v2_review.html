@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Book review | Digital Product Factory Pro</title>
+  <style>
+    :root{font-family:system-ui,sans-serif;color:#172c38;background:#f5f3ed;font-size:17px}
+    *{box-sizing:border-box}body{margin:0}header{background:#172c38;color:white;padding:24px max(20px,calc((100vw - 1120px)/2))}
+    header p{margin:0;font-size:.85rem;color:#d1e0e4}header h1{font-size:1.7rem;margin:8px 0}
+    main{max-width:1120px;margin:30px auto;padding:0 20px;display:grid;grid-template-columns:280px 1fr;gap:28px}
+    h2{font-size:1.35rem;line-height:1.4;margin:0 0 16px}h3{font-size:1rem;margin:0 0 12px}p{line-height:1.6}
+    aside,.panel{background:white;border:1px solid #d4dedf;border-radius:14px;padding:22px;align-self:start}
+    .book{display:block;width:100%;padding:14px;margin:9px 0;text-align:left;line-height:1.5;background:#f7faf9;color:#172c38;border:1px solid #d4dedf;border-radius:8px;cursor:pointer;font:inherit;overflow-wrap:anywhere}
+    .book[aria-pressed=true]{background:#e7f3ef;border-color:#277260;box-shadow:inset 4px 0 #277260}
+    .badge{display:inline-block;font-size:.85rem;padding:6px 10px;border-radius:20px;background:#e7f3ef;color:#174e40}
+    .actions{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0}.actions a,button.refresh{font:inherit;font-weight:600;padding:12px 18px;border-radius:8px;border:1px solid #277260;text-decoration:none;cursor:pointer}
+    .actions a{background:#277260;color:white}.actions a.secondary,button.refresh{background:white;color:#174e40}
+    button:focus-visible,a:focus-visible{outline:3px solid #b8621d;outline-offset:3px}
+    .note{font-size:.92rem;color:#4c606b}.attention{padding:14px;border-radius:8px;background:#fff2de;color:#5f3b10}
+    #error{color:#8b2525}small{display:block;margin-top:8px;color:#566870}[hidden]{display:none!important}
+    @media(max-width:720px){main{grid-template-columns:1fr;margin-top:20px;gap:18px}header{padding:22px 20px}.panel,aside{padding:18px}.actions{flex-direction:column}.actions a{text-align:center}}
+  </style>
+</head>
+<body>
+  <header><p>DIGITAL PRODUCT FACTORY PRO</p><h1>Your book review</h1></header>
+  <main>
+    <aside aria-label="Saved review books"><h2>Saved books</h2>
+      {% for book in books %}<button class="book" data-id="{{book.id}}" aria-pressed="{{'true' if book.id==selected else 'false'}}">{{book.title}}</button>{% else %}<p>No review books are available yet.</p>{% endfor %}
+    </aside>
+    <section class="panel" aria-label="Book progress">
+      <span class="badge" id="state">{% if selected %}Loading saved progress{% else %}No book selected{% endif %}</span>
+      <h2 id="title" style="margin-top:18px">{% if selected %}Opening your saved book{% else %}Your completed review files will appear here{% endif %}</h2>
+      <div role="status" aria-live="polite"><p id="activity"></p><p id="counts" class="note"></p><p id="attention" class="attention" hidden></p></div>
+      <p id="error" role="alert" hidden></p>
+      <div class="actions" id="files" hidden>
+        <a id="pdf" target="_blank" rel="noopener">Open review PDF</a>
+        <a id="zip" class="secondary" download="package.zip">Save review ZIP</a>
+      </div>
+      <p class="note" id="review-note" hidden>Review the complete manuscript and page layout before publishing. These files have not been approved for sale.</p>
+      <button class="refresh" id="refresh" {% if not selected %}hidden{% endif %}>Refresh progress</button>
+      <small>Completed chapters and drafts stay saved when processing stops.</small>
+    </section>
+  </main>
+  <script>
+    const statusPattern={{url_for('ebook_recovery.book_status',book_id='BOOK_ID')|tojson}};
+    let selected={{selected|tojson}},timer=null;
+    const node=id=>document.getElementById(id);
+    const labels={RUNNING:'In progress',WAITING_SERVICE:'Waiting for processing',NEEDS_ATTENTION:'Needs attention',REVIEW:'Ready for your review',READY:'Reviewed edition',WAITING_TITLE:'Title choice saved',WAITING_COVER:'Preparing the cover'};
+    async function refresh(){
+      clearTimeout(timer);if(!selected)return;
+      const id=selected,url=statusPattern.replace('BOOK_ID',encodeURIComponent(id));
+      node('error').hidden=true;
+      try{
+        const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not read this book.');
+        if(id!==selected)return;
+        node('title').textContent=data.title;node('state').textContent=labels[data.state]||data.state;
+        node('activity').textContent=data.activity||'Your saved edition is available.';
+        node('counts').textContent=typeof data.chapters_checked==='number'?`${data.chapters_checked} of ${data.chapters_total} chapters checked.`+(typeof data.words_saved==='number'?` ${data.words_saved} words saved.`:''):'';
+        node('attention').textContent=data.attention||'';node('attention').hidden=!data.attention;
+        const ready=['REVIEW','READY'].includes(data.state)&&['ebook.pdf','package.zip'].every(name=>(data.files||[]).includes(name));
+        node('files').hidden=!ready;node('review-note').hidden=!ready;
+        if(ready){node('pdf').href=url+'/files/ebook.pdf?preview=1';node('zip').href=url+'/files/package.zip?preview=1';}
+        if(['RUNNING','WAITING_SERVICE','WAITING_TITLE','WAITING_COVER'].includes(data.state))timer=setTimeout(refresh,10000);
+      }catch(error){if(id===selected){node('error').textContent=error.message;node('error').hidden=false;node('files').hidden=true;}}
+    }
+    document.querySelectorAll('.book').forEach(button=>button.addEventListener('click',()=>{
+      selected=button.dataset.id;document.querySelectorAll('.book').forEach(other=>other.setAttribute('aria-pressed',String(other===button)));
+      node('files').hidden=true;node('review-note').hidden=true;node('refresh').hidden=false;node('state').textContent='Loading saved progress';refresh();
+    }));
+    node('refresh').addEventListener('click',refresh);refresh();
+  </script>
+</body>
+</html>

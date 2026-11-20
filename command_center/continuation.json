@@ -905,6 +905,14 @@
         "fields": "unit id,stage,policy,input_sha,output_sha,state,attempts"
       },
       "submission_guard": "Durable SUBMITTING claim committed before SDK call, then SUBMITTED with exact run ID. Never repeat a submission on ambiguous outcome. Separate additional allowance consumed inside worker before model startup. Original allowance remains consumed."
+    },
+    "private_review_page_20261120": {
+      "version": "1.9.91",
+      "status": "source ready for publication, not deployed",
+      "path": "/api/ebook-recovery/workspace",
+      "scope": "Signed read-only owner-scoped book list/status and shared PDF/ZIP review. No POST routes or paid dispatch changes. Existing snapshot ownership rechecked.",
+      "ongoing_task_image": "1.9.90 / 971b5890ed50db11f04d99ee72e78774fa76f2da",
+      "verification": "20 private HTTP/shared-file/protection cases passed in19.65s. Real Chromium desktop1280x900 and phone390x844 checks passed with actual fixture ZIP download matching shared bytes, no JavaScript errors, GET-only requests, correct file hiding on book switch and no horizontal overflow. Both screenshots inspected; supplied-text editions omit unavailable word count."
     }
   },
   "next_actions": [
