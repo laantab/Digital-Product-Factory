@@ -75,6 +75,17 @@ def test_new_task_keeps_existing_compute_plan_and_is_disabled_by_default(monkeyp
             def decorate(fn):calls.append((settings,fn.__name__));return fn
             return decorate
     retry=object();task=register(App(),plan='flex',retry=retry)
-    assert calls==[({'timeout_seconds':6300,'plan':'flex','retry':retry},'create_topic_ebook')]
+    assert calls==[({'timeout_seconds':3600,'plan':'flex','retry':retry},'create_topic_ebook')]
     with pytest.raises(ValueError,match='no model or paid provider'):
         task(None,'alice','unused')
+
+
+def test_approved_pilot_allowance_is_one_use_and_book_scoped(hosted,monkeypatch):
+    from services.ebook_v2.workflow_topics import claim_pilot
+    app,client,books,*_=hosted
+    monkeypatch.setenv('FACTORY_V2_TOPIC_PILOT_BOOK','approved-book')
+    with pytest.raises(ValueError,match='not the approved'):
+        claim_pilot(books,'alice','another-book')
+    claim_pilot(books,'alice','approved-book')
+    with pytest.raises(ValueError,match='already used'):
+        claim_pilot(books,'alice','approved-book')

@@ -83,7 +83,8 @@ recover_saved_ebook = register_recovery(app, plan=TASK_PLAN, retry=TASK_RETRY)
 
 from services.ebook_v2.workflow_topics import register as register_topics
 create_topic_ebook = register_topics(app,
-    plan=os.environ.get('FACTORY_V2_TOPIC_WORKER_PLAN', TASK_PLAN), retry=TASK_RETRY)
+    plan=os.environ.get('FACTORY_V2_TOPIC_WORKER_PLAN', TASK_PLAN),
+    retry=Retry(max_retries=0, wait_duration_ms=1000, backoff_scaling=1.0))
 
 
 def _version() -> str:

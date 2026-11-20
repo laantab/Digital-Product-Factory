@@ -1,3 +1,17 @@
+## 1.9.87 — Bound the approved hosted topic pilot
+
+### What changed
+The owner approved one on-demand 8GB worker test, limited to one hour of task compute. The topic task now has a 3600-second timeout, zero automatic task retries, a shorter processing budget and a durable single-use book-scoped allowance. Existing legacy task retry/compute settings are unchanged.
+
+### What was fixed
+The previous task timeout and inherited retries could exceed the approved budget. Build-time installation now has an explicit checksum-verified official CPU runtime installer and free-model download; inference runs only inside the approved task and stops its local service on exit. No cloud or paid-model fallback is added.
+
+### Do the steps change?
+The pilot is not started by deployment. Install the workflow runtime, configure the approved book and enable the dedicated task, then invoke exactly once. The customer Create UI remains a separate unfinished integration.
+
+### Release gate
+Verify timeout, single-use allowance, duplicate submission, owner isolation and existing worker/PDF/ZIP tests. Actual hosted model installation and the single paid-compute pilot must be observed before claiming success.
+
 ## 1.9.86 — Separate automatic topic-worker adapter
 
 ### What changed

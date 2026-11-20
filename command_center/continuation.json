@@ -3,14 +3,19 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-20T03:44:13.252841+00:00",
+  "checked_at": "2026-11-20T03:50:40.403633+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
     "hosted_integration_engineering": true,
     "acceptance_priority": "Recover an existing stalled customer book before a fresh full-flow book; reuse accepted chapters and minimize ChatGPT credits and repeated checks.",
     "paid_generation": false,
-    "protect_other_generators": true
+    "protect_other_generators": true,
+    "hosted_topic_pilot": {
+      "approved": true,
+      "scope": "One on-demand2c-8g task run, maximum3600seconds, no automatic task retries; published compute up to0.70USD. No paid model API calls or new service.",
+      "approved_in_chat": "2026-11-19: user Yes to single one-hour compute test"
+    }
   },
   "evidence": {
     "local_studio": {
@@ -789,6 +794,15 @@
       },
       "runtime_constraint": "Official current Render workflow limits: flex has up to4GB RAM. Accepted qwen3:8b test runtime needs more. Existing2c-8g task plan is published at0.70USD/hour, billed during runs. Do not upgrade or run billable inference without an explicit user budget decision. No new service created.",
       "remaining": "Choose approved runtime approach; install/verify accepted local-only model on that runtime; implement signed customer Create and review controls with route classification/protection proof; verify live actual book. Current adapter test is a local protocol fixture, not real model or hosted acceptance."
+    },
+    "approved_pilot_setup": {
+      "version": "1.9.87",
+      "status": "preparing runtime installation; no paid task run started",
+      "limits": "Task timeout3600; processing budget2700 plus bounded model operation; SDK retries0; durable single-use book-scoped allowance.",
+      "runtime": "Explicit official checksum-verified Ollama CPU archive and qwen3:8b download at workflow build time. Local-only service started/stopped within task.",
+      "configuration": "Confirmed dashboard Save only: FACTORY_V2_TOPIC_WORKER_PLAN=2c-8g and FACTORY_V2_TOPIC_WORKER_ENABLED=0. No task started.",
+      "remaining": "Publish/check source, configure workflow build command, install model, create owned pilot book and set exact allowlisted ID, enable once and launch one run. Customer Create UI remains unfinished.",
+      "local_verification": "18 worker, pilot budget/allowance, saved recovery and protection cases passed in9.48s; installer and managed runtime compiled; diff check passed."
     }
   },
   "next_actions": [
