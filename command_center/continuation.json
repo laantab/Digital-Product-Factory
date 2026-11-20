@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-20T21:03:57.645151+00:00",
+  "checked_at": "2026-11-20T21:15:33.786324+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -1087,8 +1087,8 @@
     },
     "customer_review_controls_20261120": {
       "version": "1.9.94",
-      "checked_at": "2026-11-20T21:03:57.645151+00:00",
-      "state": "candidate_not_deployed_after_protection_running",
+      "checked_at": "2026-11-20T21:15:33.786324+00:00",
+      "state": "locally_verified_ready_for_existing_web_deploy",
       "scope": "Explicit owner acknowledgement and CAS approval of exact shared review PDF/ZIP; no local-file requirement or generation. Four independently owner-scoped review endpoints classified for ordinary customers.",
       "studio": {
         "tests": 185,
@@ -1191,33 +1191,113 @@
         "tests/test_word_search_stability.py",
         "tests/test_word_search_topic_scope_contract.py"
       ],
-      "protected_after": "running in local session44792; do not claim success",
-      "customer_guard_after": "running in local session58042; no failure observed at checkpoint",
+      "protected_after": {
+        "tests": 1139,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 762.531,
+        "junit_sha256": "66b3f4e687b31545d581ba20fffefc13b0cf1d3e678de07d079ffa867f095554",
+        "case_ids_sha256": "40b52d4c8871ee9113728ff1579e531bb3ef767a29a6ad330e95e342b5188e8a"
+      },
+      "customer_guard_after": {
+        "tests": 60,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 131.974,
+        "junit_sha256": "e27dc04e64b93dde0569a3f9f9535632dad00d653dc92e031e8d003d1dcd1344",
+        "case_ids_sha256": "43fb6f02f371a7f4e888aae571e0d5156f666e556ee7db16e1a982e4b52c868b"
+      },
       "browser_review": "Actual Chromium1280x900 and390x844 images inspected before/after acknowledgement; no clipping or overflow. Approval sends one explicit POST.",
       "baseline_failure_reproduced": "Normal non-admin Factory request to existing review workspace returned403 before classification. Fixture first corrected to use the authenticated snapshot API because generic project serialization omits owner identity.",
       "limits": [
         "Create and Resume controls remain unfinished.",
         "Normal signed-in production review and actual hosted model performance remain unverified.",
-        "Five shared-service protections are explicitly UNLOCKED pending matching after-suite proof and relock at a real tested source commit."
+        "Current-source complete release CI is not yet claimed."
       ],
       "generation_calls_started": 0,
       "new_hosted_task_runs": 0,
       "compute_allowances_reset": false,
       "deploy_triggered": false,
-      "evidence_file": "release_evidence/ebook_v2_customer_review_20261120.json",
-      "remote_ci": "not yet submitted"
+      "source_commit": "f37477918d416c909c1c90e36af0dd7e6dd6d9b9",
+      "identical_protected_case_ids": true,
+      "relocked_functions": [
+        "word_search",
+        "coloring_book",
+        "crossword",
+        "invite_protection",
+        "ebook_one_button_completion"
+      ],
+      "remote_ci": {
+        "source_commit": "f37477918d416c909c1c90e36af0dd7e6dd6d9b9",
+        "runs": [
+          {
+            "id": 44817032615,
+            "name": "Account isolation PostgreSQL integration",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 44817032463,
+            "name": "Book recovery PostgreSQL preservation",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 44817032592,
+            "name": "Local ebook chapter bound and protected regression",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "id": 44817032547,
+            "name": "Local manuscript correction billing and protected regressions",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "id": 44817032449,
+            "name": "One-button ebook memory and protected fast gate",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "id": 44817032509,
+            "name": "Ebook Safe Mode correction and protected regressions",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "id": 44817032540,
+            "name": "Release review bounded ZIP memory and protected functions",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "id": 44817032528,
+            "name": "Book Studio Windows and Linux customer paths",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ],
+        "note": "Studio Windows/Linux185 cases plus version31/signed recovery12/Fast Gate workflow succeeded; both PostgreSQL workflows succeeded. Five broader regressions remain running."
+      },
+      "relock_junit_sha256": "50de2764aba5e1aac10943f66682ad2b865b742574c4cee0ea57a3449c8526da",
+      "relock_cases_passed": 9,
+      "evidence_file": "release_evidence/ebook_v2_customer_review_20261120.json"
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
-      "status": "customer_approval_candidate_checks_running",
-      "action": "Inspect pending protected after suite and customer guard tests for v1.9.94. Relock the five explicitly unlocked shared-service protections only after matching before/after proof at an actual source commit. Inspect new CI, then deploy/verify the review controls. Do not start additional billed tasks. Create/Resume controls and real model latency remain unfinished."
+      "status": "customer_review_ready_for_deploy",
+      "action": "Deploy verified v1.9.94 customer review controls through the existing web service and verify the actual live private page. All1139 affected protection cases passed before/after and five functions relocked at real source f374779. Preserve books; no generation or new billed task. Create/Resume controls and real model speed remain unfinished."
     },
     {
       "id": "finish_customer_recovery_controls",
-      "status": "customer_approval_candidate_not_deployed",
-      "action": "Approval UI and shared-byte verification implemented;185 Studio cases and56 focused cases passed. Normal customer classification added after1139 baseline cases passed; after proof remains running. Finish guarded deployment and normal signed-in acceptance, then Create/Resume controls."
+      "status": "customer_approval_locally_verified",
+      "action": "Customer approval and explicit owner classification passed185 Studio cases,60 full Factory guard cases and1139 identical before/after protection cases. Deploy and verify normal signed-in delivery; then finish Create/Resume without enabling unauthorized spending."
     },
     {
       "id": "recover_existing_stalled_book",
@@ -1251,6 +1331,6 @@
     }
   ],
   "completion": "Assisted hosted retained-topic book completed in one additional approved Render run; actual14-page PDF and matching ZIP remote bytes verified, all pages reviewed and files saved for user. Saved-manuscript recovery also previously verified. Fully automatic Factory/customer Create flow and publication-quality approval are NOT complete.",
-  "blocker": "v1.9.94 approval candidate not deployed; protected after run and current-source CI pending, five protections temporarily UNLOCKED. Create/Resume and normal signed-in live acceptance unfinished. No new billed task authorized.",
+  "blocker": "Customer approval is locally verified and protections relocked; existing web deployment and normal live signed-in acceptance pending. Create/Resume and hosted model performance remain unfinished. Both billed topic-run allowances remain consumed.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
