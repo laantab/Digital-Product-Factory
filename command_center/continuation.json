@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-20T12:31:57.190331+00:00",
+  "checked_at": "2026-11-20T12:40:07.942989+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -802,7 +802,7 @@
       "limits": "Task timeout3600; processing budget2700 plus bounded model operation; SDK retries0; durable single-use book-scoped allowance.",
       "runtime": "Explicit official checksum-verified Ollama CPU archive and qwen3:8b download at workflow build time. Local-only service started/stopped within task.",
       "configuration": "Verified dashboard values: topic plan2c-8g, enabled1, exact allowlisted pilot book ID. Existing legacy tasks remain Flex. Workflow build command pip install -r requirements.txt zstandard==0.23.0 && python scripts/prepare_ebook_writer.py.",
-      "remaining": "Generation throughput remains unresolved. Customer signed-in Create/review UI remains unfinished. Do not launch another billed run or clear either allowance without new explicit budget approval.",
+      "remaining": "Request a new explicit compute budget before any further hosted generation; previous one-run allowance is consumed. Prepare a separately bounded continuation of this exact saved book after approval, preserving all completed units. Do not restart from topic. Signed-in customer Create/review UI and actual hosted fresh-book PDF/ZIP acceptance remain unfinished. Current workflow version still1.9.87; deploy a verified continuation task only after its separate new budget decision. No paid provider APIs.",
       "local_verification": "18 worker, pilot budget/allowance, saved recovery and protection cases passed in9.48s; installer and managed runtime compiled; diff check passed.",
       "source_commit": "d3ec968906a2ed5e62053a7ab673a2d86b3d7f6e",
       "workflow_version": "wfv-dbvs9vui0phs73b0o4m0",
@@ -818,7 +818,7 @@
       "runtime_installation": "Official checksum-verified CPU runtime and qwen3:8b installed; actual inference saved title, outline, two independently reviewed chapters and a third draft. No completed book.",
       "sdk_verification": "Actual Render1.1.0 SDK accepted2c-8g task registration and Retry(max_retries=0).",
       "submission_guard": "Durable ebook_v2_dispatch SUBMITTING claim before SDK network call, then SUBMITTED with exact run ID; task additionally consumes a single-use book-scoped allowance.",
-      "next_action": "Generation throughput remains unresolved. Customer signed-in Create/review UI remains unfinished. Do not launch another billed run or clear either allowance without new explicit budget approval.",
+      "next_action": "Request a new explicit compute budget before any further hosted generation; previous one-run allowance is consumed. Prepare a separately bounded continuation of this exact saved book after approval, preserving all completed units. Do not restart from topic. Signed-in customer Create/review UI and actual hosted fresh-book PDF/ZIP acceptance remain unfinished. Current workflow version still1.9.87; deploy a verified continuation task only after its separate new budget decision. No paid provider APIs.",
       "completed_at": "2026-11-20T04:52:32.768065Z",
       "error": "Continue from saved topic checkpoints; do not create a replacement book",
       "book_state": "NEEDS_ATTENTION",
@@ -827,22 +827,50 @@
       "saved_next_draft": true,
       "final_artifacts": false,
       "allowance_consumed": true,
-      "timing_findings": "All saved units attempted once. First chapter draft04:09:53Z, expansion04:17:58Z, assembly04:22:50Z, review04:22:53Z; second draft04:25:45Z, expansion04:33:50Z, assembly04:39:39Z, review04:39:43Z; third draft04:42:55Z. Draft/expansion/assembly consumed most elapsed time; no automatic retry loop observed.",
-      "live_status_repair": "Authorized existing web-service shell applied metadata-only PROCESSING_BUDGET/NEEDS_ATTENTION via topics.save CAS; revision14->15. Before/after all saved unit records exactly equal, generation_started=false."
+      "timing_findings": "Saved unit creation times delimit processing intervals, not completion timestamps: draft0 queued04:09:53Z, expansion0 queued04:17:58Z, deterministic assembly0 queued04:22:50Z, review0 queued04:22:53Z; draft1 queued04:25:45Z, expansion1 queued04:33:50Z, deterministic assembly1 queued04:39:39Z, review1 queued04:39:43Z; draft2 queued04:42:55Z. All11 units COMPLETE with attempts1. Drafts/expansions account for most elapsed time; assembly is deterministic and took about3seconds between enqueue boundaries.",
+      "live_status_repair": "Authorized existing web-service shell applied metadata-only PROCESSING_BUDGET/NEEDS_ATTENTION via topics.save CAS; revision14->15. Before/after all saved unit records exactly equal, generation_started=false.",
+      "saved_words": {
+        "reviewed_chapter_1": 752,
+        "reviewed_chapter_2": 891,
+        "third_draft": 619
+      }
     },
     "processing_budget_fix_20261120": {
       "version": "1.9.88",
-      "status": "source ready for publication; not deployed",
+      "status": "v1.9.88 published and web deployed; task workflow not redeployed; live pilot status repaired without inference",
       "verification": "53 focused worker/topic/recovery/protection cases passed, one browser case deselected, in53.26s. Version and diff checks passed. Real stopped pilot metadata corrected live; saved unit records unchanged.",
       "scope": "Record time-budget stop, preserve completed units, clear stop reason only on explicit resume, log response duration/token counts without prose. No model/runtime or paid allowance changes.",
-      "remaining": "Publish source and observe CI; runtime throughput and signed-in customer UI remain unverified."
+      "remaining": "Request a new explicit compute budget before any further hosted generation; previous one-run allowance is consumed. Prepare a separately bounded continuation of this exact saved book after approval, preserving all completed units. Do not restart from topic. Signed-in customer Create/review UI and actual hosted fresh-book PDF/ZIP acceptance remain unfinished. Current workflow version still1.9.87; deploy a verified continuation task only after its separate new budget decision. No paid provider APIs.",
+      "source_commit": "87611803c6acc45309e11cb93ab1599dec94e15f",
+      "remote_checks": {
+        "studio_run": 44736658186,
+        "postgres_run": 44736658389,
+        "postgres": "success",
+        "account_isolation_run": 44736658257,
+        "account_isolation": "success",
+        "studio": "Whole Windows/Linux/version/signed-recovery/protected-fast-gate workflow44736658186 succeeded.",
+        "broader_workflows": "Still running at last observation; no full current-source release pass claimed.",
+        "linux_studio": "150 passed in127.16s",
+        "windows_studio": "150 passed in149.65s",
+        "version": "31-case step succeeded",
+        "signed_recovery": "11-case step succeeded",
+        "protected_fast_gate": "success"
+      },
+      "web_deploy": {
+        "id": "dep-dc03ugifngtc73aumlog",
+        "source_commit": "87611803c6acc45309e11cb93ab1599dec94e15f",
+        "status": "live",
+        "finished_at": "2026-11-20T12:39:44.60863Z",
+        "instance": "srv-da8qisegekts7380vdvg-mpn7h",
+        "verification": "New gunicorn worker boot and Render service-live message verified. Root returns existing401 invitation gate; signed customer UI acceptance not claimed."
+      }
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
       "status": "hosted_pilot_failed_retained_work",
-      "action": "Generation throughput remains unresolved. Customer signed-in Create/review UI remains unfinished. Do not launch another billed run or clear either allowance without new explicit budget approval."
+      "action": "Request a new explicit compute budget before any further hosted generation; previous one-run allowance is consumed. Prepare a separately bounded continuation of this exact saved book after approval, preserving all completed units. Do not restart from topic. Signed-in customer Create/review UI and actual hosted fresh-book PDF/ZIP acceptance remain unfinished. Current workflow version still1.9.87; deploy a verified continuation task only after its separate new budget decision. No paid provider APIs."
     },
     {
       "id": "finish_customer_recovery_controls",
