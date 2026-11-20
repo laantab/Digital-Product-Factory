@@ -23,6 +23,8 @@ def blueprint(connection_factory):
     @bp.before_request
     def protect():
         if not current_user.is_authenticated or not current_user.is_active:
+            if request.endpoint=='ebook_recovery.workspace':
+                return render_template('ebook_v2_review.html',sign_in_required=True,return_path=request.full_path),401
             return jsonify(error="Please sign in."), 401
         if request.method == "POST":
             token = request.headers.get("X-CSRF-Token", "")

@@ -155,7 +155,9 @@ def test_private_review_page_lists_only_owned_books_and_never_builds(hosted,monk
     assert b'&lt;script&gt;alert(1)&lt;/script&gt;' in response.data
     assert b'Other account private title' not in response.data
     assert client.get('/api/ebook-recovery/workspace?book='+foreign['id']).status_code==404
-    assert app.test_client().get('/api/ebook-recovery/workspace').status_code==401
+    signed_out=app.test_client().get('/api/ebook-recovery/workspace')
+    assert signed_out.status_code==401 and b'Sign in to view your saved books' in signed_out.data
+    assert b'href="/auth/signin"' in signed_out.data and own['id'].encode() not in signed_out.data
     assert books.get('alice',own['id'])['revision']==own['revision']
 
 

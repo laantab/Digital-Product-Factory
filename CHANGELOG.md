@@ -1,3 +1,17 @@
+## 1.9.92 — Explain private review sign-in without exposing book data
+
+### What changed
+Signed-out visitors to the new review page see a clear link to the existing Factory sign-in page and a return control, rather than raw API JSON.
+
+### What was fixed
+The live read-only review URL correctly refused an unsigned browser but offered no usable sign-in guidance. The page remains private with HTTP401, and no book metadata is rendered before authentication. Status and file APIs retain their existing JSON refusal.
+
+### Do the steps change?
+Sign in with the existing Factory account, then open the saved review page. Existing authentication and credential handling are unchanged. No generation or publication action is added.
+
+### Release gate
+Verify signed-out HTML contains the existing sign-in link and no owned book IDs, then rerun private HTTP/protection checks and desktop/mobile read-only review checks. Verify live refusal is readable without bypassing authentication.
+
 ## 1.9.91 — Open private progress and review files without another build
 
 ### What changed

@@ -877,10 +877,10 @@
     },
     "approved_continuation_20261120": {
       "version": "1.9.90",
-      "status": "running; first full-chapter correction timed out, internal step retried; assisted candidates queued",
+      "status": "running; assisted first chapter passed its actual independent recheck, second recheck running",
       "original_run": "trn-0b54gdbvsceac2s6c73anil30",
       "book_id": "8dce9a74cd89435397a4341427418698",
-      "next_action": "Observe this exact billed run, currently finishing its already-running retry of the abandoned full-chapter copyedit; revised candidates are queued as separate work units in the same book. No further billed runs authorized. Require all four actual independent reviews, then inspect PDF/ZIP and every page. Preserve all11 original units and report assisted provenance plainly.",
+      "next_action": "Observe exact run trn-0b54gdc047n1gg92c73djct00; no new paid runs or allowance resets. First assisted recheck completed; three further chapter reviews and export remain. Inspect actual artifacts and every page, preserve all11 originals and disclose assisted provenance. Normal signed-in browser acceptance remains unverified.",
       "focused_tests": "21 worker, real fixture PDF/ZIP continuation, independent budget claims, existing recovery and protection cases passed in18.22s. Version and diff checks passed.",
       "superseded_worker_version": "wfv-dc041iss728c73ce6160",
       "superseded_source": "57c899bb989fce795de41247d462875ce952e3a6",
@@ -939,14 +939,20 @@
       "verification": "20 private HTTP/shared-file/protection cases passed in19.65s. Real Chromium desktop1280x900 and phone390x844 checks passed with actual fixture ZIP download matching shared bytes, no JavaScript errors, GET-only requests, correct file hiding on book switch and no horizontal overflow. Both screenshots inspected; supplied-text editions omit unavailable word count.",
       "source_commit": "f591ade79b4b65f4a3be0f934f0a18586f249583",
       "web_deploy": "dep-dc04bpbm8hqs739g4vh0",
-      "web_finished_at": "2026-11-20T13:07:52.140827Z"
+      "web_finished_at": "2026-11-20T13:07:52.140827Z",
+      "sign_in_candidate": {
+        "version": "1.9.92",
+        "status": "source ready, not deployed",
+        "verification": "20 focused private HTTP/shared-file/protection cases passed in22.54s. Desktop/phone real-browser checks passed including401 HTML sign-in guidance with no title leakage, existing sign-in link, real private ZIP download, GET-only requests and no JavaScript errors.",
+        "reason": "Live unsigned browser returned raw Please sign in JSON; replace it with readable private review sign-in guidance without changing authentication."
+      }
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
       "status": "approved_continuation_submitted",
-      "action": "Observe this exact billed run, currently finishing its already-running retry of the abandoned full-chapter copyedit; revised candidates are queued as separate work units in the same book. No further billed runs authorized. Require all four actual independent reviews, then inspect PDF/ZIP and every page. Preserve all11 original units and report assisted provenance plainly."
+      "action": "Observe exact run trn-0b54gdc047n1gg92c73djct00; no new paid runs or allowance resets. First assisted recheck completed; three further chapter reviews and export remain. Inspect actual artifacts and every page, preserve all11 originals and disclose assisted provenance. Normal signed-in browser acceptance remains unverified."
     },
     {
       "id": "finish_customer_recovery_controls",

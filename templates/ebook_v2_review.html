@@ -23,6 +23,14 @@
 </head>
 <body>
   <header><p>DIGITAL PRODUCT FACTORY PRO</p><h1>Your book review</h1></header>
+  {% if sign_in_required %}
+  <main style="display:block;max-width:640px">
+    <section class="panel"><h2>Sign in to view your saved books</h2>
+      <p>Use the Factory account that owns your books. Sign in, then return to this page and open your books.</p>
+      <div class="actions"><a href="/auth/signin" target="_blank" rel="noopener">Sign in to the Factory</a><a class="secondary" href="{{return_path}}">Open my books</a></div>
+    </section>
+  </main>
+  {% else %}
   <main>
     <aside aria-label="Saved review books"><h2>Saved books</h2>
       {% for book in books %}<button class="book" data-id="{{book.id}}" aria-pressed="{{'true' if book.id==selected else 'false'}}">{{book.title}}</button>{% else %}<p>No review books are available yet.</p>{% endfor %}
@@ -70,5 +78,6 @@
     }));
     node('refresh').addEventListener('click',refresh);refresh();
   </script>
+  {% endif %}
 </body>
 </html>
