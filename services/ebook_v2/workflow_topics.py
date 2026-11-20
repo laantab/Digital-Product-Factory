@@ -89,16 +89,47 @@ def claim_pilot(books,owner,book_id):
         conn.execute('INSERT INTO ebook_v2_topic_pilot VALUES (?,?,?)',('20261119-one-hour',str(owner),book_id))
 
 
+CONTINUATION_APPROVAL='20261120-continuation-one-hour'
+
+
+def claim_continuation(books,owner,book_id):
+    """Separate owner-approved hour; never reset the original pilot claim."""
+    from .topics import data
+    book=books.get(owner,book_id)
+    TopicDispatch.validate(book)
+    if (book_id!=os.environ.get('FACTORY_V2_TOPIC_PILOT_BOOK')
+            or book['state']!='NEEDS_ATTENTION'
+            or data(books,book).get('stop_reason')!='PROCESSING_BUDGET'):
+        raise ValueError('Choose the approved saved pilot stopped at its processing budget')
+    with books.units.transaction() as conn:
+        conn.execute('CREATE TABLE IF NOT EXISTS ebook_v2_topic_pilot (allowance TEXT PRIMARY KEY, owner TEXT NOT NULL, book_id TEXT NOT NULL)')
+        prior=conn.execute('SELECT owner,book_id FROM ebook_v2_topic_pilot WHERE allowance=?',
+                           ('20261119-one-hour',)).fetchone()
+        if not prior or prior['owner']!=str(owner) or prior['book_id']!=book_id:
+            raise ValueError('The original pilot allowance does not match this saved book')
+        used=conn.execute('SELECT 1 FROM ebook_v2_topic_pilot WHERE allowance=?',
+                          (CONTINUATION_APPROVAL,)).fetchone()
+        if used:raise ValueError('The additional approved hour was already used; no new run started')
+        conn.execute('INSERT INTO ebook_v2_topic_pilot VALUES (?,?,?)',
+                     (CONTINUATION_APPROVAL,str(owner),book_id))
+
+
 def register(app, *, plan, retry):
     @app.task(timeout_seconds=3600,plan=plan,retry=retry)
-    def create_topic_ebook(ctx, owner: str, book_id: str) -> dict:
+    def create_topic_ebook(ctx, owner: str, book_id: str, approval: str='') -> dict:
         if os.environ.get('FACTORY_V2_TOPIC_WORKER_ENABLED')!='1':
             raise ValueError('Fresh-topic processing is not enabled; no model or paid provider was started')
         from .hosted_runtime import configured_services,initialize
         services=configured_services();initialize(services)
         TopicDispatch.validate(services['books'].get(owner,book_id))
-        claim_pilot(services['books'],owner,book_id)
+        if approval:
+            if approval!=CONTINUATION_APPROVAL:raise ValueError('Unknown continuation approval')
+            claim_continuation(services['books'],owner,book_id)
+        else:claim_pilot(services['books'],owner,book_id)
         from .managed_writer import running
         with running():
+            if approval:
+                book=services['books'].get(owner,book_id)
+                services['books'].resume(owner,book_id,book['revision'])
             return run_topic_book(services,owner,book_id,budget=2700)
     return create_topic_ebook

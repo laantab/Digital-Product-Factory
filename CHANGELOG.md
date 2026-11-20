@@ -1,3 +1,17 @@
+## 1.9.89 — Resume the separately approved saved pilot
+
+### What changed
+The existing topic task accepts the exact additional one-hour approval for the original stopped pilot. A separate durable one-use allowance is consumed before the local writer starts. The original allowance remains consumed.
+
+### What was fixed
+A time-limited book can now continue its saved checkpoints under the additional budget explicitly approved by the owner on November20. Other books, accounts, unknown approvals, non-budget stops and repeated uses are refused before generation. Completed chapters are retained.
+
+### Do the steps change?
+One authorized administrative continuation is allowed, with the same3600-second task timeout,2700-second processing budget and zero automatic task retries. No new service or paid model API is used. This does not implement the customer Create/review UI.
+
+### Release gate
+Verify refusal cases, independent one-use allowances and an actual fixture PDF/ZIP after resume with previously completed unit records unchanged. Observe the exact hosted continuation, then review its actual manuscript/pages and downloaded bytes before claiming book completion.
+
 ## 1.9.88 — Preserve and explain time-limited topic stops
 
 ### What changed

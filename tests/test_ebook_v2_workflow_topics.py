@@ -110,3 +110,57 @@ def test_processing_budget_stop_is_visible_and_retains_completed_units(hosted,pr
     resumed=books.resume('alice',book['id'],stopped['revision'])
     assert resumed['state']=='RUNNING' and 'stop_reason' not in data(books,resumed)
     assert data(books,resumed)['units']==before
+
+
+def test_continuation_allowance_requires_original_stopped_book_and_is_one_use(hosted,monkeypatch):
+    from services.ebook_v2.workflow_topics import claim_pilot,claim_continuation
+    from services.ebook_v2.topics import data,save
+    app,client,books,*_=hosted
+    book=books.create('alice','topic:approved-continuation-001',topic_spec())
+    monkeypatch.setenv('FACTORY_V2_TOPIC_PILOT_BOOK',book['id'])
+    with pytest.raises(ValueError,match='stopped at'):
+        claim_continuation(books,'alice',book['id'])
+    state=data(books,book);state['stop_reason']='PROCESSING_BUDGET'
+    book=save(books,book,state,'NEEDS_ATTENTION')
+    with pytest.raises(ValueError,match='does not match'):
+        claim_continuation(books,'alice',book['id'])
+    claim_pilot(books,'alice',book['id'])
+    with pytest.raises(LookupError):claim_continuation(books,'bob',book['id'])
+    claim_continuation(books,'alice',book['id'])
+    with pytest.raises(ValueError,match='already used'):
+        claim_continuation(books,'alice',book['id'])
+    with pytest.raises(ValueError,match='already used'):
+        claim_pilot(books,'alice',book['id'])
+
+
+def test_approved_continuation_reuses_completed_units_and_delivers_review_files(hosted,provider,monkeypatch):
+    from contextlib import nullcontext
+    from services.ebook_v2.topics import data
+    from services.ebook_v2.workflow_topics import claim_pilot,CONTINUATION_APPROVAL
+    from services.ebook_v2 import hosted_runtime,managed_writer
+    app,client,books,artifacts,*_=hosted
+    services=app.extensions['ebook_v2_hosted']
+    book=books.create('alice','topic:continued-retained-001',topic_spec())
+    books.advance('alice',book['id']);books.advance('alice',book['id'])
+    completed={k:books.units.get('alice',v) for k,v in data(books,books.get('alice',book['id']))['units'].items()}
+    with pytest.raises(RuntimeError):
+        run_topic_book(services,'alice',book['id'],budget=0,ready=lambda:True)
+    monkeypatch.setenv('FACTORY_V2_TOPIC_WORKER_ENABLED','1')
+    monkeypatch.setenv('FACTORY_V2_TOPIC_PILOT_BOOK',book['id'])
+    claim_pilot(books,'alice',book['id'])
+    monkeypatch.setattr(hosted_runtime,'configured_services',lambda:services)
+    monkeypatch.setattr(managed_writer,'running',nullcontext)
+    class App:
+        def task(self,**settings):
+            assert settings['timeout_seconds']==3600
+            return lambda fn:fn
+    task=register(App(),plan='2c-8g',retry=object())
+    with pytest.raises(ValueError,match='Unknown continuation'):
+        task(None,'alice',book['id'],'unapproved')
+    assert task(None,'alice',book['id'],CONTINUATION_APPROVAL)['state']=='REVIEW'
+    units=data(books,books.get('alice',book['id']))['units']
+    assert all(books.units.get('alice',units[k])==v for k,v in completed.items())
+    pdf,_=artifacts.download('alice',book['id'],'ebook.pdf',preview=True)
+    package,_=artifacts.download('alice',book['id'],'package.zip',preview=True)
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        assert archive.testzip() is None and archive.read('ebook.pdf')==pdf
