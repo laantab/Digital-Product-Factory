@@ -118,3 +118,37 @@ def test_invalid_json_is_a_request_error_and_original_is_unchanged(accounts):
                              headers={'X-CSRF-Token':info['csrf_token']})
     assert response.status_code==400
     assert database.get_project(original['id'])==original
+
+
+def test_normal_customer_can_review_only_owned_shared_edition(accounts,tmp_path,monkeypatch):
+    from services.ebook_v2.books import Books
+    from services.ebook_v2.shared_artifacts import SharedArtifacts
+    from services.storage.local import LocalFilesystemDriver
+    from tests.ebook_v2_fixture import spec
+    users,projects,_,clients=accounts
+    owner=users[0]['id'];books=Books(tmp_path/'reviews.db',tmp_path/'worker');books.initialize()
+    artifacts=SharedArtifacts(books,LocalFilesystemDriver(tmp_path/'shared'));artifacts.initialize()
+    monkeypatch.setitem(app.extensions,'ebook_v2_hosted',{'books':books,'artifacts':artifacts})
+    original=database.get_project(projects[0]['id'])
+    snapshot=preserve(clients[0],projects[0]).json['snapshot_id']
+    book=books.create(owner,'snapshot:'+snapshot,spec())
+    for _ in range(20):
+        book=books.advance(owner,book['id'])
+        if book['state']=='REVIEW':break
+    artifacts.publish(owner,book['id'])
+    url='/api/ebook-recovery/books/'+book['id']
+    page=clients[0].get('/api/ebook-recovery/workspace?book='+book['id'])
+    assert page.status_code==200
+    assert clients[0].get(url).json['state']=='REVIEW'
+    info=source(clients[0],projects[0]).json
+    body={'revision':book['revision'],'reviewed':True};headers={'X-CSRF-Token':info['csrf_token']}
+    for foreign in clients[1:]:
+        token=source(foreign,projects[1]).json.get('csrf_token') if foreign is clients[1] else None
+        if token is None:
+            with foreign.session_transaction() as session:session['ebook_recovery_csrf']='foreign-test-token'
+            token='foreign-test-token'
+        assert foreign.get(url).status_code==404
+        assert foreign.post(url+'/approve',json=body,headers={'X-CSRF-Token':token}).status_code==404
+    assert clients[0].post(url+'/approve',json=body,headers=headers).status_code==200
+    assert clients[0].get(url+'/files/package.zip').status_code==200
+    assert database.get_project(original['id'])==original

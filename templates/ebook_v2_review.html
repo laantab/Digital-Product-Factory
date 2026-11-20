@@ -15,6 +15,7 @@
     .badge{display:inline-block;font-size:.85rem;padding:6px 10px;border-radius:20px;background:#e7f3ef;color:#174e40}
     .actions{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0}.actions a,button.refresh{font:inherit;font-weight:600;padding:12px 18px;border-radius:8px;border:1px solid #277260;text-decoration:none;cursor:pointer}
     .actions a{background:#277260;color:white}.actions a.secondary,button.refresh{background:white;color:#174e40}
+    .review-control{padding:16px;background:#f1f7f4;border-radius:10px;margin:18px 0}.review-control label{display:flex;gap:12px;line-height:1.5}.review-control input{width:22px;height:22px;flex-shrink:0}button:disabled{opacity:.55;cursor:default}
     button:focus-visible,a:focus-visible{outline:3px solid #b8621d;outline-offset:3px}
     .note{font-size:.92rem;color:#4c606b}.attention{padding:14px;border-radius:8px;background:#fff2de;color:#5f3b10}
     #error{color:#8b2525}small{display:block;margin-top:8px;color:#566870}[hidden]{display:none!important}
@@ -45,37 +46,68 @@
         <a id="zip" class="secondary" download="package.zip">Save review ZIP</a>
       </div>
       <p class="note" id="review-note" hidden>Review the complete manuscript and page layout before publishing. These files have not been approved for sale.</p>
+      <div class="review-control" id="approval" hidden>
+        <label><input id="reviewed" type="checkbox">I reviewed the complete manuscript and page layout for this edition.</label>
+        <p class="note">This saves your review decision. It does not publish the book or start another build.</p>
+        <button class="refresh" id="approve" disabled>Mark this edition reviewed</button>
+      </div>
       <button class="refresh" id="refresh" {% if not selected %}hidden{% endif %}>Refresh progress</button>
       <small>Completed chapters and drafts stay saved when processing stops.</small>
     </section>
   </main>
   <script>
     const statusPattern={{url_for('ebook_recovery.book_status',book_id='BOOK_ID')|tojson}};
-    let selected={{selected|tojson}},timer=null;
+    const csrfToken={{csrf_token|tojson}};
+    let selected={{selected|tojson}},timer=null,revision=null,requestNumber=0,busy=false;
     const node=id=>document.getElementById(id);
     const labels={RUNNING:'In progress',WAITING_SERVICE:'Waiting for processing',NEEDS_ATTENTION:'Needs attention',REVIEW:'Ready for your review',READY:'Reviewed edition',WAITING_TITLE:'Title choice saved',WAITING_COVER:'Preparing the cover'};
     async function refresh(){
-      clearTimeout(timer);if(!selected)return;
+      clearTimeout(timer);if(!selected||busy)return;
+      const sequence=++requestNumber;
       const id=selected,url=statusPattern.replace('BOOK_ID',encodeURIComponent(id));
       node('error').hidden=true;
       try{
         const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
         const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not read this book.');
-        if(id!==selected)return;
+        if(id!==selected||sequence!==requestNumber)return;
+        const changed=revision!==data.revision;revision=data.revision;
+        if(changed)node('reviewed').checked=false;
         node('title').textContent=data.title;node('state').textContent=labels[data.state]||data.state;
         node('activity').textContent=data.activity||'Your saved edition is available.';
         node('counts').textContent=typeof data.chapters_checked==='number'?`${data.chapters_checked} of ${data.chapters_total} chapters checked.`+(typeof data.words_saved==='number'?` ${data.words_saved} words saved.`:''):'';
         node('attention').textContent=data.attention||'';node('attention').hidden=!data.attention;
         const ready=['REVIEW','READY'].includes(data.state)&&['ebook.pdf','package.zip'].every(name=>(data.files||[]).includes(name));
         node('files').hidden=!ready;node('review-note').hidden=!ready;
+        node('approval').hidden=!ready||data.state!=='REVIEW';
+        node('approve').disabled=!node('reviewed').checked;
+        node('review-note').textContent=data.state==='READY'?'You marked this edition reviewed. Publishing is a separate step.':'Review the complete manuscript and page layout before publishing. These files have not been approved for sale.';
+        node('pdf').textContent=data.state==='READY'?'Open PDF':'Open review PDF';node('zip').textContent=data.state==='READY'?'Save ZIP':'Save review ZIP';
         if(ready){node('pdf').href=url+'/files/ebook.pdf?preview=1';node('zip').href=url+'/files/package.zip?preview=1';}
         if(['RUNNING','WAITING_SERVICE','WAITING_TITLE','WAITING_COVER'].includes(data.state))timer=setTimeout(refresh,10000);
-      }catch(error){if(id===selected){node('error').textContent=error.message;node('error').hidden=false;node('files').hidden=true;}}
+      }catch(error){if(id===selected&&sequence===requestNumber){node('error').textContent=error.message;node('error').hidden=false;node('files').hidden=true;node('approval').hidden=true;}}
     }
     document.querySelectorAll('.book').forEach(button=>button.addEventListener('click',()=>{
       selected=button.dataset.id;document.querySelectorAll('.book').forEach(other=>other.setAttribute('aria-pressed',String(other===button)));
-      node('files').hidden=true;node('review-note').hidden=true;node('refresh').hidden=false;node('state').textContent='Loading saved progress';refresh();
+      revision=null;node('reviewed').checked=false;node('approval').hidden=true;node('files').hidden=true;node('review-note').hidden=true;node('refresh').hidden=false;node('state').textContent='Loading saved progress';refresh();
     }));
+    node('reviewed').addEventListener('change',()=>node('approve').disabled=busy||!node('reviewed').checked);
+    node('approve').addEventListener('click',async()=>{
+      if(busy||!node('reviewed').checked||!Number.isInteger(revision))return;
+      busy=true;++requestNumber;clearTimeout(timer);
+      node('approve').disabled=true;node('refresh').disabled=true;
+      document.querySelectorAll('.book').forEach(button=>button.disabled=true);
+      node('error').hidden=true;
+      let failure='';
+      try{
+        const response=await fetch(statusPattern.replace('BOOK_ID',encodeURIComponent(selected))+'/approve',{
+          method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},
+          body:JSON.stringify({revision,reviewed:true})});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not save your review. Reload the book before trying again.');
+      }catch(error){failure=error.message;}
+      finally{busy=false;node('refresh').disabled=false;document.querySelectorAll('.book').forEach(button=>button.disabled=false);node('reviewed').checked=false;node('approve').disabled=true;}
+      await refresh();
+      if(failure){node('error').textContent=failure;node('error').hidden=false;}
+    });
     node('refresh').addEventListener('click',refresh);refresh();
   </script>
   {% endif %}

@@ -14,6 +14,7 @@ from werkzeug.exceptions import BadRequest
 from .legacy_snapshot import Snapshots
 from .recovery import CorruptCheckpoint, InputConflict
 from .recovery_handoff import preserve_and_queue, WorkerUnavailable
+from .books import Conflict
 
 
 def blueprint(connection_factory):
@@ -132,7 +133,8 @@ def blueprint(connection_factory):
         selected=request.args.get('book','')
         if selected and selected not in {row['id'] for row in visible}:
             raise LookupError('Book not found')
-        return render_template('ebook_v2_review.html',books=visible,
+        session.setdefault('ebook_recovery_csrf',secrets.token_urlsafe(32))
+        return render_template('ebook_v2_review.html',books=visible,csrf_token=session['ebook_recovery_csrf'],
                                selected=selected or (visible[0]['id'] if visible else ''))
 
     @bp.get("/books/<book_id>")
@@ -156,6 +158,19 @@ def blueprint(connection_factory):
         response.headers["X-Content-SHA256"] = checksum
         return response
 
+    @bp.post('/books/<book_id>/approve')
+    def approve_book(book_id):
+        body=request.get_json()
+        if (not isinstance(body,dict) or set(body)!={'revision','reviewed'}
+                or body['reviewed'] is not True or type(body['revision']) is not int or body['revision']<0):
+            raise ValueError('Confirm review of the complete manuscript and page layout.')
+        books,artifacts,book=recovery_book(book_id)
+        from .hosted_review import approve
+        result=approve(books,artifacts,current_user.id,book,body['revision'],
+                       recheck_owner=lambda:recovery_book(book_id))
+        return jsonify(book_id=result['id'],state=result['state'],revision=result['revision'],
+                       generation_started=False,publication_started=False)
+
     @bp.errorhandler(WorkerUnavailable)
     def worker_unavailable(error):
         return jsonify(error=str(error)), 503
@@ -164,6 +179,7 @@ def blueprint(connection_factory):
     def missing(error):
         return jsonify(error="Book not found."), 404
 
+    @bp.errorhandler(Conflict)
     @bp.errorhandler(InputConflict)
     def conflict(error):
         return jsonify(error=str(error)), 409

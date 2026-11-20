@@ -1,3 +1,17 @@
+## 1.9.94 — Review the saved shared edition without rebuilding
+
+### What changed
+The private book page provides an explicit manuscript-and-layout acknowledgement and a Mark this edition reviewed control. It verifies the actual saved shared PDF and ZIP against the completed export before recording the owner's decision. Publishing remains a separate action.
+
+### What was fixed
+Hosted approval no longer requires files left on a particular worker's disk. CSRF, current revision, source ownership including a final ownership recheck, package identity and an atomic revision update protect the decision. Opening or refreshing a book never approves it or starts processing.
+
+### Do the steps change?
+Open the saved review PDF, review the whole manuscript and layout, acknowledge that review, and mark the edition reviewed. Customer access is explicitly classified for these owner-scoped routes. No paid provider or new task is enabled. Create and Resume controls remain unfinished.
+
+### Release gate
+Verify signed-in customer ownership and admin isolation through the real Factory guard, stale/concurrent version refusal, source transfers, corruption, CSRF, actual PDF/ZIP bytes after worker-file loss, and desktop/mobile acknowledgement behavior. Run affected protected suites before and after the account-route classification change; keep generation and publication blocked by their existing boundaries.
+
 ## 1.9.93 — Correct affected passages without rewriting whole chapters
 
 ### What changed
