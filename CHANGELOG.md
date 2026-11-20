@@ -1,3 +1,17 @@
+## 1.9.85 — Enforce known fresh-book editorial defects
+
+### What changed
+The existing local writer and independent review now require practical instructions and the actual checklists a chapter promises. Generated titles reject internal example labels.
+
+### What was fixed
+Fresh-book review found a hypothetical label in the title, references to absent checklists and instructions to stack folding tables. Independent checks reject these defects even when the model approves them; generated-book export repeats the guard before creating files. The original manuscript and retained exports are not modified.
+
+### Do the steps change?
+Continue using the existing generator. Failed chapters use its bounded correction and independent recheck. Existing supplied manuscripts and accepted exports are retained. The live website fresh-topic connection is still unfinished.
+
+### Release gate
+Focused regressions exercise actual editorial refusal and export refusal without creating files. Run the existing topic, rendering and protection contracts; no paid generation or new service is required. This is not a general marketability certification.
+
 ## 1.9.84 — Render saved manuscript comparison tables
 
 ### What changed

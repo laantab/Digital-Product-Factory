@@ -182,6 +182,9 @@ def verified_file(root,receipt):
 def export_handler(payload,repair):
     from .visuals import prepare
     book={**payload["book"]}
+    from .editorial_contract import book_issues
+    findings=book_issues(book)
+    if findings:raise ValueError('Editorial correction required: '+' '.join(findings))
     if "visuals" not in book:book["visuals"]=prepare(book,payload["root"])
     pdf=render_pdf(book,root=payload["root"])
     from .final_quality import inspect as inspect_pages

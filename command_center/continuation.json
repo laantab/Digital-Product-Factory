@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-19T18:32:09.620831+00:00",
+  "checked_at": "2026-11-20T03:31:05.408462+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -653,7 +653,7 @@
     },
     "fresh_book_user_test_20261119": {
       "request_id": "holiday-guest-home-test-20261119-01",
-      "status": "in_progress: runtime installation; manuscript generation pending",
+      "status": "completed technically; original rejected on editorial review",
       "topic": "Preparing a small home for holiday guests without buying new storage",
       "chapters": 4,
       "minimum_words_per_chapter": 650,
@@ -667,14 +667,97 @@
       "run_id": 44588736234,
       "job_id": 135788651587,
       "url": "https://github.com/laantab/Digital-Product-Factory/actions/runs/44588736234",
-      "preflight": "Remote brief validation and all5 no-paid request tests passed; official CPU runtime installation in progress. No book completion claimed."
+      "preflight": "Remote brief validation and all5 no-paid request tests passed; official CPU runtime installation in progress. No book completion claimed.",
+      "original_artifact": 14562759956,
+      "artifact_sha256": "08c847617844d0c0357b412d462c0f3807ae2849d97e528529be61b3dc552f8b",
+      "original_chapter_words": [
+        796,
+        755,
+        807,
+        745
+      ],
+      "pages": 14,
+      "findings": [
+        "Internal hypothetical label in title",
+        "Promised checklists absent",
+        "Impractical stacked-table and sleeping-space guidance"
+      ],
+      "actual_download_hashes_verified": true,
+      "package_crc": true,
+      "embedded_pdf_matches": true
+    },
+    "editorial_correction_20261119": {
+      "version": "1.9.85",
+      "runtime_fix": "Existing local writer/reviewer and final generated-book export independently reject the known title/checklist/table defects. No shared legacy generators changed. Existing editions are not rewritten.",
+      "local_verification": "73 cases passed: 63 editorial/topic/real-PDF/protection cases (one browser case deselected), plus10 shared-artifact/HTTP-handoff/runtime cases. Version check and diff check passed. Remote CI not yet observed.",
+      "edition": {
+        "original_manuscript_sha256": "29987c00f10d8a6761ea59a2d5a023c0a00ab56587cf27f409ef043279e3f1b4",
+        "paragraphs_replaced": 15,
+        "checklists_added": 4,
+        "chapter_words": [
+          817,
+          762,
+          826,
+          829
+        ],
+        "files": {
+          "ebook.pdf": {
+            "key": "ebook-v2/6007bf6a6e7c4f26b778969f55238b7e/ebook.pdf",
+            "size": 65034,
+            "sha256": "713efa8c37d4a968096b497fe79ac6c7b8441cb91fe34da6df2479760b0a357d"
+          },
+          "package.zip": {
+            "key": "ebook-v2/6007bf6a6e7c4f26b778969f55238b7e/package.zip",
+            "size": 370305,
+            "sha256": "b87d55ce6a4082ca6e4eb957f95ea200b0444b2fe16061960869ea68ae0f4a82"
+          },
+          "manuscript.md": {
+            "key": "ebook-v2/6007bf6a6e7c4f26b778969f55238b7e/manuscript.md",
+            "size": 19980,
+            "sha256": "99b4cec74c96b6baa49799780575f5a51e8ba0f28bd1cf19dd2eadb0a6cbd62b"
+          },
+          "ebook.epub": {
+            "key": "ebook-v2/6007bf6a6e7c4f26b778969f55238b7e/ebook.epub",
+            "size": 138978,
+            "sha256": "40ec21a39f2fdf0ccc8397d7f3c19eb8d04fe20fa56d41cb4b385c097e116d8d"
+          },
+          "cover.jpg": {
+            "key": "ebook-v2/6007bf6a6e7c4f26b778969f55238b7e/cover.jpg",
+            "size": 192124,
+            "sha256": "6955d8867ff875eb8cf54c7d65a30bcbd956506a904f918ba7bc899083695ab3"
+          },
+          "manuscript.docx": {
+            "key": "ebook-v2/6007bf6a6e7c4f26b778969f55238b7e/manuscript.docx",
+            "size": 44081,
+            "sha256": "0ed778c4026e2aae08fbb9a15ad3b2c69d9189a988e038a868ae05c83659c653"
+          }
+        },
+        "page_quality": {
+          "contract": "final-pages-1",
+          "pdf_sha256": "713efa8c37d4a968096b497fe79ac6c7b8441cb91fe34da6df2479760b0a357d",
+          "pages": 14,
+          "source_text_present": true,
+          "text_within_page": true,
+          "photographs_expected": 0,
+          "photographs_placed": 0,
+          "photograph_pixels_verified": true,
+          "designer_review": "not_certified_by_mechanical_checks"
+        },
+        "editorial_process": "Targeted human editorial correction of retained generated manuscript; not a new model run.",
+        "live_factory_verified": false
+      },
+      "process": "15 targeted paragraph corrections and four added checklists by this assistant; retained generated manuscript, no new AI-provider calls. All14 rendered pages visually inspected. Not a fresh model acceptance of the correction and not certification of sale readiness.",
+      "delivered_review_files": {
+        "pdf": "libfile_dd9fef45882481918a67bf09f7a8c401",
+        "zip": "libfile_56d6bee7c18c8191967246595be7f24d"
+      }
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
-      "status": "external_run_in_progress",
-      "action": "Inspect run44588736234 before any new generation. If it completes, retrieve retained manuscript/PDF/ZIP, review actual text and pages, verify bytes and save user deliverables. This is a runner test, not hosted customer UI acceptance."
+      "status": "review_completed_correction_publishing",
+      "action": "Deliver retained corrected review edition. Do not regenerate the book. Verify candidate remote CI and complete the actual hosted no-paid fresh-topic connection; current GitHub model runner is a test path, not the customer Create button."
     },
     {
       "id": "finish_customer_recovery_controls",
