@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-20T21:15:33.786324+00:00",
+  "checked_at": "2026-11-20T21:19:19.513990+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -1087,8 +1087,8 @@
     },
     "customer_review_controls_20261120": {
       "version": "1.9.94",
-      "checked_at": "2026-11-20T21:15:33.786324+00:00",
-      "state": "locally_verified_ready_for_existing_web_deploy",
+      "checked_at": "2026-11-20T21:19:19.513990+00:00",
+      "state": "web_live_authentication_required_for_real_owner_acceptance",
       "scope": "Explicit owner acknowledgement and CAS approval of exact shared review PDF/ZIP; no local-file requirement or generation. Four independently owner-scoped review endpoints classified for ordinary customers.",
       "studio": {
         "tests": 185,
@@ -1212,14 +1212,14 @@
       "browser_review": "Actual Chromium1280x900 and390x844 images inspected before/after acknowledgement; no clipping or overflow. Approval sends one explicit POST.",
       "baseline_failure_reproduced": "Normal non-admin Factory request to existing review workspace returned403 before classification. Fixture first corrected to use the authenticated snapshot API because generic project serialization omits owner identity.",
       "limits": [
+        "Owner sign-in required for actual production saved-book UI/download acceptance. Do not mark a real edition reviewed without the owner acknowledgement.",
         "Create and Resume controls remain unfinished.",
-        "Normal signed-in production review and actual hosted model performance remain unverified.",
-        "Current-source complete release CI is not yet claimed."
+        "Hosted targeted-edit performance and full current-source release CI not yet accepted."
       ],
       "generation_calls_started": 0,
       "new_hosted_task_runs": 0,
       "compute_allowances_reset": false,
-      "deploy_triggered": false,
+      "deploy_triggered": true,
       "source_commit": "f37477918d416c909c1c90e36af0dd7e6dd6d9b9",
       "identical_protected_case_ids": true,
       "relocked_functions": [
@@ -1285,19 +1285,42 @@
       },
       "relock_junit_sha256": "50de2764aba5e1aac10943f66682ad2b865b742574c4cee0ea57a3449c8526da",
       "relock_cases_passed": 9,
-      "evidence_file": "release_evidence/ebook_v2_customer_review_20261120.json"
+      "web_deploy": {
+        "id": "dep-dc0bh6uq1p3s73e3uotg",
+        "source_commit": "c441e71dfb01694e2331d3c4d0548965aa52e167",
+        "status": "live",
+        "finished_at": "2026-11-20T21:17:54.4173Z",
+        "instance": "srv-da8qisegekts7380vdvg-f94zt",
+        "url": "https://digitalproductfactorypro.com/api/ebook-recovery/workspace",
+        "verification": "New gunicorn worker boot and Render live event inspected. Actual cloud-browser page visibly shows the private Factory sign-in guidance; request log verifies HTTP401. Deployment-transition502 cleared after service became live. No source book metadata displayed while unsigned."
+      },
+      "normal_signed_in_live_acceptance": false,
+      "live_book_approval_performed": false,
+      "evidence_file": "release_evidence/ebook_v2_customer_review_20261120.json",
+      "release_commit_ci": {
+        "source_commit": "c441e71dfb01694e2331d3c4d0548965aa52e167",
+        "studio_run": 44818821758,
+        "status": "running at checkpoint; both PostgreSQL workflows44818821763 and44818821783 passed",
+        "broader_runs": [
+          44818821750,
+          44818821813,
+          44818821761,
+          44818821735,
+          44818821756
+        ]
+      }
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
-      "status": "customer_review_ready_for_deploy",
-      "action": "Deploy verified v1.9.94 customer review controls through the existing web service and verify the actual live private page. All1139 affected protection cases passed before/after and five functions relocked at real source f374779. Preserve books; no generation or new billed task. Create/Resume controls and real model speed remain unfinished."
+      "status": "review_controls_live_owner_signin_pending",
+      "action": "Complete actual saved-book UI/PDF/ZIP acceptance after normal owner Factory sign-in. Approval controls are live1.9.94, with185 Studio and60 Factory guard cases plus1139 identical before/after protected cases passed. All five protections relocked. Do not approve a real edition for the owner. Then finish Create/Resume and measure targeted editing; no new billed task authorized."
     },
     {
       "id": "finish_customer_recovery_controls",
-      "status": "customer_approval_locally_verified",
-      "action": "Customer approval and explicit owner classification passed185 Studio cases,60 full Factory guard cases and1139 identical before/after protection cases. Deploy and verify normal signed-in delivery; then finish Create/Resume without enabling unauthorized spending."
+      "status": "approval_live_signed_in_acceptance_pending",
+      "action": "Review acknowledgement and shared-byte approval controls deployed live on c441e71. Actual unsigned page shows correct private sign-in guidance. Owner authentication required for real browser downloads; local full Factory signed-owner approval verified. Create/Resume remain unfinished."
     },
     {
       "id": "recover_existing_stalled_book",
@@ -1330,7 +1353,7 @@
       "action": "Do not deploy the loopback Studio as the hosted Factory. Before merge/deploy completion, implement and verify a supported hosted integration using shared authenticated customer state, PostgreSQL/R2-compatible storage and an explicitly approved no-paid-generation runtime; then verify actual hosted PDF and ZIP downloads."
     }
   ],
-  "completion": "Assisted hosted retained-topic book completed in one additional approved Render run; actual14-page PDF and matching ZIP remote bytes verified, all pages reviewed and files saved for user. Saved-manuscript recovery also previously verified. Fully automatic Factory/customer Create flow and publication-quality approval are NOT complete.",
-  "blocker": "Customer approval is locally verified and protections relocked; existing web deployment and normal live signed-in acceptance pending. Create/Resume and hosted model performance remain unfinished. Both billed topic-run allowances remain consumed.",
+  "completion": "Hosted saved-manuscript and assisted retained-topic review editions preserved. Customer private review/approval controls are live1.9.94 with185 Studio cases,60 signed Factory guard cases and1139 matching before/after legacy protection cases passed. All five shared-service protections relocked. Actual signed-in production acceptance and fully automatic Create/Resume Factory completion remain unfinished.",
+  "blocker": "Actual signed-in production review/download acceptance requires the owner Factory session. Create/Resume, real hosted targeted-edit performance and final current-source release CI remain unfinished. No additional billed task authorized.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

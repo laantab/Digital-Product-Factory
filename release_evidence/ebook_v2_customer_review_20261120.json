@@ -1,7 +1,7 @@
 {
   "version": "1.9.94",
-  "checked_at": "2026-11-20T21:15:33.786324+00:00",
-  "state": "locally_verified_ready_for_existing_web_deploy",
+  "checked_at": "2026-11-20T21:19:19.513990+00:00",
+  "state": "web_live_authentication_required_for_real_owner_acceptance",
   "scope": "Explicit owner acknowledgement and CAS approval of exact shared review PDF/ZIP; no local-file requirement or generation. Four independently owner-scoped review endpoints classified for ordinary customers.",
   "studio": {
     "tests": 185,
@@ -125,14 +125,14 @@
   "browser_review": "Actual Chromium1280x900 and390x844 images inspected before/after acknowledgement; no clipping or overflow. Approval sends one explicit POST.",
   "baseline_failure_reproduced": "Normal non-admin Factory request to existing review workspace returned403 before classification. Fixture first corrected to use the authenticated snapshot API because generic project serialization omits owner identity.",
   "limits": [
+    "Owner sign-in required for actual production saved-book UI/download acceptance. Do not mark a real edition reviewed without the owner acknowledgement.",
     "Create and Resume controls remain unfinished.",
-    "Normal signed-in production review and actual hosted model performance remain unverified.",
-    "Current-source complete release CI is not yet claimed."
+    "Hosted targeted-edit performance and full current-source release CI not yet accepted."
   ],
   "generation_calls_started": 0,
   "new_hosted_task_runs": 0,
   "compute_allowances_reset": false,
-  "deploy_triggered": false,
+  "deploy_triggered": true,
   "source_commit": "f37477918d416c909c1c90e36af0dd7e6dd6d9b9",
   "identical_protected_case_ids": true,
   "relocked_functions": [
@@ -197,5 +197,16 @@
     "note": "Studio Windows/Linux185 cases plus version31/signed recovery12/Fast Gate workflow succeeded; both PostgreSQL workflows succeeded. Five broader regressions remain running."
   },
   "relock_junit_sha256": "50de2764aba5e1aac10943f66682ad2b865b742574c4cee0ea57a3449c8526da",
-  "relock_cases_passed": 9
+  "relock_cases_passed": 9,
+  "web_deploy": {
+    "id": "dep-dc0bh6uq1p3s73e3uotg",
+    "source_commit": "c441e71dfb01694e2331d3c4d0548965aa52e167",
+    "status": "live",
+    "finished_at": "2026-11-20T21:17:54.4173Z",
+    "instance": "srv-da8qisegekts7380vdvg-f94zt",
+    "url": "https://digitalproductfactorypro.com/api/ebook-recovery/workspace",
+    "verification": "New gunicorn worker boot and Render live event inspected. Actual cloud-browser page visibly shows the private Factory sign-in guidance; request log verifies HTTP401. Deployment-transition502 cleared after service became live. No source book metadata displayed while unsigned."
+  },
+  "normal_signed_in_live_acceptance": false,
+  "live_book_approval_performed": false
 }
