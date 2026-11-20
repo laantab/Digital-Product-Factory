@@ -1,3 +1,17 @@
+## 1.9.93 — Correct affected passages without rewriting whole chapters
+
+### What changed
+The rebuilt engine requests up to six short exact-source replacements for editorial findings. It applies nonoverlapping edits against the original saved text, retains all unaffected prose, and caps correction output at1800 tokens instead of requesting another full chapter.
+
+### What was fixed
+Full-chapter correction was consuming the hosted CPU budget even when only a few passages needed changes. Invalid, ambiguous, overlapping, stale or oversized edits retain the source and findings for bounded recovery. Corrected candidates still undergo structural checks and a separate independent review. The editorial policy version advances without overwriting completed units.
+
+### Do the steps change?
+No customer steps change. This is an engine correction candidate; customer Create/Resume/approval controls remain unfinished. No new compute allowance, paid generation or automatic task retry is enabled.
+
+### Release gate
+Verify exact-source preservation, refused patches, separate independent review, short-correction recovery, historical-unit preservation and actual fixture PDF/ZIP output. Measure real-model correction speed separately before claiming a hosted performance improvement. No live generation or complete customer-flow acceptance is claimed by protocol tests.
+
 ## 1.9.92 — Explain private review sign-in without exposing book data
 
 ### What changed

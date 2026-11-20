@@ -13,6 +13,7 @@ import requests
 from .publishing import clean_chapter
 from .worker import Repairable
 from .editorial_contract import title_issues, chapter_issues
+from . import targeted_edit
 
 
 def timeout():
@@ -318,12 +319,14 @@ def review_handler(payload,repair):
         "checks":{key:False for key in CHECKS},"issues":generated_issues(chapter)}})
     if repair and previous.get("report") and not awaiting:
         chapter=previous.get("chapter",chapter)
-        prompt="Copyedit this chapter and address these specific findings. Preserve the approved title, "
-        prompt+="correct meaning and practical detail. Return fully written prose, at least "+str(spec["min_words"])+" words. "
-        prompt+="Findings: "+json.dumps(previous["report"]["issues"])+". Chapter: "+json.dumps(chapter)
-        revised=(expand(chapter,spec,repair,"Preserve these previous editorial corrections: "+json.dumps(previous["report"]["issues"]))
-                 if repair=="expand_editorial_revision" else generate(prompt,chapter_schema(chapter["title"],spec["min_words"]),repair,
-                    max_tokens=min(5000,spec["min_words"]*3+600)))
+        if repair=="expand_editorial_revision":
+            revised=expand(chapter,spec,repair,"Preserve these previous editorial corrections: "+json.dumps(previous["report"]["issues"]))
+        else:
+            edits=generate(targeted_edit.prompt(chapter,spec,previous['report']['issues']),
+                targeted_edit.EDIT_SCHEMA,repair,max_tokens=1800)
+            try:revised=targeted_edit.apply(chapter,edits)
+            except Repairable:
+                raise Repairable('CONTENT_QUALITY',{'chapter':chapter,'report':previous['report']}) from None
         try:chapter=_require(revised,spec["min_words"],chapter["title"])
         except Repairable as error:
             candidate=error.candidate or {}

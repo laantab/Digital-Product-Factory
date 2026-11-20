@@ -61,6 +61,17 @@ def provider(monkeypatch):
                 else:
                     start=(2*(state["addition_count"]-1))%len(source)
                     result={"new_paragraphs":[source[start],source[(start+1)%len(source)]]}
+            elif "edits" in schema["properties"]:
+                chapter=json.loads(request['prompt'].split('. Chapter: ',1)[1].split('\nCorrection action:',1)[0])
+                if 'Stack two air mattresses in the hallway.' in chapter['text']:
+                    result={'edits':[{'old':'Stack two air mattresses in the hallway.','new':'Keep hallways clear and use an existing bed as intended.'}]}
+                elif state.get('short_copyedit_count',0):
+                    state['short_copyedit_count']-=1
+                    old=chapter['text'][chapter['text'].index('\n\nFor a practical trial'):]
+                    result={'edits':[{'old':old,'new':''}]}
+                else:
+                    old=chapter['text'].split('.',1)[0]+'.'
+                    result={'edits':[{'old':old,'new':old+' Choose the next task before you begin.'}]}
             else:
                 result=developed_chapter(schema["properties"]["title"]["enum"][0])
                 if state.get("short_writing"):
@@ -348,7 +359,8 @@ def test_copyedit_and_independent_recheck_are_separate_single_call_steps(monkeyp
     def generate(prompt,schema,repair="",**kwargs):
         calls.append(prompt)
         if "checks" in schema["properties"]:return {"checks":{key:True for key in local_text.CHECKS},"issues":[]}
-        return chapter
+        old=chapter['text'].split('.',1)[0]+'.'
+        return {'edits':[{'old':old,'new':old+' Choose the next task before you begin.'}]}
     monkeypatch.setattr(local_text,"generate",generate)
     previous={"chapter":chapter,"report":{"checks":{key:False for key in local_text.CHECKS},
         "issues":["Clarify the next action."]}}
@@ -418,7 +430,7 @@ def test_incomplete_editorial_candidate_can_be_copyedited_then_rechecked(monkeyp
     calls=[]
     def generate(*args,**kwargs):
         calls.append(args)
-        return chapter
+        return {'edits':[{'old':'\n\nBy regularly reflecting on what is working and what isn‘','new':''}]}
     monkeypatch.setattr(local_text,'generate',generate)
     with pytest.raises(Repairable) as result:
         local_text.review_handler({'spec':topic_spec(),'chapter':broken,'_recovery':{'chapter':broken,'report':report}},'apply_editorial_feedback')

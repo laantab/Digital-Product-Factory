@@ -44,7 +44,7 @@ def policies():
     return {"titles":Policy("titles-3",text.titles_handler,text.titles_valid,common,timeout=deadline,retry_delay=5),
         "outline":Policy("outline-2",text.outline_handler,text.outline_valid,common,timeout=deadline,retry_delay=5),
         "writing":Policy("writing-6",text.chapter_handler,text.chapter_valid,chapters,timeout=deadline,retry_delay=5),
-        "editorial":Policy("editorial-11",text.review_handler,text.review_valid,reviews,timeout=deadline,retry_delay=5),
+        "editorial":Policy("editorial-12",text.review_handler,text.review_valid,reviews,timeout=deadline,retry_delay=5),
         "draft":Policy("draft-5",text.draft_handler,text.partial_valid,drafts,timeout=deadline,retry_delay=5),
         "expand":Policy("expand-4",text.expansion_handler,text.expansion_valid,drafts,timeout=deadline,retry_delay=5),
         "assemble":Policy("assemble-2",text.assembly_handler,text.chapter_valid,{},timeout=20,retry_delay=0)}
