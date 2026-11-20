@@ -89,3 +89,24 @@ def test_approved_pilot_allowance_is_one_use_and_book_scoped(hosted,monkeypatch)
     claim_pilot(books,'alice','approved-book')
     with pytest.raises(ValueError,match='already used'):
         claim_pilot(books,'alice','approved-book')
+
+
+def test_processing_budget_stop_is_visible_and_retains_completed_units(hosted,provider):
+    from services.ebook_v2.topics import data
+    app,client,books,*_=hosted
+    book=books.create('alice','topic:budget-retained-001',topic_spec())
+    books.advance('alice',book['id']);books.advance('alice',book['id'])
+    before=data(books,books.get('alice',book['id']))['units'].copy()
+    saved={key:books.units.get('alice',value) for key,value in before.items()}
+    calls=len(provider['calls'])
+    with pytest.raises(RuntimeError,match='saved topic checkpoints'):
+        run_topic_book(app.extensions['ebook_v2_hosted'],'alice',book['id'],budget=0,ready=lambda:True)
+    stopped=books.get('alice',book['id']);view=books.status('alice',book['id'])
+    assert stopped['state']=='NEEDS_ATTENTION'
+    assert 'processing time ended' in view['attention']
+    assert data(books,stopped)['units']==before
+    assert {key:books.units.get('alice',value) for key,value in before.items()}==saved
+    assert len(provider['calls'])==calls
+    resumed=books.resume('alice',book['id'],stopped['revision'])
+    assert resumed['state']=='RUNNING' and 'stop_reason' not in data(books,resumed)
+    assert data(books,resumed)['units']==before

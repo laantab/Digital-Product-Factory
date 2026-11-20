@@ -6,6 +6,8 @@ Provider errors never copy manuscript text or raw HTTP bodies into saved errors.
 import json
 import os
 import re
+import logging
+import time
 from urllib.parse import urlsplit
 import requests
 from .publishing import clean_chapter
@@ -58,6 +60,7 @@ def ready():
 
 def generate(prompt,schema,repair="",max_tokens=5000):
     base,model=configuration()
+    started=time.monotonic()
     try:
         with requests.Session() as session:
             session.trust_env=False
@@ -80,6 +83,8 @@ def generate(prompt,schema,repair="",max_tokens=5000):
             if response.status_code!=200:raise Repairable("LOCAL_CONFIGURATION")
             if len(response.content)>2_000_000:raise Repairable("INVALID_RESPONSE")
             envelope=response.json()
+            logging.getLogger(__name__).info('local_writer_response elapsed_seconds=%.2f output_tokens=%s prompt_tokens=%s generation_ns=%s',
+                time.monotonic()-started,envelope.get('eval_count'),envelope.get('prompt_eval_count'),envelope.get('eval_duration'))
             if envelope.get("done") is not True or envelope.get("done_reason")=="length":raise Repairable("INCOMPLETE_RESPONSE")
             result=json.loads(envelope["response"])
             if not isinstance(result,dict):raise Repairable("INVALID_RESPONSE")

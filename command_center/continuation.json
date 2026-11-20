@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-20T04:03:47.147170+00:00",
+  "checked_at": "2026-11-20T12:31:57.190331+00:00",
   "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -14,7 +14,8 @@
     "hosted_topic_pilot": {
       "approved": true,
       "scope": "One on-demand2c-8g task run, maximum3600seconds, no automatic task retries; published compute up to0.70USD. No paid model API calls or new service.",
-      "approved_in_chat": "2026-11-19: user Yes to single one-hour compute test"
+      "approved_in_chat": "2026-11-19: user Yes to single one-hour compute test",
+      "consumed": true
     }
   },
   "evidence": {
@@ -797,11 +798,11 @@
     },
     "approved_pilot_setup": {
       "version": "1.9.87",
-      "status": "single approved pilot submitted; last observed Render status pending",
+      "status": "failed at processing budget; retained work, no final artifacts",
       "limits": "Task timeout3600; processing budget2700 plus bounded model operation; SDK retries0; durable single-use book-scoped allowance.",
       "runtime": "Explicit official checksum-verified Ollama CPU archive and qwen3:8b download at workflow build time. Local-only service started/stopped within task.",
       "configuration": "Verified dashboard values: topic plan2c-8g, enabled1, exact allowlisted pilot book ID. Existing legacy tasks remain Flex. Workflow build command pip install -r requirements.txt zstandard==0.23.0 && python scripts/prepare_ebook_writer.py.",
-      "remaining": "Publish/check source, configure workflow build command, install model, create owned pilot book and set exact allowlisted ID, enable once and launch one run. Customer Create UI remains unfinished.",
+      "remaining": "Generation throughput remains unresolved. Customer signed-in Create/review UI remains unfinished. Do not launch another billed run or clear either allowance without new explicit budget approval.",
       "local_verification": "18 worker, pilot budget/allowance, saved recovery and protection cases passed in9.48s; installer and managed runtime compiled; diff check passed.",
       "source_commit": "d3ec968906a2ed5e62053a7ab673a2d86b3d7f6e",
       "workflow_version": "wfv-dbvs9vui0phs73b0o4m0",
@@ -814,17 +815,34 @@
       "submitted_at": "2026-11-20T04:02:01.455481Z",
       "task_retries": 0,
       "attempts_observed": 1,
-      "runtime_installation": "Official CPU archive checksum verified, qwen3:8b5.2GB pull reported digest verification/success, final image built and registered3 tasks. No model inference success claimed yet.",
+      "runtime_installation": "Official checksum-verified CPU runtime and qwen3:8b installed; actual inference saved title, outline, two independently reviewed chapters and a third draft. No completed book.",
       "sdk_verification": "Actual Render1.1.0 SDK accepted2c-8g task registration and Retry(max_retries=0).",
       "submission_guard": "Durable ebook_v2_dispatch SUBMITTING claim before SDK network call, then SUBMITTED with exact run ID; task additionally consumes a single-use book-scoped allowance.",
-      "next_action": "Inspect this exact run and database progress before any action. Never start another paid run or clear either allowance. On completion review actual manuscript/pages and shared PDF/ZIP. If failed, retain work and report exact failure; additional billed runs require a new budget authorization. Customer Create UI remains unfinished."
+      "next_action": "Generation throughput remains unresolved. Customer signed-in Create/review UI remains unfinished. Do not launch another billed run or clear either allowance without new explicit budget approval.",
+      "completed_at": "2026-11-20T04:52:32.768065Z",
+      "error": "Continue from saved topic checkpoints; do not create a replacement book",
+      "book_state": "NEEDS_ATTENTION",
+      "book_revision": 15,
+      "completed_editorial_chapters": 2,
+      "saved_next_draft": true,
+      "final_artifacts": false,
+      "allowance_consumed": true,
+      "timing_findings": "All saved units attempted once. First chapter draft04:09:53Z, expansion04:17:58Z, assembly04:22:50Z, review04:22:53Z; second draft04:25:45Z, expansion04:33:50Z, assembly04:39:39Z, review04:39:43Z; third draft04:42:55Z. Draft/expansion/assembly consumed most elapsed time; no automatic retry loop observed.",
+      "live_status_repair": "Authorized existing web-service shell applied metadata-only PROCESSING_BUDGET/NEEDS_ATTENTION via topics.save CAS; revision14->15. Before/after all saved unit records exactly equal, generation_started=false."
+    },
+    "processing_budget_fix_20261120": {
+      "version": "1.9.88",
+      "status": "source ready for publication; not deployed",
+      "verification": "53 focused worker/topic/recovery/protection cases passed, one browser case deselected, in53.26s. Version and diff checks passed. Real stopped pilot metadata corrected live; saved unit records unchanged.",
+      "scope": "Record time-budget stop, preserve completed units, clear stop reason only on explicit resume, log response duration/token counts without prose. No model/runtime or paid allowance changes.",
+      "remaining": "Publish source and observe CI; runtime throughput and signed-in customer UI remain unverified."
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
-      "status": "approved_hosted_pilot_external_run_pending",
-      "action": "Inspect this exact run and database progress before any action. Never start another paid run or clear either allowance. On completion review actual manuscript/pages and shared PDF/ZIP. If failed, retain work and report exact failure; additional billed runs require a new budget authorization. Customer Create UI remains unfinished."
+      "status": "hosted_pilot_failed_retained_work",
+      "action": "Generation throughput remains unresolved. Customer signed-in Create/review UI remains unfinished. Do not launch another billed run or clear either allowance without new explicit budget approval."
     },
     {
       "id": "finish_customer_recovery_controls",
@@ -863,6 +881,6 @@
     }
   ],
   "completion": "Live saved-manuscript backend recovery and actual remote PDF/ZIP bytes verified on1.9.84. Full one-button Factory completion is NOT claimed.",
-  "blocker": "Single one-hour8GB pilot submitted on existing Render worker, currently pending. Verify its actual outcome before any retry. Signed-in customer Create/review UI is still unfinished; administrative pilot is not that acceptance.",
+  "blocker": "Approved hosted pilot ended at processing budget with two reviewed chapters and a third saved draft; no PDF/ZIP. Single paid allowance consumed. CPU throughput and signed-in customer Create/review UI remain unresolved.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }

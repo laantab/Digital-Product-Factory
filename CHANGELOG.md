@@ -1,3 +1,17 @@
+## 1.9.88 — Preserve and explain time-limited topic stops
+
+### What changed
+A topic worker that reaches its processing budget now records NEEDS_ATTENTION with a precise time-allowance message before exiting. Completed work units and their checksums remain unchanged. Explicit resume clears the stop reason and retains completed units.
+
+### What was fixed
+The approved8GB pilot exited at its processing budget after two reviewed chapters and a third saved draft, but its saved book misleadingly remained RUNNING. No final artifacts were published. This change corrects future stop handling without reopening the consumed one-run allowance or starting another paid run.
+
+### Do the steps change?
+A stopped book reports the actual pause instead of appearing to process forever. No automatic paid continuation is added. CPU-model throughput remains a measured performance issue; this fix does not certify a completed book or a live Create button.
+
+### Release gate
+Test a zero-budget stop after an actual completed model-fixture work unit; require unchanged outputs and attempts, no further model calls, correct status and retained resume. Log only provider timing/token counts, never prompts or prose, to diagnose throughput on a separately authorized future run.
+
 ## 1.9.87 — Bound the approved hosted topic pilot
 
 ### What changed

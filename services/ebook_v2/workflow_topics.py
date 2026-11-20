@@ -57,6 +57,10 @@ def run_topic_book(services, owner, book_id, *, budget=5400, clock=time.monotoni
             if book['state']=='NEEDS_ATTENTION':
                 return {'book_id':book_id,'state':book['state'],'files':[]}
             if clock()>=deadline:
+                from .topics import save
+                state=data(books,book)
+                state['stop_reason']='PROCESSING_BUDGET'
+                save(books,book,state,'NEEDS_ATTENTION')
                 raise RuntimeError('Continue from saved topic checkpoints; do not create a replacement book')
             try:
                 if book['state']=='WAITING_TITLE':

@@ -169,6 +169,9 @@ def status(books,book):
             elif row.get("error")=="MISSING_PHOTOS":attention="The requested photographs could not be completed. Your chapters are saved. Continue after picture search is available."
             else:attention="This step needs a correction. Completed chapters and drafts are preserved."
             break
+    if book['state']=='NEEDS_ATTENTION' and state.get('stop_reason')=='PROCESSING_BUDGET':
+        attention='The approved processing time ended. Completed chapters and drafts are saved. No automatic paid continuation was started.'
+        activity='Stopped at the processing time limit'
     return {"attention":attention,"id":book["id"],"title":state["decisions"].get("title",book["spec"]["title"]),
         "author":book["spec"]["author"],"state":("WAITING_SERVICE" if book["state"]=="RUNNING"
             and (not books.available(local_text=True)) else book["state"]),"revision":book["revision"],
@@ -200,6 +203,7 @@ def decide(books,owner,book_id,revision,action,value):
 
 def resume(books,book):
     state=data(books,book)
+    state.pop('stop_reason',None)
     for name,key in list(state["units"].items()):
         row=books.units.get(book["owner"],key)
         if row["state"]!="NEEDS_ATTENTION":continue
