@@ -1,0 +1,50 @@
+{
+  "version": "1.9.95",
+  "checked_at": "2026-11-21T04:37:09.837352+00:00",
+  "base_commit": "9e5e5f664e2a0c66ef690c7047c3dec4cd100b56",
+  "scope": "Owner-scoped Create review copy and Resume for supplied saved manuscripts, retaining accepted chapters; no topic generation or live task submitted.",
+  "architecture": "Reuses existing source, snapshot and book resource endpoint identities. No services/project_access.py or protected shared dependency changed; no unlock/relock or repeat 1139-case baseline needed.",
+  "local_checks": {
+    "service": {
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "8db5d5e1aa1da0ad6770a1c12497afd6eb2679c595695c3909ad98cc7cf082c4"
+    },
+    "browser": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "1747869cb916566e560c75c9079f7da1efbfb1958cd8e3a52f1b0a3a44cca9ef"
+    },
+    "factory": {
+      "tests": 82,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "044defef84e4a7a6f0d5495d14fd81713f4d9569d85b79ed5afd50ad1bd403b9"
+    },
+    "studio": {
+      "status": "running"
+    },
+    "fast_gate": {
+      "status": "running"
+    }
+  },
+  "studio_expected_cases": 197,
+  "postgres_expected_cases": 12,
+  "ci_status": "not submitted",
+  "workflow_deployment": "pending compatible worker version before web deployment",
+  "web_deployment": "not requested; v1.9.94 remains live",
+  "production_acceptance": "Signed-in live acceptance remains unverified after prior cancelled authentication; no retry requested.",
+  "generation_started": false,
+  "new_paid_services": false,
+  "additional_topic_runs": 0,
+  "remaining": [
+    "Signed-in owner UI and saved PDF/ZIP verification",
+    "Actual hosted targeted-edit performance",
+    "Fully automatic fresh-topic acceptance and final combined release gate"
+  ]
+}

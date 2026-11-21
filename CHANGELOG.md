@@ -1,3 +1,17 @@
+## 1.9.95 — Create and resume review copies from saved manuscripts
+
+### What changed
+The private review page can create a separate review copy from a complete saved manuscript, with title, author, design and optional required stock photos. Resume saved work retries a failed supplied-manuscript copy while retaining completed chapters. Existing copies reopen without a second initial submission.
+
+### What was fixed
+Resume verifies that the previous Render run has stopped and records a durable per-revision claim before submission. An uncertain submission cannot automatically start another run. Owner, CSRF and revision checks apply through the existing customer resource; opening or refreshing never starts work. Originals and completed editions remain unchanged.
+
+### Do the steps change?
+Open Your book review, choose Create a review copy and a saved manuscript, then confirm the title and author. Review the resulting PDF and ZIP. Use Resume saved work when a supplied-manuscript copy needs attention after the underlying problem is resolved. Fresh-topic processing remains subject to a separately approved allowance. Deploy the compatible existing workflow before enabling this web release; no live task is part of deployment validation.
+
+### Release gate
+Verify desktop and phone create/resume controls, actual PDF/ZIP bytes, completed-chapter preservation, source ownership, normal customer access, stale requests, duplicate dispatch and uncertain network outcomes. Run the Studio/protection matrix, signed Factory recovery and version checks. Signed-in production acceptance remains distinct from fixture verification.
+
 ## 1.9.94 — Review the saved shared edition without rebuilding
 
 ### What changed

@@ -149,6 +149,11 @@ def test_normal_customer_can_review_only_owned_shared_edition(accounts,tmp_path,
             token='foreign-test-token'
         assert foreign.get(url).status_code==404
         assert foreign.post(url+'/approve',json=body,headers={'X-CSRF-Token':token}).status_code==404
+        assert foreign.post(url,json={'action':'resume','revision':book['revision']},
+                            headers={'X-CSRF-Token':token}).status_code==404
     assert clients[0].post(url+'/approve',json=body,headers=headers).status_code==200
     assert clients[0].get(url+'/files/package.zip').status_code==200
+    # The normal customer reaches the owned resource's validation, not an admin-only guard.
+    books.record_worker('customer-controls-fixture')
+    assert clients[0].post(url,json={'action':'resume','revision':book['revision']+1},headers=headers).status_code==400
     assert database.get_project(original['id'])==original

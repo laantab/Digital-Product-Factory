@@ -25,6 +25,12 @@ class Dispatch:
                 book_id TEXT PRIMARY KEY REFERENCES ebook_v2_books(id),
                 owner TEXT NOT NULL, state TEXT NOT NULL, run_id TEXT NOT NULL,
                 created DOUBLE PRECISION NOT NULL)''')
+        from .hosted_resume import initialize
+        initialize(self.books)
+
+    def resume(self,owner,book_id,revision):
+        from .hosted_resume import queue
+        queue(self,owner,book_id,revision)
 
     @staticmethod
     def validate(book):
@@ -91,9 +97,12 @@ def run_saved_book(services, owner, book_id, *, budget=600, clock=time.monotonic
 
 def register(app, *, plan, retry):
     @app.task(timeout_seconds=900, plan=plan, retry=retry)
-    def recover_saved_ebook(ctx, owner: str, book_id: str) -> dict:
+    def recover_saved_ebook(ctx, owner: str, book_id: str, resume_revision: int | None=None) -> dict:
         from .hosted_runtime import configured_services, initialize
         services = configured_services()
         initialize(services)
+        if resume_revision is not None:
+            from .hosted_resume import apply
+            apply(services['books'],owner,book_id,resume_revision)
         return run_saved_book(services, owner, book_id)
     return recover_saved_ebook

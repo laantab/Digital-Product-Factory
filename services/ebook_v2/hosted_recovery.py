@@ -62,6 +62,7 @@ def blueprint(connection_factory):
         session.setdefault("ebook_recovery_csrf", secrets.token_urlsafe(32))
         return jsonify(project_id=project["id"], name=project.get("name", ""),
                        source_version=project["version"],
+                       author=project['data'].get('author', '') if isinstance(project['data'].get('author', ''), str) else '',
                        csrf_token=session["ebook_recovery_csrf"],
                        generation_started=False)
 
@@ -134,13 +135,46 @@ def blueprint(connection_factory):
         if selected and selected not in {row['id'] for row in visible}:
             raise LookupError('Book not found')
         session.setdefault('ebook_recovery_csrf',secrets.token_urlsafe(32))
+        with closing(connection_factory()) as conn:
+            sources = [dict(row) for row in conn.execute('''SELECT id,name,version FROM projects
+                WHERE user_id=? AND type='ebook' ORDER BY id DESC LIMIT 100''', (current_user.id,))]
+        from .publishing import THEMES
         return render_template('ebook_v2_review.html',books=visible,csrf_token=session['ebook_recovery_csrf'],
+                               sources=sources,themes=list(THEMES),
                                selected=selected or (visible[0]['id'] if visible else ''))
 
-    @bp.get("/books/<book_id>")
+    @bp.route("/books/<book_id>", methods=['GET', 'POST'])
     def book_status(book_id):
         books, _, book = recovery_book(book_id)
+        services = current_app.extensions['ebook_v2_hosted']
+        dispatch = services.get('dispatch')
+        if request.method == 'POST':
+            body = request.get_json()
+            if (not isinstance(body, dict) or set(body) != {'action', 'revision'}
+                    or body['action'] != 'resume' or type(body['revision']) is not int
+                    or body['revision'] < 1):
+                raise ValueError('Reload this book before resuming.')
+            if book['spec'].get('source') == 'ollama':
+                raise ValueError('Fresh-topic processing requires a separate approved allowance.')
+            if dispatch:
+                dispatch.resume(current_user.id, book_id, body['revision'])
+            elif books.available():
+                books.resume(current_user.id, book_id, body['revision'])
+            else:
+                raise WorkerUnavailable('Processing is unavailable. Your saved work is unchanged.')
+            return jsonify(book_id=book_id, queued=True, generation_started=False), 202
         result = books.status(current_user.id, book["id"])
+        result['can_resume'] = (book['state'] == 'NEEDS_ATTENTION'
+                                and book['spec'].get('source') != 'ollama')
+        result['resume_pending'] = False
+        if dispatch and result['can_resume']:
+            from .hosted_resume import pending
+            state = pending(books, current_user.id, book_id, book['revision'])
+            result['resume_pending'] = state in {'SUBMITTING', 'SUBMITTED'}
+            if state:
+                result['can_resume'] = False
+                result['attention'] = ('Resume submission needs checking. Your saved work is safe.'
+                    if state == 'UNKNOWN' else 'Resume requested. Waiting for the worker to open your saved checkpoints.')
         with books.units.transaction() as conn:
             row = conn.execute("SELECT 1 FROM ebook_v2_artifacts WHERE book_id=? AND owner=?",
                                (book_id, str(current_user.id))).fetchone()
