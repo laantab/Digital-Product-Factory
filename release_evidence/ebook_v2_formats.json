@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-02",
+  "focused_and_registry_passed": 78,
+  "seconds": 47.94,
+  "epubcheck": "5.4.0",
+  "epubcheck_errors": 0,
+  "epubcheck_warnings": 0,
+  "docx_rendered_and_visually_reviewed_pages": 3,
+  "source": "original supplied acceptance fixture NOT FOR SALE",
+  "formats": [
+    "PDF",
+    "EPUB",
+    "DOCX",
+    "Markdown",
+    "JPEG",
+    "ZIP"
+  ],
+  "production_changed": false,
+  "paid_calls": 0
+}

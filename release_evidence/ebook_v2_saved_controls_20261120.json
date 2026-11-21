@@ -1,0 +1,197 @@
+{
+  "version": "1.9.95",
+  "checked_at": "2026-11-21T04:49:48.231520+00:00",
+  "base_commit": "9e5e5f664e2a0c66ef690c7047c3dec4cd100b56",
+  "scope": "Owner-scoped Create review copy and Resume for supplied saved manuscripts, retaining accepted chapters; no topic generation or live task submitted.",
+  "architecture": "Reuses existing source, snapshot and book resource endpoint identities. No services/project_access.py or protected shared dependency changed; no unlock/relock or repeat 1139-case baseline needed.",
+  "local_checks": {
+    "service": {
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "8db5d5e1aa1da0ad6770a1c12497afd6eb2679c595695c3909ad98cc7cf082c4"
+    },
+    "browser": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "1747869cb916566e560c75c9079f7da1efbfb1958cd8e3a52f1b0a3a44cca9ef"
+    },
+    "factory": {
+      "tests": 82,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "044defef84e4a7a6f0d5495d14fd81713f4d9569d85b79ed5afd50ad1bd403b9"
+    },
+    "studio": {
+      "tests": 197,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_sha256": "54def36fef6de1126b21f9414b4995c465e8e289aae204d406fe42a987a21eab"
+    },
+    "fast_gate": {
+      "status": "passed",
+      "tests": 954,
+      "duration_seconds": 415.92,
+      "log_sha256": "dfd84f0c1660424fa9b23c1a4d79eb12392b9aa7fe3ded96c8a40d4e0cfe3346"
+    }
+  },
+  "studio_expected_cases": 197,
+  "postgres_expected_cases": 12,
+  "ci_status": "Required Studio Windows/Linux/version/signed Factory/Fast Gate and both PostgreSQL workflows passed. Five broader legacy workflows remain running; none claimed complete.",
+  "workflow_deployment": {
+    "version_id": "wfv-dc0i0l40916s73bq4lpg",
+    "source_commit": "c39e8f81d1214b19315bd295fde5ed4cdb8441d1",
+    "status": "ready",
+    "registered_tasks": [
+      "build_ebook",
+      "recover_saved_ebook",
+      "create_topic_ebook"
+    ],
+    "recovery_task_id": "tsk-dc0i2hgkmaas73c8bjk0",
+    "task_runs_started": 0
+  },
+  "web_deployment": {
+    "deploy_id": "dep-dc0i4ih7lnhs738o3oq0",
+    "commit": "c39e8f81d1214b19315bd295fde5ed4cdb8441d1",
+    "status": "live",
+    "finished_at": "2026-11-21T04:48:19.754103Z",
+    "method": "One manual activation after [skip render] staging; no automatic web deploy existed, worker already ready. No duplicate deploy triggered."
+  },
+  "production_acceptance": "Web source deployment and private access boundary verified. Signed-in owner Create/Resume/PDF/ZIP acceptance remains unverified after prior cancelled authentication; no authentication retry, live approval or live processing task started.",
+  "generation_started": false,
+  "new_paid_services": false,
+  "additional_topic_runs": 0,
+  "remaining": [
+    "Signed-in owner UI and saved PDF/ZIP verification",
+    "Actual hosted targeted-edit performance",
+    "Fully automatic fresh-topic acceptance and final combined release gate"
+  ],
+  "candidate_commit": "c39e8f81d1214b19315bd295fde5ed4cdb8441d1",
+  "ci_runs": {
+    "studio": 44867064344,
+    "postgres_preservation": 44867064329,
+    "postgres_accounts": 44867064359,
+    "one_button_fast_gate": 44867064335,
+    "billing_regressions": 44867064400,
+    "chapter_bounds": 44867064464,
+    "safe_mode": 44867064381,
+    "bounded_zip": 44867064347
+  },
+  "postgres_artifact": {
+    "run_id": 44867064329,
+    "artifact_id": 14691738107,
+    "sha256": "a01247bea572d6794b7111d617c518d55139124fd34a588f02948ad41117e858",
+    "crc": "passed",
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 3.578,
+    "concurrent_resume_case": "integration_tests.test_ebook_v2_units_postgres_live.test_on_demand_saved_book_with_real_postgres"
+  },
+  "unsigned_http_before_web_deploy": {
+    "workspace_status": 401,
+    "cache_control": "no-store",
+    "response": "Existing private-beta gate returns401 without book data; browser Accept:text/html receives the Private beta access page before account sign-in."
+  },
+  "ci_snapshot": [
+    {
+      "id": 44867064347,
+      "name": "Release review bounded ZIP memory and protected functions",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 44867064464,
+      "name": "Local ebook chapter bound and protected regression",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 44867064329,
+      "name": "Book recovery PostgreSQL preservation",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 44867064359,
+      "name": "Account isolation PostgreSQL integration",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 44867064335,
+      "name": "One-button ebook memory and protected fast gate",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 44867064400,
+      "name": "Local manuscript correction billing and protected regressions",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 44867064381,
+      "name": "Ebook Safe Mode correction and protected regressions",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 44867064344,
+      "name": "Book Studio Windows and Linux customer paths",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "ci_artifacts": [
+    {
+      "id": 14692836460,
+      "platform": "Windows Python3.14",
+      "tests": 197,
+      "sha256": "9aeeb29fb81ae3c823d78ab0f04783d93b4e3e0aeb9d05af750514896d8f007b",
+      "crc_and_xml_verified": true,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "id": 14692053778,
+      "platform": "Linux Python3.12",
+      "tests": 197,
+      "sha256": "1c640d1a15d4d23b94f6ca8d1bb2f2eb2ff5073ee05a5d71341b1456db6ab633",
+      "crc_and_xml_verified": true,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "id": 14691873590,
+      "tests": [
+        31,
+        12
+      ],
+      "sha256": "6ff6b430d94d2630605457aadacf48ec87c37f4061f9e979e87a3634685085e9",
+      "crc_and_xml_verified": true,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "unsigned_http_after_web_deploy": {
+    "workspace_status": 401,
+    "signin_status": 401,
+    "cache_control": "no-store",
+    "page_title": "Digital Product Factory Pro \u2014 Private beta",
+    "source": "Actual HTTP GET with browser Accept:text/html; existing beta access gate precedes owner account sign-in. No private book data exposed."
+  },
+  "startup_logs": {
+    "transition_502": "One request at04:48:20.180975Z during disk-backed startup; later live requests returned expected private401 HTML, not502.",
+    "task_runs_after_deploy": 0
+  }
+}

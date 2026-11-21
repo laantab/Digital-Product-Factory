@@ -169,6 +169,11 @@ from routes.auth import auth_bp  # noqa: E402
 
 app.register_blueprint(auth_bp)
 
+# Preservation only: separate immutable recovery copies, signed account required.
+# Importing/registering this API never initializes storage or starts model work.
+from services.ebook_v2.hosted_recovery import blueprint as ebook_recovery_blueprint  # noqa: E402
+app.register_blueprint(ebook_recovery_blueprint(database.get_conn))
+
 
 @app.after_request
 def _no_store_static(response):

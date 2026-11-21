@@ -1,0 +1,40 @@
+{
+  "source_commit": "ddf192b9e0d62b9761306f6bfd8acf5dceda7a34",
+  "studio_run": 41856995045,
+  "artifacts": [
+    {
+      "platform": "linux",
+      "id": 13337871848,
+      "sha256": "4db1f9ecdea9fc5b250cf53dff130817f9a8408bdf9405b76e6da044dcaa5c94",
+      "tests": 124,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 87.043
+    },
+    {
+      "platform": "windows",
+      "id": 13337827781,
+      "sha256": "5c0cad595675612ffb6c8d18c1b9c0acef2635f53e4426ff3de43358d3e85ce6",
+      "tests": 124,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 149.945
+    },
+    {
+      "platform": "postgresql",
+      "id": 13338701135,
+      "run": 41856995023,
+      "sha256": "29188c859941fd07c3825531352d6c433ba069aaac070fd7338ef937d58d5bbf",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 2.239
+    }
+  ],
+  "artifact_review": "Downloaded ZIP bytes matched GitHub digests; parsed actual JUnit reports. Tests only, not real AI inference or production certification.",
+  "paid_generation": false,
+  "production_changed": false
+}

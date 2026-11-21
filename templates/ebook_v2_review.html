@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Book review | Digital Product Factory Pro</title>
+  <style>
+    :root{font-family:system-ui,sans-serif;color:#172c38;background:#f5f3ed;font-size:17px}
+    *{box-sizing:border-box}body{margin:0}header{background:#172c38;color:white;padding:24px max(20px,calc((100vw - 1120px)/2))}
+    header p{margin:0;font-size:.85rem;color:#d1e0e4}header h1{font-size:1.7rem;margin:8px 0}
+    main{max-width:1120px;margin:30px auto;padding:0 20px;display:grid;grid-template-columns:280px 1fr;gap:28px}
+    h2{font-size:1.35rem;line-height:1.4;margin:0 0 16px}h3{font-size:1rem;margin:0 0 12px}p{line-height:1.6}
+    aside,.panel{background:white;border:1px solid #d4dedf;border-radius:14px;padding:22px;align-self:start}
+    .book{display:block;width:100%;padding:14px;margin:9px 0;text-align:left;line-height:1.5;background:#f7faf9;color:#172c38;border:1px solid #d4dedf;border-radius:8px;cursor:pointer;font:inherit;overflow-wrap:anywhere}
+    .book[aria-pressed=true]{background:#e7f3ef;border-color:#277260;box-shadow:inset 4px 0 #277260}
+    .badge{display:inline-block;font-size:.85rem;padding:6px 10px;border-radius:20px;background:#e7f3ef;color:#174e40}
+    .actions{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0}.actions a,button.refresh{font:inherit;font-weight:600;padding:12px 18px;border-radius:8px;border:1px solid #277260;text-decoration:none;cursor:pointer}
+    .actions a{background:#277260;color:white}.actions a.secondary,button.refresh{background:white;color:#174e40}
+    .review-control{padding:16px;background:#f1f7f4;border-radius:10px;margin:18px 0}.review-control label{display:flex;gap:12px;line-height:1.5}.review-control input{width:22px;height:22px;flex-shrink:0}button:disabled{opacity:.55;cursor:default}
+    button:focus-visible,a:focus-visible{outline:3px solid #b8621d;outline-offset:3px}
+    .note{font-size:.92rem;color:#4c606b}.attention{padding:14px;border-radius:8px;background:#fff2de;color:#5f3b10}
+    #error{color:#8b2525}small{display:block;margin-top:8px;color:#566870}[hidden]{display:none!important}
+    .create-form label{display:block;margin:14px 0 6px}.create-form input:not([type=checkbox]),.create-form select{width:100%;font:inherit;padding:10px;border:1px solid #a9b8bb;border-radius:6px}.create-form input[type=checkbox]{width:20px;height:20px;vertical-align:middle}.create-form summary{cursor:pointer;font-weight:600;margin-top:24px}.create-form button{margin-top:16px}
+    @media(max-width:720px){main{grid-template-columns:1fr;margin-top:20px;gap:18px}header{padding:22px 20px}.panel,aside{padding:18px}.actions{flex-direction:column}.actions a{text-align:center}}
+  </style>
+</head>
+<body>
+  <header><p>DIGITAL PRODUCT FACTORY PRO</p><h1>Your book review</h1></header>
+  {% if sign_in_required %}
+  <main style="display:block;max-width:640px">
+    <section class="panel"><h2>Sign in to view your saved books</h2>
+      <p>Use the Factory account that owns your books. Sign in, then return to this page and open your books.</p>
+      <div class="actions"><a href="/auth/signin" target="_blank" rel="noopener">Sign in to the Factory</a><a class="secondary" href="{{return_path}}">Open my books</a></div>
+    </section>
+  </main>
+  {% else %}
+  <main>
+    <aside aria-label="Saved review books"><h2>Saved books</h2>
+      {% for book in books %}<button class="book" data-id="{{book.id}}" aria-pressed="{{'true' if book.id==selected else 'false'}}">{{book.title}}</button>{% else %}<p>No review books are available yet.</p>{% endfor %}
+      <details class="create-form" {% if not books %}open{% endif %}><summary>Create a review copy</summary>
+        <p class="note">Use a complete saved manuscript. Your original stays unchanged; completed chapters are reused.</p>
+        <form id="create-form">
+          <label for="source">Saved manuscript</label><select id="source" required><option value="">Choose a saved book</option>{% for source in sources %}<option value="{{source.id}}">{{source.name}}</option>{% endfor %}</select>
+          <label for="copy-title">Book title</label><input id="copy-title" required maxlength="180">
+          <label for="copy-author">Author name</label><input id="copy-author" required maxlength="100">
+          <label for="copy-theme">Design</label><select id="copy-theme">{% for theme in themes %}<option value="{{theme}}">{{theme|capitalize}}</option>{% endfor %}</select>
+          <label><input type="checkbox" id="copy-photos"> Require stock photos</label>
+          <p class="note">This checks and formats saved text. It does not write missing chapters. Choose an existing review copy above to reopen it.</p>
+          <button class="refresh" id="create" disabled>Create review copy</button>
+          <p id="create-message" role="status" class="note"></p>
+        </form>
+      </details>
+    </aside>
+    <section class="panel" aria-label="Book progress">
+      <span class="badge" id="state">{% if selected %}Loading saved progress{% else %}No book selected{% endif %}</span>
+      <h2 id="title" style="margin-top:18px">{% if selected %}Opening your saved book{% else %}Your completed review files will appear here{% endif %}</h2>
+      <div role="status" aria-live="polite"><p id="activity"></p><p id="counts" class="note"></p><p id="attention" class="attention" hidden></p></div>
+      <p id="error" role="alert" hidden></p>
+      <div class="actions" id="files" hidden>
+        <a id="pdf" target="_blank" rel="noopener">Open review PDF</a>
+        <a id="zip" class="secondary" download="package.zip">Save review ZIP</a>
+      </div>
+      <p class="note" id="review-note" hidden>Review the complete manuscript and page layout before publishing. These files have not been approved for sale.</p>
+      <div class="review-control" id="approval" hidden>
+        <label><input id="reviewed" type="checkbox">I reviewed the complete manuscript and page layout for this edition.</label>
+        <p class="note">This saves your review decision. It does not publish the book or start another build.</p>
+        <button class="refresh" id="approve" disabled>Mark this edition reviewed</button>
+      </div>
+      <button class="refresh" id="refresh" {% if not selected %}hidden{% endif %}>Refresh progress</button>
+      <button class="refresh" id="resume" hidden>Resume saved work</button>
+      <small>Completed chapters and drafts stay saved when processing stops.</small>
+    </section>
+  </main>
+  <script>
+    const statusPattern={{url_for('ebook_recovery.book_status',book_id='BOOK_ID')|tojson}};
+    const csrfToken={{csrf_token|tojson}};
+    const sourcePattern={{url_for('ebook_recovery.source',project_id=987654321)|tojson}};
+    let selected={{selected|tojson}},timer=null,revision=null,requestNumber=0,busy=false;
+    let sourceVersion=null,sourceRequest=0;
+    const node=id=>document.getElementById(id);
+    const labels={RUNNING:'In progress',WAITING_SERVICE:'Waiting for processing',NEEDS_ATTENTION:'Needs attention',REVIEW:'Ready for your review',READY:'Reviewed edition',WAITING_TITLE:'Title choice saved',WAITING_COVER:'Preparing the cover'};
+    async function refresh(){
+      clearTimeout(timer);if(!selected||busy)return;
+      const sequence=++requestNumber;
+      const id=selected,url=statusPattern.replace('BOOK_ID',encodeURIComponent(id));
+      node('error').hidden=true;
+      try{
+        const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not read this book.');
+        if(id!==selected||sequence!==requestNumber)return;
+        const changed=revision!==data.revision;revision=data.revision;
+        if(changed)node('reviewed').checked=false;
+        node('title').textContent=data.title;node('state').textContent=labels[data.state]||data.state;
+        node('activity').textContent=data.activity||'Your saved edition is available.';
+        node('counts').textContent=typeof data.chapters_checked==='number'?`${data.chapters_checked} of ${data.chapters_total} chapters checked.`+(typeof data.words_saved==='number'?` ${data.words_saved} words saved.`:''):'';
+        node('attention').textContent=data.attention||'';node('attention').hidden=!data.attention;
+        node('resume').hidden=!data.can_resume;node('resume').disabled=busy;
+        const ready=['REVIEW','READY'].includes(data.state)&&['ebook.pdf','package.zip'].every(name=>(data.files||[]).includes(name));
+        node('files').hidden=!ready;node('review-note').hidden=!ready;
+        node('approval').hidden=!ready||data.state!=='REVIEW';
+        node('approve').disabled=!node('reviewed').checked;
+        node('review-note').textContent=data.state==='READY'?'You marked this edition reviewed. Publishing is a separate step.':'Review the complete manuscript and page layout before publishing. These files have not been approved for sale.';
+        node('pdf').textContent=data.state==='READY'?'Open PDF':'Open review PDF';node('zip').textContent=data.state==='READY'?'Save ZIP':'Save review ZIP';
+        if(ready){node('pdf').href=url+'/files/ebook.pdf?preview=1';node('zip').href=url+'/files/package.zip?preview=1';}
+        if(data.resume_pending||['RUNNING','WAITING_SERVICE','WAITING_TITLE','WAITING_COVER'].includes(data.state))timer=setTimeout(refresh,10000);
+      }catch(error){if(id===selected&&sequence===requestNumber){node('error').textContent=error.message;node('error').hidden=false;node('files').hidden=true;node('approval').hidden=true;node('resume').hidden=true;}}
+    }
+    document.querySelectorAll('.book').forEach(button=>button.addEventListener('click',()=>{
+      selected=button.dataset.id;document.querySelectorAll('.book').forEach(other=>other.setAttribute('aria-pressed',String(other===button)));
+      revision=null;node('reviewed').checked=false;node('approval').hidden=true;node('resume').hidden=true;node('files').hidden=true;node('review-note').hidden=true;node('refresh').hidden=false;node('state').textContent='Loading saved progress';refresh();
+    }));
+    node('reviewed').addEventListener('change',()=>node('approve').disabled=busy||!node('reviewed').checked);
+    node('approve').addEventListener('click',async()=>{
+      if(busy||!node('reviewed').checked||!Number.isInteger(revision))return;
+      busy=true;++requestNumber;clearTimeout(timer);
+      node('approve').disabled=true;node('refresh').disabled=true;
+      document.querySelectorAll('.book').forEach(button=>button.disabled=true);
+      node('error').hidden=true;
+      let failure='';
+      try{
+        const response=await fetch(statusPattern.replace('BOOK_ID',encodeURIComponent(selected))+'/approve',{
+          method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},
+          body:JSON.stringify({revision,reviewed:true})});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not save your review. Reload the book before trying again.');
+      }catch(error){failure=error.message;}
+      finally{busy=false;node('refresh').disabled=false;document.querySelectorAll('.book').forEach(button=>button.disabled=false);node('reviewed').checked=false;node('approve').disabled=true;}
+      await refresh();
+      if(failure){node('error').textContent=failure;node('error').hidden=false;}
+    });
+    node('refresh').addEventListener('click',refresh);refresh();
+    node('source').addEventListener('change',async()=>{
+      const sequence=++sourceRequest,id=node('source').value;sourceVersion=null;node('create').disabled=true;node('create-message').textContent='';
+      if(!id)return;
+      try{
+        const response=await fetch(sourcePattern.replace('987654321',encodeURIComponent(id)),{credentials:'same-origin',cache:'no-store'});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not open this manuscript.');
+        if(sequence!==sourceRequest)return;
+        sourceVersion=data.source_version;node('copy-title').value=data.name;node('copy-author').value=data.author||'';node('create').disabled=false;
+      }catch(error){if(sequence===sourceRequest)node('create-message').textContent=error.message;}
+    });
+    node('create-form').addEventListener('submit',async event=>{
+      event.preventDefault();if(busy||!Number.isInteger(sourceVersion))return;
+      busy=true;clearTimeout(timer);++requestNumber;node('create').disabled=true;
+      const controls=[...document.querySelectorAll('.book'),node('refresh'),node('approve'),node('resume'),...node('create-form').querySelectorAll('input,select')];
+      controls.forEach(control=>control.disabled=true);node('create-message').textContent='Opening a review copy from your saved manuscript…';
+      try{
+        const response=await fetch(sourcePattern.replace('987654321',encodeURIComponent(node('source').value))+'/snapshots',{
+          method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},
+          body:JSON.stringify({source_version:sourceVersion,recovery:{title:node('copy-title').value,author:node('copy-author').value,theme:node('copy-theme').value,require_photos:node('copy-photos').checked}})});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not create this review copy. Your saved manuscript is unchanged.');
+        const destination=new URL(window.location.href);destination.searchParams.set('book',data.book_id);window.location.assign(destination.href);
+      }catch(error){node('create-message').textContent=error.message;busy=false;controls.forEach(control=>control.disabled=false);node('create').disabled=false;node('approve').disabled=!node('reviewed').checked;refresh();}
+    });
+    node('resume').addEventListener('click',async()=>{
+      if(busy||!Number.isInteger(revision))return;
+      busy=true;clearTimeout(timer);++requestNumber;
+      const controls=[...document.querySelectorAll('.book'),node('refresh'),node('approve'),node('resume'),node('create')];controls.forEach(control=>control.disabled=true);
+      let failure='';
+      try{
+        const response=await fetch(statusPattern.replace('BOOK_ID',encodeURIComponent(selected)),{
+          method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({action:'resume',revision})});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not resume. Your saved work is safe.');
+      }catch(error){failure=error.message;}
+      finally{busy=false;controls.forEach(control=>control.disabled=false);node('create').disabled=!Number.isInteger(sourceVersion);}
+      await refresh();if(failure){node('error').textContent=failure;node('error').hidden=false;}
+    });
+  </script>
+  {% endif %}
+</body>
+</html>

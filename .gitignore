@@ -68,3 +68,6 @@ _backup_*/
 overnight_work/
 overnight_recovery_*/
 .fuse_hidden*
+
+# Build-only local inference runtime and weights.
+.ebook-runtime/
