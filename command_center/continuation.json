@@ -3,8 +3,8 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-21T04:37:09.837352+00:00",
-  "runtime_candidate": "291c9b62a17746a9c350db35632109e1f8951841",
+  "checked_at": "2026-11-21T04:49:48.231520+00:00",
+  "runtime_candidate": "c39e8f81d1214b19315bd295fde5ed4cdb8441d1",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
     "hosted_integration_engineering": true,
@@ -1352,24 +1352,33 @@
     },
     "saved_manuscript_controls_20261120": {
       "version": "1.9.95",
-      "status": "implemented_local_checks_running_not_deployed",
+      "status": "live_v1.9.95_owner_acceptance_pending",
       "proof": "release_evidence/ebook_v2_saved_controls_20261120.json",
       "local_service_cases": 7,
       "local_browser_cases": 2,
       "local_factory_cases": 82,
-      "topic_runs_started": 0
+      "topic_runs_started": 0,
+      "local_studio_cases": 197,
+      "local_fast_gate_cases": 954,
+      "postgres_cases": 12,
+      "studio_ci_run": 44867064344,
+      "postgres_ci_run": 44867064329,
+      "workflow_version": "wfv-dc0i0l40916s73bq4lpg",
+      "source_commit": "c39e8f81d1214b19315bd295fde5ed4cdb8441d1",
+      "web_deploy": "dep-dc0i4ih7lnhs738o3oq0",
+      "broader_ci": "Five workflows still running; exact IDs in proof file."
     }
   },
   "next_actions": [
     {
       "id": "fresh_book_user_test_20261119",
-      "status": "review_controls_live_owner_signin_pending",
-      "action": "Complete actual saved-book UI/PDF/ZIP acceptance after normal owner Factory sign-in. Approval controls are live1.9.94, with185 Studio and60 Factory guard cases plus1139 identical before/after protected cases passed. All five protections relocked. Do not approve a real edition for the owner. Then finish Create/Resume and measure targeted editing; no new billed task authorized."
+      "status": "saved_manuscript_controls_live_owner_acceptance_pending",
+      "action": "Use existing private-beta access then normal owner Factory session to verify live1.9.95 Create review copy, PDF/ZIP and Resume controls. Do not approve a real edition without owner review or retry the cancelled credential request. Local/CI supplied-manuscript controls pass; fully automatic fresh-topic and measured targeted-edit performance remain unverified, both billed allowances consumed."
     },
     {
       "id": "finish_customer_recovery_controls",
-      "status": "create_resume_candidate_checks_running",
-      "action": "Create review copy and Resume supplied-manuscript controls implemented. Service7, desktop/phone2 and Factory82 cases passed. Complete197-case Studio, Fast Gate and CI including real PostgreSQL concurrent resume. Deploy compatible existing workflow first, then web. No live task, extra topic allowance or authentication retry authorized."
+      "status": "implemented_deployed_live_owner_acceptance_pending",
+      "action": "v1.9.95 Create review copy and Resume supplied saved manuscripts are live at c39e8f8, web dep-dc0i4ih7lnhs738o3oq0, compatible existing worker wfv-dc0i0l40916s73bq4lpg deployed first.197 Studio/protection cases passed locally and on Windows/Linux; Factory82 and Fast Gate954 passed locally; CI version31/signed12/Fast Gate and PostgreSQL12/concurrent resume passed. Actual private-beta401 HTTP boundary verified. Owner-signed live UI acceptance pending; no task run, new paid generation or authentication retry started."
     },
     {
       "id": "recover_existing_stalled_book",
@@ -1402,7 +1411,7 @@
       "action": "Do not deploy the loopback Studio as the hosted Factory. Before merge/deploy completion, implement and verify a supported hosted integration using shared authenticated customer state, PostgreSQL/R2-compatible storage and an explicitly approved no-paid-generation runtime; then verify actual hosted PDF and ZIP downloads."
     }
   ],
-  "completion": "v1.9.94 review/approval remains live. Saved-manuscript Create/Resume v1.9.95 candidate implemented and focused checks passed; broader checks and staged deployment pending. Fully automatic fresh-topic completion and actual signed-in live acceptance remain unverified.",
-  "blocker": "No further billed topic run authorized. Signed-in acceptance remains pending after cancelled authentication. Candidate regression checks and worker-before-web deployment must finish before claiming v1.9.95 live.",
+  "completion": "Saved-manuscript Create/Resume/review/approval controls deployed live1.9.95. Completed chapters and original source rows preserved in actual fixture PDF/ZIP and concurrent PostgreSQL recovery tests. Actual signed-in owner UI/PDF/ZIP acceptance and fully automatic fresh-topic Factory completion remain unverified.",
+  "blocker": "Owner session after existing private-beta access is needed for signed-in live acceptance; prior secure authentication was cancelled and not retried. No further billed topic run is authorized. Five broader CI workflows were still running at this checkpoint; exact run IDs and required green results are recorded. Hosted targeted-edit timing and final combined full-Factory release gate remain unfinished.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
