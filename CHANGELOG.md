@@ -6,6 +6,9 @@ The Editor-in-Chief review now opens the exported PDF and ZIP from disk, hashes 
 ### What was fixed
 A 45-page review request could exceed the hosted 512 MiB worker limit because the route loaded both full exports into memory while the review library copied the ZIP and expanded archive members. Render reported an out-of-memory server kill. The updated path avoids those overlapping full-file copies while preserving PDF/ZIP identity checks and saved owner decisions.
 
+### Do the steps change?
+No customer steps change in this release. The existing Editor-in-Chief review and approval flow remains in place; the memory fix is internal to export verification. The separate Create/Resume workflow still requires its own completed release gate and signed-in acceptance.
+
 ### Release state
 Python source compilation and diff checks pass. Regression suites and live signed-in acceptance have not yet been run for this candidate.
 
