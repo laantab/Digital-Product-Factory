@@ -1,3 +1,14 @@
+## 1.9.96 — Keep release review within the web worker memory limit
+
+### What changed
+The Editor-in-Chief review now opens the exported PDF and ZIP from disk, hashes ZIP members in bounded chunks, and reads only the PDF when reopening a saved review or approving the exact reviewed edition. Verified object-store exports are staged to short-lived temporary files and removed after the request.
+
+### What was fixed
+A 45-page review request could exceed the hosted 512 MiB worker limit because the route loaded both full exports into memory while the review library copied the ZIP and expanded archive members. Render reported an out-of-memory server kill. The updated path avoids those overlapping full-file copies while preserving PDF/ZIP identity checks and saved owner decisions.
+
+### Release state
+Python source compilation and diff checks pass. Regression suites and live signed-in acceptance have not yet been run for this candidate.
+
 ## 1.9.95 — Create and resume review copies from saved manuscripts
 
 ### What changed

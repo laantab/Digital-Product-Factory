@@ -2065,29 +2065,62 @@ def ebook_workspace_preflight_route(project_id: int):
 from datetime import datetime, timezone  # noqa: E402  (release review timestamps)
 
 
-def _release_files(project_id: int, data: dict) -> tuple[bytes | None, bytes | None]:
-    """The book's current PDF and ZIP bytes, exactly as /download would serve them."""
+def _release_file_paths(
+    project_id: int, data: dict, *, include_zip: bool = True,
+) -> tuple[str | None, str | None, list[str]]:
+    """Return disk-backed review inputs so opening a PDF/ZIP does not copy them into RAM."""
+    import tempfile
+
     pkg = str(data.get("export_package_id") or data.get("package_id") or f"ebook-{project_id}")
     if not _PACKAGE_ID_RE.match(pkg):
-        return None, None
-    out: list[bytes | None] = []
-    for name in ("ebook.pdf", "package.zip"):
+        return None, None, []
+    paths: list[str | None] = []
+    temporary: list[str] = []
+    names = ("ebook.pdf", "package.zip") if include_zip else ("ebook.pdf",)
+    for name in names:
         raw = None
+        path = os.path.join(EXPORTS_DIR, pkg, name)
         try:
             from services.storage.compat import read_export_or_legacy, refresh_stale_export
 
             refresh_stale_export(EXPORTS_DIR, pkg, name)
-            path = os.path.join(EXPORTS_DIR, pkg, name)
-            if os.path.isfile(path):
-                with open(path, "rb") as fh:
-                    raw = fh.read()
-            else:
+            if not os.path.isfile(path):
                 raw = read_export_or_legacy(int(project_id), f"{pkg}/{name}")
+                if raw:
+                    fd, path = tempfile.mkstemp(prefix="factory-review-", suffix="-" + name)
+                    temporary.append(path)
+                    with os.fdopen(fd, "wb") as target:
+                        target.write(raw)
+                    raw = None
+                else:
+                    path = ""
         except Exception:  # noqa: BLE001
             app.logger.exception("release review could not read %s", name)
+            path = ""
+        finally:
             raw = None
-        out.append(raw)
-    return out[0], out[1]
+        paths.append(path if path and os.path.isfile(path) else None)
+    return paths[0], paths[1] if include_zip else None, temporary
+
+
+def _release_path_sha256(path: str | None) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    if not path:
+        return digest.hexdigest()
+    with open(path, "rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _remove_release_review_temps(paths: list[str]) -> None:
+    for path in paths:
+        try:
+            os.unlink(path)
+        except OSError:
+            app.logger.warning("could not remove temporary release review file")
 
 
 @app.get("/ebook-workspace/<int:project_id>/previous-exports")
@@ -2156,7 +2189,6 @@ def ebook_release_review_route(project_id: int):
         estimate_ai_cost, make_provider_reviewer, review_release,
     )
 
-    pdf, zipb = _release_files(project_id, data)
     reviewer, note, charge = None, "", 0.0
     try:
         authorized = float(body.get("authorize_ai_usd") or 0)
@@ -2175,18 +2207,20 @@ def ebook_release_review_route(project_id: int):
         else:
             reviewer = make_provider_reviewer()
             charge = est["estimated_usd"] if est["billable"] else 0.0
-    import hashlib as _hl
-
+    pdf, zipb, temporary_review_files = _release_file_paths(project_id, data)
     prior = data.get("release_review") if isinstance(data.get("release_review"), dict) else {}
-    same_pdf = prior.get("pdf_sha256") == _hl.sha256(pdf or b"").hexdigest()
-    decisions = dict(prior.get("decisions") or {}) if same_pdf else {}
-    acks = list(prior.get("acknowledged_editorial") or []) if same_pdf else []
     # v1.9.15: measure once with no decisions, keep that measurement, then
     # apply the owner's decisions to it. Accept / Reject / "I have read the
     # notes" re-apply decisions to the stored measurement instead of scanning
     # the whole PDF and ZIP again on every click.
-    base = review_release(data, pdf, zipb, ai_reviewer=reviewer, ai_note=note,
-                          decisions={}, acknowledged_editorial=[])
+    try:
+        base = review_release(data, pdf, zipb, ai_reviewer=reviewer, ai_note=note,
+                              decisions={}, acknowledged_editorial=[])
+    finally:
+        _remove_release_review_temps(temporary_review_files)
+    same_pdf = prior.get("pdf_sha256") == base.pdf_sha256
+    decisions = dict(prior.get("decisions") or {}) if same_pdf else {}
+    acks = list(prior.get("acknowledged_editorial") or []) if same_pdf else []
     if reviewer is not None and base.ai.get("ran") and charge:
         ledger = data["ebook_workspace"]["paid_call_ledger"]
         ledger["spent_usd"] = round(float(ledger.get("spent_usd") or 0) + charge, 4)
@@ -2234,10 +2268,12 @@ def ebook_release_review_current_route(project_id: int):
         return err
     data = dict(project.get("data") or {})
     rr = _stored_release_review(data)
-    import hashlib as _hl
-
-    pdf, _zip = _release_files(project_id, data)
-    if not rr or not pdf or rr["base"].get("pdf_sha256") != _hl.sha256(pdf).hexdigest():
+    pdf, _zip, temporary_review_files = _release_file_paths(project_id, data, include_zip=False)
+    try:
+        current_sha = _release_path_sha256(pdf)
+    finally:
+        _remove_release_review_temps(temporary_review_files)
+    if not rr or not pdf or rr["base"].get("pdf_sha256") != current_sha:
         return jsonify({"needs_run": True}), 404
     from services.ebook_release_review import with_decisions
 
@@ -2327,10 +2363,11 @@ def ebook_approve_product_route(project_id: int):
     if err:
         return err
     data = dict(project.get("data") or {})
-    pdf, _zip = _release_files(project_id, data)
-    import hashlib as _hl
-
-    sha = _hl.sha256(pdf or b"").hexdigest()
+    pdf, _zip, temporary_review_files = _release_file_paths(project_id, data, include_zip=False)
+    try:
+        sha = _release_path_sha256(pdf)
+    finally:
+        _remove_release_review_temps(temporary_review_files)
     ok, why = release_review_allows_approval(data, sha)
     if not pdf or not ok:
         # A normal answer, not an error code: "review first" is an expected
@@ -4479,6 +4516,12 @@ def export_product_route():
     except ArtifactStateError as exc:
         return _error(str(exc), 409)
     except ValueError as exc:
+        pre_export_review = getattr(exc, "report", None)
+        if isinstance(pre_export_review, dict):
+            return jsonify({
+                "error": str(exc),
+                "editor_in_chief_pre_export": pre_export_review,
+            }), 400
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("export-product failed")

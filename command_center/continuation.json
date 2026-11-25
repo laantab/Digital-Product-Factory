@@ -3,7 +3,7 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-21T04:49:48.231520+00:00",
+  "checked_at": "2026-11-25T04:27:30+00:00",
   "runtime_candidate": "c39e8f81d1214b19315bd295fde5ed4cdb8441d1",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
@@ -1367,9 +1367,45 @@
       "source_commit": "c39e8f81d1214b19315bd295fde5ed4cdb8441d1",
       "web_deploy": "dep-dc0i4ih7lnhs738o3oq0",
       "broader_ci": "Five workflows still running; exact IDs in proof file."
+    },
+    "editor_in_chief_pre_export_20261125": {
+      "status": "implemented_locally_not_deployed",
+      "purpose": "Block designed ebook PDF rendering until a deterministic Editor-in-Chief manuscript and visible-copy review passes.",
+      "files": [
+        "services/ebook_pre_export_review.py",
+        "services/ebook_design_export.py",
+        "services/ebook_build_orchestrator.py",
+        "services/ebook_visual_pipeline.py",
+        "app.py",
+        "tests/test_ebook_pre_export_review.py"
+      ],
+      "checks": [
+        "duplicate long sentences",
+        "paragraphs ending in incomplete conjunction/article/preposition without terminal punctuation",
+        "placeholder or prompt leakage",
+        "production language in visual copy",
+        "truncated source URLs"
+      ],
+      "automatic_fix_policy": "Existing deterministic chapter copy edits remain pre-approval and paid_calls=0; the new gate does not invent missing author prose. Workflow/comparison/timeline visual defaults were changed to reader-facing captions.",
+      "test_evidence": {
+        "protected_baseline_before_change": "170 passed, 0 failures (13 protected ebook/invite test files).",
+        "targeted_after_change": "40 passed for pre-export review, visual pipeline, and design export; 60 passed for pre-export review, customer path, build resume recovery, invite gate and render persistence.",
+        "full_protected_after_change": "Attempted, but the execution session ended after partial progress without a final pytest summary; result is unknown and must not be called green.",
+        "compile_and_diff_check": "Python py_compile and git diff --check passed."
+      },
+      "document_review_correction": "The earlier apparent incomplete sentence on PDF page 46 was an extraction truncation; the full paragraph is complete. Confirmed concerns include a repeated opening sentence and a workflow production caption.",
+      "paid_calls": 0,
+      "deployment_or_live_acceptance": "Not attempted."
     }
   },
   "next_actions": [
+    {
+      "id": "release_review_oom_repair_20261125",
+      "status": "source_patch_implemented_validation_and_live_deployment_pending",
+      "action": "Render logs confirmed the release-review POST for the 45-page saved PDF was OOM-killed at the 512 MiB worker limit. Candidate 1.9.96 now passes path-backed PDF/ZIP files to the review scanner, streams archive member hashes, and reads only the PDF for saved-review and approval checks. app.py changed, so invite-protection is explicitly unlocked pending its protected before/after suite. Python compilation and diff checks pass; pytest is unavailable in the current runtime. Do not mark deployed or accepted until the protected suites pass and the signed-in release-review route is confirmed live.",
+      "candidate_source_commit": "0a2fcbe26ea989f4bbc5c09fa6492fc117733996",
+      "candidate_version": "1.9.96"
+    },
     {
       "id": "fresh_book_user_test_20261119",
       "status": "saved_manuscript_controls_live_owner_acceptance_pending",

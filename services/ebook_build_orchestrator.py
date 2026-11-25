@@ -1304,9 +1304,20 @@ def advance_build(project_id: int) -> dict:
         fresh_data["_project_id"] = project_id
         fresh_state = build_state(fresh_data)
         fresh_rec = _stage_record(fresh_state, stage)
-        final = isinstance(exc, ManuscriptRepairStalled) or int(fresh_rec.get("attempts") or 0) >= _max_attempts(stage)
+        pre_export_report = getattr(exc, "report", None)
+        pre_export_blocked = isinstance(pre_export_report, dict)
+        if pre_export_blocked:
+            fresh_data["editor_in_chief_pre_export"] = pre_export_report
+        final = (pre_export_blocked or isinstance(exc, ManuscriptRepairStalled)
+                 or int(fresh_rec.get("attempts") or 0) >= _max_attempts(stage))
         _release_stage(fresh_state, stage, FAILED_FINAL if final else FAILED_RECOVERABLE, str(exc)[:500])
-        fresh_state["customer_message"] = MSG_FINAL if final else MSG_RETRY
+        if pre_export_blocked:
+            finding = next(iter(pre_export_report.get("findings") or []), {})
+            summary = str(finding.get("summary") or "The manuscript needs correction.")
+            action = str(finding.get("action") or "Review the saved manuscript and continue.")
+            fresh_state["customer_message"] = f"Editor-in-Chief paused before PDF: {summary} {action}"
+        else:
+            fresh_state["customer_message"] = MSG_FINAL if final else MSG_RETRY
         fresh_state["failed"] = final
         fresh_state["updated_at"] = _now()
         database.update_project(project_id, None, fresh_data)
@@ -1567,6 +1578,10 @@ def status_payload(data: dict, project_id: int) -> dict:
         ),
         "title": str(data.get("title") or ""),
         "subtitle": str(data.get("subtitle") or ""),
+        "editor_in_chief_pre_export": (
+            data.get("editor_in_chief_pre_export")
+            if isinstance(data.get("editor_in_chief_pre_export"), dict) else None
+        ),
         # The manuscript is the book. It exists, and is worth showing, long
         # before the PDF does -- so report it as its own milestone rather than
         # leaving the customer with only a percentage.
