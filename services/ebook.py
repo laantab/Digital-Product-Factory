@@ -244,7 +244,7 @@ def fixture_one_chapter(book, chapter) -> dict:
     para_a = f"{pick(openers)} {pick(middles)} {pick(closers, 1)}"
     para_b = f"{pick(middles, 2)} {pick(closers, 3)} {pick(openers, 4)}"
     para_c = f"{pick(closers, 2)} {pick(openers, 3)} {pick(middles, 1)}"
-    para_d = f"{pick(openers, 2)} {pick(middles, 4)} {pick(closers, 3)}"
+    para_d = f"{pick(openers, 2)} {pick(middles, 4)} {pick(closers, 4)}"
     para_e = f"{pick(closers)} {pick(middles, 3)} {pick(openers, 1)}"
 
     body = (
