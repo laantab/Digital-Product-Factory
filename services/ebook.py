@@ -229,6 +229,7 @@ def fixture_one_chapter(book, chapter) -> dict:
         f"A reader who follows {short} exactly as written will have a working version before adding refinements.",
         f"None of {short} depends on special equipment, and nothing here needs to be bought before starting.",
         f"By the end of {short}, the reader should be able to repeat the whole sequence without rereading it.",
+        f"Small adjustments let {short} fit the reader's routine without losing the useful first version.",
     ]
 
     def pick(bank, offset=0):
@@ -244,7 +245,7 @@ def fixture_one_chapter(book, chapter) -> dict:
     para_a = f"{pick(openers)} {pick(middles)} {pick(closers, 1)}"
     para_b = f"{pick(middles, 2)} {pick(closers, 3)} {pick(openers, 4)}"
     para_c = f"{pick(closers, 2)} {pick(openers, 3)} {pick(middles, 1)}"
-    para_d = f"{pick(openers, 2)} {pick(middles, 4)} {pick(closers, 4)}"
+    para_d = f"{pick(openers, 2)} {pick(middles, 4)} {pick(closers, 5)}"
     para_e = f"{pick(closers)} {pick(middles, 3)} {pick(openers, 1)}"
 
     body = (
