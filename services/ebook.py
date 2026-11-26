@@ -203,7 +203,10 @@ def fixture_one_chapter(book, chapter) -> dict:
     keywords = purpose_keywords(purpose)[:PURPOSE_KEYWORDS_CHECKED]
     focus = ", ".join(keywords[:6]) if keywords else "the approach described here"
     lead = keywords[0] if keywords else "this routine"
-    short = title.split(":")[0].strip() or title
+    # Keep the chapter-specific suffix (often placed after a colon). Several
+    # chapters share the same book-title prefix, and trimming at the colon
+    # repeated whole sentences across the assembled manuscript.
+    short = title.strip() or "Chapter"
 
     # Every chapter must read differently: the manuscript validator rejects
     # substantially repeated paragraphs across chapters, and it is right to.
@@ -217,11 +220,11 @@ def fixture_one_chapter(book, chapter) -> dict:
         f"There is a plain version of {short} that works, and this chapter stays with that version throughout.",
     ]
     middles = [
-        f"Attention here belongs on {focus}, because that is what determines whether the rest holds together.",
-        f"The details that matter most are {focus}; everything else can be adjusted later without much cost.",
-        f"Keeping {focus} in view prevents the common detour of optimising something that was never the constraint.",
-        f"Where readers get stuck is rarely effort. It is usually {focus} being left undecided.",
-        f"Decisions about {focus} are worth making once, deliberately, so they need not be revisited under pressure.",
+        f"In {short}, attention belongs on {focus}, because that is what determines whether the rest holds together.",
+        f"In {short}, the details that matter most are {focus}; everything else can be adjusted later without much cost.",
+        f"In {short}, keeping {focus} in view prevents the common detour of optimising something that was never the constraint.",
+        f"In {short}, where readers get stuck is rarely effort. For {short}, that usually means {focus} was left undecided.",
+        f"In {short}, decisions about {focus} are worth making once, deliberately, so they need not be revisited under pressure.",
     ]
     closers = [
         f"Applied steadily, {short} stops feeling like a separate job and becomes part of an ordinary week.",
@@ -237,8 +240,8 @@ def fixture_one_chapter(book, chapter) -> dict:
 
     keyword_lines = "\n\n".join(
         f"Considered inside {short}, {kw} is less complicated than it first appears. "
-        f"Handle {kw} in the same place and at the same point in the sequence, and it "
-        f"stops competing for attention with everything else in this chapter."
+        f"For {short}, handle {kw} in the same place and at the same point in the sequence, "
+        f"so it stops competing for attention with everything else in this chapter."
         for kw in dict.fromkeys(keywords[:7] or ["this method"])
     )
 

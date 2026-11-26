@@ -335,7 +335,7 @@
     },
     "ebook_one_button_completion": {
       "display_name": "Ebook one-button completion",
-      "status": "LOCKED",
+      "status": "UNLOCKED",
       "last_known_good_commit": "f37477918d416c909c1c90e36af0dd7e6dd6d9b9",
       "factory_version": "1.9.94",
       "protected_test_files": [
@@ -386,11 +386,11 @@
       ],
       "fast_gate": false,
       "full_gate": true,
-      "relocked_by": "Codex after owner-authorized customer review verification",
-      "relocked_after_tests": "All72 affected protected files:1139 identical cases passed before and after;185 Studio/customer cases and60 full Factory guard cases passed. Exact proof in release_evidence/ebook_v2_customer_review_20261120.json.",
+      "relocked_by": null,
+      "relocked_after_tests": null,
       "notes": "Scoped worker continuation and final-export review provenance candidate. All existing ebook protected cases retained. Durable dispatch, correction acknowledgement, lease reconciliation, targeted repair and live final-download acceptance remain required; see docs/EBOOK_COMPLETION_SOLUTION.md. Relocked after full protected regression pass on af01409; live revised-book acceptance and complete one-button redesign verification remain outstanding. Chart context repair protected at 1a54da9d1c95f92616ab60043c86bb99648b8afc. This is candidate source protection, not verified live one-button completion; missing original preservation artifacts and a complete full release run still block deployment. November2,2026: scoped Continue/publication repair protected at4e1fadc after a complete3393-case release pass. Existing book recovery/downloads verified separately; this is not certification of a fresh paid-provider topic-to-book run. Relocked after the 3519-case release gate and 1192 matching baseline cases on 2026-11-13.",
-      "unlocked_by": null,
-      "unlocked_reason": null
+      "unlocked_by": "Codex under owner standing authorization",
+      "unlocked_reason": "Finish the owner-authorized one-button release work after the protected path and export files changed; run the listed protected suites before relocking."
     },
     "customer_account_isolation": {
       "display_name": "Customer account isolation (staged, not activated)",

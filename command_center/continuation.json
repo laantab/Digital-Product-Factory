@@ -3,8 +3,8 @@
   "project": "Digital Product Factory Pro",
   "branch": "rebuild/ebook-engine-v2-20261102",
   "pull_request": 107,
-  "checked_at": "2026-11-25T04:27:30+00:00",
-  "runtime_candidate": "c39e8f81d1214b19315bd295fde5ed4cdb8441d1",
+  "checked_at": "2026-11-26T03:54:30Z",
+  "runtime_candidate": "e76b0c47b47bbc818dcf0a344b7d0f9ad74285e1",
   "authorization": {
     "routine_fixes_pushes_and_deployment": true,
     "hosted_integration_engineering": true,
@@ -1396,9 +1396,42 @@
       "document_review_correction": "The earlier apparent incomplete sentence on PDF page 46 was an extraction truncation; the full paragraph is complete. Confirmed concerns include a repeated opening sentence and a workflow production caption.",
       "paid_calls": 0,
       "deployment_or_live_acceptance": "Not attempted."
+    },
+    "latest_pr107_status_20261126": {
+      "head_commit": "e76b0c47b47bbc818dcf0a344b7d0f9ad74285e1",
+      "pr_state": "open_draft",
+      "mergeable_flag": true,
+      "mergeable_state": "unstable",
+      "render_deploy_id": "dep-dc3loo6tlv9c73f5o4m0",
+      "render_deploy_status": "live",
+      "render_service": "srv-da8qisegekts7380vdvg",
+      "render_workspace": "tea-d8q0khmq1p3s739bjgn0",
+      "failed_runs": {
+        "45710652307": "One-button ebook memory: offline customer path failed because Editor-in-Chief pre-export found repeated full sentences in the generated multi-chapter fixture.",
+        "45710652437": "Local ebook chapter bound: 1 failure in protected function-lock enforcement; ebook_one_button_completion dependency files changed without explicit unlock.",
+        "45710652276": "Book Studio Windows/Linux and Factory version jobs failed on the same protected function-lock enforcement finding.",
+        "45710652302": "Release review memory job failed on the same function-lock enforcement finding.",
+        "45710652301": "Offline correction billing job failed on the same function-lock enforcement finding.",
+        "45710652345": "Fixture correction offline job failed on the same function-lock enforcement finding."
+      },
+      "passed_checks": [
+        "isolated-postgres",
+        "snapshots"
+      ],
+      "repair_in_progress": "ebook_one_button_completion explicitly unlocked in function_lock_registry.json under standing authorization. Deterministic fixture now retains full chapter titles and disambiguates repeated focus prose; 10 synthetic chapter assembly check reports zero repeated long sentences. Local pytest unavailable because pytest and project dependencies are not installed.",
+      "pending": [
+        "Run the registered ebook_one_button_completion protected suites after the source repair, then relock using the verified commit hash.",
+        "Fresh full release gates must be green.",
+        "Owner-signed hosted Create/Resume/PDF/ZIP acceptance remains outstanding; no additional billed generation is authorized."
+      ]
     }
   },
   "next_actions": [
+    {
+      "id": "pr107_merge_deploy_status_20261126",
+      "status": "blocked_pending_protected_ci_and_owner_acceptance",
+      "action": "Latest candidate e76b0c47b47bbc818dcf0a344b7d0f9ad74285e1 is live on the configured Render service, but PR107 remains draft and latest CI has failures. One-button fixture pre-export repeat-sentence failure persists; other broad workflows fail because ebook_one_button_completion shared dependency files changed without the registry unlock. This has now been explicitly unlocked for the owner-authorized repair. Validate the fixture, run every registered protected ebook_one_button_completion suite and required full release gate, then relock at a real verified commit. Do not merge until CI is green and normal owner-signed hosted acceptance completes. No additional paid generation is authorized."
+    },
     {
       "id": "release_review_oom_repair_20261125",
       "status": "source_patch_implemented_validation_and_live_deployment_pending",
@@ -1448,6 +1481,6 @@
     }
   ],
   "completion": "Saved-manuscript Create/Resume/review/approval controls deployed live1.9.95. Completed chapters and original source rows preserved in actual fixture PDF/ZIP and concurrent PostgreSQL recovery tests. Actual signed-in owner UI/PDF/ZIP acceptance and fully automatic fresh-topic Factory completion remain unverified.",
-  "blocker": "Owner session after existing private-beta access is needed for signed-in live acceptance; prior secure authentication was cancelled and not retried. No further billed topic run is authorized. Five broader CI workflows were still running at this checkpoint; exact run IDs and required green results are recorded. Hosted targeted-edit timing and final combined full-Factory release gate remain unfinished.",
+  "blocker": "Latest PR107 CI is red: the one-button customer-path fixture still fails the repeated-sentence Editor-in-Chief gate; multiple other workflows fail because protected ebook_one_button_completion files changed without an explicit registry unlock (now corrected in the working tree). PR107 is draft. The latest candidate is live on Render. Owner-signed hosted Create/Resume/PDF/ZIP acceptance and a green final combined release gate remain required. No further billed topic run is authorized.",
   "resume_rule": "Fetch current state and resume the first unfinished action without requesting routine approval. Never repeat a generation or mutation until its prior outcome is known."
 }
