@@ -2518,7 +2518,15 @@ def repair_generated_chart(aid: dict, chapter: dict) -> None:
         replacement = {"type": "checklist", "title": f"{title}: actions to try",
                        "items": [], "source": "local_manuscript_checklist",
                        "caption": f"Practical actions from {title}."}
-        for sentence in _prose_sentences(body):
+        # Many saved chapters introduce a bullet list in the gerund form.
+        verbs = {"reviewing": "Review", "checking": "Check", "talking": "Talk",
+                 "asking": "Ask", "turning": "Turn", "discussing": "Discuss"}
+        bullets = []
+        for item in re.findall(r"(?m)^\s*[-*] +([^\n]+)", body):
+            first, _, rest = item.partition(" ")
+            if first.lower() in verbs and rest:
+                bullets.append(f"{verbs[first.lower()]} {rest.rstrip('.')}.")
+        for sentence in [*bullets, *_prose_sentences(body)]:
             if not (20 <= len(sentence) <= 135 and sentence.endswith(".")):
                 continue
             if not re.match(r"^(?:Ask|Check|Choose|Compare|Decide|Discuss|Explain|Keep|Limit|Look|Make|Practice|Review|Set|Show|Start|Talk|Teach|Tell|Turn|Use|Write) ", sentence):
