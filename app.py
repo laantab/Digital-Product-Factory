@@ -2249,6 +2249,8 @@ def _store_release_review(project_id: int, data: dict, base: dict, decisions: di
     database.update_project(project_id, None, data)
     out = rev.to_dict(with_thumbs=True)
     out["decisions"] = decisions
+    from services.ebook_build_orchestrator import automatic_ebook
+    out["automatic_visual_repair"] = automatic_ebook(data) and not data.get("last_visual_repair")
     return jsonify(out)
 
 
@@ -2445,7 +2447,7 @@ margin:6px 6px 0 0;cursor:pointer;text-decoration:none;display:inline-block}butt
 <button type=button onclick="document.getElementById('visualViewer').close()">Close enlarged view</button>
 <img id=visualViewerImage alt=""></dialog><script>
 const PID=__PID__;const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let busy=false;let reviewVisuals=[];
+let busy=false;let reviewVisuals=[];let reviewDigest="";
 function setBusy(b){busy=b;document.querySelectorAll('#actions button,#sheet button').forEach(x=>{if(b)x.disabled=true;});}
 async function call(url,opts,ms){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||180000);
 try{const r=await fetch(url,{...(opts||{}),signal:c.signal});let d=null;try{d=await r.json();}catch(e){d=null;}
@@ -2458,14 +2460,17 @@ async function run(authorize){if(busy)return;setBusy(true);const st=document.get
 st.textContent='Reviewing the PDF and ZIP...';st.className='status';
 const res=await call(`/ebook-workspace/${PID}/release-review`,{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify(authorize?{authorize_ai_usd:authorize}:{})});
-if(!res.ok||!res.d||!res.d.status)return failed(res,'The review');busy=false;show(res.d);}
+if(!res.ok||!res.d||!res.d.status)return failed(res,'The review');busy=false;await show(res.d);
+if(res.d.automatic_visual_repair && reviewVisuals.some(v=>v.status==='rejected')){
+  await qualityAction('repair-reviewed',-1);
+}}
 async function load(){busy=true;const res=await call(`/ebook-workspace/${PID}/release-review/current`,{},30000);busy=false;
 if(res.ok&&res.d&&res.d.status)return show(res.d);run(0);}
 async function post(url,body,what){if(busy)return;setBusy(true);
 const res=await call(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})},60000);
 busy=false;if(!res.ok||!res.d)return failed(res,what);if(res.d.needs_run)return run(0);if(res.d.status)return show(res.d);run(0);}
 async function show(d){const st=document.getElementById('status');
-reviewVisuals=d.visuals||[];
+reviewVisuals=d.visuals||[];reviewDigest=d.pdf_sha256;
 st.textContent=d.status;st.className='status '+(d.ready?'ready':d.status==='Changes required'?'changes':'unverified');
 const label={ok:'Measured checks passed',rejected:'Rejected - replace',not_verified:'Not verified',
 needs_human_review:'Needs your review',accepted_by_owner:'Accepted by you'};
@@ -2484,6 +2489,7 @@ let est=null;try{const e=await call(`/ebook-workspace/${PID}/release-review/esti
 const rejected=(d.visuals||[]).filter(v=>v.status==='rejected').length;
 const editorial=(d.groups||[]).some(g=>g.findings.some(f=>f.level==='editorial'));
 document.getElementById('actions').innerHTML=
+(rejected?`<button type=button onclick="qualityAction('repair-reviewed',-1)">Fix rejected visuals</button>`:'')+
 `<button type=button onclick="qualityAction('improve-print',-1)">Use clearer type and redraw charts</button>`+
 `<a class=btn href="/?view=ebook-workspace&project_id=${PID}&stage=visuals">Approve all acceptable visuals${rejected?' and replace '+rejected+' rejected':''}</a>`+
 (d.ai&&d.ai.ran||!est?'':`<button onclick="if(confirm('Run the AI review for about $${est.estimated_usd.toFixed(2)}? It is charged to this book.'))run(${est.estimated_usd})">Run AI review (about $${est.estimated_usd.toFixed(2)})</button>`)+
@@ -2496,10 +2502,13 @@ const image=document.getElementById('visualViewerImage');image.src=v.thumb||'';i
 document.getElementById('visualViewer').showModal();}
 async function qualityAction(action,index){if(busy)return;setBusy(true);
 const visual=reviewVisuals[index];
-const body={action,visual_id:visual?visual.visual_id:'',mode:'higher-resolution'};
+const body={action,pdf_sha256:reviewDigest,visual_id:visual?visual.visual_id:'',mode:'higher-resolution'};
 const res=await call(`/ebook-workspace/${PID}/visuals`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},120000);
-busy=false;if(!res.ok)return failed(res,'The quality update');
-location.href=action==='improve-print'?`/?view=ebook-build&project_id=${PID}`:`/?view=ebook-workspace&project_id=${PID}&stage=visuals`;}
+busy=false;if(!res.ok){
+  if(res.d&&res.d.error){document.getElementById('status').textContent=res.d.error;
+    document.getElementById('actions').innerHTML=`<a class=btn href="/?view=ebook-workspace&project_id=${PID}&stage=visuals">Review flagged visuals</a>`;return;}
+  return failed(res,'The quality update');}
+location.href=['improve-print','repair-reviewed'].includes(action)?`/?view=ebook-build&project_id=${PID}`:`/?view=ebook-workspace&project_id=${PID}&stage=visuals`;}
 load();
 </script></body></html>"""
 

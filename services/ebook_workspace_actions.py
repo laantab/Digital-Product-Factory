@@ -50,6 +50,67 @@ class UnknownAction(ValueError):
 # Visuals
 # ---------------------------------------------------------------------------
 
+def repair_reviewed_visuals(data: dict, digest: str) -> dict:
+    """Stage repairs against a specific release review, without billable calls."""
+    from copy import deepcopy
+    from uuid import uuid4
+    from services.ebook_factory_pipeline import fill_photo_aid_from_pexels
+    from services.ebook_visual_pipeline import (
+        _package_id, materialize_visual_plan, repair_generated_chart,
+    )
+
+    review = data.get("release_review") or {}
+    if (not digest or review.get("pdf_sha256") != digest
+            or (data.get("ebook_export_identity") or {}).get("pdf_sha256") != digest):
+        raise ValueError("The PDF changed. Review the current PDF before repairing it.")
+    plan = deepcopy(data.get("visual_plan") or {})
+    rejected = {v["visual_id"]: v["kind"] for v in review.get("visuals", [])
+                if v.get("status") == "rejected" and v.get("visual_id")}
+    used_ids = {str(a.get("photo_id")) for ch in plan.get("chapters", [])
+                for a in ch.get("aids", []) if a.get("photo_id")}
+    package = f"{_package_id(data)}-repair-{uuid4().hex[:12]}"
+    repaired = []
+    for chapter in plan.get("chapters", []):
+        for index, aid in enumerate(chapter.get("aids", [])):
+            vid = aid.get("visual_id")
+            if rejected.get(vid) == "photo":
+                candidate = dict(aid, rejected_photo_ids=sorted(
+                    used_ids.union(aid.get("rejected_photo_ids") or [])))
+                candidate["chapter_body"] = chapter.get("chapter_body") or aid.get("chapter_body", "")
+                filled = fill_photo_aid_from_pexels(
+                    candidate, package_id=package, title=data.get("title", ""),
+                    topic=data.get("source", ""), audience=data.get("audience", ""),
+                    chapter=chapter.get("chapter", ""))
+                pid = str(filled.get("photo_id") or "")
+                if (filled.get("status") != "resolved" or filled.get("match_status") != "pass"
+                        or not pid or pid in candidate["rejected_photo_ids"]
+                        or filled.get("sha256") == aid.get("sha256")):
+                    continue
+                used_ids.add(pid)
+                chapter["aids"][index] = filled
+            elif rejected.get(vid) == "chart":
+                before = list(aid.get("items") or [])
+                repair_generated_chart(aid, chapter)
+                if before == aid.get("items"):
+                    continue
+                subset = dict(chapter, aids=[aid])
+                drawn = materialize_visual_plan({"chapters": [subset]}, package_id=package)
+                chapter["aids"][index] = drawn["chapters"][0]["aids"][0]
+            else:
+                continue
+            repaired.append(vid)
+    if not repaired:
+        raise ValueError("No verified replacement was available. Review the flagged visuals.")
+    unresolved = sorted(set(rejected) - set(repaired))
+    if unresolved:
+        raise ValueError("A verified replacement is still needed for " + ", ".join(unresolved)
+                         + ". The original review is available for manual correction.")
+    data["last_visual_repair"] = {"pdf_sha256": digest, "repaired": repaired,
+                                  "unresolved": sorted(set(rejected) - set(repaired))}
+    data.pop("release_review", None)
+    return plan
+
+
 def visuals(data: dict, payload: dict) -> tuple[dict, str]:
     """Prepare, replace, accept or approve the book's photographs.
 
@@ -82,17 +143,21 @@ def visuals(data: dict, payload: dict) -> tuple[dict, str]:
     if action == "edit-chart":
         return edit_chart_text(data, payload)
 
-    if action == "improve-print":
+    if action in {"improve-print", "repair-reviewed"}:
         from services.ebook_visual_pipeline import (
             _assert_mutable, materialize_visual_plan, manifest_from_plan, _package_id,
         )
         _assert_mutable(data, "improve print clarity")
         if not isinstance(data.get("ebook_workspace"), dict):
             raise ValueError("Open the ebook workspace before changing its print style.")
-        data["visual_plan"] = materialize_visual_plan(data.get("visual_plan") or {}, package_id=_package_id(data))
+        if action == "repair-reviewed":
+            data["visual_plan"] = repair_reviewed_visuals(data, payload.get("pdf_sha256"))
+        else:
+            data["visual_plan"] = materialize_visual_plan(data.get("visual_plan") or {}, package_id=_package_id(data))
         data["ebook_visual_manifest"] = manifest_from_plan(data["visual_plan"])
         data["ebook_visual_manifest_digest"] = data["ebook_visual_manifest"]["digest"]
-        data.setdefault("fields", {}).update(theme_id="modern_practical", readability_profile="clear_large")
+        if action == "improve-print":
+            data.setdefault("fields", {}).update(theme_id="modern_practical", readability_profile="clear_large")
         data["export_ready"] = False
         # A redraw invalidates both names used by preview readers. The saved
         # PDF/ZIP remain available, but cannot serve as the revised preview.
@@ -108,6 +173,8 @@ def visuals(data: dict, payload: dict) -> tuple[dict, str]:
             if stage != "export":
                 set_stage_status(data["ebook_workspace"], stage, STATUS_NOT_STARTED,
                                  note="Print clarity changed; validate the revised layout.")
+        if action == "repair-reviewed":
+            return data, "Visual repairs staged. Continue the build and review the new PDF and ZIP."
         return data, "Clearer typography and charts are ready. Continue to build the revised PDF and ZIP."
 
     if action == "approve":
