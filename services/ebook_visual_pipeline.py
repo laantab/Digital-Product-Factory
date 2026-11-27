@@ -2493,6 +2493,57 @@ def store_interior_photo(
     return out
 
 
+def repair_generated_chart(aid: dict, chapter: dict) -> None:
+    """Repair flagged generated instructions from the saved chapter before drawing."""
+    from services.ebook_release_review import HARD, chart_wording_findings
+
+    if aid.get("text_edited") or aid.get("source") not in {
+        "local_manuscript_checklist", "local_manuscript_workflow",
+        "local_manuscript_key_points", "local_manuscript_practice_sequence",
+    }:
+        return
+    title = str(chapter.get("chapter") or "")
+    body = str(chapter.get("chapter_body") or "")
+
+    def findings(candidate):
+        return chart_wording_findings(candidate, page=None, chapter=title)
+
+    problems = [f.code for f in findings(aid) if f.level == HARD]
+    if not problems or not body:
+        return
+    replacement = derive_local_aid_from_prose(int(chapter.get("chapter_index") or 0), title, body)
+    if not replacement or findings(replacement):
+        # Choose complete actions in reading order. Check every addition for
+        # fragments and near duplicates before it reaches the graphic.
+        replacement = {"type": "checklist", "title": f"{title}: actions to try",
+                       "items": [], "source": "local_manuscript_checklist",
+                       "caption": f"Practical actions from {title}."}
+        for sentence in _prose_sentences(body):
+            if not (20 <= len(sentence) <= 135 and sentence.endswith(".")):
+                continue
+            if not re.match(r"^(?:Ask|Check|Choose|Compare|Decide|Discuss|Explain|Keep|Limit|Look|Make|Practice|Review|Set|Show|Start|Talk|Teach|Tell|Turn|Use|Write) ", sentence):
+                continue
+            if instruction_requires_context(sentence):
+                continue
+            candidate = {**replacement, "items": [*replacement["items"], sentence]}
+            if not findings(candidate):
+                replacement = candidate
+            if len(replacement["items"]) == 5:
+                break
+        if len(replacement["items"]) < 3:
+            questions = re.findall(r"(?m)^\s*\d+[.)]\s+\*{0,2}([^*\n?]{8,100}\?)\*{0,2}\s*$", body)
+            replacement.update(title=f"{title}: questions to discuss", items=questions[:6],
+                               caption=f"Questions for discussing {title}.")
+            if len(replacement["items"]) < 3 or findings(replacement):
+                return
+    aid.setdefault("text_history", []).append({
+        "title": aid.get("title"), "items": list(aid.get("items") or []),
+        "reason": "Recover generated instructions at manuscript boundaries",
+        "findings": problems,
+    })
+    aid.update({key: replacement[key] for key in ("type", "title", "items", "caption", "source")})
+
+
 def materialize_visual_plan(visual_plan: dict, *, package_id: str) -> dict[str, Any]:
     """Render missing local PNG assets and stamp SHA/dimensions/source/path.
 
@@ -2529,22 +2580,7 @@ def materialize_visual_plan(visual_plan: dict, *, package_id: str) -> dict[str, 
                 _stamp_aid_from_file(aid, path, ctitle=ctitle, cidx=cidx)
                 aid["source"] = str(aid.get("source") or "pexels")
                 continue
-            # Redraw can recover the defective generated wording already saved
-            # in a project. Never replace an owner's edit or invent instructions.
-            if aid.get("source") == "local_manuscript_practice_sequence" and not aid.get("text_edited"):
-                from services.ebook_release_review import chart_wording_findings, HARD
-
-                problems = chart_wording_findings(aid, page=None, chapter=ctitle)
-                if any(f.level == HARD for f in problems):
-                    replacement = derive_local_aid_from_prose(
-                        cidx, ctitle, str(ch.get("chapter_body") or "")
-                    )
-                    if replacement and not chart_wording_findings(replacement, page=None, chapter=ctitle):
-                        aid.setdefault("text_history", []).append({
-                            "title": aid.get("title"), "items": list(aid.get("items") or []),
-                            "reason": "Recover generated instructions at manuscript boundaries",
-                        })
-                        aid.update({key: replacement[key] for key in ("type", "title", "items", "caption", "source")})
+            repair_generated_chart(aid, ch)
             img = render_aid_png(aid, scale=2.0)
             buf = io.BytesIO()
             img.save(buf, format="PNG", optimize=True)
