@@ -2249,6 +2249,8 @@ def _store_release_review(project_id: int, data: dict, base: dict, decisions: di
     database.update_project(project_id, None, data)
     out = rev.to_dict(with_thumbs=True)
     out["decisions"] = decisions
+    from services.ebook_build_orchestrator import automatic_ebook
+    out["automatic_visual_repair"] = automatic_ebook(data) and not data.get("last_visual_repair")
     return jsonify(out)
 
 
@@ -2458,7 +2460,10 @@ async function run(authorize){if(busy)return;setBusy(true);const st=document.get
 st.textContent='Reviewing the PDF and ZIP...';st.className='status';
 const res=await call(`/ebook-workspace/${PID}/release-review`,{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify(authorize?{authorize_ai_usd:authorize}:{})});
-if(!res.ok||!res.d||!res.d.status)return failed(res,'The review');busy=false;show(res.d);}
+if(!res.ok||!res.d||!res.d.status)return failed(res,'The review');busy=false;await show(res.d);
+if(res.d.automatic_visual_repair && reviewVisuals.some(v=>v.status==='rejected')){
+  await qualityAction('repair-reviewed',-1);
+}}
 async function load(){busy=true;const res=await call(`/ebook-workspace/${PID}/release-review/current`,{},30000);busy=false;
 if(res.ok&&res.d&&res.d.status)return show(res.d);run(0);}
 async function post(url,body,what){if(busy)return;setBusy(true);
@@ -2499,7 +2504,10 @@ async function qualityAction(action,index){if(busy)return;setBusy(true);
 const visual=reviewVisuals[index];
 const body={action,pdf_sha256:reviewDigest,visual_id:visual?visual.visual_id:'',mode:'higher-resolution'};
 const res=await call(`/ebook-workspace/${PID}/visuals`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},120000);
-busy=false;if(!res.ok)return failed(res,'The quality update');
+busy=false;if(!res.ok){
+  if(res.d&&res.d.error){document.getElementById('status').textContent=res.d.error;
+    document.getElementById('actions').innerHTML=`<a class=btn href="/?view=ebook-workspace&project_id=${PID}&stage=visuals">Review flagged visuals</a>`;return;}
+  return failed(res,'The quality update');}
 location.href=['improve-print','repair-reviewed'].includes(action)?`/?view=ebook-build&project_id=${PID}`:`/?view=ebook-workspace&project_id=${PID}&stage=visuals`;}
 load();
 </script></body></html>"""
