@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'services/ebook_release_review.py'
+      - 'services/ebook_workspace_actions.py'
+      - 'services/ebook_visual_pipeline.py'
       - 'tests/test_ebook_release_review_zip_memory.py'
       - '.github/workflows/ebook-release-review-memory.yml'
 
