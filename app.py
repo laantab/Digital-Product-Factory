@@ -169,6 +169,11 @@ from routes.auth import auth_bp  # noqa: E402
 
 app.register_blueprint(auth_bp)
 
+# Preservation only: separate immutable recovery copies, signed account required.
+# Importing/registering this API never initializes storage or starts model work.
+from services.ebook_v2.hosted_recovery import blueprint as ebook_recovery_blueprint  # noqa: E402
+app.register_blueprint(ebook_recovery_blueprint(database.get_conn))
+
 
 @app.after_request
 def _no_store_static(response):
@@ -2060,29 +2065,62 @@ def ebook_workspace_preflight_route(project_id: int):
 from datetime import datetime, timezone  # noqa: E402  (release review timestamps)
 
 
-def _release_files(project_id: int, data: dict) -> tuple[bytes | None, bytes | None]:
-    """The book's current PDF and ZIP bytes, exactly as /download would serve them."""
+def _release_file_paths(
+    project_id: int, data: dict, *, include_zip: bool = True,
+) -> tuple[str | None, str | None, list[str]]:
+    """Return disk-backed review inputs so opening a PDF/ZIP does not copy them into RAM."""
+    import tempfile
+
     pkg = str(data.get("export_package_id") or data.get("package_id") or f"ebook-{project_id}")
     if not _PACKAGE_ID_RE.match(pkg):
-        return None, None
-    out: list[bytes | None] = []
-    for name in ("ebook.pdf", "package.zip"):
+        return None, None, []
+    paths: list[str | None] = []
+    temporary: list[str] = []
+    names = ("ebook.pdf", "package.zip") if include_zip else ("ebook.pdf",)
+    for name in names:
         raw = None
+        path = os.path.join(EXPORTS_DIR, pkg, name)
         try:
             from services.storage.compat import read_export_or_legacy, refresh_stale_export
 
             refresh_stale_export(EXPORTS_DIR, pkg, name)
-            path = os.path.join(EXPORTS_DIR, pkg, name)
-            if os.path.isfile(path):
-                with open(path, "rb") as fh:
-                    raw = fh.read()
-            else:
+            if not os.path.isfile(path):
                 raw = read_export_or_legacy(int(project_id), f"{pkg}/{name}")
+                if raw:
+                    fd, path = tempfile.mkstemp(prefix="factory-review-", suffix="-" + name)
+                    temporary.append(path)
+                    with os.fdopen(fd, "wb") as target:
+                        target.write(raw)
+                    raw = None
+                else:
+                    path = ""
         except Exception:  # noqa: BLE001
             app.logger.exception("release review could not read %s", name)
+            path = ""
+        finally:
             raw = None
-        out.append(raw)
-    return out[0], out[1]
+        paths.append(path if path and os.path.isfile(path) else None)
+    return paths[0], paths[1] if include_zip else None, temporary
+
+
+def _release_path_sha256(path: str | None) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    if not path:
+        return digest.hexdigest()
+    with open(path, "rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _remove_release_review_temps(paths: list[str]) -> None:
+    for path in paths:
+        try:
+            os.unlink(path)
+        except OSError:
+            app.logger.warning("could not remove temporary release review file")
 
 
 @app.get("/ebook-workspace/<int:project_id>/previous-exports")
@@ -2151,7 +2189,6 @@ def ebook_release_review_route(project_id: int):
         estimate_ai_cost, make_provider_reviewer, review_release,
     )
 
-    pdf, zipb = _release_files(project_id, data)
     reviewer, note, charge = None, "", 0.0
     try:
         authorized = float(body.get("authorize_ai_usd") or 0)
@@ -2170,18 +2207,20 @@ def ebook_release_review_route(project_id: int):
         else:
             reviewer = make_provider_reviewer()
             charge = est["estimated_usd"] if est["billable"] else 0.0
-    import hashlib as _hl
-
+    pdf, zipb, temporary_review_files = _release_file_paths(project_id, data)
     prior = data.get("release_review") if isinstance(data.get("release_review"), dict) else {}
-    same_pdf = prior.get("pdf_sha256") == _hl.sha256(pdf or b"").hexdigest()
-    decisions = dict(prior.get("decisions") or {}) if same_pdf else {}
-    acks = list(prior.get("acknowledged_editorial") or []) if same_pdf else []
     # v1.9.15: measure once with no decisions, keep that measurement, then
     # apply the owner's decisions to it. Accept / Reject / "I have read the
     # notes" re-apply decisions to the stored measurement instead of scanning
     # the whole PDF and ZIP again on every click.
-    base = review_release(data, pdf, zipb, ai_reviewer=reviewer, ai_note=note,
-                          decisions={}, acknowledged_editorial=[])
+    try:
+        base = review_release(data, pdf, zipb, ai_reviewer=reviewer, ai_note=note,
+                              decisions={}, acknowledged_editorial=[])
+    finally:
+        _remove_release_review_temps(temporary_review_files)
+    same_pdf = prior.get("pdf_sha256") == base.pdf_sha256
+    decisions = dict(prior.get("decisions") or {}) if same_pdf else {}
+    acks = list(prior.get("acknowledged_editorial") or []) if same_pdf else []
     if reviewer is not None and base.ai.get("ran") and charge:
         ledger = data["ebook_workspace"]["paid_call_ledger"]
         ledger["spent_usd"] = round(float(ledger.get("spent_usd") or 0) + charge, 4)
@@ -2210,6 +2249,8 @@ def _store_release_review(project_id: int, data: dict, base: dict, decisions: di
     database.update_project(project_id, None, data)
     out = rev.to_dict(with_thumbs=True)
     out["decisions"] = decisions
+    from services.ebook_build_orchestrator import automatic_ebook
+    out["automatic_visual_repair"] = automatic_ebook(data) and not data.get("last_visual_repair")
     return jsonify(out)
 
 
@@ -2229,10 +2270,12 @@ def ebook_release_review_current_route(project_id: int):
         return err
     data = dict(project.get("data") or {})
     rr = _stored_release_review(data)
-    import hashlib as _hl
-
-    pdf, _zip = _release_files(project_id, data)
-    if not rr or not pdf or rr["base"].get("pdf_sha256") != _hl.sha256(pdf).hexdigest():
+    pdf, _zip, temporary_review_files = _release_file_paths(project_id, data, include_zip=False)
+    try:
+        current_sha = _release_path_sha256(pdf)
+    finally:
+        _remove_release_review_temps(temporary_review_files)
+    if not rr or not pdf or rr["base"].get("pdf_sha256") != current_sha:
         return jsonify({"needs_run": True}), 404
     from services.ebook_release_review import with_decisions
 
@@ -2322,10 +2365,11 @@ def ebook_approve_product_route(project_id: int):
     if err:
         return err
     data = dict(project.get("data") or {})
-    pdf, _zip = _release_files(project_id, data)
-    import hashlib as _hl
-
-    sha = _hl.sha256(pdf or b"").hexdigest()
+    pdf, _zip, temporary_review_files = _release_file_paths(project_id, data, include_zip=False)
+    try:
+        sha = _release_path_sha256(pdf)
+    finally:
+        _remove_release_review_temps(temporary_review_files)
     ok, why = release_review_allows_approval(data, sha)
     if not pdf or not ok:
         # A normal answer, not an error code: "review first" is an expected
@@ -2403,7 +2447,7 @@ margin:6px 6px 0 0;cursor:pointer;text-decoration:none;display:inline-block}butt
 <button type=button onclick="document.getElementById('visualViewer').close()">Close enlarged view</button>
 <img id=visualViewerImage alt=""></dialog><script>
 const PID=__PID__;const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let busy=false;let reviewVisuals=[];
+let busy=false;let reviewVisuals=[];let reviewDigest="";
 function setBusy(b){busy=b;document.querySelectorAll('#actions button,#sheet button').forEach(x=>{if(b)x.disabled=true;});}
 async function call(url,opts,ms){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||180000);
 try{const r=await fetch(url,{...(opts||{}),signal:c.signal});let d=null;try{d=await r.json();}catch(e){d=null;}
@@ -2416,14 +2460,17 @@ async function run(authorize){if(busy)return;setBusy(true);const st=document.get
 st.textContent='Reviewing the PDF and ZIP...';st.className='status';
 const res=await call(`/ebook-workspace/${PID}/release-review`,{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify(authorize?{authorize_ai_usd:authorize}:{})});
-if(!res.ok||!res.d||!res.d.status)return failed(res,'The review');busy=false;show(res.d);}
+if(!res.ok||!res.d||!res.d.status)return failed(res,'The review');busy=false;await show(res.d);
+if(res.d.automatic_visual_repair && reviewVisuals.some(v=>v.status==='rejected')){
+  await qualityAction('repair-reviewed',-1);
+}}
 async function load(){busy=true;const res=await call(`/ebook-workspace/${PID}/release-review/current`,{},30000);busy=false;
 if(res.ok&&res.d&&res.d.status)return show(res.d);run(0);}
 async function post(url,body,what){if(busy)return;setBusy(true);
 const res=await call(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})},60000);
 busy=false;if(!res.ok||!res.d)return failed(res,what);if(res.d.needs_run)return run(0);if(res.d.status)return show(res.d);run(0);}
 async function show(d){const st=document.getElementById('status');
-reviewVisuals=d.visuals||[];
+reviewVisuals=d.visuals||[];reviewDigest=d.pdf_sha256;
 st.textContent=d.status;st.className='status '+(d.ready?'ready':d.status==='Changes required'?'changes':'unverified');
 const label={ok:'Measured checks passed',rejected:'Rejected - replace',not_verified:'Not verified',
 needs_human_review:'Needs your review',accepted_by_owner:'Accepted by you'};
@@ -2442,6 +2489,7 @@ let est=null;try{const e=await call(`/ebook-workspace/${PID}/release-review/esti
 const rejected=(d.visuals||[]).filter(v=>v.status==='rejected').length;
 const editorial=(d.groups||[]).some(g=>g.findings.some(f=>f.level==='editorial'));
 document.getElementById('actions').innerHTML=
+(rejected?`<button type=button onclick="qualityAction('repair-reviewed',-1)">Fix rejected visuals</button>`:'')+
 `<button type=button onclick="qualityAction('improve-print',-1)">Use clearer type and redraw charts</button>`+
 `<a class=btn href="/?view=ebook-workspace&project_id=${PID}&stage=visuals">Approve all acceptable visuals${rejected?' and replace '+rejected+' rejected':''}</a>`+
 (d.ai&&d.ai.ran||!est?'':`<button onclick="if(confirm('Run the AI review for about $${est.estimated_usd.toFixed(2)}? It is charged to this book.'))run(${est.estimated_usd})">Run AI review (about $${est.estimated_usd.toFixed(2)})</button>`)+
@@ -2454,10 +2502,13 @@ const image=document.getElementById('visualViewerImage');image.src=v.thumb||'';i
 document.getElementById('visualViewer').showModal();}
 async function qualityAction(action,index){if(busy)return;setBusy(true);
 const visual=reviewVisuals[index];
-const body={action,visual_id:visual?visual.visual_id:'',mode:'higher-resolution'};
+const body={action,pdf_sha256:reviewDigest,visual_id:visual?visual.visual_id:'',mode:'higher-resolution'};
 const res=await call(`/ebook-workspace/${PID}/visuals`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},120000);
-busy=false;if(!res.ok)return failed(res,'The quality update');
-location.href=action==='improve-print'?`/?view=ebook-build&project_id=${PID}`:`/?view=ebook-workspace&project_id=${PID}&stage=visuals`;}
+busy=false;if(!res.ok){
+  if(res.d&&res.d.error){document.getElementById('status').textContent=res.d.error;
+    document.getElementById('actions').innerHTML=`<a class=btn href="/?view=ebook-workspace&project_id=${PID}&stage=visuals">Review flagged visuals</a>`;return;}
+  return failed(res,'The quality update');}
+location.href=['improve-print','repair-reviewed'].includes(action)?`/?view=ebook-build&project_id=${PID}`:`/?view=ebook-workspace&project_id=${PID}&stage=visuals`;}
 load();
 </script></body></html>"""
 
@@ -4474,6 +4525,12 @@ def export_product_route():
     except ArtifactStateError as exc:
         return _error(str(exc), 409)
     except ValueError as exc:
+        pre_export_review = getattr(exc, "report", None)
+        if isinstance(pre_export_review, dict):
+            return jsonify({
+                "error": str(exc),
+                "editor_in_chief_pre_export": pre_export_review,
+            }), 400
         return _error(str(exc), 400)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("export-product failed")

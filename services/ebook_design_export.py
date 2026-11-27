@@ -314,6 +314,18 @@ def render_designed_bundle(data: dict, *, output_dir: str | Path | None = None) 
         # interior title page here would duplicate it.
         include_title_page=False,
     )
+    # Editor-in-Chief's content and visible-copy pass runs on the manuscript
+    # and finished HTML before the first PDF render. A blocked report travels
+    # with the exception so the build can preserve it and show the exact fix.
+    from services.ebook_pre_export_review import (
+        PreExportReviewBlocked,
+        review_before_pdf,
+    )
+
+    pre_export_review = review_before_pdf(data, rendered_html=html_doc)
+    data["editor_in_chief_pre_export"] = pre_export_review
+    if pre_export_review["status"] != "PASS":
+        raise PreExportReviewBlocked(pre_export_review)
     cover = data.get("cover_design") if isinstance(data.get("cover_design"), dict) else {}
     cover_pdf = _approved_cover_pdf_bytes(data, cover)
     if not cover_pdf:

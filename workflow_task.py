@@ -77,6 +77,16 @@ def build_ebook(ctx: TaskContext, project_id: int) -> dict:
     return summary
 
 
+# Separate task: existing legacy build_ebook behavior remains unchanged.
+from services.ebook_v2.workflow_recovery import register as register_recovery
+recover_saved_ebook = register_recovery(app, plan=TASK_PLAN, retry=TASK_RETRY)
+
+from services.ebook_v2.workflow_topics import register as register_topics
+create_topic_ebook = register_topics(app,
+    plan=os.environ.get('FACTORY_V2_TOPIC_WORKER_PLAN', TASK_PLAN),
+    retry=Retry(max_retries=0, wait_duration_ms=1000, backoff_scaling=1.0))
+
+
 def _version() -> str:
     """The VERSION file next to this entrypoint, or "unknown"."""
     try:

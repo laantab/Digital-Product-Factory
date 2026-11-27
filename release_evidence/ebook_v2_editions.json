@@ -1,0 +1,9 @@
+{
+  "date": "2026-11-02",
+  "focused_and_protection_passed": 79,
+  "seconds": 54.49,
+  "browser": "create, restart, approve, download, edit, approve revised edition, download changed PDF, original bytes unchanged",
+  "scope": "isolated SQLite Studio; no production schema change",
+  "paid_calls": 0,
+  "full_release_pending": true
+}

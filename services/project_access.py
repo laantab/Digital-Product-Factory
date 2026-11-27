@@ -62,6 +62,10 @@ PUBLIC_ENDPOINTS = frozenset({
 # billing and rendering APIs are intentionally unavailable to customers during
 # this rollout. Admin/owner access and the private Factory are preserved.
 CUSTOMER_ENDPOINTS = frozenset({
+    'ebook_recovery.source', 'ebook_recovery.preserve', 'ebook_recovery.reopen',
+    # Each review route independently rechecks the signed owner's book and source.
+    'ebook_recovery.workspace', 'ebook_recovery.book_status',
+    'ebook_recovery.book_file', 'ebook_recovery.approve_book',
     'index', 'list_projects_route', 'get_project_route',
     'list_unfinished_ebook_workspaces_route', 'create_ebook_workspace_route',
     'ebook_build_start_route', 'download_export_route',

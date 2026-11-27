@@ -1,0 +1,52 @@
+{
+  "version": "1.9.93",
+  "checked_at": "2026-11-20T20:38:53.656823+00:00",
+  "status": "local_candidate_verified_not_deployed",
+  "base_commit": "8752593a6fa0270b24431602ca5e3bdefb1840ab",
+  "scope": "Bounded exact-source editorial patches with separate independent recheck. No Create/Resume/approval UI change.",
+  "verification": [
+    {
+      "name": "factory-targeted-regression.xml",
+      "tests": 164,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 123.243,
+      "sha256": "cb6be5a4a7018e56c490b7b974b06effbc3104f535747aab864339307fdd1c44"
+    },
+    {
+      "name": "factory-targeted-browser.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 51.639,
+      "sha256": "c4f879014cc82391f029c281122da771f7b5c18c00b7b30e3e1512d687d54cc1"
+    },
+    {
+      "name": "factory-targeted-patches-final.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.43,
+      "sha256": "5a75b171fd7ff598f1a194ced5d6a9f6d3ba41126357d89cbdb3563d79f4d35f"
+    }
+  ],
+  "unique_studio_cases_passed": 171,
+  "notes": [
+    "164 non-browser Studio/protection cases passed; seven separate customer/browser cases passed. The extra11 patch cases were rerun after a test-only fixture cleanup; not counted twice.",
+    "First focused attempt passed65 cases and failed one browser case because browser was not installed. Downloaded Chromium; unchanged browser case subsequently passed.",
+    "Fixture safety correction preserves all unaffected prose; current editor repairs historical false pass while immutable old unit remains unchanged; actual fixture shared PDF and ZIP still delivered and CRC checked.",
+    "Output cap1800 tokens vs prior full-chapter cap up to5000. This is a configured bound, not measured real model speed.",
+    "Prior-source b0d926d CI: all eight recorded workflows now success; Studio jobs and three artifact metadata records inspected. No artifact redownload needed to repeat prior evidence."
+  ],
+  "paid_generation_calls": 0,
+  "additional_hosted_tasks": 0,
+  "new_compute_authorization": false,
+  "known_limits": [
+    "Real CPU-model latency and patch acceptance unmeasured.",
+    "Customer Create/Resume/approval controls and normal signed-in hosted acceptance unfinished.",
+    "Candidate not deployed; prior web and workflow remain live."
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "request_id": "holiday-guest-home-test-20261119-01",
+  "requested_at": "2026-11-19",
+  "paid_providers": false,
+  "reason": "Owner authorized one fresh-topic test using the existing generator and editorial review. Runner test only; does not establish hosted Factory integration.",
+  "spec": {
+    "topic": "Preparing a small home for holiday guests without buying new storage",
+    "audience": "Busy adults with limited space who want a practical, welcoming home",
+    "outcome": "Prepare the entryway, guest sleeping space and shared rooms using existing supplies, with room-specific checklists and a realistic preparation schedule",
+    "author": "Lonnie Brown",
+    "chapter_count": 4,
+    "min_words": 650
+  },
+  "status": "prepared; generation not started"
+}

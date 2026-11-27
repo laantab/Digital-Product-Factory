@@ -1,0 +1,94 @@
+{
+  "checked_at": "2026-11-20T13:39:03.704713+00:00",
+  "scope": "Assisted retained-topic hosted book; not fully automatic or commercial acceptance",
+  "runtime_version": "1.9.90",
+  "worker_source": "971b5890ed50db11f04d99ee72e78774fa76f2da",
+  "workflow_version": "wfv-dc0456gm7kps73bc3lfg",
+  "task_run": "trn-0b54gdc047n1gg92c73djct00",
+  "task_status": "completed",
+  "started_at": "2026-11-20T12:58:04.14206Z",
+  "completed_at": "2026-11-20T13:31:09.600831Z",
+  "render_task_retries": 0,
+  "attempts": 1,
+  "book_id": "8dce9a74cd89435397a4341427418698",
+  "owner": "2",
+  "state": "REVIEW",
+  "title": "Cozying Up: A Practical Guide to Hosting Holiday Guests in a Small Space",
+  "chapter_words": [
+    829,
+    920,
+    722,
+    941
+  ],
+  "total_words": 3412,
+  "original_units_unchanged": 11,
+  "files": {
+    "ebook.pdf": {
+      "size": 65883,
+      "sha256": "0aa3ab6a54581585922b5d283e00b78204bcbfd5425678cc78d7a192ae25c773"
+    },
+    "package.zip": {
+      "size": 366752,
+      "sha256": "5f2e043c450b75a440cec8c4a2b13e1af59a1258879fc557df7c76ec92640cab"
+    }
+  },
+  "local_verification": {
+    "pages": 14,
+    "chapter_words": [
+      829,
+      920,
+      722,
+      941
+    ],
+    "total_words": 3412,
+    "full_source_text_present": true,
+    "layout_mechanical_checks": {
+      "contract": "final-pages-1",
+      "pdf_sha256": "0aa3ab6a54581585922b5d283e00b78204bcbfd5425678cc78d7a192ae25c773",
+      "pages": 14,
+      "source_text_present": true,
+      "text_within_page": true,
+      "photographs_expected": 0,
+      "photographs_placed": 0,
+      "photograph_pixels_verified": true,
+      "designer_review": "not_certified_by_mechanical_checks"
+    },
+    "zip_crc": true,
+    "embedded_pdf_matches": true,
+    "bundle_files": [
+      "ebook.pdf",
+      "manuscript.md",
+      "ebook.epub",
+      "cover.jpg",
+      "manuscript.docx",
+      "quality-report.json",
+      "photo-sources.json",
+      "edition.json"
+    ],
+    "manual_visual_review": "All14 actual rendered pages inspected. No clipping, overlaps or raw Markdown found. Plain typography-only cover and single-word carryovers at the starts of pages7 and13 remain publication-design limitations. Review edition only; no sale-readiness certification.",
+    "assisted": true,
+    "automatic_acceptance": false
+  },
+  "artifact_transfer": "Both actual remote byte streams verified against stored SHA256 and sizes. ZIP transfer initially returned HTTP500; one read-only retry succeeded. No regeneration.",
+  "assisted_provenance": "Assistant replaced four paragraphs in chapter1 and six in chapter2; completed retained619-word chapter3 draft with safe seating and concrete checklist; authored941-word chapter4 from retained approved outline. New review/assembly work units preserve all11 original completed records. All four current chapters subsequently passed actual independent local-model review.",
+  "budget": "One additional approved run, maximum3600seconds/up to0.70USD, zero automatic Render task retries. Terminal run duration about33minutes5seconds. No invoice-cost claim; no paid model API calls or new services. No further billed run authorized.",
+  "review_page": {
+    "version": "1.9.92",
+    "source": "b0d926d555ffbbb0d11ffae846ffabcc95869ab0",
+    "web_deploy": "dep-dc04ktt9fdbs73chr55g",
+    "web_status": "live",
+    "finished_at": "2026-11-20T13:27:33.155343Z",
+    "url": "https://digitalproductfactorypro.com/api/ebook-recovery/workspace?book=8dce9a74cd89435397a4341427418698",
+    "live_browser": "Unsigned request visibly shows proper private sign-in guidance; signed-in normal customer session/downloads not verified. Read-only private fixture HTTP and browser bytes/owner checks passed."
+  },
+  "library_files": {
+    "pdf": "libfile_3a70bc1537a88191a92e3ae9d8569d59",
+    "zip": "libfile_3a02a6fd8df881918c1f8412b458c081"
+  },
+  "remaining": [
+    "General automatic full-chapter copyediting still exceeds CPU deadline; this assisted edition is not automatic acceptance.",
+    "Customer Create/Resume/approval controls and ordinary signed-in browser delivery acceptance remain unfinished.",
+    "Cover design and page7/page13 lone-word carryovers need publication polish.",
+    "Broader final-source regression workflows still running; no complete current-source release pass or sale-readiness certification claimed."
+  ]
+}

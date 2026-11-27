@@ -30,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import re
 import zipfile
 import threading
@@ -146,7 +147,14 @@ class Review:
 
 
 # --------------------------------------------------------------------------- helpers
-def _sha(b: bytes) -> str:
+def _sha(b: bytes | str | os.PathLike[str] | None) -> str:
+    """Hash bytes or a file without loading a full export into memory."""
+    if isinstance(b, (str, os.PathLike)):
+        digest = hashlib.sha256()
+        with open(b, "rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
     return hashlib.sha256(b or b"").hexdigest()
 
 
@@ -354,8 +362,8 @@ def _release_review_memory() -> None:
 
 def review_release(
     data: dict,
-    pdf_bytes: bytes | None,
-    zip_bytes: bytes | None,
+    pdf_bytes: bytes | str | os.PathLike[str] | None,
+    zip_bytes: bytes | str | os.PathLike[str] | None,
     **kwargs,
 ) -> Review:
     """Inspect one book at a time and release all native PDF resources.
@@ -387,8 +395,8 @@ def _page_images(page, *, xrefs=False):
 
 def _review_release(
     data: dict,
-    pdf_bytes: bytes | None,
-    zip_bytes: bytes | None,
+    pdf_bytes: bytes | str | os.PathLike[str] | None,
+    zip_bytes: bytes | str | os.PathLike[str] | None,
     *,
     resources: ExitStack,
     ai_reviewer: Callable[[dict], list[dict]] | None = None,
@@ -408,9 +416,16 @@ def _review_release(
     try:
         import fitz  # PyMuPDF
 
-        if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
+        if isinstance(pdf_bytes, (str, os.PathLike)):
+            with open(pdf_bytes, "rb") as source:
+                pdf_header = source.read(5)
+            if pdf_header != b"%PDF-":
+                raise ValueError("not a PDF")
+            doc = resources.enter_context(fitz.open(os.fspath(pdf_bytes), filetype="pdf"))
+        elif not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
             raise ValueError("not a PDF")
-        doc = resources.enter_context(fitz.open(stream=pdf_bytes, filetype="pdf"))
+        else:
+            doc = resources.enter_context(fitz.open(stream=pdf_bytes, filetype="pdf"))
         if doc.page_count < 1:
             raise ValueError("no pages")
     except Exception as exc:  # noqa: BLE001
@@ -418,7 +433,9 @@ def _review_release(
                   "Export the book again and review the new PDF.", "Re-export the PDF"))
     zf = None
     try:
-        zf = resources.enter_context(zipfile.ZipFile(io.BytesIO(zip_bytes or b"")))
+        archive_source = (os.fspath(zip_bytes) if isinstance(zip_bytes, (str, os.PathLike))
+                          else io.BytesIO(zip_bytes or b""))
+        zf = resources.enter_context(zipfile.ZipFile(archive_source))
         bad = zf.testzip()
         if bad:
             raise ValueError(f"damaged member {bad}")
@@ -437,7 +454,7 @@ def _review_release(
         if "ebook.pdf" not in names:
             F(Finding("ZIP_MISSING_PDF", HARD, None, "", "package.zip", "The ZIP has no ebook.pdf.",
                       "Export again so the ZIP contains the book's PDF.", "Re-export the ZIP"))
-        elif pdf_bytes and _sha(zf.read("ebook.pdf")) != rev.pdf_sha256:
+        elif pdf_bytes and _zip_member_sha(zf, "ebook.pdf") != rev.pdf_sha256:
             F(Finding("ZIP_PDF_DIFFERS", HARD, None, "", "package.zip / ebook.pdf",
                       "The PDF inside the ZIP is not the same file as the downloadable PDF.",
                       "Export the PDF and ZIP together so they carry the same book.", "Re-export the ZIP"))
@@ -528,10 +545,12 @@ def _review_release(
     zip_hashes: dict[str, int] = {}
     for vid, member in zip_visuals.items():
         try:
-            # Decode only one archive image at a time; retain its small hash.
-            with Image.open(io.BytesIO(zf.read(member))) as zip_image:
-                _review_pixels(zip_image)
-                zip_hashes[vid] = dhash(zip_image)
+            # Read one member directly from the archive. Passing a path-backed
+            # ZIP avoids both a full archive copy and a full-resolution member copy.
+            with zf.open(member) as member_stream:
+                with Image.open(member_stream) as zip_image:
+                    _review_pixels(zip_image)
+                    zip_hashes[vid] = dhash(zip_image)
         except Exception:  # noqa: BLE001
             pass
     aid_by_id = {str(a.get("visual_id")): a for a in aids}
@@ -587,9 +606,9 @@ def _review_release(
             else:
                 # Re-read only the matched photo for its approved SHA-256 check.
                 # This preserves the original identity gate and image fidelity.
-                zip_raw = zf.read(zip_visuals[vid]) if zf is not None and vid in zip_visuals else None
-                _check_photo(rev, aid, v, img, placed_w, zip_raw)
-                del zip_raw
+                zip_sha = (_zip_member_sha(zf, zip_visuals[vid])
+                           if zf is not None and vid in zip_visuals else None)
+                _check_photo(rev, aid, v, img, placed_w, zip_sha)
                 photos_seen.append((v, h, _colour_signature(img)))
             img.close()
 
@@ -653,6 +672,15 @@ def _review_release(
     _apply_owner_decisions(rev, decisions or {}, acknowledged_editorial or [])
     rev.status = compute_status(rev.findings)
     return rev
+
+
+def _zip_member_sha(archive: zipfile.ZipFile, member: str) -> str:
+    """Hash an archive member in bounded chunks instead of zf.read()."""
+    digest = hashlib.sha256()
+    with archive.open(member, "r") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def compute_status(findings: list[Finding]) -> str:
@@ -790,7 +818,7 @@ def _check_chart(rev: Review, aid: dict, v: Visual, img: Image.Image, placed_w: 
 
 
 def _check_photo(rev: Review, aid: dict, v: Visual, img: Image.Image, placed_w: float,
-                 zip_raw: bytes | None) -> None:
+                 zip_raw: bytes | str | None) -> None:
     F = rev.findings.append
     group = f"Replace the photo on page {v.page}"
     src = str(aid.get("source") or "").lower()
@@ -806,8 +834,13 @@ def _check_photo(rev: Review, aid: dict, v: Visual, img: Image.Image, placed_w: 
                   f"The photo prints at {dpi:.0f} dpi at its size on the page, below {MIN_PHOTO_DPI:.0f}.",
                   "Choose a larger version of this photo or a different photo.", group))
     want = str(aid.get("sha256") or "")
-    if zip_raw is not None and want:
-        if _sha(zip_raw) != want:
+    # Path-backed reviews pass the member's already-computed SHA-256 string
+    # through the existing sixth positional argument. This preserves compatible
+    # review hooks while avoiding a full ZIP-member allocation.
+    actual_sha = (zip_raw if isinstance(zip_raw, str)
+                  else _sha(zip_raw) if zip_raw is not None else None)
+    if actual_sha is not None and want:
+        if actual_sha != want:
             v.status = "rejected"
             F(Finding("PHOTO_NOT_APPROVED_FILE", HARD, v.page, v.chapter, v.visual_id,
                       "The photo in the book is not the file that was approved.",

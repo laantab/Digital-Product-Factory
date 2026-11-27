@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-02",
+  "tested_source_commit": "8b8b2e4e0083e8ec630b92021d0fd6f4a6f2221b",
+  "tested_source_tree": "ebaf4c8bc69d82ac1ee5e74cfab47b8e43dd5f10",
+  "focused_passed": 128,
+  "focused_seconds": 83.74,
+  "pr": "https://github.com/laantab/Digital-Product-Factory/pull/107",
+  "execution_environment": "unavailable during fresh eight-chapter CPU Qwen3 8B run",
+  "last_observed_model_state": {
+    "chapters_total": 8,
+    "minimum_words": 650,
+    "activity": "Reviewing chapter 1",
+    "saved_words": 744,
+    "chapters_reviewed": 0,
+    "expanded_draft_validated": true
+  },
+  "model_final_result": "unknown; do not claim completed or still running",
+  "next": "GitHub Windows/Linux isolated checks; full release and actual model/page acceptance remain required",
+  "production_changed": false,
+  "paid_generation_calls": 0
+}

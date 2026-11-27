@@ -1,0 +1,264 @@
+{
+  "version": "1.9.94",
+  "checked_at": "2026-11-20T22:36:23.001Z",
+  "state": "web_live_authentication_required_for_real_owner_acceptance",
+  "scope": "Explicit owner acknowledgement and CAS approval of exact shared review PDF/ZIP; no local-file requirement or generation. Four independently owner-scoped review endpoints classified for ordinary customers.",
+  "studio": {
+    "tests": 185,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 142.012,
+    "junit_sha256": "06ef2b196430dfeb19a89c3aac1287a5472afe80b125600a6a75d61a3e199a20",
+    "case_ids_sha256": "3634cde519b7700d130c407b42938c161e6def771c3fff640bb96621502c32e5"
+  },
+  "focused_review_signed_requests_and_version": {
+    "tests": 56,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 53.231,
+    "junit_sha256": "518012fc9f8272f6bc4f678c2e303e640ecab384fc3a299983b2338e2198e2af",
+    "case_ids_sha256": "3261d51c0beae3ecd924aa932b3e27a899374ad9e6082cbb06b8a13ca5bbc557"
+  },
+  "protected_before": {
+    "tests": 1139,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 1100.634,
+    "junit_sha256": "4988958f9482b2ec00001324dce2f22247f3d4159f75025b3e0cbfd0ffbcac52",
+    "case_ids_sha256": "40b52d4c8871ee9113728ff1579e531bb3ef767a29a6ad330e95e342b5188e8a"
+  },
+  "protected_files": [
+    "tests/test_a_cover_is_readable_over_any_photograph.py",
+    "tests/test_a_pale_photograph_still_gets_a_cover.py",
+    "tests/test_a_refused_cover_still_leaves_a_way_forward.py",
+    "tests/test_ai_provider_render_safety.py",
+    "tests/test_artifact_state_revision_primitives.py",
+    "tests/test_chapter_photo_queries.py",
+    "tests/test_chart_text_editor.py",
+    "tests/test_choose_idea_build_handoff.py",
+    "tests/test_coloring_background_build.py",
+    "tests/test_coloring_book_final_cover_qa.py",
+    "tests/test_coloring_book_interior_no_text_contract.py",
+    "tests/test_coloring_book_local_fallback_theme_classification.py",
+    "tests/test_coloring_book_sea_creatures_customer_path.py",
+    "tests/test_coloring_completion_recovery.py",
+    "tests/test_crossword_controlled_repair.py",
+    "tests/test_crossword_cover_selection_repair.py",
+    "tests/test_crossword_customer_options_restored.py",
+    "tests/test_crossword_rebuilds_identically.py",
+    "tests/test_crossword_scope_answerkey_zip_repair.py",
+    "tests/test_customer_account_isolation.py",
+    "tests/test_download_slug_package_id.py",
+    "tests/test_ebook_build_browser_routing.py",
+    "tests/test_ebook_build_resume_recovery.py",
+    "tests/test_ebook_completion_quality.py",
+    "tests/test_ebook_copy_editor.py",
+    "tests/test_ebook_creation_modes.py",
+    "tests/test_ebook_customer_path.py",
+    "tests/test_ebook_design_export.py",
+    "tests/test_ebook_durable_executor.py",
+    "tests/test_ebook_export_stage.py",
+    "tests/test_ebook_manuscript_correction_recovery.py",
+    "tests/test_ebook_photo_review_recovery.py",
+    "tests/test_ebook_print_clarity.py",
+    "tests/test_ebook_project_response_memory.py",
+    "tests/test_ebook_real_browser_customer_path.py",
+    "tests/test_ebook_saved_projects_visibility.py",
+    "tests/test_ebook_source_authority_matching.py",
+    "tests/test_ebook_visual_match.py",
+    "tests/test_ebook_visual_pipeline.py",
+    "tests/test_ebook_workflow_execution.py",
+    "tests/test_editor_in_chief.py",
+    "tests/test_editor_in_chief_gate.py",
+    "tests/test_export_pointer_sync.py",
+    "tests/test_export_revision_identity.py",
+    "tests/test_factory_ebook_pexels_route.py",
+    "tests/test_factory_market_advantage.py",
+    "tests/test_guided_cover_choice.py",
+    "tests/test_interior_visual_editorial_standard.py",
+    "tests/test_invite_gate.py",
+    "tests/test_math_worksheet_cover_selection_repair.py",
+    "tests/test_math_worksheet_final_output_pdf_link.py",
+    "tests/test_math_worksheet_pdf_visual_qa.py",
+    "tests/test_photograph_quota_recovery.py",
+    "tests/test_planner_products.py",
+    "tests/test_plant_puzzle_topics_v1_9_15.py",
+    "tests/test_practice_chart_boundaries.py",
+    "tests/test_render_persistence_patch.py",
+    "tests/test_reopen_packaging_identity_pass2.py",
+    "tests/test_research_to_build_handoff.py",
+    "tests/test_saved_listing_memory_reclaim.py",
+    "tests/test_saved_product_open_recovery.py",
+    "tests/test_saved_products_bounded_loading.py",
+    "tests/test_saved_projects_hard_cleanup.py",
+    "tests/test_saved_projects_last10.py",
+    "tests/test_saved_projects_reopen_build.py",
+    "tests/test_universal_topic_puzzle_engine.py",
+    "tests/test_v196_free_image_sources.py",
+    "tests/test_visual_routing_outcomes.py",
+    "tests/test_word_search_rebuilds_identically.py",
+    "tests/test_word_search_short_topic_repair.py",
+    "tests/test_word_search_stability.py",
+    "tests/test_word_search_topic_scope_contract.py"
+  ],
+  "protected_after": {
+    "tests": 1139,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 762.531,
+    "junit_sha256": "66b3f4e687b31545d581ba20fffefc13b0cf1d3e678de07d079ffa867f095554",
+    "case_ids_sha256": "40b52d4c8871ee9113728ff1579e531bb3ef767a29a6ad330e95e342b5188e8a"
+  },
+  "customer_guard_after": {
+    "tests": 60,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 131.974,
+    "junit_sha256": "e27dc04e64b93dde0569a3f9f9535632dad00d653dc92e031e8d003d1dcd1344",
+    "case_ids_sha256": "43fb6f02f371a7f4e888aae571e0d5156f666e556ee7db16e1a982e4b52c868b"
+  },
+  "browser_review": "Actual Chromium1280x900 and390x844 images inspected before/after acknowledgement; no clipping or overflow. Approval sends one explicit POST.",
+  "baseline_failure_reproduced": "Normal non-admin Factory request to existing review workspace returned403 before classification. Fixture first corrected to use the authenticated snapshot API because generic project serialization omits owner identity.",
+  "limits": [
+    "Actual signed-in production review/download acceptance remains unverified; secure sign-in request cancelled, no retry.",
+    "Create and Resume controls remain unfinished.",
+    "Hosted targeted-edit performance and combined full-Factory release gate remain unverified."
+  ],
+  "generation_calls_started": 0,
+  "new_hosted_task_runs": 0,
+  "compute_allowances_reset": false,
+  "deploy_triggered": true,
+  "source_commit": "f37477918d416c909c1c90e36af0dd7e6dd6d9b9",
+  "identical_protected_case_ids": true,
+  "relocked_functions": [
+    "word_search",
+    "coloring_book",
+    "crossword",
+    "invite_protection",
+    "ebook_one_button_completion"
+  ],
+  "remote_ci": {
+    "source_commit": "f37477918d416c909c1c90e36af0dd7e6dd6d9b9",
+    "runs": [
+      {
+        "id": 44817032615,
+        "name": "Account isolation PostgreSQL integration",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44817032463,
+        "name": "Book recovery PostgreSQL preservation",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44817032592,
+        "name": "Local ebook chapter bound and protected regression",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 44817032547,
+        "name": "Local manuscript correction billing and protected regressions",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 44817032449,
+        "name": "One-button ebook memory and protected fast gate",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 44817032509,
+        "name": "Ebook Safe Mode correction and protected regressions",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 44817032540,
+        "name": "Release review bounded ZIP memory and protected functions",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 44817032528,
+        "name": "Book Studio Windows and Linux customer paths",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "note": "Studio Windows/Linux185 cases plus version31/signed recovery12/Fast Gate workflow succeeded; both PostgreSQL workflows succeeded. Five broader regressions remain running."
+  },
+  "relock_junit_sha256": "50de2764aba5e1aac10943f66682ad2b865b742574c4cee0ea57a3449c8526da",
+  "relock_cases_passed": 9,
+  "web_deploy": {
+    "id": "dep-dc0bh6uq1p3s73e3uotg",
+    "source_commit": "c441e71dfb01694e2331d3c4d0548965aa52e167",
+    "status": "live",
+    "finished_at": "2026-11-20T21:17:54.4173Z",
+    "instance": "srv-da8qisegekts7380vdvg-f94zt",
+    "url": "https://digitalproductfactorypro.com/api/ebook-recovery/workspace",
+    "verification": "New gunicorn worker boot and Render live event inspected. Actual cloud-browser page visibly shows the private Factory sign-in guidance; request log verifies HTTP401. Deployment-transition502 cleared after service became live. No source book metadata displayed while unsigned."
+  },
+  "normal_signed_in_live_acceptance": false,
+  "live_book_approval_performed": false,
+  "release_commit_ci": {
+    "source_commit": "c441e71dfb01694e2331d3c4d0548965aa52e167",
+    "status": "all eight deployed-source workflows completed successfully",
+    "runs": [
+      {
+        "id": 44818821783,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821763,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821735,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821758,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821761,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821756,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821750,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 44818821813,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "full_combined_factory_release_gate_claimed": false
+  },
+  "authentication": {
+    "request": "cancelled by user",
+    "signed_in_outcome": "unknown",
+    "automated_retry_started": false
+  }
+}
